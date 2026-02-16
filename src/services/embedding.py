@@ -60,9 +60,9 @@ class LocalEmbeddingProvider(EmbeddingProvider):
         embeddings = self._model.encode(texts, convert_to_numpy=True)
         return embeddings.tolist()
 
-@property
-def dimension(self) -> int:
-    return self._dimension
+    @property
+    def dimension(self) -> int:
+        return self._dimension
 
 class GeminiEmbeddingProvider(EmbeddingProvider):
     """
