@@ -99,7 +99,7 @@ def chunk_document (document: FinancialDocument,
             sentences = _split_into_sentences(paragraph)
             for sentence in sentences: 
                 sent_tokens = _estimate_tokens(sentence)
-                curren_tokens = _estimate_tokens(current_chunk)
+                current_tokens = _estimate_tokens(current_chunk)
 
                 if current_tokens + sent_tokens <= chunk_size:
                     current_chunk += " " + sentence if current_chunk else sentence
