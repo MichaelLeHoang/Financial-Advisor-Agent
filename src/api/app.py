@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import inngest.fast_api
 
 from src.jobs.inngest_client import inngest_client
@@ -8,6 +8,12 @@ from src.jobs.functions import (
 )
 from src.rag.pipeline import ask as rag_ask
 from src.services.ingestion import ingest_news
+
+from src.ml.preprocessing import prepare_training_data
+from src.ml.models import RandomForestPredictor, LSTMPredictor, evaluate_model
+from src.ml.sentiment import SentimentAnalyzer
+
+from pydantic import BaseModel
 
 app = FastAPI(
     title = "Financial Advisor API",
@@ -22,6 +28,16 @@ inngest.fast_api.serve(
     [scheduled_news_ingestion, on_demand_news_ingestion],
 )
 
+# Request/Response Models 
+class PredictRequest(BaseModel):
+    ticker: str = "AAPL"
+    model_type: str = "random_forest"  # "random_forest" or "lstm"
+    sequence_length: int = 5
+
+class SentimentRequest(BaseModel):
+    texts: list[str]
+
+
 # basic api endpoints 
 
 @app.get("/health")
@@ -29,6 +45,8 @@ inngest.fast_api.serve(
 async def health_check():
     """Simple health check endpoint"""
     return {"status": "ok", "service": "Financial Advisor API"}
+
+# Rag Endpoints
 
 @app.post("/api/v1/query")
 async def query(question: str, ticker: str | None = None):
@@ -61,4 +79,50 @@ async def trigger_ingestion(tickers: list[str] = ["AAPL", "NVDA"]):
     return {
         "status": "completed",
         "stats": stats,
+    }
+
+# ML endpoints 
+@app.post("/api/v1/predict")
+async def predict_stock(req: PredictRequest):
+    """
+    Train a model on historical data and predict direction.
+    POST /api/v1/predict
+    {"ticker": "AAPL", "model_type": "random_forest", "sequence_length": 5}
+    """
+    try: 
+        data = prepare_training_data(
+            req.ticker, 
+            sequence_length=req.sequence_length,
+            model_type=req.model_type,
+        )
+        if req.model_type == "random_forest":
+            model = RandomForestPredictor(n_estimators=200)
+        elif req.model_type == "lstm":
+            model = LSTMPredictor(epochs=20)
+        
+        train_metrics = model.train(data["X_train"], data["y_train"])
+        test_metrics = evaluate_model(model, data["X_test"], data["y_test"], data["scaler"])
+        
+        return {
+            "ticker": req.ticker,
+            "model_type": req.model_type,
+            "train_metrics": train_metrics,
+            "test_metrics": test_metrics,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/sentiment")
+async def analyze_sentiment(req: SentimentRequest):
+    """
+    Analyze sentiment of financial texts.
+    POST /api/v1/sentiment
+    {"texts": ["Apple beat earnings", "Tesla recalls vehicles"]}
+    """
+    analyzer = SentimentAnalyzer()
+    results = analyzer.analyze_batch(req.texts)
+    mood = analyzer.get_market_mood(req.texts)
+    return {
+        "individual": results,
+        "market_mood": mood,
     }
