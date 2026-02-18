@@ -146,8 +146,11 @@ def prepare_training_data(
     scaler = MinMaxScaler()
     scaled_data = scaler.fit_transform(features.values)
 
-    # Create sequences 
-    X, y = create_sequences(scaled_data, sequence_length)
+    # Create inputs based on model type
+    if model_type == "lstm":
+        X, y = create_sequences(scaled_data, sequence_length)
+    else:
+        X, y = create_flat(scaled_data, lookback=sequence_length)
 
     split_idx = int(len(X) * (1 - test_split))
     X_train, X_test = X[:split_idx], X[split_idx:]
