@@ -117,3 +117,32 @@ def optimize_portfolio(
 
     result["tickers"] = data["tickers"]
     return result
+
+def quantum_optimize_portfolio(
+    tickers: list[str],
+    risk_penalty: float = 0.5,
+    target_assets: int = 3,
+    n_layers: int = 2,
+) -> dict: 
+    """
+    Quantum portfolio optimization using QAOA.
+    Usage:
+        result = quantum_optimize_portfolio(
+            ["AAPL", "NVDA", "GOOGL", "TSLA", "AMZN"],
+            target_assets=3
+        )
+    """
+    from src.quantum.qaoa import qaoa_optimize
+
+    data = get_portfolio_volatility(tickers)
+
+    result = qaoa_optimize(
+        data["mean_returns"],
+        data["cov_matrix"],
+        n_layers=n_layers,
+        risk_penalty=risk_penalty,
+        target_assets=target_assets,
+    )
+    
+    result["tickers"] = data["tickers"]
+    return result
