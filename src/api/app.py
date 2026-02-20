@@ -13,6 +13,8 @@ from src.ml.preprocessing import prepare_training_data
 from src.ml.models import RandomForestPredictor, LSTMPredictor, evaluate_model
 from src.ml.sentiment import SentimentAnalyzer
 
+from src.quantum.portfolio import optimize_portfolio, quantum_optimize_portfolio
+
 from pydantic import BaseModel
 
 app = FastAPI(
@@ -37,6 +39,11 @@ class PredictRequest(BaseModel):
 class SentimentRequest(BaseModel):
     texts: list[str]
 
+class OptimizeRequest(BaseModel):
+    tickers: list[str] = ["AAPL", "NVDA", "GOOGL", "TSLA", "AMZN"]
+    method: str = "classical"  # "classical" or "quantum"
+    risk_tolerance: float = 1.0
+    target_assets: int = 3
 
 # basic api endpoints 
 
@@ -126,3 +133,19 @@ async def analyze_sentiment(req: SentimentRequest):
         "individual": results,
         "market_mood": mood,
     }
+
+# Quantum Portfolio Optimization Endpoints
+@app.post("/api/v1/optimize")
+async def optimize(req: OptimizeRequest):
+    """
+    Portfolio optimization (classical Markowitz or Quantum QAOA).
+    """
+    if req.method == "quantum":
+        result = quantum_optimize_portfolio(
+            req.tickers,
+            risk_penalty=1.0 - req.risk_tolerance,
+            target_assets=req.target_assets,
+        )
+    else:
+        result = optimize_portfolio(req.tickers, risk_tolerance=req.risk_tolerance)
+    return result
