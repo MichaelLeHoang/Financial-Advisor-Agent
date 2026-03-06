@@ -7,27 +7,27 @@ class SentimentAnalyzer:
 
     Model: ProsusAI/finbert (~440MB, downloaded on first use)
     """
-    _instance = None # Singleton (model is expensive to load) 
+    _instance = None # Singleton (model is expensive to load)
 
     def __new__(cls):
-        if cls._instance is None: 
+        if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._initialize = False
+            cls._instance._initialized = False  
         return cls._instance
 
     def __init__(self):
-        if self._initialize: 
-            return 
+        if self._initialized:  
+            return
         print("Loading FinBERT sentiment model...")
         self._tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
         self._model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
         self._pipeline = pipeline(
             "sentiment-analysis",
             model=self._model,
-            tokenizer=self._tokenizer, 
-            top_k = None,
+            tokenizer=self._tokenizer,
+            top_k=None,
         )
-        self._initialized = True 
+        self._initialized = True
         print("FinBERT loaded")
 
     def analyze(self, text: str) -> dict: 

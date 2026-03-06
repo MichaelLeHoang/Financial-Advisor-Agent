@@ -3,7 +3,7 @@ import inngest.fast_api
 
 from src.jobs.inngest_client import inngest_client
 from src.jobs.functions import (
-    scheduled_new_ingestion as scheduled_news_ingestion,
+    scheduled_new_ingestion,   
     on_demand_news_ingestion,
 )
 from src.rag.pipeline import ask as rag_ask
@@ -14,23 +14,33 @@ from src.ml.models import RandomForestPredictor, LSTMPredictor, evaluate_model
 from src.ml.sentiment import SentimentAnalyzer
 
 from src.quantum.portfolio import optimize_portfolio, quantum_optimize_portfolio
+from src.agent.agent import FinancialAdvisorAgent
 
 from pydantic import BaseModel
 
 app = FastAPI(
-    title = "Financial Advisor API",
-    description = "AI-powered financial advisor with RAG",
-    version = "0.1.0",
+    title="Financial Advisor API",
+    description="AI-powered financial advisor with RAG, ML prediction, and Quantum optimization",
+    version="0.1.0",
 )
 
-# Resgister Inngest with FastAPI
+# Register Inngest with FastAPI
 inngest.fast_api.serve(
-    app, 
-    inngest_client, 
-    [scheduled_news_ingestion, on_demand_news_ingestion],
+    app,
+    inngest_client,
+    [scheduled_new_ingestion, on_demand_news_ingestion],
 )
 
-# Request/Response Models 
+# Lazy singleton: agent is expensive to initialize (downloads models)
+_agent: FinancialAdvisorAgent | None = None
+
+def get_agent() -> FinancialAdvisorAgent:
+    global _agent
+    if _agent is None:
+        _agent = FinancialAdvisorAgent()
+    return _agent
+
+# Request/Response Models
 class PredictRequest(BaseModel):
     ticker: str = "AAPL"
     model_type: str = "random_forest"  # "random_forest" or "lstm"
@@ -44,6 +54,10 @@ class OptimizeRequest(BaseModel):
     method: str = "classical"  # "classical" or "quantum"
     risk_tolerance: float = 1.0
     target_assets: int = 3
+
+class AgentChatRequest(BaseModel):
+    message: str
+    remember: bool = True  # maintain multi-turn conversation history
 
 # basic api endpoints 
 
@@ -149,3 +163,30 @@ async def optimize(req: OptimizeRequest):
     else:
         result = optimize_portfolio(req.tickers, risk_tolerance=req.risk_tolerance)
     return result
+
+
+# Agent Endpoint
+@app.post("/api/v1/agent/chat")
+async def agent_chat(req: AgentChatRequest):
+    """
+    Chat with the full Financial Advisor AI Agent.
+    The agent has access to all tools: stock data, sentiment analysis,
+    ML prediction, and portfolio optimization.
+
+    POST /api/v1/agent/chat
+    {"message": "Should I invest in NVDA?", "remember": true}
+    """
+    try:
+        response = get_agent().chat(req.message, remember=req.remember)
+        return {"response": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/agent/reset")
+async def agent_reset():
+    """
+    Clear the agent's conversation history to start a fresh session.
+    """
+    get_agent().reset_history()
+    return {"status": "ok", "message": "Conversation history cleared"}

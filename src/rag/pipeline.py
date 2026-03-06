@@ -16,16 +16,18 @@ def ask(
     3. Generate response with Gemini
     Args:
         question: User's financial question
-        ticker_filter: Optionally focus on specific ticker
+        ticker_filter: Optionally focus on a specific ticker (e.g. "AAPL")
         top_k: Number of documents to retrieve
     Usage:
         response = ask("How is Apple doing?", ticker_filter="AAPL")
         print(response.answer)
         print(response.format_with_citations())
     """
+    tickers_list: list[str] | None = [ticker_filter] if ticker_filter else None
+
     # Retrieve
     retriever = Retriever()
-    results = retriever.retrieve(question, top_k=top_k, tickers_filter=ticker_filter)
+    results = retriever.retrieve(question, top_k=top_k, tickers_filter=tickers_list)
     print(f"Retrieved {len(results)} relevant documents")
 
     # Build context
