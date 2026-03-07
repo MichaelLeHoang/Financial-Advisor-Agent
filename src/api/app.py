@@ -58,6 +58,7 @@ class OptimizeRequest(BaseModel):
 class AgentChatRequest(BaseModel):
     message: str
     remember: bool = True  # maintain multi-turn conversation history
+    session_id: str = "default"
 
 # basic api endpoints 
 
@@ -176,11 +177,23 @@ async def agent_chat(req: AgentChatRequest):
     POST /api/v1/agent/chat
     {"message": "Should I invest in NVDA?", "remember": true}
     """
+    from src.agent.history import load_history, append_message
     try:
-        response = get_agent().chat(req.message, remember=req.remember)
-        return {"response": response}
+        agent = get_agent()
+
+        # Load persistent history for this session
+        history = load_history(req.session_id)
+        agent._history = history
+        response = agent.chat(req.message, remember=False)  # we handle persistence
+
+        # Persist both turns
+        if req.remember:
+            append_message(req.session_id, "user", req.message)
+            append_message(req.session_id, "assistant", response)
+        return {"response": response, "session_id": req.session_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.post("/api/v1/agent/reset")
@@ -188,8 +201,20 @@ async def agent_reset():
     """
     Clear the agent's conversation history to start a fresh session.
     """
+    from src.agent.history import clear_history
+
+    clear_history(session_id)
     get_agent().reset_history()
-    return {"status": "ok", "message": "Conversation history cleared"}
+
+    return {"status": "ok", "session_id": session_id}
+
+@app.get("/api/v1/agent/sessions")
+async def list_sessions():
+    """List all conversation sessions."""
+    from src.agent.history import list_sessions
+    
+    return list_sessions()
+
 
 @app.websocket("/ws/agent/chat")
 async def agent_ws(websocket: WebSocket):
@@ -256,3 +281,4 @@ async def agent_ws(websocket: WebSocket):
         pass
     except Exception as e:
         await websocket.send_json({"type": "error", "message": str(e)})
+
