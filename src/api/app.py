@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 import inngest.fast_api
 
 from src.jobs.inngest_client import inngest_client
@@ -190,3 +190,69 @@ async def agent_reset():
     """
     get_agent().reset_history()
     return {"status": "ok", "message": "Conversation history cleared"}
+
+@app.websocket("/ws/agent/chat")
+async def agent_ws(websocket: WebSocket):
+     """
+    WebSocket endpoint for streaming agent responses token by token.
+    
+    Client sends:  {"message": "Should I buy NVDA?", "remember": true}
+    Server pushes: {"type": "token", "content": "Based on..."} (repeated)
+                   {"type": "tool_start", "tool": "get_stock_info"}
+                   {"type": "tool_end", "tool": "get_stock_info", "result": "..."}
+                   {"type": "done"}
+    """
+    await websocket.accept()
+    try: 
+        while True: 
+            data = await websocket.receive_json()
+            message = data.get("message", "")
+            remember = data.get("remember", True)
+
+            agent = get_agent()
+            messages = agent._history + [{"role": "user", "content": message}]
+
+            # Stream events from LangGraph
+            async for event in agent._agent.astream_events(
+                {"messages": messages}, version="v2"):
+                    kind = event["event"]
+
+                    # LLM token streaming
+                    if kind == "on_chat_model_stream": 
+                        chunk = event["data"]["chunk"]
+
+                        if chunk.content:
+                            await websocket.send_json({
+                                "type": "token",
+                                "content": chunk.content,
+                            })
+
+                    # Tool call started
+                    elif kind == "on_tool_start":
+                        await websocket.send_json({
+                            "type": "tool_start",
+                            "tool": event["name"],
+                            "input": str(event["data"].get("input", "")),
+                        })
+                    
+                    # Tool call finished
+                    elif kind == "on_tool_end":
+                        await websocket.send_json({
+                            "type": "tool_end",
+                            "tool": event["name"],
+                            "result": str(event["data"].get("output", "")),
+                        })
+                    
+                    # Signal end of stream
+                    await websocket.send_json({"type": "done"})
+
+                    # Persist to history if requested
+                    if remember:
+                        # We'll capture the final response via a non-streaming call
+                        # (history is already maintained inside the agent)
+                        pass
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        await websocket.send_json({"type": "error", "message": str(e)})
