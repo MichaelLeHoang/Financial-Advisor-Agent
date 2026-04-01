@@ -212,13 +212,13 @@ async def agent_reset():
 async def list_sessions():
     """List all conversation sessions."""
     from src.agent.history import list_sessions
-    
+
     return list_sessions()
 
 
 @app.websocket("/ws/agent/chat")
 async def agent_ws(websocket: WebSocket):
-     """
+    """
     WebSocket endpoint for streaming agent responses token by token.
     
     Client sends:  {"message": "Should I buy NVDA?", "remember": true}
