@@ -2,6 +2,7 @@
 
 An AI-powered financial advisor that combines **real-time market data**, **sentiment analysis**, **ML price prediction**, and **quantum-inspired portfolio optimization** — all orchestrated by a LangGraph ReAct agent powered by Gemini.
 
+![Financial Advisor Agent](ui/public/FinancialAdvisorWebsite.png)
 ---
 
 ## Architecture
