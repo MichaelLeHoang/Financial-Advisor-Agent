@@ -1,33 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import { X, Plus, Zap, BarChart3 } from "lucide-react";
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { X } from "lucide-react";
+import {
+    PieChart as RePieChart, Pie, Cell, ResponsiveContainer
+} from "recharts";
+import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import type { OptimizeResult } from "@/lib/api";
 
 const COLORS = ["#6366f1", "#22d3ee", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#fb923c"];
 
 export default function PortfolioPage() {
-    const [tickerInput, setTickerInput] = useState("");
-    const [tickers, setTickers] = useState<string[]>(["AAPL", "NVDA", "GOOGL"]);
-    const [method, setMethod] = useState<"classical" | "quantum">("classical");
+    const [tickers, setTickers] = useState(["AAPL", "NVDA", "GOOGL"]);
+    const [input, setInput] = useState("");
+    const [mode, setMode] = useState<"classical" | "quantum">("classical");
     const [risk, setRisk] = useState(1.0);
     const [result, setResult] = useState<OptimizeResult | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const addTicker = () => {
-        const t = tickerInput.trim().toUpperCase();
+        const t = input.trim().toUpperCase();
         if (t && !tickers.includes(t)) setTickers((prev) => [...prev, t]);
-        setTickerInput("");
+        setInput("");
     };
 
     const optimize = async () => {
         if (tickers.length < 2) { setError("Add at least 2 tickers"); return; }
         setLoading(true); setError(null);
         try {
-            setResult(await api.optimize(tickers, method, risk));
+            setResult(await api.optimize(tickers, mode, risk));
         } catch (e: any) {
             setError(e.message);
         } finally {
@@ -36,158 +39,172 @@ export default function PortfolioPage() {
     };
 
     const pieData = result?.weights
-        ? Object.entries(result.weights).map(([name, value]) => ({ name, value: Math.round(value * 1000) / 10 }))
+        ? Object.entries(result.weights).map(([name, value]) => ({ name, value: Math.round(value * 1000) / 10, color: COLORS[Object.keys(result.weights!).indexOf(name) % COLORS.length] }))
         : [];
 
     return (
-        <div className="p-6 max-w-3xl mx-auto">
-            <h1 className="text-2xl font-bold glow-text mb-1">Portfolio Optimizer</h1>
-            <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Classical Markowitz or Quantum QAOA optimization.</p>
+        <div className="flex-1 p-8 overflow-y-auto">
+            <div className="max-w-6xl mx-auto space-y-10">
+                <h1 className="text-4xl font-bold">Portfolio Optimizer</h1>
 
-            {/* Ticker tags */}
-            <div className="glass rounded-2xl p-4 mb-4">
-                <p className="text-xs font-medium mb-3" style={{ color: "var(--text-muted)" }}>TICKERS</p>
-                <div className="flex flex-wrap gap-2 mb-3">
-                    {tickers.map((t) => (
-                        <span key={t} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
-                            style={{ background: "var(--accent)", color: "white" }}>
-                            {t}
-                            <button onClick={() => setTickers((prev) => prev.filter((x) => x !== t))}>
-                                <X className="w-3 h-3 opacity-70" />
-                            </button>
-                        </span>
-                    ))}
-                </div>
-                <div className="flex gap-2">
-                    <input
-                        className="flex-1 bg-transparent text-sm outline-none px-3 py-2 rounded-xl border"
-                        style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
-                        placeholder="Add ticker (e.g. TSLA)"
-                        value={tickerInput}
-                        onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
-                        onKeyDown={(e) => e.key === "Enter" && addTicker()}
-                    />
-                    <button onClick={addTicker} className="glass px-3 py-2 rounded-xl text-sm" style={{ color: "var(--accent)" }}>
-                        <Plus className="w-4 h-4" />
-                    </button>
-                </div>
-            </div>
-
-            {/* Method + Risk */}
-            <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="glass rounded-2xl p-4">
-                    <p className="text-xs font-medium mb-3" style={{ color: "var(--text-muted)" }}>METHOD</p>
-                    <div className="flex gap-2">
-                        {(["classical", "quantum"] as const).map((m) => (
-                            <button key={m} onClick={() => setMethod(m)}
-                                className="flex-1 py-1.5 rounded-xl text-xs font-medium transition-all capitalize"
-                                style={{
-                                    background: method === m ? "var(--accent)" : "transparent",
-                                    border: "1px solid",
-                                    borderColor: method === m ? "var(--accent)" : "var(--border)",
-                                    color: method === m ? "white" : "var(--text-muted)",
-                                }}>
-                                {m === "quantum" ? "⚛️ " : "📊 "}{m}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                {method === "classical" && (
-                    <div className="glass rounded-2xl p-4">
-                        <p className="text-xs font-medium mb-2" style={{ color: "var(--text-muted)" }}>
-                            RISK TOLERANCE — {risk.toFixed(1)}
-                        </p>
-                        <input type="range" min="0.1" max="3" step="0.1" value={risk}
-                            onChange={(e) => setRisk(parseFloat(e.target.value))}
-                            className="w-full accent-indigo-500" />
-                        <div className="flex justify-between text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                            <span>Conservative</span><span>Aggressive</span>
+                {/* Config card */}
+                <div className="glass p-8 rounded-[32px] space-y-8">
+                    <div className="space-y-4">
+                        <label className="text-sm text-white/40">Target Assets</label>
+                        <div className="flex flex-wrap gap-3 p-4 glass rounded-2xl">
+                            {tickers.map((t) => (
+                                <div key={t} className="bg-indigo-primary/20 text-indigo-primary px-4 py-2 rounded-xl flex items-center gap-2 font-bold">
+                                    {t}
+                                    <button onClick={() => setTickers((prev) => prev.filter((x) => x !== t))}>
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                            <input
+                                type="text"
+                                value={input}
+                                onChange={(e) => setInput(e.target.value.toUpperCase())}
+                                onKeyDown={(e) => e.key === "Enter" && addTicker()}
+                                placeholder="Add ticker..."
+                                className="bg-transparent focus:outline-none text-sm w-24"
+                            />
                         </div>
                     </div>
-                )}
-            </div>
 
-            {error && <p className="text-sm mb-3" style={{ color: "var(--accent-red)" }}>{error}</p>}
-
-            <button onClick={optimize} disabled={loading}
-                className="w-full py-2.5 rounded-xl font-medium text-sm transition-all disabled:opacity-40"
-                style={{ background: "var(--accent)", boxShadow: "0 0 20px var(--accent-glow)" }}>
-                {loading ? "Optimizing…" : "Optimize Portfolio"}
-            </button>
-
-            {/* Results */}
-            {result && (
-                <div className="mt-6 flex flex-col gap-4">
-
-                    {/* Classical: metrics + donut */}
-                    {result.weights && (
-                        <>
-                            <div className="grid grid-cols-3 gap-3">
-                                {[
-                                    { label: "Expected Return", value: `${((result.expected_annual_return ?? 0) * 100).toFixed(1)}%`, color: "var(--accent-green)" },
-                                    { label: "Volatility", value: `${((result.annual_volatility ?? 0) * 100).toFixed(1)}%`, color: "var(--accent-amber)" },
-                                    { label: "Sharpe Ratio", value: (result.sharpe_ratio ?? 0).toFixed(2), color: "var(--accent)" },
-                                ].map(({ label, value, color }) => (
-                                    <div key={label} className="glass rounded-2xl p-4 text-center">
-                                        <p className="text-2xl font-bold" style={{ color }}>{value}</p>
-                                        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{label}</p>
-                                    </div>
-                                ))}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-4">
+                            <label className="text-sm text-white/40">Optimization Strategy</label>
+                            <div className="flex p-1 glass rounded-2xl">
+                                <button
+                                    onClick={() => setMode("classical")}
+                                    className={cn("flex-1 py-3 rounded-xl transition-all", mode === "classical" ? "bg-white/10 text-white" : "text-white/40")}
+                                >
+                                    Classical
+                                </button>
+                                <button
+                                    onClick={() => setMode("quantum")}
+                                    className={cn("flex-1 py-3 rounded-xl transition-all", mode === "quantum" ? "bg-indigo-primary text-white glow-indigo" : "text-white/40")}
+                                >
+                                    Quantum
+                                </button>
                             </div>
-
-                            <div className="glass rounded-2xl p-4" style={{ height: 280 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100}
-                                            paddingAngle={3} dataKey="value" isAnimationActive>
-                                            {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                                        </Pie>
-                                        <Tooltip formatter={(v) => `${v}%`}
-                                            contentStyle={{ background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)" }} />
-                                        <Legend formatter={(v) => <span style={{ color: "var(--text-secondary)", fontSize: 12 }}>{v}</span>} />
-                                    </PieChart>
-                                </ResponsiveContainer>
+                        </div>
+                        <div className="space-y-4">
+                            <label className="text-sm text-white/40">Risk Tolerance — {risk.toFixed(1)}</label>
+                            <div className="px-4 py-6">
+                                <input
+                                    type="range" min="0.1" max="3" step="0.1" value={risk}
+                                    onChange={(e) => setRisk(parseFloat(e.target.value))}
+                                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-primary"
+                                />
+                                <div className="flex justify-between mt-2 text-xs text-white/40">
+                                    <span>Conservative</span>
+                                    <span>Aggressive</span>
+                                </div>
                             </div>
-                        </>
-                    )}
+                        </div>
+                    </div>
 
-                    {/* Quantum: selected stocks + probability bars */}
-                    {result.selected_stocks && (
-                        <div className="glass rounded-2xl p-4 flex flex-col gap-4">
-                            <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>⚛️ QAOA Selected Stocks</p>
-                            <div className="flex gap-2 flex-wrap">
-                                {result.selected_stocks.map((t) => (
-                                    <span key={t} className="px-3 py-1 rounded-full text-sm font-medium"
-                                        style={{ background: "var(--accent)", color: "white" }}>{t}</span>
-                                ))}
-                            </div>
-                            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                                Best probability: {((result.best_probability ?? 0) * 100).toFixed(1)}%
-                            </p>
+                    {error && <p className="text-sm text-red-negative">{error}</p>}
 
-                            {/* Top quantum states */}
-                            {result.top_states && (
-                                <div className="flex flex-col gap-2 mt-2">
-                                    <p className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>TOP STATES</p>
-                                    {result.top_states.map((state, i) => (
-                                        <div key={i} className="flex items-center gap-3">
-                                            <span className="text-xs font-mono w-24 shrink-0" style={{ color: "var(--text-muted)" }}>{state.bitstring}</span>
-                                            <div className="flex-1 h-5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.04)" }}>
-                                                <div className="h-full rounded-full transition-all"
-                                                    style={{ width: `${state.probability * 100}%`, background: COLORS[i % COLORS.length] }} />
-                                            </div>
-                                            <span className="text-xs w-12 text-right" style={{ color: "var(--text-secondary)" }}>
-                                                {(state.probability * 100).toFixed(1)}%
-                                            </span>
+                    <button
+                        onClick={optimize}
+                        disabled={loading}
+                        className="w-full bg-indigo-primary py-5 rounded-2xl font-bold text-lg glow-indigo hover:scale-[1.01] transition-transform disabled:opacity-40"
+                    >
+                        {loading ? "Optimizing…" : "Optimize Portfolio"}
+                    </button>
+                </div>
+
+                {/* Results */}
+                {result && (
+                    <>
+                        {/* Metrics */}
+                        {result.weights && (
+                            <>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    {[
+                                        { label: "Expected Return", value: `${((result.expected_annual_return ?? 0) * 100).toFixed(1)}%`, color: "text-green-positive" },
+                                        { label: "Volatility", value: `${((result.annual_volatility ?? 0) * 100).toFixed(1)}%`, color: "text-amber-warning" },
+                                        { label: "Sharpe Ratio", value: (result.sharpe_ratio ?? 0).toFixed(2), color: "text-indigo-primary" },
+                                    ].map((m) => (
+                                        <div key={m.label} className="glass p-6 rounded-3xl text-center">
+                                            <div className="text-white/40 text-sm mb-2">{m.label}</div>
+                                            <div className={cn("text-4xl font-bold", m.color)}>{m.value}</div>
                                         </div>
                                     ))}
                                 </div>
-                            )}
-                        </div>
-                    )}
 
-                </div>
-            )}
+                                {/* Pie chart + legend */}
+                                <div className="glass p-10 rounded-[40px] flex flex-col md:flex-row items-center gap-12">
+                                    <div className="w-64 h-64">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <RePieChart>
+                                                <Pie
+                                                    data={pieData}
+                                                    innerRadius={80}
+                                                    outerRadius={100}
+                                                    paddingAngle={5}
+                                                    dataKey="value"
+                                                >
+                                                    {pieData.map((entry, index) => (
+                                                        <Cell key={index} fill={entry.color} />
+                                                    ))}
+                                                </Pie>
+                                            </RePieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                    <div className="flex-1 grid grid-cols-2 gap-6 w-full">
+                                        {pieData.map((d) => (
+                                            <div key={d.name} className="flex items-center justify-between p-4 glass rounded-2xl">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }} />
+                                                    <span className="font-bold">{d.name}</span>
+                                                </div>
+                                                <span className="text-white/60">{d.value}%</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {/* Quantum results */}
+                        {result.selected_stocks && (
+                            <div className="glass p-8 rounded-[32px] space-y-6">
+                                <h3 className="text-xl font-bold">⚛️ QAOA Selected Portfolio</h3>
+                                <div className="flex gap-3 flex-wrap">
+                                    {result.selected_stocks.map((t) => (
+                                        <span key={t} className="px-4 py-2 rounded-xl text-sm font-bold bg-cyan-secondary text-space-black">
+                                            {t}
+                                        </span>
+                                    ))}
+                                </div>
+                                {result.best_probability && (
+                                    <p className="text-white/40 text-sm">Best probability: {(result.best_probability * 100).toFixed(1)}%</p>
+                                )}
+                                {result.top_states && (
+                                    <div className="space-y-3 mt-4">
+                                        <h4 className="text-sm text-white/40 font-bold">Top Quantum States</h4>
+                                        {result.top_states.map((s, i) => (
+                                            <div key={i} className="flex items-center gap-4">
+                                                <span className="font-mono text-xs w-20 shrink-0 text-white/40">|{s.bitstring}⟩</span>
+                                                <div className="flex-1 h-3 bg-white/5 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full rounded-full transition-all"
+                                                        style={{ width: `${s.probability * 100}%`, backgroundColor: COLORS[i % COLORS.length] }}
+                                                    />
+                                                </div>
+                                                <span className="text-xs text-white/40 w-12 text-right">{(s.probability * 100).toFixed(1)}%</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
         </div>
     );
 }

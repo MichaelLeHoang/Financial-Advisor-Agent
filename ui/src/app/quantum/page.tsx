@@ -2,149 +2,157 @@
 
 import { useState } from "react";
 import { Atom, Plus, X } from "lucide-react";
+import { motion } from "motion/react";
+import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import type { OptimizeResult } from "@/lib/api";
 
-const COLORS = ["#6366f1","#22d3ee","#34d399","#fbbf24","#f87171"];
+const COLORS = ["#6366f1", "#22d3ee", "#34d399", "#fbbf24", "#f87171"];
 
 export default function QuantumPage() {
-  const [input, setInput] = useState("");
-  const [tickers, setTickers] = useState<string[]>(["AAPL","NVDA","GOOGL","TSLA","AMZN"]);
-  const [targetAssets, setTargetAssets] = useState(3);
-  const [result, setResult] = useState<OptimizeResult | null>(null);
-  const [loading, setLoading] = useState(false);
+    const [input, setInput] = useState("");
+    const [tickers, setTickers] = useState(["AAPL", "NVDA", "GOOGL", "TSLA", "AMZN"]);
+    const [targetAssets, setTargetAssets] = useState(3);
+    const [result, setResult] = useState<OptimizeResult | null>(null);
+    const [loading, setLoading] = useState(false);
 
-  const add = () => {
-    const t = input.trim().toUpperCase();
-    if (t && !tickers.includes(t)) setTickers(p => [...p, t]);
-    setInput("");
-  };
+    const add = () => {
+        const t = input.trim().toUpperCase();
+        if (t && !tickers.includes(t)) setTickers((p) => [...p, t]);
+        setInput("");
+    };
 
-  const run = async () => {
-    setLoading(true);
-    try { setResult(await api.optimize(tickers, "quantum", 1.0, targetAssets)); }
-    finally { setLoading(false); }
-  };
+    const run = async () => {
+        setLoading(true);
+        try {
+            setResult(await api.optimize(tickers, "quantum", 1.0, targetAssets));
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <div className="flex items-center gap-3 mb-1">
-        <Atom className="w-6 h-6" style={{ color: "var(--accent-cyan)" }} />
-        <h1 className="text-2xl font-bold glow-text">Quantum QAOA Optimizer</h1>
-      </div>
-      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
-        Uses a quantum-inspired QAOA circuit (PennyLane) to select the optimal stock subset.
-      </p>
-
-      {/* Circuit diagram: qubit wires */}
-      <div className="glass rounded-2xl p-4 mb-4 overflow-x-auto">
-        <p className="text-xs font-medium mb-3" style={{ color: "var(--text-muted)" }}>QAOA CIRCUIT SCHEMATIC</p>
-        <svg width={Math.max(260, tickers.length * 80)} height={tickers.length * 36 + 20}>
-          {tickers.map((t, i) => (
-            <g key={t}>
-              {/* Wire */}
-              <line x1={40} y1={18 + i * 36} x2={tickers.length * 80 + 20} y2={18 + i * 36}
-                stroke="rgba(255,255,255,0.12)" strokeWidth={1.5} />
-              {/* Label */}
-              <text x={4} y={23 + i * 36} fontSize={10} fill="var(--text-secondary)">{t}</text>
-              {/* Hadamard gate */}
-              <rect x={48} y={8 + i * 36} width={20} height={20} rx={3} fill="#6366f1" opacity={0.8} />
-              <text x={58} y={22 + i * 36} fontSize={9} fill="white" textAnchor="middle">H</text>
-              {/* Layer gates */}
-              {[1, 2].map((layer) => (
-                <g key={layer}>
-                  <rect x={90 + layer * 60} y={8 + i * 36} width={20} height={20} rx={3} fill="#22d3ee" opacity={0.7} />
-                  <text x={100 + layer * 60} y={22 + i * 36} fontSize={7} fill="white" textAnchor="middle">Rz</text>
-                </g>
-              ))}
-              {/* Measurement */}
-              <circle cx={tickers.length * 80 + 10} cy={18 + i * 36} r={7} fill="rgba(251,191,36,0.3)" stroke="#fbbf24" strokeWidth={1} />
-              <text x={tickers.length * 80 + 10} y={22 + i * 36} fontSize={8} fill="#fbbf24" textAnchor="middle">M</text>
-            </g>
-          ))}
-        </svg>
-        <div className="flex gap-4 mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
-          <span><span className="inline-block w-2.5 h-2.5 rounded-sm mr-1" style={{ background: "#6366f1" }} />Hadamard</span>
-          <span><span className="inline-block w-2.5 h-2.5 rounded-sm mr-1" style={{ background: "#22d3ee" }} />QAOA Layers</span>
-          <span><span className="inline-block w-2.5 h-2.5 rounded-full mr-1" style={{ background: "#fbbf24", opacity: 0.5 }} />Measure</span>
-        </div>
-      </div>
-
-      {/* Tickers + config */}
-      <div className="glass rounded-2xl p-4 mb-4">
-        <p className="text-xs font-medium mb-2" style={{ color: "var(--text-muted)" }}>STOCK UNIVERSE ({tickers.length} qubits)</p>
-        <div className="flex flex-wrap gap-2 mb-3">
-          {tickers.map((t) => (
-            <span key={t} className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs"
-              style={{ background: "var(--accent)", color: "white" }}>
-              {t}
-              <button onClick={() => setTickers(p => p.filter(x => x !== t))}><X className="w-3 h-3" /></button>
-            </span>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <input className="flex-1 glass rounded-xl px-3 py-2 text-sm outline-none"
-            style={{ color: "var(--text-primary)" }}
-            placeholder="Add ticker…" value={input}
-            onChange={e => setInput(e.target.value.toUpperCase())}
-            onKeyDown={e => e.key === "Enter" && add()} />
-          <button onClick={add} className="glass px-3 rounded-xl" style={{ color: "var(--accent)" }}>
-            <Plus className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="mt-3">
-          <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-            SELECT {targetAssets} of {tickers.length} stocks
-          </p>
-          <input type="range" min={1} max={Math.max(1, tickers.length - 1)} value={targetAssets}
-            onChange={e => setTargetAssets(parseInt(e.target.value))}
-            className="w-full accent-indigo-500" />
-        </div>
-      </div>
-
-      <button onClick={run} disabled={loading || tickers.length < 2}
-        className="w-full py-2.5 rounded-xl font-medium text-sm transition-all disabled:opacity-40"
-        style={{ background: "linear-gradient(135deg, #6366f1, #22d3ee)", boxShadow: "0 0 20px rgba(99,102,241,0.3)" }}>
-        {loading ? "Running QAOA…" : "⚛️ Run Quantum Optimization"}
-      </button>
-
-      {/* Results */}
-      {result?.top_states && (
-        <div className="mt-6 glass rounded-2xl p-4 flex flex-col gap-4">
-          <div>
-            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Selected Portfolio</p>
-            <div className="flex gap-2 mt-2 flex-wrap">
-              {result.selected_stocks?.map(t => (
-                <span key={t} className="px-3 py-1 rounded-full text-sm font-medium"
-                  style={{ background: "var(--accent-cyan)", color: "#07080b" }}>{t}</span>
-              ))}
-            </div>
-            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-              Probability: {((result.best_probability ?? 0) * 100).toFixed(1)}%
-            </p>
-          </div>
-
-          <div>
-            <p className="text-xs font-medium mb-2" style={{ color: "var(--text-muted)" }}>TOP 5 QUANTUM STATES</p>
-            {result.top_states.map((s, i) => (
-              <div key={i} className="flex items-center gap-3 mb-2">
-                <code className="text-xs w-28 shrink-0" style={{ color: "var(--text-muted)" }}>
-                  |{s.bitstring}⟩
-                </code>
-                <div className="flex-1 h-5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.04)" }}>
-                  <div className="h-full rounded-full" style={{ width: `${s.probability * 100}%`, background: COLORS[i] }} />
+    return (
+        <div className="flex-1 p-8 overflow-y-auto">
+            <div className="max-w-6xl mx-auto space-y-12">
+                <div className="flex justify-between items-end">
+                    <div>
+                        <h1 className="text-4xl font-bold mb-2">Quantum QAOA</h1>
+                        <p className="text-white/40">Quantum Approximate Optimization Algorithm for discrete asset selection.</p>
+                    </div>
+                    <div className="glass px-4 py-2 rounded-xl text-xs text-cyan-secondary border-cyan-secondary/30">
+                        Quantum Processor: PennyLane Simulator
+                    </div>
                 </div>
-                <span className="text-xs w-12 text-right" style={{ color: "var(--text-secondary)" }}>
-                  {(s.probability * 100).toFixed(1)}%
-                </span>
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  [{s.stocks.join(", ")}]
-                </span>
-              </div>
-            ))}
-          </div>
+
+                {/* Quantum Circuit Visualization */}
+                <div className="glass p-10 rounded-[40px] overflow-x-auto">
+                    <div className="min-w-[800px] space-y-8">
+                        {tickers.map((t) => (
+                            <div key={t} className="flex items-center gap-6">
+                                <div className="w-16 font-mono text-sm text-white/40">{t}</div>
+                                <div className="flex-1 h-[2px] bg-white/10 relative flex items-center gap-12 px-12">
+                                    <div className="w-10 h-10 rounded bg-indigo-primary flex items-center justify-center text-xs font-bold glow-indigo">H</div>
+                                    <div className="w-10 h-10 rounded bg-cyan-secondary flex items-center justify-center text-xs font-bold glow-cyan">Rz</div>
+                                    <div className="w-10 h-10 rounded bg-indigo-primary flex items-center justify-center text-xs font-bold glow-indigo">H</div>
+                                    <div className="ml-auto w-8 h-8 rounded-full border-2 border-amber-warning flex items-center justify-center">
+                                        <div className="w-1 h-4 bg-amber-warning rotate-45" />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Parameters */}
+                    <div className="glass p-8 rounded-[32px] space-y-6">
+                        <h3 className="text-xl font-bold">Parameters</h3>
+                        <div className="space-y-4">
+                            <label className="text-sm text-white/40">
+                                Select {targetAssets} of {tickers.length} stocks
+                            </label>
+                            <input
+                                type="range"
+                                min={1}
+                                max={Math.max(1, tickers.length - 1)}
+                                value={targetAssets}
+                                onChange={(e) => setTargetAssets(parseInt(e.target.value))}
+                                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-cyan-secondary"
+                            />
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {tickers.map((t) => (
+                                <div key={t} className="px-3 py-1 glass rounded-lg text-xs font-bold flex items-center gap-1.5">
+                                    {t}
+                                    <button onClick={() => setTickers((p) => p.filter((x) => x !== t))}>
+                                        <X className="w-3 h-3 text-white/40" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex gap-2">
+                            <input
+                                className="flex-1 glass rounded-xl px-3 py-2 text-sm outline-none"
+                                placeholder="Add ticker…"
+                                value={input}
+                                onChange={(e) => setInput(e.target.value.toUpperCase())}
+                                onKeyDown={(e) => e.key === "Enter" && add()}
+                            />
+                            <button onClick={add} className="glass px-3 rounded-xl" style={{ color: "#22d3ee" }}>
+                                <Plus className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <button
+                            onClick={run}
+                            disabled={loading || tickers.length < 2}
+                            className="w-full bg-gradient-to-r from-indigo-primary to-cyan-secondary py-4 rounded-2xl font-bold glow-indigo disabled:opacity-40"
+                        >
+                            {loading ? "Running QAOA…" : "⚛️ Run Quantum Optimization"}
+                        </button>
+                    </div>
+
+                    {/* Results */}
+                    <div className="glass p-8 rounded-[32px] space-y-6">
+                        <h3 className="text-xl font-bold">Top 5 Quantum States</h3>
+                        {result?.top_states ? (
+                            <>
+                                <div className="space-y-4">
+                                    {result.top_states.map((s, i) => (
+                                        <div key={i} className="space-y-2">
+                                            <div className="flex justify-between text-xs">
+                                                <span className="font-mono">|{s.bitstring}⟩</span>
+                                                <span className="text-white/40">{(s.probability * 100).toFixed(1)}%</span>
+                                            </div>
+                                            <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                                                <motion.div
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: `${s.probability * 100}%` }}
+                                                    className="h-full rounded-full"
+                                                    style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                {result.selected_stocks && (
+                                    <div className="mt-4 pt-4 border-t border-white/10">
+                                        <p className="text-sm text-white/40 mb-2">Selected Portfolio</p>
+                                        <div className="flex gap-2 flex-wrap">
+                                            {result.selected_stocks.map((t) => (
+                                                <span key={t} className="px-3 py-1 rounded-full text-sm font-bold bg-cyan-secondary text-space-black">{t}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div className="text-white/20 text-sm text-center py-12">
+                                Run the quantum optimizer to see results
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
         </div>
-      )}
-    </div>
-  );
+    );
 }

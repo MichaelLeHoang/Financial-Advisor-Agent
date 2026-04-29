@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 import inngest.fast_api
 
 from src.jobs.inngest_client import inngest_client
@@ -22,6 +23,15 @@ app = FastAPI(
     title="Financial Advisor API",
     description="AI-powered financial advisor with RAG, ML prediction, and Quantum optimization",
     version="0.1.0",
+)
+
+# CORS — allow the Next.js frontend to call the API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Register Inngest with FastAPI
