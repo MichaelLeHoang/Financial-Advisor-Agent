@@ -106,7 +106,7 @@ export default function ChatPage() {
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6">
         {messages.length === 1 && (
-          <div className="h-full flex flex-col items-start justify-center space-y-8">
+          <div className="mx-auto flex h-full w-full max-w-3xl flex-col items-center justify-center space-y-8">
             <div className="w-full max-w-3xl space-y-1 text-left">
               <motion.h1
                 initial={{ opacity: 0, y: 20 }}
@@ -168,7 +168,7 @@ export default function ChatPage() {
 
       {/* Input */}
       <div className="p-8 pt-0">
-        <div className="max-w-4xl mx-auto rounded-2xl border border-white/[0.08] bg-white/[0.045] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_18px_50px_rgba(0,0,0,0.38),0_0_54px_rgba(99,102,241,0.08)] backdrop-blur-xl transition-colors focus-within:border-indigo-primary/45 focus-within:shadow-[0_0_0_1px_rgba(99,102,241,0.28),0_18px_50px_rgba(0,0,0,0.42),0_0_70px_rgba(99,102,241,0.12)]">
+        <div className="mx-auto w-full max-w-3xl rounded-2xl border border-white/[0.08] bg-white/[0.045] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_18px_50px_rgba(0,0,0,0.38),0_0_54px_rgba(99,102,241,0.08)] backdrop-blur-xl transition-colors focus-within:border-indigo-primary/45 focus-within:shadow-[0_0_0_1px_rgba(99,102,241,0.28),0_18px_50px_rgba(0,0,0,0.42),0_0_70px_rgba(99,102,241,0.12)]">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}

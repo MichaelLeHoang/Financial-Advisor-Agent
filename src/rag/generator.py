@@ -11,7 +11,11 @@ class Generator:
     """
 
     def __init__(self):
-        genai.configure(api_key=settings.gemini_api_key)
+        api_key = settings.secret_value("gemini_api_key")
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEY is required for RAG generation")
+
+        genai.configure(api_key=api_key)
         self._model = genai.GenerativeModel("gemini-2.0-flash")
     def generate(
         self,

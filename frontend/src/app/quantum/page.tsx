@@ -107,7 +107,7 @@ export default function QuantumPage() {
                             disabled={loading || tickers.length < 2}
                             className="w-full bg-gradient-to-r from-indigo-primary to-cyan-secondary py-4 rounded-2xl font-bold glow-indigo disabled:opacity-40"
                         >
-                            {loading ? "Running QAOA…" : "⚛️ Run Quantum Optimization"}
+                            {loading ? "Running QAOA…" : "Run Quantum Optimization"}
                         </button>
                     </div>
 

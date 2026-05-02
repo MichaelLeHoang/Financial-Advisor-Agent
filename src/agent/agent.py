@@ -49,9 +49,13 @@ class FinancialAdvisorAgent:
         This is the ONLY place you need to change to switch LLMs.
         """
         if provider == "google":
+            api_key = settings.secret_value("gemini_api_key")
+            if not api_key:
+                raise RuntimeError("GEMINI_API_KEY is required for the Google LLM provider")
+
             return ChatGoogleGenerativeAI(
                 model="gemini-2.0-flash",
-                google_api_key=settings.gemini_api_key,
+                google_api_key=api_key,
                 temperature=0.3,
             )
         elif provider == "openai":

@@ -74,15 +74,33 @@ cp .env.example .env
 ### 3. Configure `.env`
 
 ```dotenv
+# App
+APP_ENV=development
+FRONTEND_URL=http://localhost:3000
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+
+# LLM provider used by the current agent/RAG flow
 GEMINI_API_KEY=your_key_here
+DEFAULT_LLM_PROVIDER=google
+DEFAULT_LLM_MODE=fast
 
 # Optional: Qdrant (defaults to local)
 QDRANT_URL=http://localhost:6333
 QDRANT_API_KEY=
+QDRANT_COLLECTION_NEWS=financial_news
 
 # Optional: embedding provider (local is free, gemini requires API)
 EMBEDDING_PROVIDER=local
+
+# Future SaaS services. Keep these empty locally until you need them.
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+DATABASE_URL=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
 ```
+
+The app loads configuration through `src/core/config.py`. `src/config.py` is kept as a compatibility import path for existing modules. Keep real secrets in `.env` or your deployment secret manager; do not commit `.env`.
 
 ### 4. Start Qdrant (Docker)
 
@@ -106,6 +124,14 @@ uv run uvicorn src.api.app:app --reload --port 8000
 # → Swagger UI: http://localhost:8000/docs
 ```
 
+### 7. Check service readiness
+
+```bash
+curl http://localhost:8000/api/v1/status
+```
+
+The status endpoint reports whether database, Supabase, Qdrant, LLM provider keys, Inngest jobs, billing, and notification services are configured. It checks Qdrant reachability and never returns secret values.
+
 ---
 
 ## API Endpoints
@@ -113,6 +139,7 @@ uv run uvicorn src.api.app:app --reload --port 8000
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Health check |
+| `GET` | `/api/v1/status` | SaaS service readiness status |
 | `POST` | `/api/v1/agent/chat` | Chat with the full AI agent |
 | `POST` | `/api/v1/agent/reset` | Clear conversation history |
 | `POST` | `/api/v1/query` | RAG-only Q&A |

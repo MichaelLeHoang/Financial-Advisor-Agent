@@ -16,19 +16,21 @@ from src.ml.sentiment import SentimentAnalyzer
 
 from src.quantum.portfolio import optimize_portfolio, quantum_optimize_portfolio
 from src.agent.agent import FinancialAdvisorAgent
+from src.config import settings
+from src.data.vector_db import get_qdrant_client
 
 from pydantic import BaseModel
 
 app = FastAPI(
-    title="Financial Advisor API",
+    title=settings.app_name,
     description="AI-powered financial advisor with RAG, ML prediction, and Quantum optimization",
-    version="0.1.0",
+    version=settings.app_version,
 )
 
 # CORS — allow the Next.js frontend to call the API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -70,6 +72,56 @@ class AgentChatRequest(BaseModel):
     remember: bool = True  # maintain multi-turn conversation history
     session_id: str = "default"
 
+
+def _service_state(configured: bool, ok: bool | None = None, detail: str | None = None) -> dict:
+    if ok is True:
+        status = "ok"
+    elif ok is False:
+        status = "error"
+    else:
+        status = "configured" if configured else "missing_config"
+
+    payload = {"status": status, "configured": configured}
+    if detail:
+        payload["detail"] = detail
+    return payload
+
+
+def _check_qdrant() -> dict:
+    configured = bool(settings.qdrant_url)
+    if not configured:
+        return _service_state(False, detail="QDRANT_URL is not set")
+
+    try:
+        collections = get_qdrant_client().get_collections()
+        return {
+            **_service_state(True, ok=True),
+            "url": settings.qdrant_url,
+            "collections": len(collections.collections),
+        }
+    except Exception as exc:
+        return {
+            **_service_state(True, ok=False, detail=str(exc)),
+            "url": settings.qdrant_url,
+        }
+
+
+def _llm_key_status() -> dict:
+    providers = {
+        "google": settings.is_configured("gemini_api_key"),
+        "openai": settings.is_configured("openai_api_key"),
+        "anthropic": settings.is_configured("anthropic_api_key"),
+        "openrouter": settings.is_configured("openrouter_api_key"),
+    }
+    default_provider_ready = providers.get(settings.default_llm_provider, False)
+
+    return {
+        "status": "configured" if default_provider_ready else "missing_config",
+        "default_provider": settings.default_llm_provider,
+        "default_mode": settings.default_llm_mode,
+        "providers": providers,
+    }
+
 # basic api endpoints 
 
 @app.get("/health")
@@ -77,6 +129,45 @@ class AgentChatRequest(BaseModel):
 async def health_check():
     """Simple health check endpoint"""
     return {"status": "ok", "service": "Financial Advisor API"}
+
+
+@app.get("/api/v1/status")
+async def service_status():
+    """
+    Report SaaS foundation service readiness.
+
+    This endpoint is safe for deployment health dashboards: it reports whether
+    required service configuration is present and checks Qdrant reachability.
+    It never returns secret values.
+    """
+    services = {
+        "database": _service_state(settings.is_configured("database_url")),
+        "supabase": _service_state(
+            bool(settings.supabase_url and settings.is_configured("supabase_service_role_key"))
+        ),
+        "qdrant": _check_qdrant(),
+        "llm": _llm_key_status(),
+        "jobs": _service_state(
+            bool(settings.inngest_app_id and settings.news_ingestion_cron),
+            detail=f"cron={settings.news_ingestion_cron}",
+        ),
+        "billing": _service_state(
+            settings.is_configured("stripe_secret_key") and settings.is_configured("stripe_webhook_secret")
+        ),
+        "notifications": _service_state(
+            settings.is_configured("resend_api_key")
+            or settings.is_configured("telegram_bot_token")
+            or settings.is_configured("notification_secret_key")
+        ),
+    }
+    degraded = any(service["status"] == "error" for service in services.values())
+
+    return {
+        "status": "degraded" if degraded else "ok",
+        "environment": settings.app_env,
+        "version": settings.app_version,
+        "services": services,
+    }
 
 # Rag Endpoints
 
@@ -207,7 +298,7 @@ async def agent_chat(req: AgentChatRequest):
 
 
 @app.post("/api/v1/agent/reset")
-async def agent_reset():
+async def agent_reset(session_id: str = "default"):
     """
     Clear the agent's conversation history to start a fresh session.
     """
@@ -291,4 +382,3 @@ async def agent_ws(websocket: WebSocket):
         pass
     except Exception as e:
         await websocket.send_json({"type": "error", "message": str(e)})
-

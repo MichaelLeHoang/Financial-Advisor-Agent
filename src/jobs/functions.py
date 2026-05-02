@@ -1,14 +1,15 @@
 import inngest 
 from src.jobs.inngest_client import inngest_client
 from src.services.ingestion import ingest_news
+from src.config import settings
 
 # Default tickers to track 
-DEFAULT_TICKERS = ["AAPL", "MSFT", "GOOGL", "NVDA", "TSLA", "AMZN", "META", "VOO", "QQQ", "VFV"]
+DEFAULT_TICKERS = settings.default_news_tickers
 
 @inngest_client.create_function(
     fn_id = "scheduled_news_ingestion",
     trigger = inngest.TriggerCron(
-        cron = "0 * * * *" # Every hour
+        cron = settings.news_ingestion_cron
     ),    
 )
 
@@ -58,6 +59,4 @@ async def on_demand_news_ingestion(
         lambda: ingest_news(tickers),
     )
 
-    return {"status": "completed", "tickers": tickers,"stats": stats}
-    
-    
+    return {"status": "completed", "tickers": tickers, "stats": stats}

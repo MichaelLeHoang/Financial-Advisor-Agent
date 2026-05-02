@@ -24,7 +24,7 @@ def ingest_documents(
         Stats dict with counts of processed items
     """
 
-    collection_name = collection_name or settings.news_collection
+    collection_name = collection_name or settings.resolved_news_collection
 
     # Initialize services
     client = get_qdrant_client()
@@ -100,5 +100,3 @@ def ingest_news(tickers: list[str], collection_name: str | None = None) -> dict:
     
     # Ingest
     return ingest_documents(documents, collection_name=collection_name)
-
-    

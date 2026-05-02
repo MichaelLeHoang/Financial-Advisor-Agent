@@ -78,10 +78,14 @@ class GeminiEmbeddingProvider(EmbeddingProvider):
                 - Requires internet connection
     """
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str | None = None):
         import google.generativeai as genai
 
-        genai.configure(api_key=settings.gemini_api_key)
+        api_key = api_key or settings.secret_value("gemini_api_key")
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEY is required when EMBEDDING_PROVIDER=gemini")
+
+        genai.configure(api_key=api_key)
 
         self.model = 'models/embedding-001'  # or latest embedding model
         self._dimension = 768  # Fix: use private attr so @property works
@@ -156,5 +160,3 @@ def get_embedding_service() -> EmbeddingService:
     :rtype: EmbeddingService
     """
     return EmbeddingService()
-
-        

@@ -16,7 +16,7 @@ class Retriever:
     def __init__(self):
         self._client = get_qdrant_client()
         self._embedding_service = get_embedding_service()
-        self._collection_name = settings.news_collection
+        self._collection_name = settings.resolved_news_collection
 
     def retrieve(
                 self, 
@@ -64,4 +64,3 @@ class Retriever:
 def retrieve(query: str, **kwargs) -> list[RetrievalResult]:
     """Convenience function for quick retrieval."""
     return Retriever().retrieve(query, **kwargs)
-
