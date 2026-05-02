@@ -6,6 +6,7 @@ import { motion } from "motion/react";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import FinanceDisclaimer from "@/components/common/FinanceDisclaimer";
 
 interface StockInfo {
     ticker: string;
@@ -82,6 +83,9 @@ export default function MarketPage() {
                 >
                     <RefreshCw className={cn("w-5 h-5 text-white/60", loading && "animate-spin")} />
                 </button>
+            </div>
+            <div className="mb-8">
+                <FinanceDisclaimer />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

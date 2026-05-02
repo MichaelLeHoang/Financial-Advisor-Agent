@@ -27,13 +27,24 @@ import {
     Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/components/auth/AuthProvider";
+import type { Plan } from "@/components/auth/AuthProvider";
 
-const NAV = [
+type NavItem = {
+    href: string;
+    icon: ComponentType<{ className?: string }>;
+    label: string;
+    minPlan?: Plan;
+};
+
+const NAV: NavItem[] = [
+    { href: "/dashboard", icon: Sparkles, label: "Dashboard" },
     { href: "/", icon: MessageSquare, label: "AI Advisor" },
     { href: "/market", icon: TrendingUp, label: "Market" },
     { href: "/sentiment", icon: Brain, label: "Sentiment" },
+    { href: "/watchlist", icon: Pin, label: "Watchlist" },
     { href: "/portfolio", icon: PieChart, label: "Portfolio" },
-    { href: "/quantum", icon: Atom, label: "Quantum" },
+    { href: "/quantum", icon: Atom, label: "Quantum", minPlan: "quant" },
 ];
 
 const RECENT_THREADS = [
@@ -52,7 +63,9 @@ export default function Sidebar({
     onToggle: () => void;
 }) {
     const path = usePathname();
+    const { user } = useAuth();
     const [mobileOpen, setMobileOpen] = useState(false);
+    const visibleNav = getVisibleNav(user?.plan ?? "free");
 
     useEffect(() => {
         setMobileOpen(false);
@@ -70,7 +83,7 @@ export default function Sidebar({
                 {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
 
-            <DesktopSidebar path={path} isOpen={isOpen} onToggle={onToggle} />
+            <DesktopSidebar path={path} isOpen={isOpen} onToggle={onToggle} nav={visibleNav} />
 
             <AnimatePresence>
                 {mobileOpen && (
@@ -92,7 +105,7 @@ export default function Sidebar({
                             exit={{ x: -340, opacity: 0.8 }}
                             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                         >
-                            <SidebarSurface path={path} />
+                            <SidebarSurface path={path} nav={visibleNav} />
                         </motion.div>
                     </>
                 )}
@@ -105,10 +118,12 @@ function DesktopSidebar({
     path,
     isOpen,
     onToggle,
+    nav,
 }: {
     path: string;
     isOpen: boolean;
     onToggle: () => void;
+    nav: NavItem[];
 }) {
     const [recentsOpen, setRecentsOpen] = useState(false);
 
@@ -122,10 +137,11 @@ function DesktopSidebar({
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
         >
             {isOpen ? (
-                <SidebarSurface path={path} onToggle={onToggle} />
+                <SidebarSurface path={path} onToggle={onToggle} nav={nav} />
             ) : (
                 <MiniSidebar
                     path={path}
+                    nav={nav}
                     recentsOpen={recentsOpen}
                     onToggleRecents={() => setRecentsOpen((open) => !open)}
                     onToggleSidebar={onToggle}
@@ -137,11 +153,13 @@ function DesktopSidebar({
 
 function MiniSidebar({
     path,
+    nav,
     recentsOpen,
     onToggleRecents,
     onToggleSidebar,
 }: {
     path: string;
+    nav: NavItem[];
     recentsOpen: boolean;
     onToggleRecents: () => void;
     onToggleSidebar: () => void;
@@ -208,7 +226,7 @@ function MiniSidebar({
             <div className="mb-3 h-px w-8 bg-white/[0.08]" />
 
             <nav className="flex flex-col items-center gap-1" aria-label="Primary navigation">
-                {NAV.map(({ href, icon: Icon, label }) => {
+                {nav.map(({ href, icon: Icon, label }) => {
                     const active = path === href;
 
                     return (
@@ -233,9 +251,11 @@ function MiniSidebar({
 
 function SidebarSurface({
     path,
+    nav,
     onToggle,
 }: {
     path: string;
+    nav: NavItem[];
     onToggle?: () => void;
 }) {
     return (
@@ -282,7 +302,7 @@ function SidebarSurface({
                             Workspace
                         </div>
                         <nav className="space-y-1" aria-label="Primary navigation">
-                            {NAV.map(({ href, icon: Icon, label }) => {
+                            {nav.map(({ href, icon: Icon, label }) => {
                                 const active = path === href;
 
                                 return (
@@ -348,6 +368,17 @@ function SidebarSurface({
             </div>
         </div>
     );
+}
+
+function getVisibleNav(plan: Plan): NavItem[] {
+    const rank: Record<Plan, number> = {
+        free: 0,
+        pro: 1,
+        trader: 2,
+        quant: 3,
+        execution_addon: 4,
+    };
+    return NAV.filter((item) => !item.minPlan || rank[plan] >= rank[item.minPlan]);
 }
 
 function RecentThreadRow({ thread, compact = false }: { thread: string; compact?: boolean }) {

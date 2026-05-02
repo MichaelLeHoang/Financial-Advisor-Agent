@@ -6,6 +6,7 @@ import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import type { OptimizeResult } from "@/lib/api";
+import FinanceDisclaimer from "@/components/common/FinanceDisclaimer";
 
 const COLORS = ["#6366f1", "#22d3ee", "#34d399", "#fbbf24", "#f87171"];
 
@@ -43,6 +44,7 @@ export default function QuantumPage() {
                         Quantum Processor: PennyLane Simulator
                     </div>
                 </div>
+                <FinanceDisclaimer />
 
                 {/* Quantum Circuit Visualization */}
                 <div className="glass p-10 rounded-[40px] overflow-x-auto">

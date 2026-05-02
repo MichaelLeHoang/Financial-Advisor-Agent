@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import {
     PieChart as RePieChart, Pie, Cell, ResponsiveContainer
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
-import type { OptimizeResult } from "@/lib/api";
+import type { OptimizeResult, Portfolio } from "@/lib/api";
+import FinanceDisclaimer from "@/components/common/FinanceDisclaimer";
 
 const COLORS = ["#6366f1", "#22d3ee", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#fb923c"];
 
@@ -17,6 +18,8 @@ export default function PortfolioPage() {
     const [mode, setMode] = useState<"classical" | "quantum">("classical");
     const [risk, setRisk] = useState(1.0);
     const [result, setResult] = useState<OptimizeResult | null>(null);
+    const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
+    const [portfolioName, setPortfolioName] = useState("Core Portfolio");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -24,6 +27,24 @@ export default function PortfolioPage() {
         const t = input.trim().toUpperCase();
         if (t && !tickers.includes(t)) setTickers((prev) => [...prev, t]);
         setInput("");
+    };
+
+    const refreshPortfolios = async () => setPortfolios(await api.portfolios());
+
+    useEffect(() => {
+        void refreshPortfolios();
+    }, []);
+
+    const createPortfolio = async () => {
+        if (!portfolioName.trim()) return;
+        setLoading(true);
+        try {
+            await api.createPortfolio(portfolioName.trim(), "USD");
+            setPortfolioName("");
+            await refreshPortfolios();
+        } finally {
+            setLoading(false);
+        }
     };
 
     const optimize = async () => {
@@ -46,6 +67,33 @@ export default function PortfolioPage() {
         <div className="flex-1 p-8 overflow-y-auto">
             <div className="max-w-6xl mx-auto space-y-10">
                 <h1 className="text-4xl font-bold">Portfolio Optimizer</h1>
+                <FinanceDisclaimer />
+
+                <div className="glass p-6 rounded-2xl space-y-5">
+                    <div className="flex flex-col gap-3 md:flex-row">
+                        <input
+                            value={portfolioName}
+                            onChange={(event) => setPortfolioName(event.target.value)}
+                            placeholder="Portfolio name"
+                            className="min-w-0 flex-1 rounded-xl border border-white/[0.08] bg-white/[0.035] px-4 py-3 text-sm outline-none placeholder:text-white/24"
+                        />
+                        <button
+                            onClick={createPortfolio}
+                            disabled={loading}
+                            className="rounded-xl bg-white/[0.08] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/[0.12] disabled:opacity-50"
+                        >
+                            Create Portfolio
+                        </button>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-3">
+                        {portfolios.map((portfolio) => (
+                            <div key={portfolio.id} className="rounded-xl border border-white/[0.08] bg-white/[0.035] p-4">
+                                <div className="font-semibold">{portfolio.name}</div>
+                                <div className="mt-1 text-xs text-white/35">{portfolio.base_currency}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
 
                 {/* Config card */}
                 <div className="glass p-8 rounded-[32px] space-y-8">

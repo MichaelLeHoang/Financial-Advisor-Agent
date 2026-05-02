@@ -1,4 +1,5 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+let authToken: string | null = null;
 
 // ─── Types ────────────────────
 
@@ -37,12 +38,42 @@ export interface PredictResult {
   test_metrics: Record<string, number>;
 }
 
+export interface AuthUser {
+  id: string;
+  email: string | null;
+  display_name?: string | null;
+  plan: "free" | "pro" | "trader" | "quant" | "execution_addon";
+}
+
+export interface Portfolio {
+  id: string;
+  user_id: string;
+  name: string;
+  base_currency: string;
+  created_at: string;
+}
+
+export interface Watchlist {
+  id: string;
+  user_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface WatchlistAsset {
+  id: string;
+  watchlist_id: string;
+  symbol: string;
+  asset_type: string;
+  created_at: string;
+}
+
 // ─── API helpers ────────────────────
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: requestHeaders(),
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -53,14 +84,40 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`);
+  const res = await fetch(`${BASE}${path}`, { headers: requestHeaders(false) });
   if (!res.ok) throw new Error(`API error: ${res.statusText}`);
   return res.json();
+}
+
+function requestHeaders(includeJson = true): HeadersInit {
+  return {
+    ...(includeJson ? { "Content-Type": "application/json" } : {}),
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+  };
 }
 
 // ─── Exported functions ────────────
 
 export const api = {
+  setAuthToken: (token: string | null) => {
+    authToken = token;
+  },
+
+  me: () => get<AuthUser>("/api/v1/me"),
+
+  portfolios: () => get<Portfolio[]>("/api/v1/portfolios"),
+
+  createPortfolio: (name: string, baseCurrency = "USD") =>
+    post<Portfolio>("/api/v1/portfolios", { name, base_currency: baseCurrency }),
+
+  watchlists: () => get<Watchlist[]>("/api/v1/watchlists"),
+
+  createWatchlist: (name: string) =>
+    post<Watchlist>("/api/v1/watchlists", { name }),
+
+  addWatchlistAsset: (watchlistId: string, symbol: string, assetType = "equity") =>
+    post<WatchlistAsset>(`/api/v1/watchlists/${watchlistId}/assets`, { symbol, asset_type: assetType }),
+
   /** Chat with the full LangGraph agent */
   chat: (message: string, sessionId = "default", remember = true) =>
     post<ChatResponse>("/api/v1/agent/chat", { message, session_id: sessionId, remember }),

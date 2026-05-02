@@ -21,16 +21,10 @@ import {
     User,
     Zap,
 } from "lucide-react";
-
-const currentUserName = "Michael";
-
-const ACCOUNTS = [
-    { name: currentUserName, plan: "PRO Trial", active: true },
-    { name: "Personal Research", plan: "Free", active: false },
-    { name: "Atlas Capital", plan: "Team", active: false },
-];
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function Header({ onSettingsClick }: { onSettingsClick?: () => void }) {
+    const { user, signOut } = useAuth();
     const [modelOpen, setModelOpen] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
     const [accountSwitcherOpen, setAccountSwitcherOpen] = useState(false);
@@ -58,6 +52,10 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
         setAccountSwitcherOpen(false);
         onSettingsClick?.();
     };
+
+    const currentUserName = user?.display_name || user?.email?.split("@")[0] || "Researcher";
+    const currentPlan = user?.plan ?? "free";
+    const initial = currentUserName.slice(0, 1).toUpperCase();
 
     return (
         <header className="h-20 border-b border-white/10 flex items-center justify-between px-4 pl-16 md:px-8 md:pl-8 bg-space-black/30 backdrop-blur-md z-40 shrink-0">
@@ -138,7 +136,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                         className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.035] px-2.5 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors hover:bg-white/[0.065] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
                         <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-primary/20 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/30">
-                            M
+                            {initial}
                             <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-space-black bg-green-positive shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
                         </div>
                         <div className="hidden min-w-0 sm:block">
@@ -162,11 +160,11 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                                     className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-white/[0.06]"
                                 >
                                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-primary/20 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/30">
-                                        M
+                                        {initial}
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <div className="truncate text-sm font-semibold text-white">{currentUserName}</div>
-                                        <div className="truncate text-xs text-white/42">Current plan: PRO Trial</div>
+                                        <div className="truncate text-xs text-white/42">Current plan: {formatPlan(currentPlan)}</div>
                                     </div>
                                     <ChevronRight className="h-4 w-4 text-white/35" />
                                 </button>
@@ -184,6 +182,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
 
                                 <button
                                     type="button"
+                                    onClick={signOut}
                                     className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm text-red-negative/85 transition-colors hover:bg-red-negative/10 hover:text-red-negative"
                                 >
                                     <LogOut className="h-4 w-4" />
@@ -200,22 +199,19 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                                             className="absolute right-[calc(100%+0.75rem)] top-2 hidden w-64 rounded-2xl border border-white/[0.08] bg-[#0a0a0c] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_20px_60px_rgba(0,0,0,0.58)] lg:block"
                                         >
                                             <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/35">Switch account</div>
-                                            {ACCOUNTS.map((account) => (
-                                                <button
-                                                    type="button"
-                                                    key={account.name}
-                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/[0.055]"
-                                                >
-                                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.055] text-white/60 ring-1 ring-white/10">
-                                                        <Building2 className="h-4 w-4" />
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="truncate text-sm text-white/85">{account.name}</div>
-                                                        <div className="truncate text-xs text-white/35">{account.plan}</div>
-                                                    </div>
-                                                    {account.active && <Check className="h-4 w-4 text-green-positive" />}
-                                                </button>
-                                            ))}
+                                            <button
+                                                type="button"
+                                                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/[0.055]"
+                                            >
+                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.055] text-white/60 ring-1 ring-white/10">
+                                                    <Building2 className="h-4 w-4" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="truncate text-sm text-white/85">{currentUserName}</div>
+                                                    <div className="truncate text-xs text-white/35">{formatPlan(currentPlan)}</div>
+                                                </div>
+                                                <Check className="h-4 w-4 text-green-positive" />
+                                            </button>
                                             <div className="my-2 h-px bg-white/[0.08]" />
                                             <button
                                                 type="button"
@@ -236,6 +232,13 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
             </div>
         </header>
     );
+}
+
+function formatPlan(plan: string) {
+    return plan
+        .split("_")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
 }
 
 function MenuItem({

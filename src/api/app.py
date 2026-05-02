@@ -18,6 +18,7 @@ from src.quantum.portfolio import optimize_portfolio, quantum_optimize_portfolio
 from src.agent.agent import FinancialAdvisorAgent
 from src.config import settings
 from src.data.vector_db import get_qdrant_client
+from src.saas.routes import router as saas_router
 
 from pydantic import BaseModel
 
@@ -35,6 +36,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(saas_router)
 
 # Register Inngest with FastAPI
 inngest.fast_api.serve(

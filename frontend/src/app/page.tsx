@@ -6,6 +6,7 @@ import { Brain, Image, Loader2, Paperclip, PieChart, Send, TableProperties, Tren
 import { motion, AnimatePresence } from "motion/react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import FinanceDisclaimer from "@/components/common/FinanceDisclaimer";
 
 interface Message {
   id: string;
@@ -105,6 +106,7 @@ export default function ChatPage() {
     <div className="flex flex-col h-full relative overflow-hidden">
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6">
+        <FinanceDisclaimer />
         {messages.length === 1 && (
           <div className="mx-auto flex h-full w-full max-w-3xl flex-col items-center justify-center space-y-8">
             <div className="w-full max-w-3xl space-y-1 text-left">

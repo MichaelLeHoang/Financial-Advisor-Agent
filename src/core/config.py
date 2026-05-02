@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     supabase_url: str | None = None
     supabase_service_role_key: SecretStr | None = None
     supabase_jwt_secret: SecretStr | None = None
+    supabase_anon_key: SecretStr | None = None
     database_url: SecretStr | None = None
 
     # Billing
