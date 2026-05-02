@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from src.config import settings
 from src.saas.models import (
+    AuthenticatedUser,
     HoldingCreate,
     HoldingRead,
     PortfolioCreate,
@@ -241,7 +242,10 @@ class SupabaseRestStore:
         return [WatchlistAssetRead.model_validate(row) for row in rows]
 
 
-def get_store() -> UserScopedStore | SupabaseRestStore:
+def get_store(user: AuthenticatedUser | None = None) -> UserScopedStore | SupabaseRestStore:
+    if user and user.is_guest:
+        return store
+
     service_role_key = settings.secret_value("supabase_service_role_key")
     if settings.supabase_url and service_role_key:
         return SupabaseRestStore(settings.supabase_url, service_role_key)

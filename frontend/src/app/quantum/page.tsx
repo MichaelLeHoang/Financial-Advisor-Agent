@@ -4,18 +4,23 @@ import { useState } from "react";
 import { Atom, Plus, X } from "lucide-react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { OptimizeResult } from "@/lib/api";
 import FinanceDisclaimer from "@/components/common/FinanceDisclaimer";
+import UpgradePrompt from "@/components/common/UpgradePrompt";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 const COLORS = ["#6366f1", "#22d3ee", "#34d399", "#fbbf24", "#f87171"];
 
 export default function QuantumPage() {
+    const { user } = useAuth();
     const [input, setInput] = useState("");
     const [tickers, setTickers] = useState(["AAPL", "NVDA", "GOOGL", "TSLA", "AMZN"]);
     const [targetAssets, setTargetAssets] = useState(3);
     const [result, setResult] = useState<OptimizeResult | null>(null);
     const [loading, setLoading] = useState(false);
+    const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
+    const isLocked = !["quant", "execution_addon"].includes(user.plan);
 
     const add = () => {
         const t = input.trim().toUpperCase();
@@ -24,9 +29,16 @@ export default function QuantumPage() {
     };
 
     const run = async () => {
+        if (isLocked) {
+            setUpgradeMessage("Quantum optimization is available on the Quant plan.");
+            return;
+        }
         setLoading(true);
+        setUpgradeMessage(null);
         try {
             setResult(await api.optimize(tickers, "quantum", 1.0, targetAssets));
+        } catch (error) {
+            if (isUpgradeRequiredError(error)) setUpgradeMessage(error.detail.message);
         } finally {
             setLoading(false);
         }
@@ -45,6 +57,11 @@ export default function QuantumPage() {
                     </div>
                 </div>
                 <FinanceDisclaimer />
+                {(isLocked || upgradeMessage) && (
+                    <UpgradePrompt
+                        message={upgradeMessage ?? "Quantum optimization is available on the Quant plan."}
+                    />
+                )}
 
                 {/* Quantum Circuit Visualization */}
                 <div className="glass p-10 rounded-[40px] overflow-x-auto">

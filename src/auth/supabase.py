@@ -14,6 +14,7 @@ from src.saas.models import AuthenticatedUser, Plan
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
+GUEST_USER_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 
 def _b64url_decode(value: str) -> bytes:
@@ -90,3 +91,37 @@ async def get_current_user(
             detail=f"Invalid bearer token: {exc}",
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
+
+
+def get_guest_user() -> AuthenticatedUser:
+    return AuthenticatedUser(
+        id=GUEST_USER_ID,
+        email=None,
+        display_name="Guest",
+        plan=Plan.FREE,
+        is_guest=True,
+    )
+
+
+async def get_current_or_guest_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> AuthenticatedUser:
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return get_guest_user()
+
+    jwt_secret = settings.secret_value("supabase_jwt_secret")
+    if not jwt_secret:
+        return get_guest_user()
+
+    try:
+        claims = _verify_hs256(credentials.credentials, jwt_secret)
+        user_metadata = claims.get("user_metadata") or {}
+        return AuthenticatedUser(
+            id=UUID(claims["sub"]),
+            email=claims.get("email"),
+            display_name=user_metadata.get("display_name") or user_metadata.get("full_name"),
+            plan=_plan_from_claims(claims),
+            is_guest=False,
+        )
+    except Exception:
+        return get_guest_user()

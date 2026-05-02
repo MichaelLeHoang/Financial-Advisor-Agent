@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { ComponentType } from "react";
+import type { ComponentType, FormEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
     Bell,
@@ -12,6 +12,7 @@ import {
     CreditCard,
     Cpu,
     HelpCircle,
+    LogIn,
     LogOut,
     Plus,
     Search,
@@ -24,10 +25,15 @@ import {
 import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function Header({ onSettingsClick }: { onSettingsClick?: () => void }) {
-    const { user, signOut } = useAuth();
+    const { user, error: authError, signIn, signUp, signOut } = useAuth();
     const [modelOpen, setModelOpen] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
     const [accountSwitcherOpen, setAccountSwitcherOpen] = useState(false);
+    const [signInOpen, setSignInOpen] = useState(false);
+    const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [authSubmitting, setAuthSubmitting] = useState(false);
     const modelRef = useRef<HTMLDivElement>(null);
     const profileRef = useRef<HTMLDivElement>(null);
 
@@ -40,6 +46,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
             if (profileRef.current && !profileRef.current.contains(target)) {
                 setProfileOpen(false);
                 setAccountSwitcherOpen(false);
+                setSignInOpen(false);
             }
         };
 
@@ -50,12 +57,30 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
     const openSettings = () => {
         setProfileOpen(false);
         setAccountSwitcherOpen(false);
+        setSignInOpen(false);
         onSettingsClick?.();
     };
 
     const currentUserName = user?.display_name || user?.email?.split("@")[0] || "Researcher";
     const currentPlan = user?.plan ?? "free";
     const initial = currentUserName.slice(0, 1).toUpperCase();
+    const isGuest = user?.is_guest ?? false;
+
+    const submitAuth = async (event: FormEvent) => {
+        event.preventDefault();
+        setAuthSubmitting(true);
+        try {
+            if (authMode === "signin") {
+                await signIn(email, password);
+            } else {
+                await signUp(email, password);
+            }
+            setSignInOpen(false);
+            setProfileOpen(false);
+        } finally {
+            setAuthSubmitting(false);
+        }
+    };
 
     return (
         <header className="h-20 border-b border-white/10 flex items-center justify-between px-4 pl-16 md:px-8 md:pl-8 bg-space-black/30 backdrop-blur-md z-40 shrink-0">
@@ -171,23 +196,80 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
 
                                 <div className="my-2 h-px bg-white/[0.08]" />
 
+                                {isGuest && (
+                                    <MenuItem
+                                        icon={LogIn}
+                                        label="Sign in"
+                                        onClick={() => {
+                                            setSignInOpen((open) => !open);
+                                            setAccountSwitcherOpen(false);
+                                        }}
+                                    />
+                                )}
                                 <MenuItem icon={Sparkles} label="Upgrade plan" />
-                                <MenuItem icon={User} label="Profile" />
-                                <MenuItem icon={CreditCard} label="Billing" />
+                                {!isGuest && <MenuItem icon={User} label="Profile" />}
+                                {!isGuest && <MenuItem icon={CreditCard} label="Billing" />}
                                 <MenuItem icon={Shield} label="Security" />
                                 <MenuItem icon={HelpCircle} label="Help center" />
                                 <MenuItem icon={Settings} label="Settings" onClick={openSettings} />
+                                {!isGuest && <MenuItem icon={LogOut} label="Sign out" onClick={signOut} />}
 
                                 <div className="my-2 h-px bg-white/[0.08]" />
 
-                                <button
-                                    type="button"
-                                    onClick={signOut}
-                                    className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm text-red-negative/85 transition-colors hover:bg-red-negative/10 hover:text-red-negative"
-                                >
-                                    <LogOut className="h-4 w-4" />
-                                    Log out
-                                </button>
+                                <AnimatePresence>
+                                    {signInOpen && (
+                                        <motion.form
+                                            onSubmit={submitAuth}
+                                            initial={{ opacity: 0, y: -6 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -6 }}
+                                            transition={{ duration: 0.16 }}
+                                            className="mb-2 space-y-3 rounded-xl border border-white/[0.08] bg-white/[0.035] p-3"
+                                        >
+                                            <div className="flex rounded-lg bg-black/20 p-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setAuthMode("signin")}
+                                                    className={`h-8 flex-1 rounded-md text-xs ${authMode === "signin" ? "bg-white/[0.1] text-white" : "text-white/45"}`}
+                                                >
+                                                    Sign in
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setAuthMode("signup")}
+                                                    className={`h-8 flex-1 rounded-md text-xs ${authMode === "signup" ? "bg-white/[0.1] text-white" : "text-white/45"}`}
+                                                >
+                                                    Sign up
+                                                </button>
+                                            </div>
+                                            <input
+                                                type="email"
+                                                value={email}
+                                                onChange={(event) => setEmail(event.target.value)}
+                                                placeholder="Email"
+                                                className="h-10 w-full rounded-lg border border-white/[0.08] bg-black/20 px-3 text-sm outline-none placeholder:text-white/28 focus:border-indigo-primary/50"
+                                                required
+                                            />
+                                            <input
+                                                type="password"
+                                                value={password}
+                                                onChange={(event) => setPassword(event.target.value)}
+                                                placeholder="Password"
+                                                className="h-10 w-full rounded-lg border border-white/[0.08] bg-black/20 px-3 text-sm outline-none placeholder:text-white/28 focus:border-indigo-primary/50"
+                                                required
+                                                minLength={6}
+                                            />
+                                            {authError && <p className="text-xs text-red-negative">{authError}</p>}
+                                            <button
+                                                type="submit"
+                                                disabled={authSubmitting}
+                                                className="h-10 w-full rounded-lg bg-indigo-primary text-sm font-semibold text-white disabled:opacity-50"
+                                            >
+                                                {authSubmitting ? "Working..." : authMode === "signin" ? "Sign in" : "Create account"}
+                                            </button>
+                                        </motion.form>
+                                    )}
+                                </AnimatePresence>
 
                                 <AnimatePresence>
                                     {accountSwitcherOpen && (

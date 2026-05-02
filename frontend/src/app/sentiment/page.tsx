@@ -4,15 +4,17 @@ import { useState } from "react";
 import type { ChangeEvent, ComponentType } from "react";
 import { ClipboardList, FileText, TableProperties, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { SentimentResult } from "@/lib/api";
 import FinanceDisclaimer from "@/components/common/FinanceDisclaimer";
+import UpgradePrompt from "@/components/common/UpgradePrompt";
 
 export default function SentimentPage() {
     const [input, setInput] = useState("");
     const [headlines, setHeadlines] = useState<string[]>([]);
     const [result, setResult] = useState<SentimentResult | null>(null);
     const [loading, setLoading] = useState(false);
+    const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
 
     const addHeadline = () => {
         if (input.trim() && !headlines.includes(input.trim())) {
@@ -42,8 +44,11 @@ export default function SentimentPage() {
     const analyze = async () => {
         if (headlines.length === 0) return;
         setLoading(true);
+        setUpgradeMessage(null);
         try {
             setResult(await api.sentiment(headlines));
+        } catch (error) {
+            if (isUpgradeRequiredError(error)) setUpgradeMessage(error.detail.message);
         } finally {
             setLoading(false);
         }
@@ -61,6 +66,7 @@ export default function SentimentPage() {
                     <p className="text-white/40">Powered by FinBERT — analyze market sentiment from financial headlines.</p>
                 </div>
                 <FinanceDisclaimer />
+                {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
 
                 {/* Input */}
                 <div className="rounded-2xl border border-white/[0.08] bg-white/[0.045] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_18px_50px_rgba(0,0,0,0.34),0_0_54px_rgba(99,102,241,0.08)] backdrop-blur-xl transition-colors focus-within:border-indigo-primary/45">

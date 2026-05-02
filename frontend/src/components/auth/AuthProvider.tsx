@@ -10,16 +10,11 @@ export interface AuthUser {
   email: string | null;
   display_name?: string | null;
   plan: Plan;
-}
-
-interface AuthSession {
-  access_token: string;
-  refresh_token?: string;
-  user: AuthUser;
+  is_guest?: boolean;
 }
 
 interface AuthContextValue {
-  user: AuthUser | null;
+  user: AuthUser;
   token: string | null;
   loading: boolean;
   error: string | null;
@@ -30,12 +25,25 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 const STORAGE_KEY = "faa.supabase.session";
+const GUEST_USER: AuthUser = {
+  id: "00000000-0000-0000-0000-000000000001",
+  email: null,
+  display_name: "Guest",
+  plan: "free",
+  is_guest: true,
+};
+
+interface AuthSession {
+  access_token: string;
+  refresh_token?: string;
+  user: AuthUser;
+}
 
 function supabaseConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anonKey) {
-    throw new Error("Supabase frontend environment variables are not configured.");
+    throw new Error("Sign in is not configured for this environment.");
   }
   return { url, anonKey };
 }
@@ -47,22 +55,21 @@ function normalizeUser(payload: any): AuthUser {
     email: payload.email ?? null,
     display_name: metadata.display_name ?? metadata.full_name ?? null,
     plan: metadata.plan ?? "free",
+    is_guest: false,
   };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as AuthSession;
-      setSession(parsed);
-      api.setAuthToken(parsed.access_token);
-    }
-    setLoading(false);
+    if (!raw) return;
+
+    const parsed = JSON.parse(raw) as AuthSession;
+    setSession(parsed);
+    api.setAuthToken(parsed.access_token);
   }, []);
 
   const persistSession = (nextSession: AuthSession) => {
@@ -74,10 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const authenticate = async (email: string, password: string, mode: "signin" | "signup") => {
     setError(null);
     const { url, anonKey } = supabaseConfig();
-    const endpoint =
-      mode === "signin"
-        ? `${url}/auth/v1/token?grant_type=password`
-        : `${url}/auth/v1/signup`;
+    const endpoint = mode === "signin" ? `${url}/auth/v1/token?grant_type=password` : `${url}/auth/v1/signup`;
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -91,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const message = data.error_description ?? data.msg ?? data.message ?? "Authentication failed";
+      const message = data.error_description ?? data.msg ?? data.message ?? "Sign in failed";
       setError(message);
       throw new Error(message);
     }
@@ -111,19 +115,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      user: session?.user ?? null,
+      user: session?.user ?? GUEST_USER,
       token: session?.access_token ?? null,
-      loading,
+      loading: false,
       error,
       signIn: (email, password) => authenticate(email, password, "signin"),
       signUp: (email, password) => authenticate(email, password, "signup"),
       signOut: () => {
         setSession(null);
+        setError(null);
         api.setAuthToken(null);
         window.localStorage.removeItem(STORAGE_KEY);
       },
     }),
-    [session, loading, error]
+    [session, error]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

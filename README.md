@@ -101,9 +101,6 @@ DATABASE_URL=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 
-# Frontend auth
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ```
 
 The app loads configuration through `src/core/config.py`. `src/config.py` is kept as a compatibility import path for existing modules. Keep real secrets in `.env` or your deployment secret manager; do not commit `.env`.
@@ -142,7 +139,7 @@ The status endpoint reports whether database, Supabase, Qdrant, LLM provider key
 
 Create a Supabase project, then run the migration in `supabase/migrations/001_saas_foundation.sql` using the Supabase SQL editor or CLI. It creates profiles, subscriptions, portfolios, holdings, watchlists, watchlist assets, strategies, usage events, and audit logs with RLS policies for user-owned data.
 
-For local frontend auth, add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to `frontend/.env.local`. Keep `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_JWT_SECRET` backend-only.
+Authentication is not required for local access. Requests without a bearer token run as a Free guest user. Keep `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_JWT_SECRET` backend-only for future authenticated account support.
 
 ---
 
@@ -152,11 +149,11 @@ For local frontend auth, add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABAS
 |--------|----------|-------------|
 | `GET` | `/health` | Health check |
 | `GET` | `/api/v1/status` | SaaS service readiness status |
-| `GET` | `/api/v1/me` | Current authenticated Supabase user |
-| `GET` | `/api/v1/portfolios` | List authenticated user's portfolios |
-| `POST` | `/api/v1/portfolios` | Create authenticated user's portfolio |
-| `GET` | `/api/v1/watchlists` | List authenticated user's watchlists |
-| `POST` | `/api/v1/watchlists` | Create authenticated user's watchlist |
+| `GET` | `/api/v1/me` | Current user context, defaulting to Free guest |
+| `GET` | `/api/v1/portfolios` | List current user's portfolios |
+| `POST` | `/api/v1/portfolios` | Create current user's portfolio |
+| `GET` | `/api/v1/watchlists` | List current user's watchlists |
+| `POST` | `/api/v1/watchlists` | Create current user's watchlist |
 | `POST` | `/api/v1/agent/chat` | Chat with the full AI agent |
 | `POST` | `/api/v1/agent/reset` | Clear conversation history |
 | `POST` | `/api/v1/query` | RAG-only Q&A |

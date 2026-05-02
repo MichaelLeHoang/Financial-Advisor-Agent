@@ -4,9 +4,11 @@ import { useRef, useEffect, useState } from "react";
 import type { ChangeEvent, ComponentType, MouseEvent } from "react";
 import { Brain, Image, Loader2, Paperclip, PieChart, Send, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { api } from "@/lib/api";
+import { api, isUpgradeRequiredError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import FinanceDisclaimer from "@/components/common/FinanceDisclaimer";
+import { useAuth } from "@/components/auth/AuthProvider";
+import UpgradePrompt from "@/components/common/UpgradePrompt";
 
 interface Message {
   id: string;
@@ -36,15 +38,17 @@ const SUGGESTIONS = [
   },
 ];
 
-const currentUserName = "Michael";
-
 export default function ChatPage() {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([
-    { id: "1", role: "assistant", content: "Hello! I'm your Quantum AI Financial Advisor. How can I help you optimize your wealth today?" },
+    { id: "1", role: "assistant", content: "Hello. I can help with market research, portfolio analysis, and financial news." },
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const firstName = getFirstName(user?.display_name || user?.email || "");
+  const greeting = user?.is_guest ? "Hello" : `Hello${firstName ? ` ${firstName}` : ""}`;
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -60,6 +64,7 @@ export default function ChatPage() {
 
     setMessages((prev) => [...prev, userMsg, fetchingMsg]);
     setIsLoading(true);
+    setUpgradeMessage(null);
 
     try {
       const res = await api.chat(text);
@@ -71,11 +76,14 @@ export default function ChatPage() {
         })
       );
     } catch (err: any) {
+      if (isUpgradeRequiredError(err)) {
+        setUpgradeMessage(err.detail.message);
+      }
       setMessages((prev) =>
         prev.filter((m) => m.status !== "fetching").concat({
           id: Date.now().toString(),
           role: "assistant",
-          content: `⚠️ Error: ${err.message}`,
+          content: isUpgradeRequiredError(err) ? err.detail.message : `Error: ${err.message}`,
         })
       );
     } finally {
@@ -107,6 +115,7 @@ export default function ChatPage() {
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6">
         <FinanceDisclaimer />
+        {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
         {messages.length === 1 && (
           <div className="mx-auto flex h-full w-full max-w-3xl flex-col items-center justify-center space-y-8">
             <div className="w-full max-w-3xl space-y-1 text-left">
@@ -115,7 +124,7 @@ export default function ChatPage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="text-4xl md:text-5xl font-semibold bg-gradient-to-r from-white via-indigo-primary to-cyan-secondary bg-clip-text text-transparent"
               >
-                Hello {currentUserName}
+                {greeting}
               </motion.h1>
               <motion.p
                 initial={{ opacity: 0, y: 12 }}
@@ -260,6 +269,11 @@ function SuggestionCard({
       </div>
     </button>
   );
+}
+
+function getFirstName(value: string) {
+  const name = value.includes("@") ? value.split("@")[0] : value;
+  return name.trim().split(/\s+/)[0] || "";
 }
 
 function UploadPill({

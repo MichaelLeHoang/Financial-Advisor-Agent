@@ -6,9 +6,10 @@ import {
     PieChart as RePieChart, Pie, Cell, ResponsiveContainer
 } from "recharts";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { OptimizeResult, Portfolio } from "@/lib/api";
 import FinanceDisclaimer from "@/components/common/FinanceDisclaimer";
+import UpgradePrompt from "@/components/common/UpgradePrompt";
 
 const COLORS = ["#6366f1", "#22d3ee", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#fb923c"];
 
@@ -22,6 +23,7 @@ export default function PortfolioPage() {
     const [portfolioName, setPortfolioName] = useState("Core Portfolio");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
 
     const addTicker = () => {
         const t = input.trim().toUpperCase();
@@ -38,10 +40,15 @@ export default function PortfolioPage() {
     const createPortfolio = async () => {
         if (!portfolioName.trim()) return;
         setLoading(true);
+        setError(null);
+        setUpgradeMessage(null);
         try {
             await api.createPortfolio(portfolioName.trim(), "USD");
             setPortfolioName("");
             await refreshPortfolios();
+        } catch (e: any) {
+            if (isUpgradeRequiredError(e)) setUpgradeMessage(e.detail.message);
+            else setError(e.message);
         } finally {
             setLoading(false);
         }
@@ -49,11 +56,12 @@ export default function PortfolioPage() {
 
     const optimize = async () => {
         if (tickers.length < 2) { setError("Add at least 2 tickers"); return; }
-        setLoading(true); setError(null);
+        setLoading(true); setError(null); setUpgradeMessage(null);
         try {
             setResult(await api.optimize(tickers, mode, risk));
         } catch (e: any) {
-            setError(e.message);
+            if (isUpgradeRequiredError(e)) setUpgradeMessage(e.detail.message);
+            else setError(e.message);
         } finally {
             setLoading(false);
         }
@@ -68,6 +76,7 @@ export default function PortfolioPage() {
             <div className="max-w-6xl mx-auto space-y-10">
                 <h1 className="text-4xl font-bold">Portfolio Optimizer</h1>
                 <FinanceDisclaimer />
+                {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
 
                 <div className="glass p-6 rounded-2xl space-y-5">
                     <div className="flex flex-col gap-3 md:flex-row">
@@ -185,8 +194,8 @@ export default function PortfolioPage() {
 
                                 {/* Pie chart + legend */}
                                 <div className="glass p-10 rounded-[40px] flex flex-col md:flex-row items-center gap-12">
-                                    <div className="w-64 h-64">
-                                        <ResponsiveContainer width="100%" height="100%">
+                                    <div className="w-64 h-64 min-w-0 min-h-64">
+                                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                             <RePieChart>
                                                 <Pie
                                                     data={pieData}

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RefreshCw, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { motion } from "motion/react";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { api, isUpgradeRequiredError } from "@/lib/api";
 import FinanceDisclaimer from "@/components/common/FinanceDisclaimer";
+import UpgradePrompt from "@/components/common/UpgradePrompt";
 
 interface StockInfo {
     ticker: string;
@@ -45,9 +46,16 @@ function parsePrice(text: string): { price: string; change: string; up: boolean 
 export default function MarketPage() {
     const [stocks, setStocks] = useState<StockInfo[]>(DEFAULT_STOCKS);
     const [loading, setLoading] = useState(false);
+    const [mounted, setMounted] = useState(false);
+    const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const refresh = async () => {
         setLoading(true);
+        setUpgradeMessage(null);
         const updated = [...stocks];
         await Promise.all(
             updated.map(async (stock, i) => {
@@ -61,8 +69,8 @@ export default function MarketPage() {
                     if (parsed) {
                         updated[i] = { ...stock, ...parsed };
                     }
-                } catch {
-                    /* keep default */
+                } catch (error) {
+                    if (isUpgradeRequiredError(error)) setUpgradeMessage(error.detail.message);
                 }
             })
         );
@@ -87,6 +95,7 @@ export default function MarketPage() {
             <div className="mb-8">
                 <FinanceDisclaimer />
             </div>
+            {upgradeMessage && <div className="mb-8"><UpgradePrompt message={upgradeMessage} /></div>}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {stocks.map((stock) => (
@@ -113,25 +122,29 @@ export default function MarketPage() {
 
                         <div className="text-3xl font-bold mb-6">${stock.price}</div>
 
-                        <div className="h-20 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={stock.data.map((v, i) => ({ v, i }))}>
-                                    <defs>
-                                        <linearGradient id={`grad-${stock.ticker}`} x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor={stock.up ? "#34d399" : "#f87171"} stopOpacity={0.3} />
-                                            <stop offset="95%" stopColor={stock.up ? "#34d399" : "#f87171"} stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <Area
-                                        type="monotone"
-                                        dataKey="v"
-                                        stroke={stock.up ? "#34d399" : "#f87171"}
-                                        strokeWidth={2}
-                                        fillOpacity={1}
-                                        fill={`url(#grad-${stock.ticker})`}
-                                    />
-                                </AreaChart>
-                            </ResponsiveContainer>
+                        <div className="h-20 min-h-20 w-full min-w-0">
+                            {mounted ? (
+                                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                                    <AreaChart data={stock.data.map((v, i) => ({ v, i }))}>
+                                        <defs>
+                                            <linearGradient id={`grad-${stock.ticker}`} x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor={stock.up ? "#34d399" : "#f87171"} stopOpacity={0.3} />
+                                                <stop offset="95%" stopColor={stock.up ? "#34d399" : "#f87171"} stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <Area
+                                            type="monotone"
+                                            dataKey="v"
+                                            stroke={stock.up ? "#34d399" : "#f87171"}
+                                            strokeWidth={2}
+                                            fillOpacity={1}
+                                            fill={`url(#grad-${stock.ticker})`}
+                                        />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full w-full rounded-xl bg-white/[0.035]" />
+                            )}
                         </div>
                     </motion.div>
                 ))}

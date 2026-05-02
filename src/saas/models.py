@@ -18,6 +18,7 @@ class AuthenticatedUser(BaseModel):
     email: str | None = None
     display_name: str | None = None
     plan: Plan = Plan.FREE
+    is_guest: bool = False
 
 
 class Profile(BaseModel):

@@ -38,11 +38,40 @@ export interface PredictResult {
   test_metrics: Record<string, number>;
 }
 
+export interface UpgradeRequiredDetail {
+  error: "upgrade_required";
+  feature_key: string;
+  current_plan: string;
+  required_plan: string;
+  message: string;
+  metadata: Record<string, unknown>;
+}
+
 export interface AuthUser {
   id: string;
   email: string | null;
   display_name?: string | null;
   plan: "free" | "pro" | "trader" | "quant" | "execution_addon";
+  is_guest?: boolean;
+}
+
+export class ApiError extends Error {
+  status: number;
+  detail: unknown;
+
+  constructor(status: number, detail: unknown) {
+    super(errorMessage(detail));
+    this.name = "ApiError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+export function isUpgradeRequiredError(error: unknown): error is ApiError & { detail: UpgradeRequiredDetail } {
+  return error instanceof ApiError
+    && typeof error.detail === "object"
+    && error.detail !== null
+    && (error.detail as { error?: string }).error === "upgrade_required";
 }
 
 export interface Portfolio {
@@ -78,15 +107,28 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "API error");
+    throw new ApiError(res.status, err.detail ?? err);
   }
   return res.json();
 }
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { headers: requestHeaders(false) });
-  if (!res.ok) throw new Error(`API error: ${res.statusText}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new ApiError(res.status, err.detail ?? err);
+  }
   return res.json();
+}
+
+function errorMessage(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (typeof detail === "object" && detail !== null) {
+    const maybeMessage = (detail as { message?: unknown; detail?: unknown }).message
+      ?? (detail as { message?: unknown; detail?: unknown }).detail;
+    if (typeof maybeMessage === "string") return maybeMessage;
+  }
+  return "API error";
 }
 
 function requestHeaders(includeJson = true): HeadersInit {

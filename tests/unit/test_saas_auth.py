@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import time
+import asyncio
 from uuid import uuid4
 
 from pydantic import SecretStr
@@ -52,3 +53,13 @@ def test_supabase_jwt_rejects_bad_signature():
         assert "signature" in str(exc)
     else:
         raise AssertionError("Expected invalid signature")
+
+
+def test_optional_auth_returns_guest_without_token():
+    from src.auth.supabase import GUEST_USER_ID, get_current_or_guest_user
+
+    user = asyncio.run(get_current_or_guest_user(None))
+
+    assert user.id == GUEST_USER_ID
+    assert user.plan == "free"
+    assert user.is_guest is True

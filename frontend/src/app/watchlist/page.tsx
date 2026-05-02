@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import { Plus, Star } from "lucide-react";
 import FinanceDisclaimer from "@/components/common/FinanceDisclaimer";
-import { api } from "@/lib/api";
+import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { Watchlist } from "@/lib/api";
+import UpgradePrompt from "@/components/common/UpgradePrompt";
 
 export default function WatchlistPage() {
   const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
   const [name, setName] = useState("Primary Watchlist");
   const [loading, setLoading] = useState(false);
+  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
 
   const refresh = async () => setWatchlists(await api.watchlists());
 
@@ -20,10 +22,13 @@ export default function WatchlistPage() {
   const create = async () => {
     if (!name.trim()) return;
     setLoading(true);
+    setUpgradeMessage(null);
     try {
       await api.createWatchlist(name.trim());
       setName("");
       await refresh();
+    } catch (error) {
+      if (isUpgradeRequiredError(error)) setUpgradeMessage(error.detail.message);
     } finally {
       setLoading(false);
     }
@@ -34,9 +39,10 @@ export default function WatchlistPage() {
       <div className="mx-auto max-w-5xl space-y-8">
         <div>
           <h1 className="text-4xl font-bold">Watchlists</h1>
-          <p className="mt-2 text-white/42">User-owned market lists backed by protected API routes.</p>
+          <p className="mt-2 text-white/42">Track the symbols you want to follow.</p>
         </div>
         <FinanceDisclaimer />
+        {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
 
         <div className="flex gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.045] p-2">
           <input

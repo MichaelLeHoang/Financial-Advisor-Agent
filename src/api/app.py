@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import inngest.fast_api
 
@@ -18,7 +18,11 @@ from src.quantum.portfolio import optimize_portfolio, quantum_optimize_portfolio
 from src.agent.agent import FinancialAdvisorAgent
 from src.config import settings
 from src.data.vector_db import get_qdrant_client
+from src.auth.supabase import get_current_or_guest_user
+from src.saas.entitlements import FeatureKey, enforce_feature
+from src.saas.models import AuthenticatedUser
 from src.saas.routes import router as saas_router
+from src.saas.usage import usage_tracker
 
 from pydantic import BaseModel
 
@@ -209,12 +213,13 @@ async def trigger_ingestion(tickers: list[str] = ["AAPL", "NVDA"]):
 
 # ML endpoints 
 @app.post("/api/v1/predict")
-async def predict_stock(req: PredictRequest):
+async def predict_stock(req: PredictRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
     """
     Train a model on historical data and predict direction.
     POST /api/v1/predict
     {"ticker": "AAPL", "model_type": "random_forest", "sequence_length": 5}
     """
+    enforce_feature(user, FeatureKey.ML_PREDICTION)
     try: 
         data = prepare_training_data(
             req.ticker, 
@@ -239,12 +244,14 @@ async def predict_stock(req: PredictRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/sentiment")
-async def analyze_sentiment(req: SentimentRequest):
+async def analyze_sentiment(req: SentimentRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
     """
     Analyze sentiment of financial texts.
     POST /api/v1/sentiment
     {"texts": ["Apple beat earnings", "Tesla recalls vehicles"]}
     """
+    enforce_feature(user, FeatureKey.SENTIMENT)
+    usage_tracker.increment(user, FeatureKey.SENTIMENT, "sentiment_requests_per_day")
     analyzer = SentimentAnalyzer()
     results = analyzer.analyze_batch(req.texts)
     mood = analyzer.get_market_mood(req.texts)
@@ -255,24 +262,26 @@ async def analyze_sentiment(req: SentimentRequest):
 
 # Quantum Portfolio Optimization Endpoints
 @app.post("/api/v1/optimize")
-async def optimize(req: OptimizeRequest):
+async def optimize(req: OptimizeRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
     """
     Portfolio optimization (classical Markowitz or Quantum QAOA).
     """
     if req.method == "quantum":
+        enforce_feature(user, FeatureKey.QUANTUM_OPTIMIZATION)
         result = quantum_optimize_portfolio(
             req.tickers,
             risk_penalty=1.0 - req.risk_tolerance,
             target_assets=req.target_assets,
         )
     else:
+        enforce_feature(user, FeatureKey.CLASSICAL_OPTIMIZATION)
         result = optimize_portfolio(req.tickers, risk_tolerance=req.risk_tolerance)
     return result
 
 
 # Agent Endpoint
 @app.post("/api/v1/agent/chat")
-async def agent_chat(req: AgentChatRequest):
+async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
     """
     Chat with the full Financial Advisor AI Agent.
     The agent has access to all tools: stock data, sentiment analysis,
@@ -282,6 +291,8 @@ async def agent_chat(req: AgentChatRequest):
     {"message": "Should I invest in NVDA?", "remember": true}
     """
     from src.agent.history import load_history, append_message
+    enforce_feature(user, FeatureKey.AI_RESEARCH)
+    usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
     try:
         agent = get_agent()
 
