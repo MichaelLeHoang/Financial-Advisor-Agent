@@ -83,3 +83,15 @@ class WatchlistAssetRead(BaseModel):
     symbol: str
     asset_type: str = "equity"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class SubscriptionRead(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    user_id: UUID
+    stripe_customer_id: str | None = None
+    stripe_subscription_id: str | None = None
+    plan: Plan = Plan.FREE
+    status: str = "inactive"
+    current_period_end: datetime | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ComponentType, FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import {
     Building2,
@@ -28,6 +29,7 @@ export default function ProfileMenu({
     compact?: boolean;
     onSettingsClick?: () => void;
 }) {
+    const router = useRouter();
     const { user, error: authError, signIn, signUp, signOut } = useAuth();
     const [profileOpen, setProfileOpen] = useState(false);
     const [accountSwitcherOpen, setAccountSwitcherOpen] = useState(false);
@@ -149,7 +151,7 @@ export default function ProfileMenu({
                         )}
                         <MenuItem icon={Sparkles} label="Upgrade plan" />
                         {!isGuest && <MenuItem icon={User} label="Profile" />}
-                        {!isGuest && <MenuItem icon={CreditCard} label="Billing" />}
+                        {!isGuest && <MenuItem icon={CreditCard} label="Billing" onClick={() => router.push("/billing")} />}
                         <MenuItem icon={Shield} label="Security" />
                         <MenuItem icon={HelpCircle} label="Help center" />
                         <MenuItem icon={Settings} label="Settings" onClick={openSettings} />

@@ -137,9 +137,30 @@ The status endpoint reports whether database, Supabase, Qdrant, LLM provider key
 
 ### 8. Apply the SaaS database foundation
 
-Create a Supabase project, then run the migration in `supabase/migrations/001_saas_foundation.sql` using the Supabase SQL editor or CLI. It creates profiles, subscriptions, portfolios, holdings, watchlists, watchlist assets, strategies, usage events, and audit logs with RLS policies for user-owned data.
+Create a Supabase project, then run the migrations in `supabase/migrations/` using the Supabase SQL editor or CLI. The foundation migration creates profiles, subscriptions, portfolios, holdings, watchlists, watchlist assets, strategies, usage events, and audit logs with RLS policies for user-owned data. The billing migration adds subscription uniqueness and service-role update policies for Stripe sync.
 
 Authentication is not required for local access. Requests without a bearer token run as a Free guest user. Keep `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_JWT_SECRET` backend-only for future authenticated account support.
+
+### 9. Configure Stripe billing
+
+Create Stripe products and recurring test-mode prices for Pro, Trader, Quant, and Execution Add-on. Add the price IDs and webhook secret to `.env`.
+
+```bash
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_PRO=price_...
+STRIPE_PRICE_TRADER=price_...
+STRIPE_PRICE_QUANT=price_...
+STRIPE_PRICE_EXECUTION_ADDON=price_...
+```
+
+Use Stripe CLI to forward test webhooks to the backend:
+
+```bash
+stripe listen --forward-to localhost:8000/api/v1/billing/webhook
+```
+
+Checkout and Customer Portal require a signed-in user. Guests remain on the Free plan.
 
 ---
 
@@ -154,6 +175,10 @@ Authentication is not required for local access. Requests without a bearer token
 | `POST` | `/api/v1/portfolios` | Create current user's portfolio |
 | `GET` | `/api/v1/watchlists` | List current user's watchlists |
 | `POST` | `/api/v1/watchlists` | Create current user's watchlist |
+| `GET` | `/api/v1/billing/subscription` | Current subscription and effective plan |
+| `POST` | `/api/v1/billing/create-checkout-session` | Create Stripe Checkout session |
+| `POST` | `/api/v1/billing/create-customer-portal-session` | Create Stripe Customer Portal session |
+| `POST` | `/api/v1/billing/webhook` | Stripe signed webhook receiver |
 | `POST` | `/api/v1/agent/chat` | Chat with the full AI agent |
 | `POST` | `/api/v1/agent/reset` | Clear conversation history |
 | `POST` | `/api/v1/query` | RAG-only Q&A |

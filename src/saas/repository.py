@@ -3,6 +3,7 @@ from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from uuid import UUID, uuid4
+from datetime import datetime, timezone
 
 from src.config import settings
 from src.saas.models import (
@@ -11,6 +12,8 @@ from src.saas.models import (
     HoldingRead,
     PortfolioCreate,
     PortfolioRead,
+    Plan,
+    SubscriptionRead,
     WatchlistAssetCreate,
     WatchlistAssetRead,
     WatchlistCreate,
@@ -31,6 +34,7 @@ class UserScopedStore:
         self._holdings: dict[UUID, list[HoldingRead]] = {}
         self._watchlists: dict[UUID, WatchlistRead] = {}
         self._watchlist_assets: dict[UUID, list[WatchlistAssetRead]] = {}
+        self._subscriptions: dict[UUID, SubscriptionRead] = {}
 
     def reset(self) -> None:
         with self._lock:
@@ -38,6 +42,49 @@ class UserScopedStore:
             self._holdings.clear()
             self._watchlists.clear()
             self._watchlist_assets.clear()
+            self._subscriptions.clear()
+
+    def get_subscription(self, user_id: UUID) -> SubscriptionRead:
+        with self._lock:
+            return self._subscriptions.get(user_id) or SubscriptionRead(user_id=user_id)
+
+    def get_user_plan(self, user_id: UUID) -> Plan | None:
+        subscription = self.get_subscription(user_id)
+        return subscription.plan if subscription.status in {"active", "trialing"} else None
+
+    def upsert_subscription(
+        self,
+        user_id: UUID,
+        *,
+        stripe_customer_id: str | None = None,
+        stripe_subscription_id: str | None = None,
+        plan: Plan = Plan.FREE,
+        status: str = "inactive",
+        current_period_end: datetime | None = None,
+    ) -> SubscriptionRead:
+        with self._lock:
+            existing = self._subscriptions.get(user_id)
+            subscription = SubscriptionRead(
+                id=existing.id if existing else uuid4(),
+                user_id=user_id,
+                stripe_customer_id=stripe_customer_id or existing.stripe_customer_id if existing else stripe_customer_id,
+                stripe_subscription_id=stripe_subscription_id or existing.stripe_subscription_id if existing else stripe_subscription_id,
+                plan=plan,
+                status=status,
+                current_period_end=current_period_end,
+                created_at=existing.created_at if existing else datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+            self._subscriptions[user_id] = subscription
+            return subscription
+
+    def find_subscription_by_customer(self, stripe_customer_id: str) -> SubscriptionRead | None:
+        with self._lock:
+            return next((sub for sub in self._subscriptions.values() if sub.stripe_customer_id == stripe_customer_id), None)
+
+    def find_subscription_by_stripe_subscription(self, stripe_subscription_id: str) -> SubscriptionRead | None:
+        with self._lock:
+            return next((sub for sub in self._subscriptions.values() if sub.stripe_subscription_id == stripe_subscription_id), None)
 
     def list_portfolios(self, user_id: UUID) -> list[PortfolioRead]:
         with self._lock:
@@ -240,6 +287,59 @@ class SupabaseRestStore:
             return None
         rows = self._request("GET", "watchlist_assets", {"select": "*", "watchlist_id": f"eq.{watchlist_id}"})
         return [WatchlistAssetRead.model_validate(row) for row in rows]
+
+    def get_subscription(self, user_id: UUID) -> SubscriptionRead:
+        rows = self._request("GET", "subscriptions", {"select": "*", "user_id": f"eq.{user_id}", "limit": "1"})
+        return SubscriptionRead.model_validate(rows[0]) if rows else SubscriptionRead(user_id=user_id)
+
+    def get_user_plan(self, user_id: UUID) -> Plan | None:
+        subscription = self.get_subscription(user_id)
+        if subscription.status in {"active", "trialing"}:
+            return subscription.plan
+
+        rows = self._request("GET", "profiles", {"select": "plan", "id": f"eq.{user_id}", "limit": "1"})
+        if rows:
+            try:
+                return Plan(rows[0].get("plan", Plan.FREE.value))
+            except ValueError:
+                return Plan.FREE
+        return None
+
+    def upsert_subscription(
+        self,
+        user_id: UUID,
+        *,
+        stripe_customer_id: str | None = None,
+        stripe_subscription_id: str | None = None,
+        plan: Plan = Plan.FREE,
+        status: str = "inactive",
+        current_period_end: datetime | None = None,
+    ) -> SubscriptionRead:
+        existing = self.get_subscription(user_id)
+        body = {
+            "user_id": str(user_id),
+            "stripe_customer_id": stripe_customer_id or existing.stripe_customer_id,
+            "stripe_subscription_id": stripe_subscription_id or existing.stripe_subscription_id,
+            "plan": plan.value,
+            "status": status,
+            "current_period_end": current_period_end.isoformat() if current_period_end else None,
+        }
+        if existing.status != "inactive" or existing.stripe_customer_id or existing.stripe_subscription_id:
+            rows = self._request("PATCH", "subscriptions", {"user_id": f"eq.{user_id}"}, body=body)
+        else:
+            rows = self._request("POST", "subscriptions", body=body)
+
+        effective_plan = plan if status in {"active", "trialing"} else Plan.FREE
+        self._request("PATCH", "profiles", {"id": f"eq.{user_id}"}, body={"plan": effective_plan.value})
+        return SubscriptionRead.model_validate(rows[0]) if rows else self.get_subscription(user_id)
+
+    def find_subscription_by_customer(self, stripe_customer_id: str) -> SubscriptionRead | None:
+        rows = self._request("GET", "subscriptions", {"select": "*", "stripe_customer_id": f"eq.{stripe_customer_id}", "limit": "1"})
+        return SubscriptionRead.model_validate(rows[0]) if rows else None
+
+    def find_subscription_by_stripe_subscription(self, stripe_subscription_id: str) -> SubscriptionRead | None:
+        rows = self._request("GET", "subscriptions", {"select": "*", "stripe_subscription_id": f"eq.{stripe_subscription_id}", "limit": "1"})
+        return SubscriptionRead.model_validate(rows[0]) if rows else None
 
 
 def get_store(user: AuthenticatedUser | None = None) -> UserScopedStore | SupabaseRestStore:

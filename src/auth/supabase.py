@@ -79,12 +79,21 @@ async def get_current_user(
     try:
         claims = _verify_hs256(credentials.credentials, jwt_secret)
         user_metadata = claims.get("user_metadata") or {}
-        return AuthenticatedUser(
+        user = AuthenticatedUser(
             id=UUID(claims["sub"]),
             email=claims.get("email"),
             display_name=user_metadata.get("display_name") or user_metadata.get("full_name"),
             plan=_plan_from_claims(claims),
         )
+        try:
+            from src.saas.repository import get_store
+
+            synced_plan = get_store(user).get_user_plan(user.id)
+            if synced_plan:
+                user.plan = synced_plan
+        except Exception:
+            pass
+        return user
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -116,12 +125,21 @@ async def get_current_or_guest_user(
     try:
         claims = _verify_hs256(credentials.credentials, jwt_secret)
         user_metadata = claims.get("user_metadata") or {}
-        return AuthenticatedUser(
+        user = AuthenticatedUser(
             id=UUID(claims["sub"]),
             email=claims.get("email"),
             display_name=user_metadata.get("display_name") or user_metadata.get("full_name"),
             plan=_plan_from_claims(claims),
             is_guest=False,
         )
+        try:
+            from src.saas.repository import get_store
+
+            synced_plan = get_store(user).get_user_plan(user.id)
+            if synced_plan:
+                user.plan = synced_plan
+        except Exception:
+            pass
+        return user
     except Exception:
         return get_guest_user()

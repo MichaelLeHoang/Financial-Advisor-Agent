@@ -125,6 +125,24 @@ export interface MarketQuote {
   history: MarketQuotePoint[];
 }
 
+export interface Subscription {
+  id: string;
+  user_id: string;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  plan: AuthUser["plan"];
+  status: string;
+  current_period_end?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BillingSubscription {
+  subscription: Subscription;
+  publishable_plan: AuthUser["plan"];
+  configured: boolean;
+}
+
 // ─── API helpers ────────────────────
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -187,6 +205,14 @@ export const api = {
 
   addWatchlistAsset: (watchlistId: string, symbol: string, assetType = "equity") =>
     post<WatchlistAsset>(`/api/v1/watchlists/${watchlistId}/assets`, { symbol, asset_type: assetType }),
+
+  billingSubscription: () => get<BillingSubscription>("/api/v1/billing/subscription"),
+
+  createCheckoutSession: (plan: AuthUser["plan"]) =>
+    post<{ url: string }>("/api/v1/billing/create-checkout-session", { plan }),
+
+  createCustomerPortalSession: (returnUrl?: string) =>
+    post<{ url: string }>("/api/v1/billing/create-customer-portal-session", { return_url: returnUrl }),
 
   /** Chat with the full LangGraph agent */
   chat: (message: string, sessionId = "default", remember = true) =>
