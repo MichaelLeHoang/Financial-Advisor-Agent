@@ -6,9 +6,12 @@ import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { OptimizeResult } from "@/lib/api";
-import FinanceDisclaimer from "@/components/common/FinanceDisclaimer";
+import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const COLORS = ["#6366f1", "#22d3ee", "#34d399", "#fbbf24", "#f87171"];
 
@@ -22,8 +25,8 @@ export default function QuantumPage() {
     const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
     const isLocked = !["quant", "execution_addon"].includes(user.plan);
 
-    const add = () => {
-        const t = input.trim().toUpperCase();
+    const add = (value = input) => {
+        const t = value.trim().toUpperCase();
         if (t && !tickers.includes(t)) setTickers((p) => [...p, t]);
         setInput("");
     };
@@ -52,11 +55,10 @@ export default function QuantumPage() {
                         <h1 className="text-4xl font-bold mb-2">Quantum QAOA</h1>
                         <p className="text-white/40">Quantum Approximate Optimization Algorithm for discrete asset selection.</p>
                     </div>
-                    <div className="glass px-4 py-2 rounded-xl text-xs text-cyan-secondary border-cyan-secondary/30">
+                    <Badge variant="outline" className="h-9 rounded-xl border-cyan-secondary/30 bg-cyan-secondary/10 px-4 text-cyan-secondary">
                         Quantum Processor: PennyLane Simulator
-                    </div>
+                    </Badge>
                 </div>
-                <FinanceDisclaimer />
                 {(isLocked || upgradeMessage) && (
                     <UpgradePrompt
                         message={upgradeMessage ?? "Quantum optimization is available on the Quant plan."}
@@ -64,7 +66,8 @@ export default function QuantumPage() {
                 )}
 
                 {/* Quantum Circuit Visualization */}
-                <div className="glass p-10 rounded-[40px] overflow-x-auto">
+                <Card className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_14px_38px_rgba(0,0,0,0.28)]">
+                  <CardContent className="overflow-x-auto p-10">
                     <div className="min-w-[800px] space-y-8">
                         {tickers.map((t) => (
                             <div key={t} className="flex items-center gap-6">
@@ -80,12 +83,16 @@ export default function QuantumPage() {
                             </div>
                         ))}
                     </div>
-                </div>
+                  </CardContent>
+                </Card>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* Parameters */}
-                    <div className="glass p-8 rounded-[32px] space-y-6">
-                        <h3 className="text-xl font-bold">Parameters</h3>
+                    <Card className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_14px_38px_rgba(0,0,0,0.28)]">
+                      <CardHeader className="px-8 pt-8">
+                        <CardTitle className="text-xl font-bold">Parameters</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-6 p-8 pt-0">
                         <div className="space-y-4">
                             <label className="text-sm text-white/40">
                                 Select {targetAssets} of {tickers.length} stocks
@@ -101,38 +108,44 @@ export default function QuantumPage() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {tickers.map((t) => (
-                                <div key={t} className="px-3 py-1 glass rounded-lg text-xs font-bold flex items-center gap-1.5">
+                                <Badge key={t} variant="outline" className="h-7 rounded-lg border-white/[0.06] bg-white/[0.045] text-white">
                                     {t}
                                     <button onClick={() => setTickers((p) => p.filter((x) => x !== t))}>
                                         <X className="w-3 h-3 text-white/40" />
                                     </button>
-                                </div>
+                                </Badge>
                             ))}
                         </div>
                         <div className="flex gap-2">
-                            <input
-                                className="flex-1 glass rounded-xl px-3 py-2 text-sm outline-none"
+                            <TickerSuggestionInput
+                                className="flex-1"
+                                inputClassName="h-10 rounded-xl border-white/[0.06] bg-white/[0.045] text-sm text-white placeholder:text-white/24"
                                 placeholder="Add ticker…"
                                 value={input}
-                                onChange={(e) => setInput(e.target.value.toUpperCase())}
-                                onKeyDown={(e) => e.key === "Enter" && add()}
+                                onValueChange={setInput}
+                                onSelect={add}
+                                existingTickers={tickers}
                             />
-                            <button onClick={add} className="glass px-3 rounded-xl" style={{ color: "#22d3ee" }}>
+                            <Button onClick={() => add()} variant="outline" size="icon" className="h-10 w-10 rounded-xl border-white/[0.06] bg-white/[0.045] text-cyan-secondary hover:bg-white/[0.08] hover:text-cyan-secondary">
                                 <Plus className="w-4 h-4" />
-                            </button>
+                            </Button>
                         </div>
-                        <button
+                        <Button
                             onClick={run}
                             disabled={loading || tickers.length < 2}
-                            className="w-full bg-gradient-to-r from-indigo-primary to-cyan-secondary py-4 rounded-2xl font-bold glow-indigo disabled:opacity-40"
+                            className="h-12 w-full rounded-2xl bg-gradient-to-r from-indigo-primary to-cyan-secondary font-bold text-white glow-indigo disabled:opacity-40"
                         >
                             {loading ? "Running QAOA…" : "Run Quantum Optimization"}
-                        </button>
-                    </div>
+                        </Button>
+                      </CardContent>
+                    </Card>
 
                     {/* Results */}
-                    <div className="glass p-8 rounded-[32px] space-y-6">
-                        <h3 className="text-xl font-bold">Top 5 Quantum States</h3>
+                    <Card className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_14px_38px_rgba(0,0,0,0.28)]">
+                      <CardHeader className="px-8 pt-8">
+                        <CardTitle className="text-xl font-bold">Top 5 Quantum States</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-6 p-8 pt-0">
                         {result?.top_states ? (
                             <>
                                 <div className="space-y-4">
@@ -154,7 +167,7 @@ export default function QuantumPage() {
                                     ))}
                                 </div>
                                 {result.selected_stocks && (
-                                    <div className="mt-4 pt-4 border-t border-white/10">
+                                    <div className="mt-4 pt-4 border-t border-white/[0.06]">
                                         <p className="text-sm text-white/40 mb-2">Selected Portfolio</p>
                                         <div className="flex gap-2 flex-wrap">
                                             {result.selected_stocks.map((t) => (
@@ -169,7 +182,8 @@ export default function QuantumPage() {
                                 Run the quantum optimizer to see results
                             </div>
                         )}
-                    </div>
+                      </CardContent>
+                    </Card>
                 </div>
             </div>
         </div>

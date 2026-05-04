@@ -6,9 +6,12 @@ import { Brain, Image, Loader2, Paperclip, PieChart, Send, TableProperties, Tren
 import { motion, AnimatePresence } from "motion/react";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import FinanceDisclaimer from "@/components/common/FinanceDisclaimer";
 import { useAuth } from "@/components/auth/AuthProvider";
+import ModelSelector from "@/components/ModelSelector";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Message {
   id: string;
@@ -112,9 +115,12 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden">
+      <div className="absolute left-8 top-6 z-20">
+        <ModelSelector />
+      </div>
+
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6">
-        <FinanceDisclaimer />
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 pt-24 space-y-6">
         {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
         {messages.length === 1 && (
           <div className="mx-auto flex h-full w-full max-w-3xl flex-col items-center justify-center space-y-8">
@@ -156,10 +162,12 @@ export default function ChatPage() {
               className={cn("flex w-full", msg.role === "user" ? "justify-end" : "justify-start")}
             >
               {msg.status === "fetching" ? (
-                <div className="glass px-4 py-2 rounded-xl flex items-center gap-3 text-sm text-indigo-primary border-indigo-primary/30">
+                <Card className="rounded-xl border-indigo-primary/30 bg-indigo-primary/10 px-4 py-2 text-sm text-indigo-primary shadow-none">
+                  <CardContent className="flex items-center gap-3 p-0">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   {msg.content}
-                </div>
+                  </CardContent>
+                </Card>
               ) : (
                 <div
                   className={cn(
@@ -179,8 +187,8 @@ export default function ChatPage() {
 
       {/* Input */}
       <div className="p-8 pt-0">
-        <div className="mx-auto w-full max-w-3xl rounded-2xl border border-white/[0.08] bg-white/[0.045] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_18px_50px_rgba(0,0,0,0.38),0_0_54px_rgba(99,102,241,0.08)] backdrop-blur-xl transition-colors focus-within:border-indigo-primary/45 focus-within:shadow-[0_0_0_1px_rgba(99,102,241,0.28),0_18px_50px_rgba(0,0,0,0.42),0_0_70px_rgba(99,102,241,0.12)]">
-          <textarea
+        <Card className="mx-auto w-full max-w-3xl rounded-2xl border border-white/[0.06] bg-white/[0.045] p-2 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_18px_50px_rgba(0,0,0,0.38),0_0_54px_rgba(99,102,241,0.08)] backdrop-blur-xl transition-colors focus-within:border-indigo-primary/45 focus-within:shadow-[0_0_0_1px_rgba(99,102,241,0.28),0_18px_50px_rgba(0,0,0,0.42),0_0_70px_rgba(99,102,241,0.12)]">
+          <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -191,7 +199,7 @@ export default function ChatPage() {
             }}
             placeholder="Ask anything about markets, stocks, or your portfolio..."
             rows={2}
-            className="max-h-36 min-h-14 w-full resize-none bg-transparent px-4 py-3 pr-12 text-sm text-white outline-none placeholder:text-white/24"
+            className="max-h-36 min-h-14 border-transparent bg-transparent px-4 py-3 pr-12 text-sm text-white placeholder:text-white/24 focus-visible:ring-0"
           />
           <div className="flex items-center justify-between gap-3 border-t border-white/[0.06] px-2 pt-2">
             <div className="flex items-center gap-1.5">
@@ -214,16 +222,17 @@ export default function ChatPage() {
                 onChange={(event) => handleUpload(event, "image")}
               />
             </div>
-            <button
+            <Button
               onClick={handleSend}
               disabled={isLoading}
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-primary text-white shadow-[0_0_0_1px_rgba(99,102,241,0.55),0_8px_22px_rgba(99,102,241,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] transition-all hover:bg-indigo-primary/90 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.65),0_12px_30px_rgba(99,102,241,0.36),inset_0_1px_0_rgba(255,255,255,0.24)] active:scale-[0.98] disabled:opacity-50"
+              size="icon"
+              className="h-9 w-9 rounded-xl bg-indigo-primary text-white shadow-[0_0_0_1px_rgba(99,102,241,0.55),0_8px_22px_rgba(99,102,241,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] hover:bg-indigo-primary/90 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.65),0_12px_30px_rgba(99,102,241,0.36),inset_0_1px_0_rgba(255,255,255,0.24)]"
               aria-label="Send message"
             >
               <Send className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
         <p className="text-center text-xs mt-3 text-white/20">
           AI-generated analysis only. Not professional financial advice.
         </p>
@@ -246,28 +255,32 @@ function SuggestionCard({
 }) {
   const Icon = suggestion.icon;
 
-  const moveSpotlight = (event: MouseEvent<HTMLButtonElement>) => {
+  const moveSpotlight = (event: MouseEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     event.currentTarget.style.setProperty("--x", `${event.clientX - rect.left}px`);
     event.currentTarget.style.setProperty("--y", `${event.clientY - rect.top}px`);
   };
 
   return (
-    <button
-      type="button"
+    <Card
+      role="button"
+      tabIndex={0}
       onMouseMove={moveSpotlight}
       onClick={onClick}
-      className="group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-b from-white/[0.07] to-white/[0.025] p-4 text-left shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_14px_38px_rgba(0,0,0,0.32)] transition-all duration-200 hover:-translate-y-1 hover:border-white/[0.12] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_18px_46px_rgba(0,0,0,0.42),0_0_60px_rgba(99,102,241,0.1)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") onClick();
+      }}
+      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-b from-white/[0.07] to-white/[0.025] p-4 text-left text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_14px_38px_rgba(0,0,0,0.32)] transition-all duration-200 hover:-translate-y-1 hover:border-white/[0.12] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_18px_46px_rgba(0,0,0,0.42),0_0_60px_rgba(99,102,241,0.1)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
     >
       <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100" style={{ background: "radial-gradient(260px circle at var(--x, 50%) var(--y, 50%), rgba(99,102,241,0.16), transparent 42%)" }} />
       <div className="relative">
-        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.055] text-indigo-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.055] text-indigo-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
           <Icon className="h-5 w-5" />
         </div>
         <div className="text-sm font-semibold text-white/88">{suggestion.title}</div>
         <p className="mt-1 text-sm leading-relaxed text-white/42">{suggestion.description}</p>
       </div>
-    </button>
+    </Card>
   );
 }
 
@@ -288,7 +301,7 @@ function UploadPill({
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
   return (
-    <label className="group flex h-9 cursor-pointer items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.035] px-3 text-xs font-medium text-white/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors hover:bg-white/[0.075] hover:text-white">
+    <label className="group flex h-9 cursor-pointer items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.035] px-3 text-xs font-medium text-white/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-white/[0.075] hover:text-white">
       <Icon className="h-4 w-4 text-white/38 group-hover:text-indigo-primary" />
       <span className="hidden sm:inline">{label}</span>
       <input type="file" accept={accept} className="sr-only" onChange={onChange} />

@@ -17,3 +17,6 @@ wheels/
 
 # OS files
 .DS_Store
+
+# Agent skills
+.agent/

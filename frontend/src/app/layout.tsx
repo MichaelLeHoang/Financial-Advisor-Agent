@@ -3,7 +3,6 @@
 import { useState } from "react";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
-import Header from "@/components/Header";
 import SettingsModal from "@/components/SettingsModal";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 
@@ -31,11 +30,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Sidebar
             isOpen={isSidebarOpen}
             onToggle={() => setIsSidebarOpen((open) => !open)}
+            onSettingsClick={() => setIsSettingsOpen(true)}
           />
 
           {/* Main content area */}
           <main className={`flex-1 flex flex-col relative z-10 overflow-hidden transition-[margin] duration-300 ease-out ${isSidebarOpen ? "md:ml-72" : "md:ml-16"}`}>
-            <Header onSettingsClick={() => setIsSettingsOpen(true)} />
             <div className="flex-1 overflow-y-auto">
               {children}
             </div>

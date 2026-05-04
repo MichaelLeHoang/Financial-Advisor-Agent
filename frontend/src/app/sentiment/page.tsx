@@ -6,8 +6,11 @@ import { ClipboardList, FileText, TableProperties, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { SentimentResult } from "@/lib/api";
-import FinanceDisclaimer from "@/components/common/FinanceDisclaimer";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 export default function SentimentPage() {
     const [input, setInput] = useState("");
@@ -65,26 +68,26 @@ export default function SentimentPage() {
                     <h1 className="text-4xl font-bold">Sentiment Analysis</h1>
                     <p className="text-white/40">Powered by FinBERT — analyze market sentiment from financial headlines.</p>
                 </div>
-                <FinanceDisclaimer />
                 {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
 
                 {/* Input */}
-                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.045] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_18px_50px_rgba(0,0,0,0.34),0_0_54px_rgba(99,102,241,0.08)] backdrop-blur-xl transition-colors focus-within:border-indigo-primary/45">
+                <Card className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_18px_50px_rgba(0,0,0,0.34),0_0_54px_rgba(99,102,241,0.08)] backdrop-blur-xl transition-colors focus-within:border-indigo-primary/45">
+                    <CardContent className="p-2">
                     <div className="flex gap-2">
-                        <input
+                        <Input
                             type="text"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={(e) => e.key === "Enter" && addHeadline()}
                             placeholder='Enter a financial headline...'
-                            className="min-w-0 flex-1 bg-transparent px-4 py-3 text-sm text-white outline-none placeholder:text-white/24"
+                            className="h-11 flex-1 rounded-xl border-transparent bg-transparent px-4 text-sm text-white placeholder:text-white/24 focus-visible:ring-0"
                         />
-                        <button
+                        <Button
                             onClick={addHeadline}
-                            className="rounded-xl bg-indigo-primary px-5 text-sm font-semibold text-white shadow-[0_0_0_1px_rgba(99,102,241,0.55),0_8px_22px_rgba(99,102,241,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] transition-all hover:bg-indigo-primary/90 active:scale-[0.98]"
+                            className="h-11 rounded-xl bg-indigo-primary px-5 text-sm font-semibold text-white shadow-[0_0_0_1px_rgba(99,102,241,0.55),0_8px_22px_rgba(99,102,241,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] hover:bg-indigo-primary/90"
                         >
                             Add
-                        </button>
+                        </Button>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-white/[0.06] px-2 pt-2">
                         <UploadPill
@@ -106,28 +109,29 @@ export default function SentimentPage() {
                             onChange={uploadHeadlines}
                         />
                     </div>
-                </div>
+                    </CardContent>
+                </Card>
 
                 {/* Headline chips */}
                 <div className="flex flex-wrap gap-2">
                     {headlines.map((h) => (
-                        <div key={h} className="glass px-4 py-2 rounded-full text-sm flex items-center gap-2">
+                        <Badge key={h} variant="outline" className="h-9 rounded-full border-white/[0.06] bg-white/[0.045] px-4 text-sm text-white/72">
                             {h.length > 50 ? h.slice(0, 50) + "…" : h}
                             <button onClick={() => setHeadlines((prev) => prev.filter((x) => x !== h))}>
                                 <X className="w-4 h-4 text-white/40 hover:text-white" />
                             </button>
-                        </div>
+                        </Badge>
                     ))}
                 </div>
 
                 {/* Analyze button */}
-                <button
+                <Button
                     onClick={analyze}
                     disabled={headlines.length === 0 || loading}
-                    className="w-full rounded-2xl bg-indigo-primary py-5 text-lg font-bold text-white shadow-[0_0_0_1px_rgba(99,102,241,0.55),0_12px_34px_rgba(99,102,241,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] transition-all hover:bg-indigo-primary/90 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.65),0_16px_44px_rgba(99,102,241,0.34),inset_0_1px_0_rgba(255,255,255,0.26)] active:scale-[0.99] disabled:opacity-40"
+                    className="h-14 w-full rounded-2xl bg-indigo-primary text-lg font-bold text-white shadow-[0_0_0_1px_rgba(99,102,241,0.55),0_12px_34px_rgba(99,102,241,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] hover:bg-indigo-primary/90 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.65),0_16px_44px_rgba(99,102,241,0.34),inset_0_1px_0_rgba(255,255,255,0.26)] disabled:opacity-40"
                 >
                     {loading ? "Analyzing…" : `Analyze ${headlines.length} headline${headlines.length !== 1 ? "s" : ""}`}
-                </button>
+                </Button>
 
                 {/* Results */}
                 {mood && (
@@ -138,7 +142,7 @@ export default function SentimentPage() {
 
                             <div className="relative w-64 h-32 mb-8">
                                 <svg viewBox="0 0 200 110" className="w-full h-full">
-                                    <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="14" strokeLinecap="round" />
+                                    <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="14" strokeLinecap="round" />
                                     <defs>
                                         <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="0%">
                                             <stop offset="0%" stopColor="#f87171" />
@@ -225,7 +229,7 @@ function UploadPill({
     onChange: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
     return (
-        <label className="group flex h-9 cursor-pointer items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.035] px-3 text-xs font-medium text-white/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors hover:bg-white/[0.075] hover:text-white">
+        <label className="group flex h-9 cursor-pointer items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.035] px-3 text-xs font-medium text-white/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-white/[0.075] hover:text-white">
             <Icon className="h-4 w-4 text-white/38 group-hover:text-indigo-primary" />
             <span>{label}</span>
             <input type="file" accept={accept} className="sr-only" onChange={onChange} />

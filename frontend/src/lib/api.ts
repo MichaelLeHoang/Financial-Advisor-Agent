@@ -97,6 +97,34 @@ export interface WatchlistAsset {
   created_at: string;
 }
 
+export interface MarketQuotePoint {
+  label: string;
+  price: number;
+  volume: number;
+}
+
+export interface MarketQuote {
+  ticker: string;
+  name: string;
+  exchange?: string | null;
+  sector?: string | null;
+  price: number;
+  change: number;
+  currency?: string | null;
+  open_price?: number | null;
+  day_high?: number | null;
+  day_low?: number | null;
+  market_cap?: number | null;
+  volume?: number | null;
+  pe_ratio?: number | null;
+  fifty_two_week_high?: number | null;
+  fifty_two_week_low?: number | null;
+  dividend_yield?: number | null;
+  dividend_rate?: number | null;
+  quarterly_dividend_amount?: number | null;
+  history: MarketQuotePoint[];
+}
+
 // ─── API helpers ────────────────────
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -181,6 +209,9 @@ export const api = {
   /** ML stock prediction */
   predict: (ticker: string, modelType: "random_forest" | "lstm" = "random_forest") =>
     post<PredictResult>("/api/v1/predict", { ticker, model_type: modelType }),
+
+  marketQuote: (ticker: string, period = "1mo", interval = "1d") =>
+    get<MarketQuote>(`/api/v1/market/quote/${encodeURIComponent(ticker)}?period=${period}&interval=${interval}`),
 
   /** Health check */
   health: () => get<{ status: string }>("/health"),

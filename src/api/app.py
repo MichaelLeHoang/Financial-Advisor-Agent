@@ -25,6 +25,7 @@ from src.saas.routes import router as saas_router
 from src.saas.usage import usage_tracker
 
 from pydantic import BaseModel
+import yfinance as yf
 
 app = FastAPI(
     title=settings.app_name,
@@ -78,6 +79,32 @@ class AgentChatRequest(BaseModel):
     message: str
     remember: bool = True  # maintain multi-turn conversation history
     session_id: str = "default"
+
+class MarketQuotePoint(BaseModel):
+    label: str
+    price: float
+    volume: int
+
+class MarketQuoteResponse(BaseModel):
+    ticker: str
+    name: str
+    exchange: str | None = None
+    sector: str | None = None
+    price: float
+    change: float
+    currency: str | None = None
+    open_price: float | None = None
+    day_high: float | None = None
+    day_low: float | None = None
+    market_cap: float | None = None
+    volume: int | None = None
+    pe_ratio: float | None = None
+    fifty_two_week_high: float | None = None
+    fifty_two_week_low: float | None = None
+    dividend_yield: float | None = None
+    dividend_rate: float | None = None
+    quarterly_dividend_amount: float | None = None
+    history: list[MarketQuotePoint]
 
 
 def _service_state(configured: bool, ok: bool | None = None, detail: str | None = None) -> dict:
@@ -175,6 +202,72 @@ async def service_status():
         "version": settings.app_version,
         "services": services,
     }
+
+@app.get("/api/v1/market/quote/{ticker}", response_model=MarketQuoteResponse)
+async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
+    """
+    Fetch current quote and recent chart data for a market symbol.
+    """
+    normalized = ticker.strip().upper()
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Ticker is required")
+
+    try:
+        stock = yf.Ticker(normalized)
+        info = stock.info or {}
+        history = stock.history(period=period, interval=interval, auto_adjust=True)
+        if history.empty:
+            raise HTTPException(status_code=404, detail=f"No market data found for {normalized}")
+
+        closes = history["Close"].dropna()
+        if closes.empty:
+            raise HTTPException(status_code=404, detail=f"No price data found for {normalized}")
+
+        latest_price = float(info.get("regularMarketPrice") or closes.iloc[-1])
+        previous_close = float(info.get("regularMarketPreviousClose") or (closes.iloc[-2] if len(closes) > 1 else closes.iloc[0]))
+        change = ((latest_price - previous_close) / previous_close * 100) if previous_close else 0.0
+        volume_series = history["Volume"] if "Volume" in history else None
+
+        points = [
+            MarketQuotePoint(
+                label=index.strftime("%b %d") if hasattr(index, "strftime") else str(index),
+                price=round(float(row["Close"]), 2),
+                volume=int(row.get("Volume", 0) or 0),
+            )
+            for index, row in history.tail(90).iterrows()
+            if row.get("Close") is not None
+        ]
+
+        return MarketQuoteResponse(
+            ticker=normalized,
+            name=info.get("longName") or info.get("shortName") or normalized,
+            exchange=info.get("exchange") or info.get("fullExchangeName"),
+            sector=info.get("sector") or info.get("quoteType"),
+            price=round(latest_price, 2),
+            change=round(change, 2),
+            currency=info.get("currency"),
+            open_price=_round_optional(info.get("regularMarketOpen") or (float(history["Open"].dropna().iloc[-1]) if "Open" in history and not history["Open"].dropna().empty else None)),
+            day_high=_round_optional(info.get("dayHigh") or (float(history["High"].dropna().iloc[-1]) if "High" in history and not history["High"].dropna().empty else None)),
+            day_low=_round_optional(info.get("dayLow") or (float(history["Low"].dropna().iloc[-1]) if "Low" in history and not history["Low"].dropna().empty else None)),
+            market_cap=info.get("marketCap"),
+            volume=int(info.get("regularMarketVolume") or (volume_series.iloc[-1] if volume_series is not None and not volume_series.empty else 0) or 0),
+            pe_ratio=_round_optional(info.get("trailingPE") or info.get("forwardPE")),
+            fifty_two_week_high=_round_optional(info.get("fiftyTwoWeekHigh")),
+            fifty_two_week_low=_round_optional(info.get("fiftyTwoWeekLow")),
+            dividend_yield=_round_optional(info.get("dividendYield")),
+            dividend_rate=_round_optional(info.get("dividendRate")),
+            quarterly_dividend_amount=_round_optional((info.get("dividendRate") / 4) if info.get("dividendRate") else None),
+            history=points,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Unable to fetch market data for {normalized}: {exc}")
+
+def _round_optional(value: float | int | None, digits: int = 4) -> float | None:
+    if value is None:
+        return None
+    return round(float(value), digits)
 
 # Rag Endpoints
 

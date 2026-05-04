@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ComponentType, FormEvent } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import {
     Bell,
@@ -23,8 +24,12 @@ import {
     Zap,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export default function Header({ onSettingsClick }: { onSettingsClick?: () => void }) {
+    const router = useRouter();
+    const pathname = usePathname();
     const { user, error: authError, signIn, signUp, signOut } = useAuth();
     const [modelOpen, setModelOpen] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
@@ -36,6 +41,10 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
     const [authSubmitting, setAuthSubmitting] = useState(false);
     const modelRef = useRef<HTMLDivElement>(null);
     const profileRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        router.prefetch("/market?focus=search");
+    }, [router]);
 
     useEffect(() => {
         const handlePointerDown = (event: PointerEvent) => {
@@ -61,6 +70,19 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
         onSettingsClick?.();
     };
 
+    const focusMarketSearch = () => {
+        setModelOpen(false);
+        setProfileOpen(false);
+        setAccountSwitcherOpen(false);
+        setSignInOpen(false);
+
+        if (pathname === "/market") {
+            window.dispatchEvent(new Event("market-search:focus"));
+            return;
+        }
+        router.push("/market?focus=search");
+    };
+
     const currentUserName = user?.display_name || user?.email?.split("@")[0] || "Researcher";
     const currentPlan = user?.plan ?? "free";
     const initial = currentUserName.slice(0, 1).toUpperCase();
@@ -83,7 +105,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
     };
 
     return (
-        <header className="h-20 border-b border-white/10 flex items-center justify-between px-4 pl-16 md:px-8 md:pl-8 bg-space-black/30 backdrop-blur-md z-40 shrink-0">
+        <header className="h-20 border-b border-white/[0.06] flex items-center justify-between px-4 pl-16 md:px-8 md:pl-8 bg-space-black/30 backdrop-blur-md z-40 shrink-0">
             <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-indigo-primary/20 flex items-center justify-center">
                     <Zap className="w-4 h-4 text-indigo-primary" />
@@ -98,7 +120,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                             setProfileOpen(false);
                             setAccountSwitcherOpen(false);
                         }}
-                        className="flex h-10 items-center gap-2 rounded-full border border-white/[0.08] bg-[#0a0a0c] px-4 text-sm font-semibold text-white/86 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_10px_28px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(255,255,255,0.08)] transition-colors hover:bg-[#101016] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                        className="flex h-10 items-center gap-2 rounded-full border border-white/[0.06] bg-[#0a0a0c] px-4 text-sm font-semibold text-white/86 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_10px_28px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors hover:bg-[#101016] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
                         QuanAd 1.0
                         <ChevronDown className="h-4 w-4 text-white/45" />
@@ -112,7 +134,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 8, scale: 0.98 }}
                                 transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                                className="absolute left-0 top-12 w-72 rounded-2xl border border-white/[0.08] bg-[#0a0a0c] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_24px_70px_rgba(0,0,0,0.58),0_0_52px_rgba(99,102,241,0.12)]"
+                                className="absolute left-0 top-12 w-72 rounded-2xl border border-white/[0.06] bg-[#0a0a0c] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_24px_70px_rgba(0,0,0,0.58),0_0_52px_rgba(99,102,241,0.12)]"
                             >
                                 <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/35">Models</div>
                                 <button
@@ -139,8 +161,11 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                     <Search className="w-5 h-5 text-white/40 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                         type="text"
+                        readOnly
+                        onClick={focusMarketSearch}
+                        onFocus={focusMarketSearch}
                         placeholder="Search markets..."
-                        className="glass bg-white/5 border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-primary/50 w-64"
+                        className="glass w-64 cursor-pointer rounded-xl border-white/[0.06] bg-white/5 py-2 pl-10 pr-4 text-sm text-white placeholder:text-white/42 focus:outline-none focus:border-indigo-primary/50"
                     />
                 </div>
                 <button className="relative text-white/40 hover:text-white transition-colors">
@@ -158,7 +183,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                             setAccountSwitcherOpen(false);
                             setModelOpen(false);
                         }}
-                        className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.035] px-2.5 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors hover:bg-white/[0.065] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                        className="flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.035] px-2.5 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-white/[0.065] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
                         <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-primary/20 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/30">
                             {initial}
@@ -177,7 +202,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 8, scale: 0.98 }}
                                 transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                                className="absolute right-0 top-12 w-80 rounded-2xl border border-white/[0.08] bg-[#0a0a0c] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_24px_70px_rgba(0,0,0,0.58),0_0_60px_rgba(99,102,241,0.1)]"
+                                className="absolute right-0 top-12 w-80 rounded-2xl border border-white/[0.06] bg-[#0a0a0c] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_24px_70px_rgba(0,0,0,0.58),0_0_60px_rgba(99,102,241,0.1)]"
                             >
                                 <button
                                     type="button"
@@ -224,49 +249,53 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, y: -6 }}
                                             transition={{ duration: 0.16 }}
-                                            className="mb-2 space-y-3 rounded-xl border border-white/[0.08] bg-white/[0.035] p-3"
+                                            className="mb-2 space-y-3 rounded-xl border border-white/[0.06] bg-white/[0.035] p-3"
                                         >
                                             <div className="flex rounded-lg bg-black/20 p-1">
-                                                <button
+                                                <Button
                                                     type="button"
+                                                    variant={authMode === "signin" ? "secondary" : "ghost"}
+                                                    size="sm"
                                                     onClick={() => setAuthMode("signin")}
-                                                    className={`h-8 flex-1 rounded-md text-xs ${authMode === "signin" ? "bg-white/[0.1] text-white" : "text-white/45"}`}
+                                                    className="h-8 flex-1 rounded-md text-xs"
                                                 >
                                                     Sign in
-                                                </button>
-                                                <button
+                                                </Button>
+                                                <Button
                                                     type="button"
+                                                    variant={authMode === "signup" ? "secondary" : "ghost"}
+                                                    size="sm"
                                                     onClick={() => setAuthMode("signup")}
-                                                    className={`h-8 flex-1 rounded-md text-xs ${authMode === "signup" ? "bg-white/[0.1] text-white" : "text-white/45"}`}
+                                                    className="h-8 flex-1 rounded-md text-xs"
                                                 >
                                                     Sign up
-                                                </button>
+                                                </Button>
                                             </div>
-                                            <input
+                                            <Input
                                                 type="email"
                                                 value={email}
                                                 onChange={(event) => setEmail(event.target.value)}
                                                 placeholder="Email"
-                                                className="h-10 w-full rounded-lg border border-white/[0.08] bg-black/20 px-3 text-sm outline-none placeholder:text-white/28 focus:border-indigo-primary/50"
+                                                className="h-10 rounded-lg border-white/[0.06] bg-black/20 text-sm text-white placeholder:text-white/28 focus-visible:border-indigo-primary/50 focus-visible:ring-indigo-primary/20"
                                                 required
                                             />
-                                            <input
+                                            <Input
                                                 type="password"
                                                 value={password}
                                                 onChange={(event) => setPassword(event.target.value)}
                                                 placeholder="Password"
-                                                className="h-10 w-full rounded-lg border border-white/[0.08] bg-black/20 px-3 text-sm outline-none placeholder:text-white/28 focus:border-indigo-primary/50"
+                                                className="h-10 rounded-lg border-white/[0.06] bg-black/20 text-sm text-white placeholder:text-white/28 focus-visible:border-indigo-primary/50 focus-visible:ring-indigo-primary/20"
                                                 required
                                                 minLength={6}
                                             />
                                             {authError && <p className="text-xs text-red-negative">{authError}</p>}
-                                            <button
+                                            <Button
                                                 type="submit"
                                                 disabled={authSubmitting}
-                                                className="h-10 w-full rounded-lg bg-indigo-primary text-sm font-semibold text-white disabled:opacity-50"
+                                                className="h-10 w-full rounded-lg bg-indigo-primary text-sm font-semibold text-white hover:bg-indigo-primary/90"
                                             >
                                                 {authSubmitting ? "Working..." : authMode === "signin" ? "Sign in" : "Create account"}
-                                            </button>
+                                            </Button>
                                         </motion.form>
                                     )}
                                 </AnimatePresence>
@@ -278,7 +307,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                                             animate={{ opacity: 1, x: 0, scale: 1 }}
                                             exit={{ opacity: 0, x: 8, scale: 0.98 }}
                                             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                                            className="absolute right-[calc(100%+0.75rem)] top-2 hidden w-64 rounded-2xl border border-white/[0.08] bg-[#0a0a0c] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_20px_60px_rgba(0,0,0,0.58)] lg:block"
+                                            className="absolute right-[calc(100%+0.75rem)] top-2 hidden w-64 rounded-2xl border border-white/[0.06] bg-[#0a0a0c] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_20px_60px_rgba(0,0,0,0.58)] lg:block"
                                         >
                                             <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/35">Switch account</div>
                                             <button

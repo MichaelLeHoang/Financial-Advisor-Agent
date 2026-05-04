@@ -3,6 +3,8 @@
 import { X, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface SettingsModalProps {
     isOpen: boolean;
@@ -27,36 +29,40 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                className="glass w-full max-w-2xl rounded-[40px] p-10 relative z-10 overflow-hidden"
+                className="relative z-10 w-full max-w-2xl overflow-hidden"
             >
+              <Card className="rounded-2xl border border-white/[0.06] bg-white/[0.055] py-0 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_24px_70px_rgba(0,0,0,0.5),0_0_70px_rgba(99,102,241,0.12)] backdrop-blur-xl">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-primary to-cyan-secondary" />
 
-                <div className="flex justify-between items-center mb-8">
-                    <h2 className="text-3xl font-bold">Settings</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors">
-                        <X className="w-6 h-6 text-white/40" />
-                    </button>
-                </div>
+                <CardHeader className="flex flex-row items-center justify-between px-8 pt-8">
+                    <CardTitle className="text-3xl font-bold">Settings</CardTitle>
+                    <Button onClick={onClose} variant="ghost" size="icon" className="rounded-full text-white/40 hover:bg-white/5 hover:text-white">
+                        <X className="w-5 h-5" />
+                    </Button>
+                </CardHeader>
 
-                <div className="space-y-8 max-h-[60vh] overflow-y-auto pr-4">
+                <CardContent className="space-y-8 px-8 pb-8">
+                <div className="space-y-8 max-h-[60vh] overflow-y-auto pr-2">
                     {/* AI Model */}
                     <div className="space-y-4">
                         <label className="text-sm font-bold text-white/40 uppercase tracking-widest">AI Intelligence</label>
                         <div className="grid grid-cols-2 gap-4">
                             {["Gemini 3 Flash", "Gemini 3.1 Pro"].map((m) => (
-                                <button
+                                <Button
                                     key={m}
+                                    type="button"
+                                    variant="outline"
                                     onClick={() => setSettings({ ...settings, model: m })}
                                     className={cn(
-                                        "p-4 rounded-2xl border transition-all text-left",
+                                        "h-auto flex-col items-start justify-start rounded-2xl border p-4 text-left",
                                         settings.model === m
                                             ? "bg-indigo-primary/20 border-indigo-primary text-white"
-                                            : "bg-white/5 border-white/10 text-white/40 hover:border-white/20"
+                                            : "bg-white/5 border-white/[0.06] text-white/40 hover:border-white/[0.12]"
                                     )}
                                 >
                                     <div className="font-bold">{m}</div>
                                     <div className="text-xs opacity-60">{m.includes("Pro") ? "High reasoning" : "Fast & efficient"}</div>
-                                </button>
+                                </Button>
                             ))}
                         </div>
                     </div>
@@ -70,14 +76,16 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                                 { name: "Emerald", primary: "#10b981", secondary: "#34d399" },
                                 { name: "Crimson", primary: "#ef4444", secondary: "#f87171" },
                             ].map((t) => (
-                                <button
+                                <Button
                                     key={t.name}
+                                    type="button"
+                                    variant="outline"
                                     onClick={() => setSettings({ ...settings, theme: t.name })}
                                     className={cn(
-                                        "flex-1 p-4 rounded-2xl border transition-all flex flex-col items-center gap-2",
+                                        "h-auto flex-1 rounded-2xl border p-4 transition-all flex flex-col items-center gap-2",
                                         settings.theme === t.name
                                             ? "bg-white/10 border-white/30"
-                                            : "bg-white/5 border-white/10 opacity-60 hover:opacity-100"
+                                            : "bg-white/5 border-white/[0.06] opacity-60 hover:opacity-100"
                                     )}
                                 >
                                     <div className="flex gap-1">
@@ -85,7 +93,7 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                                         <div className="w-4 h-4 rounded-full" style={{ backgroundColor: t.secondary }} />
                                     </div>
                                     <span className="text-xs font-bold">{t.name}</span>
-                                </button>
+                                </Button>
                             ))}
                         </div>
                     </div>
@@ -96,7 +104,7 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                         <select
                             value={settings.risk}
                             onChange={(e) => setSettings({ ...settings, risk: e.target.value })}
-                            className="w-full glass bg-white/5 border-white/10 rounded-2xl p-4 focus:outline-none focus:border-indigo-primary/50"
+                            className="w-full glass bg-white/5 border-white/[0.06] rounded-2xl p-4 focus:outline-none focus:border-indigo-primary/50"
                         >
                             <option value="conservative" className="bg-space-black">Conservative</option>
                             <option value="moderate" className="bg-space-black">Moderate</option>
@@ -109,32 +117,36 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                         <label className="text-sm font-bold text-white/40 uppercase tracking-widest">Quantum Backend</label>
                         <div className="space-y-2">
                             {["IonQ Forte (11 Qubits)", "Rigetti Aspen-M-3", "IBM Eagle (127 Qubits)"].map((q) => (
-                                <button
+                                <Button
                                     key={q}
+                                    type="button"
+                                    variant="outline"
                                     onClick={() => setSettings({ ...settings, quantum: q })}
                                     className={cn(
-                                        "w-full p-4 rounded-2xl border transition-all flex justify-between items-center",
+                                        "h-auto w-full rounded-2xl border p-4 transition-all flex justify-between items-center",
                                         settings.quantum === q
                                             ? "bg-cyan-secondary/20 border-cyan-secondary text-white"
-                                            : "bg-white/5 border-white/10 text-white/40 hover:border-white/20"
+                                            : "bg-white/5 border-white/[0.06] text-white/40 hover:border-white/[0.12]"
                                     )}
                                 >
                                     <span className="font-bold">{q}</span>
                                     {settings.quantum === q && <CheckCircle2 className="w-5 h-5 text-cyan-secondary" />}
-                                </button>
+                                </Button>
                             ))}
                         </div>
                     </div>
                 </div>
 
                 <div className="mt-10 flex gap-4">
-                    <button
+                    <Button
                         onClick={onClose}
-                        className="flex-1 bg-indigo-primary py-4 rounded-2xl font-bold glow-indigo hover:scale-[1.02] transition-transform"
+                        className="h-12 flex-1 rounded-2xl bg-indigo-primary font-bold text-white glow-indigo hover:bg-indigo-primary/90"
                     >
                         Save Changes
-                    </button>
+                    </Button>
                 </div>
+                </CardContent>
+              </Card>
             </motion.div>
         </div>
     );

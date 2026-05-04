@@ -29,6 +29,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { Plan } from "@/components/auth/AuthProvider";
+import ProfileMenu from "@/components/ProfileMenu";
 
 type NavItem = {
     href: string;
@@ -58,9 +59,11 @@ const RECENT_THREADS = [
 export default function Sidebar({
     isOpen,
     onToggle,
+    onSettingsClick,
 }: {
     isOpen: boolean;
     onToggle: () => void;
+    onSettingsClick?: () => void;
 }) {
     const path = usePathname();
     const { user } = useAuth();
@@ -78,12 +81,12 @@ export default function Sidebar({
                 aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
                 aria-expanded={mobileOpen}
                 onClick={() => setMobileOpen((open) => !open)}
-                className="fixed left-4 top-4 z-[70] flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-space-black/80 text-white/70 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_10px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl transition-colors hover:bg-white/10 hover:text-white md:hidden"
+                className="fixed left-4 top-4 z-[70] flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.06] bg-space-black/80 text-white/70 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_10px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl transition-colors hover:bg-white/10 hover:text-white md:hidden"
             >
                 {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
 
-            <DesktopSidebar path={path} isOpen={isOpen} onToggle={onToggle} nav={visibleNav} />
+            <DesktopSidebar path={path} isOpen={isOpen} onToggle={onToggle} nav={visibleNav} onSettingsClick={onSettingsClick} />
 
             <AnimatePresence>
                 {mobileOpen && (
@@ -105,7 +108,7 @@ export default function Sidebar({
                             exit={{ x: -340, opacity: 0.8 }}
                             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                         >
-                            <SidebarSurface path={path} nav={visibleNav} />
+                            <SidebarSurface path={path} nav={visibleNav} onSettingsClick={onSettingsClick} />
                         </motion.div>
                     </>
                 )}
@@ -119,11 +122,13 @@ function DesktopSidebar({
     isOpen,
     onToggle,
     nav,
+    onSettingsClick,
 }: {
     path: string;
     isOpen: boolean;
     onToggle: () => void;
     nav: NavItem[];
+    onSettingsClick?: () => void;
 }) {
     const [recentsOpen, setRecentsOpen] = useState(false);
 
@@ -137,7 +142,7 @@ function DesktopSidebar({
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
         >
             {isOpen ? (
-                <SidebarSurface path={path} onToggle={onToggle} nav={nav} />
+                <SidebarSurface path={path} onToggle={onToggle} nav={nav} onSettingsClick={onSettingsClick} />
             ) : (
                 <MiniSidebar
                     path={path}
@@ -145,6 +150,7 @@ function DesktopSidebar({
                     recentsOpen={recentsOpen}
                     onToggleRecents={() => setRecentsOpen((open) => !open)}
                     onToggleSidebar={onToggle}
+                    onSettingsClick={onSettingsClick}
                 />
             )}
         </motion.aside>
@@ -157,15 +163,17 @@ function MiniSidebar({
     recentsOpen,
     onToggleRecents,
     onToggleSidebar,
+    onSettingsClick,
 }: {
     path: string;
     nav: NavItem[];
     recentsOpen: boolean;
     onToggleRecents: () => void;
     onToggleSidebar: () => void;
+    onSettingsClick?: () => void;
 }) {
     return (
-        <div className="relative flex h-full flex-col items-center border-r border-white/[0.08] bg-[#050506] py-3 shadow-[12px_0_42px_rgba(0,0,0,0.4)]">
+        <div className="relative flex h-full flex-col items-center border-r border-white/[0.06] bg-[#050506] py-3 shadow-[12px_0_42px_rgba(0,0,0,0.4)]">
             <button
                 type="button"
                 aria-label="Open sidebar"
@@ -212,7 +220,7 @@ function MiniSidebar({
                             animate={{ opacity: 1, x: 0, scale: 1 }}
                             exit={{ opacity: 0, x: -8, scale: 0.98 }}
                             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                            className="absolute left-12 top-0 w-72 rounded-2xl border border-white/[0.08] bg-[#0a0a0c] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_20px_60px_rgba(0,0,0,0.58),0_0_48px_rgba(99,102,241,0.1)]"
+                            className="absolute left-12 top-0 w-72 rounded-2xl border border-white/[0.06] bg-[#0a0a0c] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_20px_60px_rgba(0,0,0,0.58),0_0_48px_rgba(99,102,241,0.1)]"
                         >
                             <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/38">Recent conversations</div>
                             {RECENT_THREADS.map((thread) => (
@@ -245,6 +253,10 @@ function MiniSidebar({
                     );
                 })}
             </nav>
+
+            <div className="mt-auto">
+                <ProfileMenu compact onSettingsClick={onSettingsClick} />
+            </div>
         </div>
     );
 }
@@ -253,13 +265,15 @@ function SidebarSurface({
     path,
     nav,
     onToggle,
+    onSettingsClick,
 }: {
     path: string;
     nav: NavItem[];
     onToggle?: () => void;
+    onSettingsClick?: () => void;
 }) {
     return (
-        <div className="relative flex h-full flex-col overflow-hidden border-r border-white/[0.08] bg-[radial-gradient(ellipse_at_top_left,rgba(99,102,241,0.16),transparent_42%),linear-gradient(180deg,rgba(7,8,11,0.96),rgba(2,2,3,0.94))] px-3 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.04),18px_0_55px_rgba(0,0,0,0.48),0_0_80px_rgba(99,102,241,0.08)] backdrop-blur-2xl">
+        <div className="relative flex h-full flex-col overflow-hidden border-r border-white/[0.06] bg-[radial-gradient(ellipse_at_top_left,rgba(99,102,241,0.16),transparent_42%),linear-gradient(180deg,rgba(7,8,11,0.96),rgba(2,2,3,0.94))] px-3 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.025),18px_0_55px_rgba(0,0,0,0.48),0_0_80px_rgba(99,102,241,0.08)] backdrop-blur-2xl">
             <div className="pointer-events-none absolute inset-0 opacity-[0.035] [background-image:linear-gradient(rgba(255,255,255,0.5)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.5)_1px,transparent_1px)] [background-size:48px_48px]" />
             <div className="pointer-events-none absolute -left-28 top-20 h-72 w-72 rounded-full bg-indigo-primary/15 blur-[95px]" />
             <div className="pointer-events-none absolute -bottom-20 right-0 h-56 w-56 rounded-full bg-cyan-secondary/10 blur-[90px]" />
@@ -278,7 +292,7 @@ function SidebarSurface({
                             type="button"
                             aria-label="Close sidebar"
                             onClick={onToggle}
-                            className="hidden h-10 w-10 cursor-w-resize items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors hover:bg-white/[0.07] hover:text-white md:flex"
+                            className="hidden h-10 w-10 cursor-w-resize items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.035] text-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-white/[0.07] hover:text-white md:flex"
                         >
                             <SidebarGlyph />
                         </button>
@@ -313,7 +327,7 @@ function SidebarSurface({
                                         className={cn(
                                             "group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                                             active
-                                                ? "bg-white/[0.09] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_26px_rgba(99,102,241,0.14)]"
+                                                ? "bg-white/[0.09] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_26px_rgba(99,102,241,0.14)]"
                                                 : "text-white/55 hover:bg-white/[0.055] hover:text-white"
                                         )}
                                     >
@@ -345,8 +359,8 @@ function SidebarSurface({
                     </section>
                 </div>
 
-                <div className="mt-auto border-t border-white/[0.07] pt-3">
-                    <div className="relative overflow-hidden rounded-2xl border border-indigo-primary/20 bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.22),transparent_44%),rgba(255,255,255,0.045)] p-3 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_14px_36px_rgba(0,0,0,0.34),0_0_46px_rgba(99,102,241,0.12)]">
+                <div className="mt-auto flex flex-col gap-3 border-t border-white/[0.06] pt-3">
+                    <div className="relative overflow-hidden rounded-2xl border border-indigo-primary/20 bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.22),transparent_44%),rgba(255,255,255,0.045)] p-3 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_14px_36px_rgba(0,0,0,0.34),0_0_46px_rgba(99,102,241,0.12)]">
                         <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-cyan-secondary/15 blur-2xl" />
                         <div className="relative">
                             <div className="text-sm font-semibold text-white">
@@ -357,13 +371,14 @@ function SidebarSurface({
                             </p>
                             <button
                                 type="button"
-                                className="mt-3 flex h-8 items-center gap-2 rounded-lg bg-white/[0.07] px-3 text-xs font-medium text-white/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-colors hover:bg-white/[0.11] hover:text-white"
+                                className="mt-3 flex h-8 items-center gap-2 rounded-lg bg-white/[0.07] px-3 text-xs font-medium text-white/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors hover:bg-white/[0.11] hover:text-white"
                             >
                                 Learn more
                                 <ExternalLink className="h-3.5 w-3.5" />
                             </button>
                         </div>
                     </div>
+                    <ProfileMenu onSettingsClick={onSettingsClick} />
                 </div>
             </div>
         </div>
@@ -468,7 +483,7 @@ function RecentThreadRow({ thread, compact = false }: { thread: string; compact?
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 6, scale: 0.98 }}
                         transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                        className="fixed z-[100] w-40 rounded-xl border border-white/[0.08] bg-[#0a0a0c] p-1.5 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_18px_48px_rgba(0,0,0,0.58),0_0_36px_rgba(99,102,241,0.1)]"
+                        className="fixed z-[100] w-40 rounded-xl border border-white/[0.06] bg-[#0a0a0c] p-1.5 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_18px_48px_rgba(0,0,0,0.58),0_0_36px_rgba(99,102,241,0.1)]"
                         style={{ left: menuPosition.left, top: menuPosition.top, transformOrigin: "top left" }}
                     >
                         <RecentAction icon={Share2} label="Share" />

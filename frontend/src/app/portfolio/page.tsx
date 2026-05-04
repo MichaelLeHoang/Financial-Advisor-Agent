@@ -8,8 +8,11 @@ import {
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { OptimizeResult, Portfolio } from "@/lib/api";
-import FinanceDisclaimer from "@/components/common/FinanceDisclaimer";
+import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 const COLORS = ["#6366f1", "#22d3ee", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#fb923c"];
 
@@ -25,8 +28,8 @@ export default function PortfolioPage() {
     const [error, setError] = useState<string | null>(null);
     const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
 
-    const addTicker = () => {
-        const t = input.trim().toUpperCase();
+    const addTicker = (value = input) => {
+        const t = value.trim().toUpperCase();
         if (t && !tickers.includes(t)) setTickers((prev) => [...prev, t]);
         setInput("");
     };
@@ -75,34 +78,35 @@ export default function PortfolioPage() {
         <div className="flex-1 p-8 overflow-y-auto">
             <div className="max-w-6xl mx-auto space-y-10">
                 <h1 className="text-4xl font-bold">Portfolio Optimizer</h1>
-                <FinanceDisclaimer />
                 {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
 
-                <div className="glass p-6 rounded-2xl space-y-5">
+                <Card className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_14px_38px_rgba(0,0,0,0.28)]">
+                  <CardContent className="space-y-5 p-6">
                     <div className="flex flex-col gap-3 md:flex-row">
-                        <input
+                        <Input
                             value={portfolioName}
                             onChange={(event) => setPortfolioName(event.target.value)}
                             placeholder="Portfolio name"
-                            className="min-w-0 flex-1 rounded-xl border border-white/[0.08] bg-white/[0.035] px-4 py-3 text-sm outline-none placeholder:text-white/24"
+                            className="h-11 flex-1 rounded-xl border-white/[0.06] bg-white/[0.035] px-4 text-sm text-white placeholder:text-white/24"
                         />
-                        <button
+                        <Button
                             onClick={createPortfolio}
                             disabled={loading}
-                            className="rounded-xl bg-white/[0.08] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/[0.12] disabled:opacity-50"
+                            className="h-11 rounded-xl bg-white/[0.08] px-4 text-sm font-semibold text-white hover:bg-white/[0.12]"
                         >
                             Create Portfolio
-                        </button>
+                        </Button>
                     </div>
                     <div className="grid gap-3 md:grid-cols-3">
                         {portfolios.map((portfolio) => (
-                            <div key={portfolio.id} className="rounded-xl border border-white/[0.08] bg-white/[0.035] p-4">
+                            <div key={portfolio.id} className="rounded-xl border border-white/[0.06] bg-white/[0.035] p-4">
                                 <div className="font-semibold">{portfolio.name}</div>
                                 <div className="mt-1 text-xs text-white/35">{portfolio.base_currency}</div>
                             </div>
                         ))}
                     </div>
-                </div>
+                  </CardContent>
+                </Card>
 
                 {/* Config card */}
                 <div className="glass p-8 rounded-[32px] space-y-8">
@@ -117,13 +121,14 @@ export default function PortfolioPage() {
                                     </button>
                                 </div>
                             ))}
-                            <input
-                                type="text"
+                            <TickerSuggestionInput
                                 value={input}
-                                onChange={(e) => setInput(e.target.value.toUpperCase())}
-                                onKeyDown={(e) => e.key === "Enter" && addTicker()}
+                                onValueChange={setInput}
+                                onSelect={addTicker}
+                                existingTickers={tickers}
                                 placeholder="Add ticker..."
-                                className="bg-transparent focus:outline-none text-sm w-24"
+                                className="max-w-72"
+                                inputClassName="border-transparent bg-transparent shadow-none focus-visible:ring-0"
                             />
                         </div>
                     </div>

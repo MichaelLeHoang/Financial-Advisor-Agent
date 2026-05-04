@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { Bookmark, BriefcaseBusiness, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import FinanceDisclaimer from "@/components/common/FinanceDisclaimer";
 import { api } from "@/lib/api";
 import type { Portfolio, Watchlist } from "@/lib/api";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -26,7 +26,6 @@ export default function DashboardPage() {
           <h1 className="text-4xl font-bold">Dashboard</h1>
           <p className="mt-2 text-white/42">Plan: {formatPlan(user?.plan ?? "free")}</p>
         </div>
-        <FinanceDisclaimer />
         <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
           <MetricCard icon={BriefcaseBusiness} label="Portfolios" value={portfolios.length} />
           <MetricCard icon={Bookmark} label="Watchlists" value={watchlists.length} />
@@ -47,11 +46,13 @@ function MetricCard({
   value: number | string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.045] p-6">
+    <Card className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_14px_38px_rgba(0,0,0,0.28)]">
+      <CardContent className="p-6">
       <Icon className="mb-5 h-6 w-6 text-indigo-primary" />
       <div className="text-sm text-white/42">{label}</div>
       <div className="mt-2 text-3xl font-semibold">{value}</div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
