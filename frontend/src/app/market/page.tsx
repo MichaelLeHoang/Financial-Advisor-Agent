@@ -1,6 +1,6 @@
 "use client";
 
-import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ArrowDownRight,
     ArrowUpRight,
@@ -567,12 +567,48 @@ function MarketCard({
     );
 }
 
+/** Wrapper around ResponsiveContainer that waits for the parent to have valid dimensions before rendering. */
+function SafeChartContainer({ children, className }: { children: React.ReactNode; className?: string }) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [ready, setReady] = useState(false);
+
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+
+        const check = () => {
+            if (el.clientWidth > 0 && el.clientHeight > 0) {
+                setReady(true);
+            }
+        };
+
+        // Immediate check
+        check();
+        if (!ready) {
+            const observer = new ResizeObserver(check);
+            observer.observe(el);
+            return () => observer.disconnect();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    return (
+        <div ref={containerRef} className={cn("h-full w-full", className)}>
+            {ready && (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                    {children as React.ReactElement}
+                </ResponsiveContainer>
+            )}
+        </div>
+    );
+}
+
 function MiniChart({ stock }: { stock: StockInfo }) {
     const up = stock.change >= 0;
     const color = up ? "#34d399" : "#f87171";
 
     return (
-        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+        <SafeChartContainer>
             <AreaChart data={stock.data}>
                 <defs>
                     <linearGradient id={`grad-${stock.ticker}`} x1="0" y1="0" x2="0" y2="1">
@@ -589,7 +625,7 @@ function MiniChart({ stock }: { stock: StockInfo }) {
                     fill={`url(#grad-${stock.ticker})`}
                 />
             </AreaChart>
-        </ResponsiveContainer>
+        </SafeChartContainer>
     );
 }
 
@@ -692,7 +728,7 @@ function MarketChartDialog({
                                         </div>
                                         {mounted ? (
                                             <div className="h-[20rem] sm:h-[24rem] lg:h-[28rem]">
-                                                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                                                <SafeChartContainer>
                                                     <ComposedChart data={series} margin={{ left: 0, right: 8, top: 12, bottom: 0 }}>
                                                         <defs>
                                                             <linearGradient id={`dialog-grad-${stock.ticker}`} x1="0" y1="0" x2="0" y2="1">
@@ -713,7 +749,7 @@ function MarketChartDialog({
                                                             <Line yAxisId="price" type="monotone" dataKey="price" stroke={color} strokeWidth={2.4} dot={false} />
                                                         )}
                                                     </ComposedChart>
-                                                </ResponsiveContainer>
+                                                </SafeChartContainer>
                                             </div>
                                         ) : (
                                             <div className="h-[20rem] sm:h-[24rem] lg:h-[28rem] rounded-xl bg-white/[0.035]" />
