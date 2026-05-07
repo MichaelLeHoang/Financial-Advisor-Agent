@@ -52,12 +52,12 @@ function DialogContent({
     <DialogPortal>
       <DialogPrimitive.Backdrop
         data-slot="dialog-backdrop"
-        className="fixed inset-0 z-[220] bg-space-black/76 backdrop-blur-md"
+        className="fixed inset-0 z-[220] bg-[var(--surface-backdrop)] backdrop-blur-md"
       />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed left-1/2 top-1/2 z-[230] flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl border border-white/[0.06] bg-[#08090d] text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_30px_90px_rgba(0,0,0,0.68),0_0_86px_rgba(99,102,241,0.16)] outline-none sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)]",
+          "fixed left-1/2 top-1/2 z-[230] flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--surface-dialog)] text-white shadow-[var(--shadow-dialog)] outline-none sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)]",
           className
         )}
         {...props}

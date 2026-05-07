@@ -23,7 +23,7 @@ export default function ModelSelector() {
                 aria-haspopup="menu"
                 aria-expanded={open}
                 onClick={() => setOpen((current) => !current)}
-                className="flex h-10 items-center gap-2 rounded-full border border-white/[0.06] bg-[#0a0a0c] px-4 text-sm font-semibold text-white/86 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_10px_28px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors hover:bg-[#101016] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                className="flex h-10 items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--surface-control)] px-4 text-sm font-semibold text-white/86 shadow-[var(--shadow-control)] transition-colors hover:bg-[var(--surface-control-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
                 <Zap className="size-4 text-indigo-primary" />
                 QuanAd 1.0
@@ -38,7 +38,7 @@ export default function ModelSelector() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 8, scale: 0.98 }}
                         transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                        className="absolute left-0 top-12 z-30 w-72 rounded-2xl border border-white/[0.06] bg-[#0a0a0c] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_24px_70px_rgba(0,0,0,0.58),0_0_52px_rgba(99,102,241,0.12)]"
+                        className="absolute left-0 top-12 z-30 w-72 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
                     >
                         <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/35">Models</div>
                         <button

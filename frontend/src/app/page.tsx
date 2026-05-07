@@ -2,7 +2,8 @@
 
 import { useRef, useEffect, useState } from "react";
 import type { ChangeEvent, ComponentType, MouseEvent } from "react";
-import { Brain, Image, Loader2, Paperclip, PieChart, Send, TableProperties, TrendingUp } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Brain, ClipboardList, Image, Loader2, Paperclip, PieChart, Send, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,37 @@ const SUGGESTIONS = [
   },
 ];
 
+const WORKFLOW_STEPS = [
+  {
+    title: "Research",
+    detail: "Start with live quotes, market context, and a focused AI brief.",
+    href: "/market",
+    action: "Open market",
+    icon: TrendingUp,
+  },
+  {
+    title: "Risk",
+    detail: "Move from ticker ideas into allocation, volatility, and Sharpe checks.",
+    href: "/portfolio",
+    action: "Check portfolio",
+    icon: PieChart,
+  },
+  {
+    title: "Narrative",
+    detail: "Validate whether headlines support or contradict the trade thesis.",
+    href: "/sentiment",
+    action: "Run sentiment",
+    icon: Brain,
+  },
+  {
+    title: "Discipline",
+    detail: "Track watchlists now, then turn the best setups into alerts and journal entries.",
+    href: "/watchlist",
+    action: "Review watchlist",
+    icon: ClipboardList,
+  },
+];
+
 export default function ChatPage() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([
@@ -63,7 +95,7 @@ export default function ChatPage() {
     setInput("");
 
     const userMsg: Message = { id: Date.now().toString(), role: "user", content: text };
-    const fetchingMsg: Message = { id: (Date.now() + 1).toString(), role: "assistant", content: "📈 Analyzing...", status: "fetching" };
+    const fetchingMsg: Message = { id: (Date.now() + 1).toString(), role: "assistant", content: "Analyzing market context...", status: "fetching" };
 
     setMessages((prev) => [...prev, userMsg, fetchingMsg]);
     setIsLoading(true);
@@ -123,12 +155,12 @@ export default function ChatPage() {
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 pt-24 space-y-6">
         {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
         {messages.length === 1 && (
-          <div className="mx-auto flex h-full w-full max-w-3xl flex-col items-center justify-center space-y-8">
-            <div className="w-full max-w-3xl space-y-1 text-left">
+          <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center justify-center gap-8 py-8">
+            <div className="w-full max-w-5xl text-left">
               <motion.h1
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-4xl md:text-5xl font-semibold bg-gradient-to-r from-white via-indigo-primary to-cyan-secondary bg-clip-text text-transparent"
+                className="text-4xl font-semibold text-white md:text-5xl"
               >
                 {greeting}
               </motion.h1>
@@ -136,12 +168,17 @@ export default function ChatPage() {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.06 }}
-                className="text-4xl md:text-5xl font-semibold text-white/42"
+                className="mt-1 max-w-3xl text-3xl font-semibold leading-tight text-white/42 md:text-5xl"
               >
-                How can I help you today?
+                Build a <span className="gradient-highlight">research trail</span> before you place the trade.
               </motion.p>
             </div>
-            <div className="grid w-full max-w-3xl grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="grid w-full grid-cols-1 gap-3 lg:grid-cols-4">
+              {WORKFLOW_STEPS.map((step) => (
+                <WorkflowStep key={step.title} step={step} />
+              ))}
+            </div>
+            <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-3">
               {SUGGESTIONS.map((suggestion) => (
                 <SuggestionCard
                   key={suggestion.title}
@@ -187,7 +224,7 @@ export default function ChatPage() {
 
       {/* Input */}
       <div className="p-8 pt-0">
-        <Card className="mx-auto w-full max-w-3xl rounded-2xl border border-white/[0.06] bg-white/[0.045] p-2 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_18px_50px_rgba(0,0,0,0.38),0_0_54px_rgba(99,102,241,0.08)] backdrop-blur-xl transition-colors focus-within:border-indigo-primary/45 focus-within:shadow-[0_0_0_1px_rgba(99,102,241,0.28),0_18px_50px_rgba(0,0,0,0.42),0_0_70px_rgba(99,102,241,0.12)]">
+        <Card className="mx-auto w-full max-w-5xl rounded-2xl border border-white/[0.06] bg-white/[0.045] p-2 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_18px_50px_rgba(0,0,0,0.34)] transition-colors">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -199,7 +236,7 @@ export default function ChatPage() {
             }}
             placeholder="Ask anything about markets, stocks, or your portfolio..."
             rows={2}
-            className="max-h-36 min-h-14 border-transparent bg-transparent px-4 py-3 pr-12 text-sm text-white placeholder:text-white/24 focus-visible:ring-0"
+            className="max-h-36 min-h-14 border-transparent bg-transparent px-4 py-3 pr-12 text-sm text-white placeholder:text-white/24 focus-visible:border-indigo-primary/45 focus-visible:ring-2 focus-visible:ring-indigo-primary/20"
           />
           <div className="flex items-center justify-between gap-3 border-t border-white/[0.06] px-2 pt-2">
             <div className="flex items-center gap-1.5">
@@ -226,7 +263,7 @@ export default function ChatPage() {
               onClick={handleSend}
               disabled={isLoading}
               size="icon"
-              className="h-9 w-9 rounded-xl bg-indigo-primary text-white shadow-[0_0_0_1px_rgba(99,102,241,0.55),0_8px_22px_rgba(99,102,241,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] hover:bg-indigo-primary/90 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.65),0_12px_30px_rgba(99,102,241,0.36),inset_0_1px_0_rgba(255,255,255,0.24)]"
+              className="h-9 w-9 rounded-xl bg-indigo-primary text-white shadow-[var(--shadow-primary-action)] hover:bg-indigo-primary/90 hover:shadow-[var(--shadow-primary-action-hover)]"
               aria-label="Send message"
             >
               <Send className="w-4 h-4" />
@@ -270,9 +307,9 @@ function SuggestionCard({
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") onClick();
       }}
-      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-b from-white/[0.07] to-white/[0.025] p-4 text-left text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_14px_38px_rgba(0,0,0,0.32)] transition-all duration-200 hover:-translate-y-1 hover:border-white/[0.12] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_18px_46px_rgba(0,0,0,0.42),0_0_60px_rgba(99,102,241,0.1)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.035] p-4 text-left text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_12px_32px_rgba(0,0,0,0.24)] transition-colors duration-200 hover:border-white/[0.12] hover:bg-white/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
     >
-      <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100" style={{ background: "radial-gradient(260px circle at var(--x, 50%) var(--y, 50%), rgba(99,102,241,0.16), transparent 42%)" }} />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-indigo-primary/45 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
       <div className="relative">
         <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.055] text-indigo-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
           <Icon className="h-5 w-5" />
@@ -281,6 +318,39 @@ function SuggestionCard({
         <p className="mt-1 text-sm leading-relaxed text-white/42">{suggestion.description}</p>
       </div>
     </Card>
+  );
+}
+
+function WorkflowStep({
+  step,
+}: {
+  step: {
+    title: string;
+    detail: string;
+    href: string;
+    action: string;
+    icon: ComponentType<{ className?: string }>;
+  };
+}) {
+  const Icon = step.icon;
+
+  return (
+    <Link
+      href={step.href}
+      className="group flex min-h-40 flex-col justify-between rounded-2xl border border-white/[0.06] bg-white/[0.035] p-4 text-left text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_12px_32px_rgba(0,0,0,0.24)] transition-colors hover:border-indigo-primary/35 hover:bg-white/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+    >
+      <div>
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-white/35">
+          <Icon className="h-4 w-4 text-indigo-primary" />
+          {step.title}
+        </div>
+        <p className="mt-3 text-sm leading-6 text-white/58">{step.detail}</p>
+      </div>
+      <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-indigo-primary">
+        {step.action}
+        <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+      </div>
+    </Link>
   );
 }
 

@@ -173,14 +173,14 @@ function MiniSidebar({
     onSettingsClick?: () => void;
 }) {
     return (
-        <div className="relative flex h-full flex-col items-center border-r border-white/[0.06] bg-[#050506] py-3 shadow-[12px_0_42px_rgba(0,0,0,0.4)]">
+        <div className="relative flex h-full flex-col items-center border-r border-[var(--theme-border)] bg-[var(--surface-popover-strong)] py-3 shadow-[var(--shadow-sidebar)]">
             <button
                 type="button"
                 aria-label="Open sidebar"
                 onClick={onToggleSidebar}
                 className="group relative mb-3 flex h-10 w-10 cursor-e-resize items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
-                <span className="absolute flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-primary to-cyan-secondary text-white opacity-100 shadow-[0_0_0_1px_rgba(255,255,255,0.14),0_10px_28px_rgba(99,102,241,0.28),inset_0_1px_0_rgba(255,255,255,0.25)] transition-opacity group-hover:opacity-0">
+                <span className="absolute flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-primary to-cyan-secondary text-white opacity-100 shadow-[var(--shadow-brand-mark)] transition-opacity group-hover:opacity-0">
                     <Zap className="h-5 w-5" />
                 </span>
                 <span className="absolute flex h-10 w-10 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
@@ -220,7 +220,7 @@ function MiniSidebar({
                             animate={{ opacity: 1, x: 0, scale: 1 }}
                             exit={{ opacity: 0, x: -8, scale: 0.98 }}
                             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                            className="absolute left-12 top-0 w-72 rounded-2xl border border-white/[0.06] bg-[#0a0a0c] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_20px_60px_rgba(0,0,0,0.58),0_0_48px_rgba(99,102,241,0.1)]"
+                            className="absolute left-12 top-0 w-72 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
                         >
                             <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/38">Recent conversations</div>
                             {RECENT_THREADS.map((thread) => (
@@ -273,17 +273,14 @@ function SidebarSurface({
     onSettingsClick?: () => void;
 }) {
     return (
-        <div className="relative flex h-full flex-col overflow-hidden border-r border-white/[0.06] bg-[radial-gradient(ellipse_at_top_left,rgba(99,102,241,0.16),transparent_42%),linear-gradient(180deg,rgba(7,8,11,0.96),rgba(2,2,3,0.94))] px-3 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.025),18px_0_55px_rgba(0,0,0,0.48),0_0_80px_rgba(99,102,241,0.08)] backdrop-blur-2xl">
-            <div className="pointer-events-none absolute inset-0 opacity-[0.035] [background-image:linear-gradient(rgba(255,255,255,0.5)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.5)_1px,transparent_1px)] [background-size:48px_48px]" />
-            <div className="pointer-events-none absolute -left-28 top-20 h-72 w-72 rounded-full bg-indigo-primary/15 blur-[95px]" />
-            <div className="pointer-events-none absolute -bottom-20 right-0 h-56 w-56 rounded-full bg-cyan-secondary/10 blur-[90px]" />
+        <div className="relative flex h-full flex-col overflow-hidden border-r border-white/[0.06] bg-space-black/95 px-3 py-4 shadow-[var(--shadow-sidebar)]">
 
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
                 <div className="mb-3 flex h-10 items-center justify-between">
                     <Link
                         href="/"
                         aria-label="Quantum Advisor home"
-                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-primary to-cyan-secondary text-white shadow-[0_0_0_1px_rgba(255,255,255,0.14),0_10px_28px_rgba(99,102,241,0.35),inset_0_1px_0_rgba(255,255,255,0.25)] outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-primary to-cyan-secondary text-white shadow-[var(--shadow-brand-mark-strong)] outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
                         <Zap className="h-5 w-5" />
                     </Link>
@@ -301,7 +298,7 @@ function SidebarSurface({
 
                 <Link
                     href="/"
-                    className="mb-4 flex h-11 items-center justify-between rounded-xl bg-indigo-primary px-3 text-sm font-semibold text-white shadow-[0_0_0_1px_rgba(99,102,241,0.55),0_8px_22px_rgba(99,102,241,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] outline-none transition-all duration-200 hover:bg-indigo-primary/90 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.65),0_12px_30px_rgba(99,102,241,0.34),inset_0_1px_0_rgba(255,255,255,0.25)] active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-space-black"
+                    className="mb-4 flex h-11 items-center justify-between rounded-xl bg-indigo-primary px-3 text-sm font-semibold text-white shadow-[var(--shadow-create-action)] outline-none transition-all duration-200 hover:bg-indigo-primary/90 hover:shadow-[var(--shadow-create-action-hover)] active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-space-black"
                 >
                     <span className="flex items-center gap-2">
                         <PenLine className="h-4 w-4" />
@@ -327,7 +324,7 @@ function SidebarSurface({
                                         className={cn(
                                             "group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                                             active
-                                                ? "bg-white/[0.09] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_26px_rgba(99,102,241,0.14)]"
+                                                ? "bg-white/[0.09] text-white shadow-[var(--shadow-selected-nav)]"
                                                 : "text-white/55 hover:bg-white/[0.055] hover:text-white"
                                         )}
                                     >
@@ -360,7 +357,7 @@ function SidebarSurface({
                 </div>
 
                 <div className="mt-auto flex flex-col gap-3 border-t border-white/[0.06] pt-3">
-                    <div className="relative overflow-hidden rounded-2xl border border-indigo-primary/20 bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.22),transparent_44%),rgba(255,255,255,0.045)] p-3 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_14px_36px_rgba(0,0,0,0.34),0_0_46px_rgba(99,102,241,0.12)]">
+                    <div className="relative overflow-hidden rounded-2xl border border-indigo-primary/20 bg-[var(--pro-card-bg)] p-3 shadow-[var(--pro-card-shadow)]">
                         <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-cyan-secondary/15 blur-2xl" />
                         <div className="relative">
                             <div className="text-sm font-semibold text-white">
@@ -483,7 +480,7 @@ function RecentThreadRow({ thread, compact = false }: { thread: string; compact?
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 6, scale: 0.98 }}
                         transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                        className="fixed z-[100] w-40 rounded-xl border border-white/[0.06] bg-[#0a0a0c] p-1.5 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_18px_48px_rgba(0,0,0,0.58),0_0_36px_rgba(99,102,241,0.1)]"
+                        className="fixed z-[100] w-40 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-1.5 shadow-[var(--shadow-popover)]"
                         style={{ left: menuPosition.left, top: menuPosition.top, transformOrigin: "top left" }}
                     >
                         <RecentAction icon={Share2} label="Share" />

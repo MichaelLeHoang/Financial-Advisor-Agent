@@ -1,12 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import SettingsModal from "@/components/SettingsModal";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 
+const SETTINGS_STORAGE_KEY = "financial-advisor.settings";
+const COVER_SEEN_STORAGE_KEY = "financial-advisor.coverSeen";
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const isStandalonePage = pathname.startsWith("/introduction") || pathname.startsWith("/login");
+
+  const [entryChecked, setEntryChecked] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [settings, setSettings] = useState({
@@ -16,17 +25,62 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     quantum: "IonQ Forte (11 Qubits)",
   });
 
+  useEffect(() => {
+    const stored = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!stored) return;
+
+    try {
+      const parsed = JSON.parse(stored);
+      setSettings((current) => ({ ...current, ...parsed }));
+    } catch {
+      window.localStorage.removeItem(SETTINGS_STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isStandalonePage) {
+      setEntryChecked(true);
+      return;
+    }
+
+    const hasSeenCover = window.localStorage.getItem(COVER_SEEN_STORAGE_KEY) === "true";
+    if (!hasSeenCover) {
+      router.replace("/cover");
+      return;
+    }
+
+    setEntryChecked(true);
+  }, [isStandalonePage, router]);
+
+  const updateSettings = (next: typeof settings) => {
+    setSettings(next);
+    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
+  };
+
+  if (isStandalonePage) {
+    return (
+      <html lang="en" className="dark">
+        <body className="bg-[#050507] text-white font-sans antialiased overflow-x-hidden">
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </body>
+      </html>
+    );
+  }
+
+  if (!entryChecked) {
+    return (
+      <html lang="en" className="dark">
+        <body data-theme={settings.theme} className="flex h-screen overflow-hidden relative" />
+      </html>
+    );
+  }
+
   return (
     <html lang="en" className="dark">
-      <body className="flex h-screen overflow-hidden relative">
+      <body data-theme={settings.theme} className="flex h-screen overflow-hidden relative">
         <AuthProvider>
-          {/* Animated Background Blobs */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-primary/10 rounded-full blur-[120px] animate-blob" />
-            <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-cyan-secondary/10 rounded-full blur-[120px] animate-blob animation-delay-2000" />
-            <div className="absolute top-[20%] right-[10%] w-[30%] h-[30%] bg-indigo-primary/5 rounded-full blur-[100px] animate-blob animation-delay-4000" />
-          </div>
-
           <Sidebar
             isOpen={isSidebarOpen}
             onToggle={() => setIsSidebarOpen((open) => !open)}
@@ -45,7 +99,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             isOpen={isSettingsOpen}
             onClose={() => setIsSettingsOpen(false)}
             settings={settings}
-            setSettings={setSettings}
+            setSettings={updateSettings}
           />
         </AuthProvider>
       </body>

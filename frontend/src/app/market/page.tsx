@@ -266,7 +266,7 @@ export default function MarketPage() {
         <div className="flex-1 overflow-y-auto p-6 md:p-8">
             <div ref={marketTopRef} className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                    <h1 className="bg-gradient-to-r from-white to-white/40 bg-clip-text text-4xl font-bold text-transparent">
+                    <h1 className="text-4xl font-bold text-white">
                         Market Overview
                     </h1>
                     
@@ -428,13 +428,13 @@ function MarketSearch({
             )}
 
             {open && query && (
-                <Card className="absolute left-0 right-0 top-13 z-30 rounded-2xl border-white/[0.06] bg-[#090a0f] py-2 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_22px_64px_rgba(0,0,0,0.58),0_0_44px_rgba(99,102,241,0.1)]">
+                <Card className="absolute left-0 right-0 top-13 z-30 rounded-2xl border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
                     <CardContent className="flex max-h-80 flex-col gap-1 overflow-y-auto px-2 py-0">
                         {matches.map((match) => (
                             <div
                                 key={match.ticker}
                                 onMouseDown={(event) => event.preventDefault()}
-                                className="group/search-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-white/[0.11] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_34px_rgba(99,102,241,0.12)]"
+                                className="group/search-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-white/[0.11] hover:shadow-[var(--shadow-row-hover)]"
                             >
                                 <button
                                     type="button"
@@ -515,7 +515,7 @@ function MarketCard({
                 onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") onOpen();
                 }}
-                className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_14px_38px_rgba(0,0,0,0.28),0_0_34px_rgba(99,102,241,0.06)] transition-all duration-300 group-hover:border-white/[0.12] group-hover:bg-white/[0.07] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[var(--shadow-accent-card)] transition-all duration-300 group-hover:border-white/[0.12] group-hover:bg-white/[0.07] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
                 <CardContent className="p-6">
                     <div className="mb-4 flex items-start justify-between gap-4">
@@ -736,12 +736,12 @@ function MarketChartDialog({
                                                                 <stop offset="95%" stopColor={color} stopOpacity={0.02} />
                                                             </linearGradient>
                                                         </defs>
-                                                        <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                                                        <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "rgba(255,255,255,0.42)", fontSize: 11 }} minTickGap={24} />
-                                                        <YAxis yAxisId="price" orientation="right" tickLine={false} axisLine={false} tick={{ fill: "rgba(255,255,255,0.42)", fontSize: 11 }} width={64} domain={["dataMin - 3", "dataMax + 3"]} />
+                                                        <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
+                                                        <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "var(--chart-axis)", fontSize: 11 }} minTickGap={24} />
+                                                        <YAxis yAxisId="price" orientation="right" tickLine={false} axisLine={false} tick={{ fill: "var(--chart-axis)", fontSize: 11 }} width={64} domain={["dataMin - 3", "dataMax + 3"]} />
                                                         <YAxis yAxisId="volume" hide />
-                                                        <Tooltip content={<ChartTooltip />} cursor={{ stroke: "rgba(99,102,241,0.46)", strokeWidth: 1 }} />
-                                                        <Bar yAxisId="volume" dataKey="volume" fill="rgba(99,102,241,0.16)" barSize={6} radius={[4, 4, 0, 0]} />
+                                                        <Tooltip content={<ChartTooltip />} cursor={{ stroke: "var(--chart-cursor)", strokeWidth: 1 }} />
+                                                        <Bar yAxisId="volume" dataKey="volume" fill="var(--chart-volume)" barSize={6} radius={[4, 4, 0, 0]} />
                                                         {chartStyle === "area" && (
                                                             <Area yAxisId="price" type="monotone" dataKey="price" stroke={color} strokeWidth={2.4} fill={`url(#dialog-grad-${stock.ticker})`} />
                                                         )}
@@ -798,7 +798,7 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
     const volume = payload.find((item) => item.dataKey === "volume")?.value;
 
     return (
-        <div className="rounded-xl border border-white/[0.06] bg-[#090a0f]/96 p-3 shadow-[0_16px_46px_rgba(0,0,0,0.48)] backdrop-blur-xl">
+        <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--surface-tooltip)] p-3 shadow-[var(--shadow-tooltip)] backdrop-blur-xl">
             <div className="text-xs text-white/38">{label}</div>
             <div className="mt-1 text-sm font-semibold text-white">{formatCurrency(price ?? 0)}</div>
             <div className="mt-1 text-xs text-white/42">Volume {formatLargeNumber(volume ?? 0)}</div>

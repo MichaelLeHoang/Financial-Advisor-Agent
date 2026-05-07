@@ -103,7 +103,7 @@ STRIPE_WEBHOOK_SECRET=
 
 ```
 
-The app loads configuration through `src/core/config.py`. `src/config.py` is kept as a compatibility import path for existing modules. Keep real secrets in `.env` or your deployment secret manager; do not commit `.env`.
+The app loads configuration through `src/core/config.py`. `src/config.py` is kept as a compatibility import path for existing modules.
 
 ### 4. Start Qdrant (Docker)
 
@@ -135,32 +135,9 @@ curl http://localhost:8000/api/v1/status
 
 The status endpoint reports whether database, Supabase, Qdrant, LLM provider keys, Inngest jobs, billing, and notification services are configured. It checks Qdrant reachability and never returns secret values.
 
-### 8. Apply the SaaS database foundation
+### 8. SaaS implementation instructions
 
-Create a Supabase project, then run the migrations in `supabase/migrations/` using the Supabase SQL editor or CLI. The foundation migration creates profiles, subscriptions, portfolios, holdings, watchlists, watchlist assets, strategies, usage events, and audit logs with RLS policies for user-owned data. The billing migration adds subscription uniqueness and service-role update policies for Stripe sync.
-
-Authentication is not required for local access. Requests without a bearer token run as a Free guest user. Keep `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_JWT_SECRET` backend-only for future authenticated account support.
-
-### 9. Configure Stripe billing
-
-Create Stripe products and recurring test-mode prices for Pro, Trader, Quant, and Execution Add-on. Add the price IDs and webhook secret to `.env`.
-
-```bash
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_PRICE_PRO=price_...
-STRIPE_PRICE_TRADER=price_...
-STRIPE_PRICE_QUANT=price_...
-STRIPE_PRICE_EXECUTION_ADDON=price_...
-```
-
-Use Stripe CLI to forward test webhooks to the backend:
-
-```bash
-stripe listen --forward-to localhost:8000/api/v1/billing/webhook
-```
-
-Checkout and Customer Portal require a signed-in user. Guests remain on the Free plan.
+The SaaS implementation plan, sprint checklists, service setup notes, and security audit prompt live outside this project README in [`doc/README.md`](doc/README.md).
 
 ---
 

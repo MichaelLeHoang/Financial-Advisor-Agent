@@ -86,7 +86,7 @@ export default function TickerSuggestionInput({
             )}
 
             {open && normalized && (matches.length > 0 || canAddCustom) && (
-                <Card className="absolute left-0 right-0 top-12 z-40 rounded-2xl border-white/[0.06] bg-[#090a0f] py-2 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_22px_64px_rgba(0,0,0,0.58),0_0_44px_rgba(99,102,241,0.1)]">
+                <Card className="absolute left-0 right-0 top-12 z-40 rounded-2xl border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
                     <CardContent className="flex max-h-72 flex-col gap-1 overflow-y-auto px-2 py-0">
                         {matches.map((match) => (
                             <button
@@ -94,7 +94,7 @@ export default function TickerSuggestionInput({
                                 type="button"
                                 onMouseDown={(event) => event.preventDefault()}
                                 onClick={() => selectTicker(match.ticker)}
-                                className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-white/[0.11] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_34px_rgba(99,102,241,0.12)]"
+                                className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-white/[0.11] hover:shadow-[var(--shadow-row-hover)]"
                             >
                                 <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-primary/16 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/24 transition-colors group-hover:bg-indigo-primary/24 group-hover:text-white">
                                     {match.ticker.slice(0, 2)}
@@ -115,7 +115,7 @@ export default function TickerSuggestionInput({
                                 type="button"
                                 onMouseDown={(event) => event.preventDefault()}
                                 onClick={() => selectTicker(value)}
-                                className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-white/[0.11] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_34px_rgba(34,211,238,0.12)]"
+                                className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-white/[0.11] hover:shadow-[var(--shadow-row-hover-alt)]"
                             >
                                 <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-cyan-secondary/14 text-cyan-secondary ring-1 ring-cyan-secondary/24">
                                     <Plus className="size-4" />

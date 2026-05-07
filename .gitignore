@@ -20,3 +20,6 @@ wheels/
 
 # Agent skills
 .agent/
+
+# Documentation
+doc/

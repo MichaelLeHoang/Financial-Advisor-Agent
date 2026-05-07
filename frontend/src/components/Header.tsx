@@ -120,7 +120,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                             setProfileOpen(false);
                             setAccountSwitcherOpen(false);
                         }}
-                        className="flex h-10 items-center gap-2 rounded-full border border-white/[0.06] bg-[#0a0a0c] px-4 text-sm font-semibold text-white/86 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_10px_28px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors hover:bg-[#101016] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                        className="flex h-10 items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--surface-control)] px-4 text-sm font-semibold text-white/86 shadow-[var(--shadow-control)] transition-colors hover:bg-[var(--surface-control-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
                         QuanAd 1.0
                         <ChevronDown className="h-4 w-4 text-white/45" />
@@ -134,7 +134,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 8, scale: 0.98 }}
                                 transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                                className="absolute left-0 top-12 w-72 rounded-2xl border border-white/[0.06] bg-[#0a0a0c] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_24px_70px_rgba(0,0,0,0.58),0_0_52px_rgba(99,102,241,0.12)]"
+                                className="absolute left-0 top-12 w-72 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
                             >
                                 <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/35">Models</div>
                                 <button
@@ -202,7 +202,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 8, scale: 0.98 }}
                                 transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                                className="absolute right-0 top-12 w-80 rounded-2xl border border-white/[0.06] bg-[#0a0a0c] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_24px_70px_rgba(0,0,0,0.58),0_0_60px_rgba(99,102,241,0.1)]"
+                                className="absolute right-0 top-12 w-80 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
                             >
                                 <button
                                     type="button"
@@ -231,7 +231,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                                         }}
                                     />
                                 )}
-                                <MenuItem icon={Sparkles} label="Upgrade plan" />
+                                <MenuItem icon={Sparkles} label="Upgrade plan" onClick={() => router.push("/pricing")} />
                                 {!isGuest && <MenuItem icon={User} label="Profile" />}
                                 {!isGuest && <MenuItem icon={CreditCard} label="Billing" />}
                                 <MenuItem icon={Shield} label="Security" />
@@ -251,7 +251,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                                             transition={{ duration: 0.16 }}
                                             className="mb-2 space-y-3 rounded-xl border border-white/[0.06] bg-white/[0.035] p-3"
                                         >
-                                            <div className="flex rounded-lg bg-black/20 p-1">
+                                            <div className="flex rounded-lg bg-white/[0.035] p-1">
                                                 <Button
                                                     type="button"
                                                     variant={authMode === "signin" ? "secondary" : "ghost"}
@@ -276,7 +276,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                                                 value={email}
                                                 onChange={(event) => setEmail(event.target.value)}
                                                 placeholder="Email"
-                                                className="h-10 rounded-lg border-white/[0.06] bg-black/20 text-sm text-white placeholder:text-white/28 focus-visible:border-indigo-primary/50 focus-visible:ring-indigo-primary/20"
+                                                className="h-10 rounded-lg border-white/[0.06] bg-white/[0.035] text-sm text-white placeholder:text-white/28 focus-visible:border-indigo-primary/50 focus-visible:ring-indigo-primary/20"
                                                 required
                                             />
                                             <Input
@@ -284,7 +284,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                                                 value={password}
                                                 onChange={(event) => setPassword(event.target.value)}
                                                 placeholder="Password"
-                                                className="h-10 rounded-lg border-white/[0.06] bg-black/20 text-sm text-white placeholder:text-white/28 focus-visible:border-indigo-primary/50 focus-visible:ring-indigo-primary/20"
+                                                className="h-10 rounded-lg border-white/[0.06] bg-white/[0.035] text-sm text-white placeholder:text-white/28 focus-visible:border-indigo-primary/50 focus-visible:ring-indigo-primary/20"
                                                 required
                                                 minLength={6}
                                             />
@@ -307,7 +307,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                                             animate={{ opacity: 1, x: 0, scale: 1 }}
                                             exit={{ opacity: 0, x: 8, scale: 0.98 }}
                                             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                                            className="absolute right-[calc(100%+0.75rem)] top-2 hidden w-64 rounded-2xl border border-white/[0.06] bg-[#0a0a0c] p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_20px_60px_rgba(0,0,0,0.58)] lg:block"
+                                            className="absolute right-[calc(100%+0.75rem)] top-2 hidden w-64 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)] lg:block"
                                         >
                                             <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/35">Switch account</div>
                                             <button

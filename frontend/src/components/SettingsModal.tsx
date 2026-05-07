@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { X, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -10,8 +11,47 @@ interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
     settings: { model: string; theme: string; risk: string; quantum: string };
-    setSettings: (s: any) => void;
+    setSettings: (s: { model: string; theme: string; risk: string; quantum: string }) => void;
 }
+
+const THEMES = [
+    {
+        name: "Deep Space",
+        primary: "#6366f1",
+        secondary: "#22d3ee",
+        label: "Dark",
+        surface: "rgba(255, 255, 255, 0.05)",
+        hover: "rgba(99, 102, 241, 0.12)",
+        selected: "rgba(99, 102, 241, 0.18)",
+        border: "rgba(99, 102, 241, 0.56)",
+        ring: "rgba(99, 102, 241, 0.32)",
+        shadow: "0 0 0 1px rgba(99, 102, 241, 0.2), 0 12px 30px rgba(99, 102, 241, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.12)",
+    },
+    {
+        name: "White",
+        primary: "#f5f6fa",
+        secondary: "#3340d1",
+        label: "Light",
+        surface: "rgba(255, 255, 255, 0.72)",
+        hover: "rgba(38, 50, 184, 0.1)",
+        selected: "rgba(38, 50, 184, 0.14)",
+        border: "rgba(38, 50, 184, 0.44)",
+        ring: "rgba(38, 50, 184, 0.24)",
+        shadow: "0 0 0 1px rgba(38, 50, 184, 0.12), 0 12px 30px rgba(31, 42, 68, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.88)",
+    },
+    {
+        name: "Crimson",
+        primary: "#ef4444",
+        secondary: "#f97316",
+        label: "Red",
+        surface: "rgba(255, 230, 232, 0.055)",
+        hover: "rgba(239, 68, 68, 0.12)",
+        selected: "rgba(239, 68, 68, 0.18)",
+        border: "rgba(239, 68, 68, 0.56)",
+        ring: "rgba(239, 68, 68, 0.32)",
+        shadow: "0 0 0 1px rgba(239, 68, 68, 0.18), 0 12px 30px rgba(239, 68, 68, 0.2), inset 0 1px 0 rgba(255, 230, 232, 0.1)",
+    },
+];
 
 export default function SettingsModal({ isOpen, onClose, settings, setSettings }: SettingsModalProps) {
     if (!isOpen) return null;
@@ -23,7 +63,7 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={onClose}
-                className="absolute inset-0 bg-space-black/60 backdrop-blur-sm"
+                className="absolute inset-0 bg-[var(--surface-settings-backdrop)] backdrop-blur-sm"
             />
             <motion.div
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -31,8 +71,7 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                 exit={{ opacity: 0, scale: 0.9, y: 20 }}
                 className="relative z-10 w-full max-w-2xl overflow-hidden"
             >
-              <Card className="rounded-2xl border border-white/[0.06] bg-white/[0.055] py-0 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_24px_70px_rgba(0,0,0,0.5),0_0_70px_rgba(99,102,241,0.12)] backdrop-blur-xl">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-primary to-cyan-secondary" />
+                <Card className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-settings)] py-0 text-white shadow-[var(--shadow-settings)]">
 
                 <CardHeader className="flex flex-row items-center justify-between px-8 pt-8">
                     <CardTitle className="text-3xl font-bold">Settings</CardTitle>
@@ -71,28 +110,32 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                     <div className="space-y-4">
                         <label className="text-sm font-bold text-white/40 uppercase tracking-widest">Visual Theme</label>
                         <div className="flex gap-4">
-                            {[
-                                { name: "Deep Space", primary: "#6366f1", secondary: "#22d3ee" },
-                                { name: "Emerald", primary: "#10b981", secondary: "#34d399" },
-                                { name: "Crimson", primary: "#ef4444", secondary: "#f87171" },
-                            ].map((t) => (
+                            {THEMES.map((t) => (
                                 <Button
                                     key={t.name}
                                     type="button"
                                     variant="outline"
                                     onClick={() => setSettings({ ...settings, theme: t.name })}
+                                    style={{
+                                        "--theme-option-surface": t.surface,
+                                        "--theme-option-hover": t.hover,
+                                        "--theme-option-selected": t.selected,
+                                        "--theme-option-border": t.border,
+                                        "--theme-option-ring": t.ring,
+                                        "--theme-option-shadow": t.shadow,
+                                    } as CSSProperties}
                                     className={cn(
-                                        "h-auto flex-1 rounded-2xl border p-4 transition-all flex flex-col items-center gap-2",
+                                        "h-auto flex-1 rounded-2xl border p-4 transition-all duration-200 flex flex-col items-center gap-2 bg-[var(--theme-option-surface)] text-white/62 shadow-none hover:-translate-y-0.5 hover:border-[var(--theme-option-border)] hover:bg-[var(--theme-option-hover)] hover:text-white hover:shadow-[var(--theme-option-shadow)] focus-visible:border-[var(--theme-option-border)] focus-visible:ring-2 focus-visible:ring-[var(--theme-option-ring)]",
                                         settings.theme === t.name
-                                            ? "bg-white/10 border-white/30"
-                                            : "bg-white/5 border-white/[0.06] opacity-60 hover:opacity-100"
+                                            ? "border-[var(--theme-option-border)] bg-[var(--theme-option-selected)] text-white shadow-[var(--theme-option-shadow)]"
+                                            : "border-white/[0.06]"
                                     )}
                                 >
                                     <div className="flex gap-1">
                                         <div className="w-4 h-4 rounded-full" style={{ backgroundColor: t.primary }} />
                                         <div className="w-4 h-4 rounded-full" style={{ backgroundColor: t.secondary }} />
                                     </div>
-                                    <span className="text-xs font-bold">{t.name}</span>
+                                    <span className="text-xs font-bold">{t.label}</span>
                                 </Button>
                             ))}
                         </div>

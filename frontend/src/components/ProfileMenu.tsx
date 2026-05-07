@@ -101,7 +101,7 @@ export default function ProfileMenu({
                 )}
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent side="right" align="end" sideOffset={compact ? 8 : 14} className="bg-[#050506]">
+            <DropdownMenuContent side="right" align="end" sideOffset={compact ? 8 : 14} className="bg-[var(--surface-popover-strong)]">
                 <DropdownMenuGroup>
                     <DropdownMenuItem
                         closeOnClick={false}
@@ -120,7 +120,7 @@ export default function ProfileMenu({
                 </DropdownMenuGroup>
 
                 {accountSwitcherOpen && (
-                    <div className="mb-2 rounded-xl border border-white/[0.06] bg-black/30 p-2">
+                    <div className="mb-2 rounded-xl border border-white/[0.06] bg-white/[0.035] p-2">
                         <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-widest text-white/35">Switch account</div>
                         <button
                             type="button"
@@ -155,14 +155,10 @@ export default function ProfileMenu({
                         <MenuItem
                             icon={LogIn}
                             label="Sign in"
-                            closeOnClick={false}
-                            onClick={() => {
-                                setSignInOpen((open) => !open);
-                                setAccountSwitcherOpen(false);
-                            }}
+                            onClick={() => router.push("/login")}
                         />
                     )}
-                    <MenuItem icon={Sparkles} label="Upgrade plan" />
+                    <MenuItem icon={Sparkles} label="Upgrade plan" onClick={() => router.push("/pricing")} />
                     {!isGuest && <MenuItem icon={User} label="Profile" />}
                     {!isGuest && <MenuItem icon={CreditCard} label="Billing" onClick={() => router.push("/billing")} />}
                     <MenuItem icon={Shield} label="Security" />
@@ -176,9 +172,9 @@ export default function ProfileMenu({
                 {signInOpen && (
                     <form
                         onSubmit={submitAuth}
-                        className="mb-2 flex flex-col gap-3 rounded-xl border border-white/[0.06] bg-black/30 p-3"
+                        className="mb-2 flex flex-col gap-3 rounded-xl border border-white/[0.06] bg-white/[0.035] p-3"
                     >
-                        <div className="flex rounded-lg bg-black/30 p-1">
+                        <div className="flex rounded-lg bg-white/[0.035] p-1">
                             <Button
                                 type="button"
                                 variant={authMode === "signin" ? "secondary" : "ghost"}
@@ -203,7 +199,7 @@ export default function ProfileMenu({
                             value={email}
                             onChange={(event) => setEmail(event.target.value)}
                             placeholder="Email"
-                            className="h-10 rounded-lg border-white/[0.06] bg-black/20 text-sm"
+                            className="h-10 rounded-lg border-white/[0.06] bg-white/[0.035] text-sm"
                             required
                         />
                         <Input
@@ -211,7 +207,7 @@ export default function ProfileMenu({
                             value={password}
                             onChange={(event) => setPassword(event.target.value)}
                             placeholder="Password"
-                            className="h-10 rounded-lg border-white/[0.06] bg-black/20 text-sm"
+                            className="h-10 rounded-lg border-white/[0.06] bg-white/[0.035] text-sm"
                             required
                             minLength={6}
                         />

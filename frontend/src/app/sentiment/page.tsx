@@ -71,7 +71,7 @@ export default function SentimentPage() {
                 {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
 
                 {/* Input */}
-                <Card className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_18px_50px_rgba(0,0,0,0.34),0_0_54px_rgba(99,102,241,0.08)] backdrop-blur-xl transition-colors focus-within:border-indigo-primary/45">
+                <Card className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[var(--shadow-accent-composer)] backdrop-blur-xl transition-colors focus-within:border-indigo-primary/45">
                     <CardContent className="p-2">
                     <div className="flex gap-2">
                         <Input
@@ -84,7 +84,7 @@ export default function SentimentPage() {
                         />
                         <Button
                             onClick={addHeadline}
-                            className="h-11 rounded-xl bg-indigo-primary px-5 text-sm font-semibold text-white shadow-[0_0_0_1px_rgba(99,102,241,0.55),0_8px_22px_rgba(99,102,241,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] hover:bg-indigo-primary/90"
+                            className="h-11 rounded-xl bg-indigo-primary px-5 text-sm font-semibold text-white shadow-[var(--shadow-primary-action)] hover:bg-indigo-primary/90"
                         >
                             Add
                         </Button>
@@ -128,7 +128,7 @@ export default function SentimentPage() {
                 <Button
                     onClick={analyze}
                     disabled={headlines.length === 0 || loading}
-                    className="h-14 w-full rounded-2xl bg-indigo-primary text-lg font-bold text-white shadow-[0_0_0_1px_rgba(99,102,241,0.55),0_12px_34px_rgba(99,102,241,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] hover:bg-indigo-primary/90 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.65),0_16px_44px_rgba(99,102,241,0.34),inset_0_1px_0_rgba(255,255,255,0.26)] disabled:opacity-40"
+                    className="h-14 w-full rounded-2xl bg-indigo-primary text-lg font-bold text-white shadow-[var(--shadow-primary-wide)] hover:bg-indigo-primary/90 hover:shadow-[var(--shadow-primary-wide-hover)] disabled:opacity-40"
                 >
                     {loading ? "Analyzing…" : `Analyze ${headlines.length} headline${headlines.length !== 1 ? "s" : ""}`}
                 </Button>
@@ -142,12 +142,12 @@ export default function SentimentPage() {
 
                             <div className="relative w-64 h-32 mb-8">
                                 <svg viewBox="0 0 200 110" className="w-full h-full">
-                                    <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="14" strokeLinecap="round" />
+                                    <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="var(--chart-grid)" strokeWidth="14" strokeLinecap="round" />
                                     <defs>
                                         <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                            <stop offset="0%" stopColor="#f87171" />
-                                            <stop offset="50%" stopColor="#fbbf24" />
-                                            <stop offset="100%" stopColor="#34d399" />
+                                            <stop offset="0%" stopColor="var(--color-red-negative)" />
+                                            <stop offset="50%" stopColor="var(--color-amber-warning)" />
+                                            <stop offset="100%" stopColor="var(--color-green-positive)" />
                                         </linearGradient>
                                     </defs>
                                     <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#gauge-grad)" strokeWidth="14" strokeLinecap="round" opacity="0.3" />
@@ -155,11 +155,11 @@ export default function SentimentPage() {
                                         x1="100" y1="100"
                                         x2={100 + 60 * Math.cos(Math.PI - (angle * Math.PI) / 180)}
                                         y2={100 - 60 * Math.sin((angle * Math.PI) / 180)}
-                                        stroke="white" strokeWidth="2.5" strokeLinecap="round"
+                                        stroke="var(--gauge-needle)" strokeWidth="2.5" strokeLinecap="round"
                                     />
-                                    <circle cx="100" cy="100" r="5" fill="white" />
-                                    <text x="20" y="118" fontSize="10" fill="#f87171" textAnchor="middle">Bearish</text>
-                                    <text x="180" y="118" fontSize="10" fill="#34d399" textAnchor="middle">Bullish</text>
+                                    <circle cx="100" cy="100" r="5" fill="var(--gauge-needle)" />
+                                    <text x="20" y="118" fontSize="10" fill="var(--color-red-negative)" textAnchor="middle">Bearish</text>
+                                    <text x="180" y="118" fontSize="10" fill="var(--color-green-positive)" textAnchor="middle">Bullish</text>
                                 </svg>
                             </div>
 
@@ -167,7 +167,7 @@ export default function SentimentPage() {
                                 <div
                                     className="text-5xl font-bold mb-2"
                                     style={{
-                                        color: bullish > 0.1 ? "#34d399" : bullish < -0.1 ? "#f87171" : "#fbbf24",
+                                        color: bullish > 0.1 ? "var(--color-green-positive)" : bullish < -0.1 ? "var(--color-red-negative)" : "var(--color-amber-warning)",
                                     }}
                                 >
                                     {mood.signal}
@@ -183,7 +183,7 @@ export default function SentimentPage() {
                                         <div
                                             className="text-2xl font-bold"
                                             style={{
-                                                color: label === "positive" ? "#34d399" : label === "negative" ? "#f87171" : "#fbbf24",
+                                                color: label === "positive" ? "var(--color-green-positive)" : label === "negative" ? "var(--color-red-negative)" : "var(--color-amber-warning)",
                                             }}
                                         >
                                             {count}
