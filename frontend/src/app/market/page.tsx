@@ -267,9 +267,8 @@ export default function MarketPage() {
             <div ref={marketTopRef} className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                     <h1 className="text-4xl font-bold text-white">
-                        Market Overview
+                        <span className="gradient-highlight">Market</span> Overview
                     </h1>
-                    
                 </div>
 
                 <div className="flex w-full flex-col gap-3 lg:w-[34rem]">
@@ -798,7 +797,7 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
     const volume = payload.find((item) => item.dataKey === "volume")?.value;
 
     return (
-        <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--surface-tooltip)] p-3 shadow-[var(--shadow-tooltip)] backdrop-blur-xl">
+        <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--surface-tooltip)] p-3 shadow-[var(--shadow-tooltip)]">
             <div className="text-xs text-white/38">{label}</div>
             <div className="mt-1 text-sm font-semibold text-white">{formatCurrency(price ?? 0)}</div>
             <div className="mt-1 text-xs text-white/42">Volume {formatLargeNumber(volume ?? 0)}</div>

@@ -105,7 +105,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
     };
 
     return (
-        <header className="h-20 border-b border-white/[0.06] flex items-center justify-between px-4 pl-16 md:px-8 md:pl-8 bg-space-black/30 backdrop-blur-md z-40 shrink-0">
+        <header className="h-20 border-b border-[var(--theme-border)] flex items-center justify-between px-4 pl-16 md:px-8 md:pl-8 bg-[var(--surface-header)] backdrop-blur-md z-40 shrink-0">
             <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-indigo-primary/20 flex items-center justify-center">
                     <Zap className="w-4 h-4 text-indigo-primary" />
@@ -168,7 +168,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                         className="glass w-64 cursor-pointer rounded-xl border-white/[0.06] bg-white/5 py-2 pl-10 pr-4 text-sm text-white placeholder:text-white/42 focus:outline-none focus:border-indigo-primary/50"
                     />
                 </div>
-                <button className="relative text-white/40 hover:text-white transition-colors">
+                <button type="button" aria-label="Notifications" className="relative text-white/40 hover:text-white transition-colors">
                     <Bell className="w-6 h-6" />
                     <span className="absolute top-0 right-0 w-2 h-2 bg-red-negative rounded-full border border-space-black" />
                 </button>

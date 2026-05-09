@@ -147,20 +147,20 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden">
-      <div className="absolute left-8 top-6 z-20">
+      <div className="absolute left-4 top-4 z-20 sm:left-8 sm:top-6">
         <ModelSelector />
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 pt-24 space-y-6">
+      <div ref={scrollRef} className="flex-1 space-y-6 overflow-y-auto p-4 pt-20 sm:p-8 sm:pt-24">
         {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
         {messages.length === 1 && (
-          <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center justify-center gap-8 py-8">
+          <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-col items-center justify-start gap-6 py-4 sm:gap-8 sm:py-8 lg:min-h-full lg:justify-center">
             <div className="w-full max-w-5xl text-left">
               <motion.h1
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-4xl font-semibold text-white md:text-5xl"
+                className="text-3xl font-semibold text-white sm:text-4xl md:text-5xl"
               >
                 {greeting}
               </motion.h1>
@@ -168,7 +168,7 @@ export default function ChatPage() {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.06 }}
-                className="mt-1 max-w-3xl text-3xl font-semibold leading-tight text-white/42 md:text-5xl"
+                className="mt-1 max-w-3xl text-2xl font-semibold leading-tight text-white/42 sm:text-3xl md:text-5xl"
               >
                 Build a <span className="gradient-highlight">research trail</span> before you place the trade.
               </motion.p>
@@ -208,9 +208,9 @@ export default function ChatPage() {
               ) : (
                 <div
                   className={cn(
-                    "max-w-[70%] p-4 rounded-2xl whitespace-pre-wrap",
+                    "max-w-[88%] rounded-2xl p-4 whitespace-pre-wrap sm:max-w-[70%]",
                     msg.role === "user"
-                      ? "bg-indigo-primary text-white glow-indigo"
+                      ? "on-accent accent-gradient-surface glow-indigo"
                       : "glass text-white/90"
                   )}
                 >
@@ -223,7 +223,7 @@ export default function ChatPage() {
       </div>
 
       {/* Input */}
-      <div className="p-8 pt-0">
+      <div className="p-4 pt-0 sm:p-8 sm:pt-0">
         <Card className="mx-auto w-full max-w-5xl rounded-2xl border border-white/[0.06] bg-white/[0.045] p-2 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_18px_50px_rgba(0,0,0,0.34)] transition-colors">
           <Textarea
             value={input}
@@ -238,8 +238,8 @@ export default function ChatPage() {
             rows={2}
             className="max-h-36 min-h-14 border-transparent bg-transparent px-4 py-3 pr-12 text-sm text-white placeholder:text-white/24 focus-visible:border-indigo-primary/45 focus-visible:ring-2 focus-visible:ring-indigo-primary/20"
           />
-          <div className="flex items-center justify-between gap-3 border-t border-white/[0.06] px-2 pt-2">
-            <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] px-2 pt-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <UploadPill
                 icon={Paperclip}
                 label="PDF"
@@ -263,7 +263,7 @@ export default function ChatPage() {
               onClick={handleSend}
               disabled={isLoading}
               size="icon"
-              className="h-9 w-9 rounded-xl bg-indigo-primary text-white shadow-[var(--shadow-primary-action)] hover:bg-indigo-primary/90 hover:shadow-[var(--shadow-primary-action-hover)]"
+              className="on-accent accent-gradient-surface h-9 w-9 rounded-xl shadow-[var(--shadow-primary-action)] hover:shadow-[var(--shadow-primary-action-hover)]"
               aria-label="Send message"
             >
               <Send className="w-4 h-4" />

@@ -1,7 +1,9 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import type { Session, User } from "@supabase/supabase-js";
 import { api } from "@/lib/api";
+import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 
 export type Plan = "free" | "pro" | "trader" | "quant" | "execution_addon";
 
@@ -20,11 +22,10 @@ interface AuthContextValue {
   error: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
-  signOut: () => void;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-const STORAGE_KEY = "faa.supabase.session";
 const GUEST_USER: AuthUser = {
   id: "00000000-0000-0000-0000-000000000001",
   email: null,
@@ -33,102 +34,151 @@ const GUEST_USER: AuthUser = {
   is_guest: true,
 };
 
-interface AuthSession {
-  access_token: string;
-  refresh_token?: string;
-  user: AuthUser;
-}
-
-function supabaseConfig() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) {
-    throw new Error("Sign in is not configured for this environment.");
-  }
-  return { url, anonKey };
-}
-
-function normalizeUser(payload: any): AuthUser {
+function normalizeUser(payload: User): AuthUser {
   const metadata = payload.user_metadata ?? {};
+  const appMetadata = payload.app_metadata ?? {};
   return {
     id: payload.id,
     email: payload.email ?? null,
     display_name: metadata.display_name ?? metadata.full_name ?? null,
-    plan: metadata.plan ?? "free",
+    plan: isPlan(appMetadata.plan) ? appMetadata.plan : "free",
     is_guest: false,
   };
 }
 
+function isPlan(value: unknown): value is Plan {
+  return value === "free"
+    || value === "pro"
+    || value === "trader"
+    || value === "quant"
+    || value === "execution_addon";
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const [authSession, setAuthSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AuthUser>(GUEST_USER);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-
-    const parsed = JSON.parse(raw) as AuthSession;
-    setSession(parsed);
-    api.setAuthToken(parsed.access_token);
-  }, []);
-
-  const persistSession = (nextSession: AuthSession) => {
-    setSession(nextSession);
-    api.setAuthToken(nextSession.access_token);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSession));
-  };
-
-  const authenticate = async (email: string, password: string, mode: "signin" | "signup") => {
-    setError(null);
-    const { url, anonKey } = supabaseConfig();
-    const endpoint = mode === "signin" ? `${url}/auth/v1/token?grant_type=password` : `${url}/auth/v1/signup`;
-
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const message = data.error_description ?? data.msg ?? data.message ?? "Sign in failed";
-      setError(message);
-      throw new Error(message);
+    let mounted = true;
+    if (!isSupabaseConfigured()) {
+      setLoading(false);
+      return () => {
+        mounted = false;
+      };
     }
 
-    if (!data.access_token) {
+    const supabase = getSupabaseBrowserClient();
+
+    const applySession = async (nextSession: Session | null) => {
+      if (!mounted) return;
+
+      setAuthSession(nextSession);
+      api.setAuthToken(nextSession?.access_token ?? null);
+
+      if (!nextSession) {
+        setUser(GUEST_USER);
+        setLoading(false);
+        return;
+      }
+
+      const fallbackUser = normalizeUser(nextSession.user);
+      setUser(fallbackUser);
+
+      try {
+        const apiUser = await api.me();
+        if (mounted && !apiUser.is_guest) setUser(apiUser);
+      } catch {
+        if (mounted) setUser(fallbackUser);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    supabase.auth.getSession()
+      .then(({ data, error: sessionError }) => {
+        if (sessionError) setError(sessionError.message);
+        return applySession(data.session);
+      })
+      .catch((sessionError: Error) => {
+        if (!mounted) return;
+        setError(sessionError.message);
+        api.setAuthToken(null);
+        setUser(GUEST_USER);
+        setLoading(false);
+      });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      void applySession(nextSession);
+    });
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const signIn = async (email: string, password: string) => {
+    setError(null);
+    const supabase = getSupabaseBrowserClient();
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInError) {
+      setError(signInError.message);
+      throw signInError;
+    }
+    if (data.session) {
+      setAuthSession(data.session);
+      api.setAuthToken(data.session.access_token);
+    }
+  };
+
+  const signUp = async (email: string, password: string) => {
+    setError(null);
+    const supabase = getSupabaseBrowserClient();
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/login`,
+      },
+    });
+
+    if (signUpError) {
+      setError(signUpError.message);
+      throw signUpError;
+    }
+
+    if (!data.session) {
       const message = "Check your email to confirm your account, then sign in.";
       setError(message);
       throw new Error(message);
     }
 
-    persistSession({
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      user: normalizeUser(data.user),
-    });
+    setAuthSession(data.session);
+    api.setAuthToken(data.session.access_token);
+  };
+
+  const signOut = async () => {
+    const supabase = getSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    setAuthSession(null);
+    setUser(GUEST_USER);
+    setError(null);
+    api.setAuthToken(null);
   };
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      user: session?.user ?? GUEST_USER,
-      token: session?.access_token ?? null,
-      loading: false,
+      user,
+      token: authSession?.access_token ?? null,
+      loading,
       error,
-      signIn: (email, password) => authenticate(email, password, "signin"),
-      signUp: (email, password) => authenticate(email, password, "signup"),
-      signOut: () => {
-        setSession(null);
-        setError(null);
-        api.setAuthToken(null);
-        window.localStorage.removeItem(STORAGE_KEY);
-      },
+      signIn,
+      signUp,
+      signOut,
     }),
-    [session, error]
+    [authSession, user, loading, error]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

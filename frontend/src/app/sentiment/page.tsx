@@ -65,13 +65,13 @@ export default function SentimentPage() {
         <div className="flex-1 p-8 overflow-y-auto flex flex-col items-center">
             <div className="w-full max-w-4xl space-y-12">
                 <div className="text-center space-y-4">
-                    <h1 className="text-4xl font-bold">Sentiment Analysis</h1>
+                    <h1 className="text-4xl font-bold"><span className="gradient-highlight">Sentiment</span> Analysis</h1>
                     <p className="text-white/40">Powered by FinBERT — analyze market sentiment from financial headlines.</p>
                 </div>
                 {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
 
                 {/* Input */}
-                <Card className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[var(--shadow-accent-composer)] backdrop-blur-xl transition-colors focus-within:border-indigo-primary/45">
+                <Card className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[var(--shadow-accent-composer)] transition-colors focus-within:border-indigo-primary/45">
                     <CardContent className="p-2">
                     <div className="flex gap-2">
                         <Input

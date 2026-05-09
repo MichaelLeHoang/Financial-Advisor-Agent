@@ -41,7 +41,7 @@ export default function WatchlistPage() {
     <div className="flex-1 overflow-y-auto p-8">
       <div className="mx-auto max-w-5xl space-y-8">
         <div>
-          <h1 className="text-4xl font-bold">Watchlists</h1>
+          <h1 className="gradient-highlight text-4xl font-bold">Watchlists</h1>
         </div>
         {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
 

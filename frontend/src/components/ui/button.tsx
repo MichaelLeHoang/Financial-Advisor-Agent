@@ -6,13 +6,13 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-4xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-indigo-primary/50 focus-visible:ring-3 focus-visible:ring-indigo-primary/20 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-2xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-indigo-primary/50 focus-visible:ring-3 focus-visible:ring-indigo-primary/20 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/80",
         outline:
-          "border-white/[0.06] bg-white/[0.035] text-white/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] hover:border-white/[0.12] hover:bg-white/[0.07] hover:text-white aria-expanded:bg-white/[0.07] aria-expanded:text-white",
+          "border-[var(--border-card)] bg-[var(--surface-card)] text-[var(--text-secondary)] shadow-[var(--shadow-control)] hover:border-[var(--theme-border)] hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)] aria-expanded:bg-[var(--surface-card-hover)] aria-expanded:text-[var(--text-primary)]",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:

@@ -39,12 +39,14 @@ export default function LoginPage() {
   };
 
   const goBack = () => {
-    if (window.history.length > 1) {
+    // If the user came from within the app, go back. Otherwise go to introduction.
+    const referrer = document.referrer;
+    const isSameOrigin = referrer && new URL(referrer).origin === window.location.origin;
+    if (isSameOrigin) {
       router.back();
-      return;
+    } else {
+      router.push("/introduction");
     }
-
-    router.push("/cover");
   };
 
   return (

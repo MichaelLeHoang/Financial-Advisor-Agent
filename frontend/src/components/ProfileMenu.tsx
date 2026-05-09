@@ -101,7 +101,7 @@ export default function ProfileMenu({
                 )}
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent side="right" align="end" sideOffset={compact ? 8 : 14} className="bg-[var(--surface-popover-strong)]">
+            <DropdownMenuContent side="right" align="end" sideOffset={compact ? 8 : 14} className="bg-[var(--surface-popover-strong)] text-[var(--text-secondary)]">
                 <DropdownMenuGroup>
                     <DropdownMenuItem
                         closeOnClick={false}
@@ -112,10 +112,10 @@ export default function ProfileMenu({
                             {initial}
                         </div>
                         <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-semibold text-white">{currentUserName}</div>
-                            <div className="truncate text-xs text-white/42">Current plan: {formatPlan(currentPlan)}</div>
+                            <div className="truncate text-sm font-semibold text-[var(--text-primary)]">{currentUserName}</div>
+                            <div className="truncate text-xs text-[var(--text-muted)]">Current plan: {formatPlan(currentPlan)}</div>
                         </div>
-                        <ChevronRight className="size-4 text-white/35" />
+                        <ChevronRight className="size-4 text-[var(--text-subtle)]" />
                     </DropdownMenuItem>
                 </DropdownMenuGroup>
 
@@ -130,8 +130,8 @@ export default function ProfileMenu({
                                 <Building2 className="size-4" />
                             </div>
                             <div className="min-w-0 flex-1">
-                                <div className="truncate text-sm text-white/85">{currentUserName}</div>
-                                <div className="truncate text-xs text-white/35">{formatPlan(currentPlan)}</div>
+                                <div className="truncate text-sm text-[var(--text-secondary)]">{currentUserName}</div>
+                                <div className="truncate text-xs text-[var(--text-subtle)]">{formatPlan(currentPlan)}</div>
                             </div>
                             <Check className="size-4 text-green-positive" />
                         </button>
@@ -143,7 +143,7 @@ export default function ProfileMenu({
                             <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-indigo-primary/14 text-indigo-primary ring-1 ring-indigo-primary/25">
                                 <Plus className="size-4" />
                             </div>
-                            <div className="min-w-0 flex-1 truncate text-sm text-white/85">Add account</div>
+                            <div className="min-w-0 flex-1 truncate text-sm text-[var(--text-secondary)]">Add account</div>
                         </button>
                     </div>
                 )}
@@ -249,10 +249,10 @@ function MenuItem({
             onClick={onClick}
             closeOnClick={closeOnClick}
         >
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.055] text-white/55 ring-1 ring-white/10">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.055] text-[var(--text-muted)] ring-1 ring-white/10">
                 <Icon className="size-4" />
             </div>
-            <div className="min-w-0 truncate text-sm text-white/82">{label}</div>
+            <div className="min-w-0 truncate text-sm text-[var(--text-secondary)]">{label}</div>
         </DropdownMenuItem>
     );
 }

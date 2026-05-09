@@ -13,7 +13,7 @@ const COVER_SEEN_STORAGE_KEY = "financial-advisor.coverSeen";
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const isStandalonePage = pathname.startsWith("/introduction") || pathname.startsWith("/login");
+  const isStandalonePage = pathname.startsWith("/introduction") || pathname.startsWith("/login") || pathname.startsWith("/pricing");
 
   const [entryChecked, setEntryChecked] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -45,7 +45,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
     const hasSeenCover = window.localStorage.getItem(COVER_SEEN_STORAGE_KEY) === "true";
     if (!hasSeenCover) {
-      router.replace("/cover");
+      router.replace("/introduction");
       return;
     }
 

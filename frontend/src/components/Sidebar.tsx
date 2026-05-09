@@ -81,7 +81,7 @@ export default function Sidebar({
                 aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
                 aria-expanded={mobileOpen}
                 onClick={() => setMobileOpen((open) => !open)}
-                className="fixed left-4 top-4 z-[70] flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.06] bg-space-black/80 text-white/70 shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_10px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl transition-colors hover:bg-white/10 hover:text-white md:hidden"
+                className="fixed left-4 top-4 z-[70] flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--theme-border)] bg-[var(--surface-mobile-trigger)] text-[var(--text-secondary)] shadow-[var(--shadow-control)] transition-colors hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)] md:hidden"
             >
                 {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
@@ -94,7 +94,7 @@ export default function Sidebar({
                         <motion.button
                             type="button"
                             aria-label="Close navigation backdrop"
-                            className="fixed inset-0 z-[55] bg-space-black/70 backdrop-blur-sm md:hidden"
+                            className="fixed inset-0 z-[55] bg-[var(--surface-nav-backdrop)] backdrop-blur-sm md:hidden"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
@@ -180,7 +180,7 @@ function MiniSidebar({
                 onClick={onToggleSidebar}
                 className="group relative mb-3 flex h-10 w-10 cursor-e-resize items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
-                <span className="absolute flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-primary to-cyan-secondary text-white opacity-100 shadow-[var(--shadow-brand-mark)] transition-opacity group-hover:opacity-0">
+                    <span className="accent-gradient-surface on-accent absolute flex h-10 w-10 items-center justify-center rounded-xl opacity-100 shadow-[var(--shadow-brand-mark)] transition-opacity group-hover:opacity-0">
                     <Zap className="h-5 w-5" />
                 </span>
                 <span className="absolute flex h-10 w-10 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
@@ -272,15 +272,17 @@ function SidebarSurface({
     onToggle?: () => void;
     onSettingsClick?: () => void;
 }) {
+    const [showProCard, setShowProCard] = useState(true);
+
     return (
-        <div className="relative flex h-full flex-col overflow-hidden border-r border-white/[0.06] bg-space-black/95 px-3 py-4 shadow-[var(--shadow-sidebar)]">
+        <div className="relative flex h-full flex-col overflow-hidden border-r border-[var(--theme-border)] bg-[var(--surface-sidebar)] px-3 py-4 shadow-[var(--shadow-sidebar)]">
 
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
                 <div className="mb-3 flex h-10 items-center justify-between">
                     <Link
                         href="/"
                         aria-label="Quantum Advisor home"
-                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-primary to-cyan-secondary text-white shadow-[var(--shadow-brand-mark-strong)] outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                        className="accent-gradient-surface on-accent flex h-10 w-10 items-center justify-center rounded-xl shadow-[var(--shadow-brand-mark-strong)] outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
                         <Zap className="h-5 w-5" />
                     </Link>
@@ -298,7 +300,7 @@ function SidebarSurface({
 
                 <Link
                     href="/"
-                    className="mb-4 flex h-11 items-center justify-between rounded-xl bg-indigo-primary px-3 text-sm font-semibold text-white shadow-[var(--shadow-create-action)] outline-none transition-all duration-200 hover:bg-indigo-primary/90 hover:shadow-[var(--shadow-create-action-hover)] active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-space-black"
+                    className="accent-gradient-surface on-accent mb-4 flex h-11 items-center justify-between rounded-xl px-3 text-sm font-semibold shadow-[var(--shadow-create-action)] outline-none transition-all duration-200 hover:shadow-[var(--shadow-create-action-hover)] active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-space-black"
                 >
                     <span className="flex items-center gap-2">
                         <PenLine className="h-4 w-4" />
@@ -357,24 +359,34 @@ function SidebarSurface({
                 </div>
 
                 <div className="mt-auto flex flex-col gap-3 border-t border-white/[0.06] pt-3">
-                    <div className="relative overflow-hidden rounded-2xl border border-indigo-primary/20 bg-[var(--pro-card-bg)] p-3 shadow-[var(--pro-card-shadow)]">
-                        <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-cyan-secondary/15 blur-2xl" />
-                        <div className="relative">
-                            <div className="text-sm font-semibold text-white">
-                                Upgrade to <span className="bg-gradient-to-r from-cyan-secondary to-indigo-primary bg-clip-text text-transparent">PRO</span>
-                            </div>
-                            <p className="mt-1 text-xs leading-relaxed text-white/38">
-                                Unlock deeper portfolio simulations, faster agents, and premium market memory.
-                            </p>
+                    {showProCard && (
+                        <div className="relative overflow-hidden rounded-2xl border border-indigo-primary/20 bg-[var(--pro-card-bg)] p-3 shadow-[var(--pro-card-shadow)]">
+                            <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-cyan-secondary/15 blur-2xl" />
                             <button
                                 type="button"
-                                className="mt-3 flex h-8 items-center gap-2 rounded-lg bg-white/[0.07] px-3 text-xs font-medium text-white/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors hover:bg-white/[0.11] hover:text-white"
+                                aria-label="Dismiss upgrade prompt"
+                                onClick={() => setShowProCard(false)}
+                                className="absolute right-2 top-2 z-10 flex size-6 items-center justify-center rounded-lg text-white/45 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                             >
-                                Learn more
-                                <ExternalLink className="h-3.5 w-3.5" />
+                                <img src="/close-svgrepo-com.svg" alt="" aria-hidden="true" className="size-3.5 opacity-80" />
                             </button>
+                            <div className="relative pr-6">
+                                <div className="text-sm font-semibold text-white">
+                                    Upgrade to <span className="bg-gradient-to-r from-cyan-secondary to-indigo-primary bg-clip-text text-transparent">PRO</span>
+                                </div>
+                                <p className="mt-1 text-xs leading-relaxed text-white/38">
+                                    Unlock deeper portfolio simulations, faster agents, and premium market memory.
+                                </p>
+                                <Link
+                                    href="/introduction#pricing"
+                                    className="mt-3 flex h-8 w-fit items-center gap-2 rounded-lg bg-white/[0.07] px-3 text-xs font-medium text-white/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors hover:bg-white/[0.11] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                                >
+                                    Learn more
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                </Link>
+                            </div>
                         </div>
-                    </div>
+                    )}
                     <ProfileMenu onSettingsClick={onSettingsClick} />
                 </div>
             </div>

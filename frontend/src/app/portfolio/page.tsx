@@ -77,12 +77,12 @@ export default function PortfolioPage() {
     return (
         <div className="flex-1 p-8 overflow-y-auto">
             <div className="max-w-6xl mx-auto space-y-10">
-                <h1 className="text-4xl font-bold">Portfolio Optimizer</h1>
+                <h1 className="text-4xl font-bold gradient-highlight">Portfolio Optimizer</h1>
                 {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
 
                 <Card className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_14px_38px_rgba(0,0,0,0.28)]">
-                  <CardContent className="space-y-5 p-6">
-                    <div className="flex flex-col gap-3 md:flex-row">
+                    <CardContent className="space-y-5 p-6">
+                        <div className="flex flex-col gap-3 md:flex-row">
                         <Input
                             value={portfolioName}
                             onChange={(event) => setPortfolioName(event.target.value)}
