@@ -6,6 +6,9 @@ import time
 import asyncio
 from uuid import uuid4
 
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 from pydantic import SecretStr
 
 
@@ -17,6 +20,15 @@ def _sign(payload: dict, secret: str = "test-secret") -> str:
     header = _b64url(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
     body = _b64url(json.dumps(payload).encode())
     signature = hmac.new(secret.encode(), f"{header}.{body}".encode(), hashlib.sha256).digest()
+    return f"{header}.{body}.{_b64url(signature)}"
+
+
+def _sign_es256(payload: dict, private_key: ec.EllipticCurvePrivateKey, kid: str = "test-kid") -> str:
+    header = _b64url(json.dumps({"alg": "ES256", "kid": kid, "typ": "JWT"}).encode())
+    body = _b64url(json.dumps(payload).encode())
+    der_signature = private_key.sign(f"{header}.{body}".encode(), ec.ECDSA(hashes.SHA256()))
+    r, s = decode_dss_signature(der_signature)
+    signature = r.to_bytes(32, "big") + s.to_bytes(32, "big")
     return f"{header}.{body}.{_b64url(signature)}"
 
 
@@ -53,6 +65,39 @@ def test_supabase_jwt_rejects_bad_signature():
         assert "signature" in str(exc)
     else:
         raise AssertionError("Expected invalid signature")
+
+
+def test_supabase_es256_jwt_uses_jwks(monkeypatch):
+    from src.auth import supabase
+    from src.auth.supabase import _verify_supabase_token
+
+    user_id = uuid4()
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    public_numbers = private_key.public_key().public_numbers()
+    jwk = {
+        "kid": "test-kid",
+        "alg": "ES256",
+        "kty": "EC",
+        "crv": "P-256",
+        "x": _b64url(public_numbers.x.to_bytes(32, "big")),
+        "y": _b64url(public_numbers.y.to_bytes(32, "big")),
+    }
+    monkeypatch.setattr(supabase.settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(supabase, "_fetch_supabase_jwks", lambda _url: {"keys": [jwk]})
+
+    token = _sign_es256(
+        {
+            "sub": str(user_id),
+            "email": "test@example.com",
+            "exp": int(time.time()) + 3600,
+        },
+        private_key,
+    )
+
+    claims = _verify_supabase_token(token)
+
+    assert claims["sub"] == str(user_id)
+    assert claims["email"] == "test@example.com"
 
 
 def test_optional_auth_returns_guest_without_token():

@@ -80,8 +80,8 @@ def create_checkout_session(user_id: UUID, email: str | None, plan: Plan) -> str
         "client_reference_id": str(user_id),
         "line_items[0][price]": price_id,
         "line_items[0][quantity]": "1",
-        "success_url": f"{settings.frontend_url.rstrip('/')}/billing?checkout=success",
-        "cancel_url": f"{settings.frontend_url.rstrip('/')}/billing?checkout=cancelled",
+        "success_url": f"{settings.frontend_url.rstrip('/')}/pricing?checkout=success",
+        "cancel_url": f"{settings.frontend_url.rstrip('/')}/pricing?checkout=cancelled",
         "metadata[user_id]": str(user_id),
         "metadata[plan]": plan.value,
         "subscription_data[metadata][user_id]": str(user_id),
@@ -109,7 +109,7 @@ def create_portal_session(user_id: UUID, return_url: str | None = None) -> str:
         "/v1/billing_portal/sessions",
         {
             "customer": subscription.stripe_customer_id,
-            "return_url": return_url or f"{settings.frontend_url.rstrip('/')}/billing",
+            "return_url": return_url or f"{settings.frontend_url.rstrip('/')}/pricing",
         },
     )
     url = session.get("url")

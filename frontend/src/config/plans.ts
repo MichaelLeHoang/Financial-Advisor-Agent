@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 import {
   Sparkles, TrendingUp, Pin, PieChart, Brain, MessageSquare,
   Shield, Atom, FlaskConical, LineChart, Bell, BookOpen,
-  BarChart3, Layers, TestTube, Signal, Download, CreditCard, Zap,
+  BarChart3, Layers, TestTube, Signal, Download, Zap,
 } from "lucide-react";
 
 export type PlanId = "free" | "pro" | "trader" | "quant" | "execution";
@@ -149,7 +149,6 @@ export const ALL_NAV: NavEntry[] = [
   { href: "/validation", icon: TestTube, label: "Validation", minPlan: "quant" },
   { href: "/signals", icon: Signal, label: "Signals", minPlan: "quant" },
   { href: "/export", icon: Download, label: "Export", minPlan: "quant" },
-  { href: "/billing", icon: CreditCard, label: "Billing", minPlan: "pro" },
 ];
 
 export function getNavigationForPlan(plan: PlanId): NavEntry[] {

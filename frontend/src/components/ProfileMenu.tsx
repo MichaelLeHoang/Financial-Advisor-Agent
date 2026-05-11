@@ -7,7 +7,6 @@ import {
     Building2,
     Check,
     ChevronRight,
-    CreditCard,
     HelpCircle,
     LogIn,
     LogOut,
@@ -158,9 +157,8 @@ export default function ProfileMenu({
                             onClick={() => router.push("/login")}
                         />
                     )}
-                    <MenuItem icon={Sparkles} label="Upgrade plan" onClick={() => router.push("/pricing")} />
+                    <MenuItem icon={Sparkles} label={isGuest ? "Upgrade plan" : "Plans & billing"} onClick={() => router.push("/pricing")} />
                     {!isGuest && <MenuItem icon={User} label="Profile" />}
-                    {!isGuest && <MenuItem icon={CreditCard} label="Billing" onClick={() => router.push("/billing")} />}
                     <MenuItem icon={Shield} label="Security" />
                     <MenuItem icon={HelpCircle} label="Help center" />
                     <MenuItem icon={Settings} label="Settings" onClick={openSettings} />

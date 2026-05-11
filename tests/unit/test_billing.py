@@ -7,9 +7,16 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
-from src.auth.supabase import get_current_or_guest_user
+from src.auth.supabase import get_current_or_guest_user, get_current_user
 from src.saas.models import AuthenticatedUser, Plan
 from src.saas.repository import store
+
+
+def _use_memory_store(monkeypatch):
+    from src.saas import repository
+
+    monkeypatch.setattr(repository.settings, "supabase_url", None)
+    monkeypatch.setattr(repository.settings, "supabase_service_role_key", None)
 
 
 def _override_user(user_id, plan=Plan.FREE, is_guest=False):
@@ -30,10 +37,11 @@ def test_checkout_session_uses_backend_price_id(monkeypatch):
     from src.api.app import app
     from src.billing import stripe_service
 
+    _use_memory_store(monkeypatch)
     user_id = uuid4()
     client = TestClient(app)
     store.reset()
-    app.dependency_overrides[get_current_or_guest_user] = _override_user(user_id)
+    app.dependency_overrides[get_current_user] = _override_user(user_id)
 
     monkeypatch.setattr(stripe_service.settings, "stripe_secret_key", SecretStr("sk_test_mock"))
     monkeypatch.setattr(stripe_service.settings, "stripe_price_pro", "price_pro_mock")
@@ -59,16 +67,17 @@ def test_checkout_session_uses_backend_price_id(monkeypatch):
     store.reset()
 
 
-def test_guest_cannot_create_checkout_session():
+def test_guest_cannot_create_checkout_session(monkeypatch):
     from src.api.app import app
 
+    _use_memory_store(monkeypatch)
     client = TestClient(app)
     store.reset()
 
     response = client.post("/api/v1/billing/create-checkout-session", json={"plan": "pro"})
 
     assert response.status_code == 401
-    assert response.json()["detail"] == "Sign in to manage billing"
+    assert response.json()["detail"] == "Missing bearer token"
     store.reset()
 
 
@@ -76,6 +85,7 @@ def test_webhook_updates_subscription_and_effective_plan(monkeypatch):
     from src.api.app import app
     from src.billing import stripe_service
 
+    _use_memory_store(monkeypatch)
     user_id = uuid4()
     client = TestClient(app)
     store.reset()

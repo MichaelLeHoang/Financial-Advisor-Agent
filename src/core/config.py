@@ -1,8 +1,8 @@
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, SecretStr, computed_field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 AppEnvironment = Literal["development", "test", "staging", "production"]
@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     app_env: AppEnvironment = "development"
     app_version: str = "0.1.0"
     frontend_url: str = "http://localhost:3000"
-    cors_origins: list[str] = Field(
+    cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
     )
 
@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     inngest_app_id: str = "financial-advisor-agent"
     inngest_is_production: bool = False
     news_ingestion_cron: str = "0 * * * *"
-    default_news_tickers: list[str] = Field(
+    default_news_tickers: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["AAPL", "MSFT", "GOOGL", "NVDA", "TSLA", "AMZN", "META", "VOO", "QQQ", "VFV"]
     )
 

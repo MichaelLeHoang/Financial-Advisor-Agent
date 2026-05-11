@@ -378,7 +378,7 @@ function SidebarSurface({
                                     Unlock deeper portfolio simulations, faster agents, and premium market memory.
                                 </p>
                                 <Link
-                                    href="/introduction#pricing"
+                                    href="/pricing"
                                     className="mt-3 flex h-8 w-fit items-center gap-2 rounded-lg bg-white/[0.07] px-3 text-xs font-medium text-white/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors hover:bg-white/[0.11] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                                 >
                                     Learn more

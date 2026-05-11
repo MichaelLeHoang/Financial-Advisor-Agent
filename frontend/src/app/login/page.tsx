@@ -32,7 +32,8 @@ export default function LoginPage() {
       } else {
         await signUp(email, password);
       }
-      router.push("/");
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.push(next?.startsWith("/") && !next.startsWith("//") ? next : "/");
     } finally {
       setSubmitting(false);
     }

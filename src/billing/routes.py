@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from src.auth.supabase import get_current_or_guest_user
+from src.auth.supabase import get_current_or_guest_user, get_current_user
 from src.billing.stripe_service import (
     BillingPortalCreate,
     BillingSessionResponse,
@@ -27,7 +27,7 @@ def require_account(user: AuthenticatedUser) -> None:
 @router.post("/create-checkout-session", response_model=BillingSessionResponse)
 async def create_checkout(
     payload: CheckoutSessionCreate,
-    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> BillingSessionResponse:
     require_account(user)
     return BillingSessionResponse(url=create_checkout_session(user.id, user.email, payload.plan))
@@ -36,7 +36,7 @@ async def create_checkout(
 @router.post("/create-customer-portal-session", response_model=BillingSessionResponse)
 async def create_customer_portal(
     payload: BillingPortalCreate,
-    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> BillingSessionResponse:
     require_account(user)
     return BillingSessionResponse(url=create_portal_session(user.id, payload.return_url))

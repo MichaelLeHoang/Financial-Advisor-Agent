@@ -1,20 +1,106 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { Check, Lock, Crown, Zap, ArrowRight, X } from "lucide-react";
+import { Check, Lock, Crown, Zap, ArrowRight, X, CreditCard, AlertCircle } from "lucide-react";
 import { PLANS, type PlanId } from "@/config/plans";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { api, type AuthUser as ApiAuthUser, type BillingSubscription } from "@/lib/api";
+
+type CheckoutPlanId = Extract<ApiAuthUser["plan"], "pro" | "trader" | "quant">;
+
+function checkoutPlanFor(planId: PlanId): CheckoutPlanId | null {
+  return planId === "pro" || planId === "trader" || planId === "quant" ? planId : null;
+}
+
+function normalizePlanId(plan: ApiAuthUser["plan"] | PlanId): PlanId {
+  return plan === "execution_addon" ? "execution" : plan;
+}
+
+function formatPlan(plan: string) {
+  return plan.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+}
 
 export default function PricingPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const currentPlan: PlanId = (user?.plan as PlanId) ?? "free";
+  const [billing, setBilling] = useState<BillingSubscription | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState<PlanId | "portal" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const handleUpgrade = (planId: PlanId) => {
-    // TODO: Connect to Stripe Checkout session
-    console.info(`[Mock] Stripe Checkout will be connected in the backend billing sprint. Target plan: ${planId}`);
-    alert(`Stripe Checkout will be connected in the backend billing sprint.\n\nTarget plan: ${planId}`);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkout = params.get("checkout");
+    if (checkout === "success") {
+      setNotice("Checkout complete. Your plan will update after Stripe confirms the subscription.");
+    } else if (checkout === "cancelled") {
+      setNotice("Checkout cancelled. No changes were made to your plan.");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user.is_guest) return;
+
+    api.billingSubscription()
+      .then(setBilling)
+      .catch((err) => setError(err.message));
+  }, [user.is_guest]);
+
+  const currentPlan = normalizePlanId((billing?.publishable_plan ?? user.plan) as ApiAuthUser["plan"]);
+  const status = billing?.subscription.status ?? (currentPlan === "free" ? "inactive" : "active");
+  const hasStripeCustomer = Boolean(billing?.subscription.stripe_customer_id);
+
+  const handleUpgrade = async (planId: PlanId) => {
+    setError(null);
+
+    if (planId === "free") {
+      router.push(user.is_guest ? "/login?next=/" : "/");
+      return;
+    }
+
+    if (planId === "execution") {
+      setNotice("Execution access is invite only. Use the request access path when broker execution is enabled.");
+      return;
+    }
+
+    if (user.is_guest) {
+      router.push(`/login?next=/pricing&plan=${planId}`);
+      return;
+    }
+
+    const checkoutPlan = checkoutPlanFor(planId);
+    if (!checkoutPlan) return;
+
+    setLoadingPlan(planId);
+    try {
+      const session = await api.createCheckoutSession(checkoutPlan);
+      window.location.href = session.url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to open Stripe Checkout.");
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
+  const openPortal = async () => {
+    setError(null);
+
+    if (user.is_guest) {
+      router.push("/login?next=/pricing");
+      return;
+    }
+
+    setLoadingPlan("portal");
+    try {
+      const session = await api.createCustomerPortalSession(window.location.href);
+      window.location.href = session.url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to open Stripe Customer Portal.");
+    } finally {
+      setLoadingPlan(null);
+    }
   };
 
   return (
@@ -55,13 +141,46 @@ export default function PricingPage() {
           <p className="mx-auto mt-3 max-w-xl text-base text-white/45">
             Unlock more AI research, portfolio tools, backtesting, and advanced analytics.
           </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            {!user.is_guest && (
+              <div className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.035] px-4 text-sm text-white/60">
+                <Crown className="h-4 w-4 text-green-positive" />
+                {formatPlan(currentPlan)} <span className="text-white/30">/</span> {status}
+              </div>
+            )}
+            {!user.is_guest && (
+              <button
+                type="button"
+                onClick={openPortal}
+                disabled={loadingPlan !== null || !hasStripeCustomer}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 text-sm font-medium text-white/70 transition-all hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <CreditCard className="h-4 w-4" />
+                {loadingPlan === "portal" ? "Opening..." : "Manage subscription"}
+              </button>
+            )}
+          </div>
         </motion.div>
+
+        {(notice || error) && (
+          <div
+            className={`mx-auto mb-8 flex max-w-2xl items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
+              error
+                ? "border-red-negative/25 bg-red-negative/10 text-red-negative"
+                : "border-indigo-primary/25 bg-indigo-primary/10 text-white/70"
+            }`}
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error ?? notice}</span>
+          </div>
+        )}
 
         {/* Plan cards grid */}
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           {PLANS.filter((p) => p.id !== "execution").map((plan, i) => {
             const isCurrent = plan.id === currentPlan;
             const isRecommended = plan.highlighted;
+            const isLoading = loadingPlan === plan.id;
 
             return (
               <motion.div
@@ -120,14 +239,15 @@ export default function PricingPage() {
                   <button
                     type="button"
                     onClick={() => handleUpgrade(plan.id)}
+                    disabled={loadingPlan !== null}
                     className={`group/btn flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] ${
                       isRecommended
                         ? "bg-indigo-500 text-white shadow-[0_0_0_1px_rgba(99,102,241,0.5),0_6px_18px_rgba(99,102,241,0.3)] hover:bg-indigo-400"
                         : "border border-white/[0.08] bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"
-                    }`}
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
                   >
-                    {plan.ctaLabel}
-                    <ArrowRight className="h-4 w-4 transition-transform group-hover/btn:translate-x-0.5" />
+                    {isLoading ? "Opening Checkout..." : user.is_guest && plan.id !== "free" ? "Sign in to upgrade" : plan.ctaLabel}
+                    {!isLoading && <ArrowRight className="h-4 w-4 transition-transform group-hover/btn:translate-x-0.5" />}
                   </button>
                 )}
               </motion.div>
@@ -160,6 +280,7 @@ export default function PricingPage() {
                 </div>
                 <button
                   type="button"
+                  onClick={() => handleUpgrade(exec.id)}
                   className="mt-6 inline-flex h-10 items-center rounded-xl border border-white/[0.08] bg-white/[0.04] px-6 text-sm font-medium text-white/60 transition-all hover:border-amber-400/40 hover:bg-amber-400/10 hover:text-amber-200"
                 >
                   {exec.ctaLabel}
