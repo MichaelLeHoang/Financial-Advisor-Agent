@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
-import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -32,7 +31,7 @@ function DialogClose({
     <DialogPrimitive.Close
       data-slot="dialog-close"
       className={cn(
-        "inline-flex size-9 items-center justify-center rounded-xl border border-transparent bg-transparent text-white/50 transition-colors hover:bg-white/[0.04] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+        "group inline-flex size-9 items-center justify-center rounded-xl border border-transparent bg-transparent text-white/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
         className
       )}
       {...props}
@@ -65,7 +64,13 @@ function DialogContent({
         {children}
         {showCloseButton && (
           <DialogClose className="absolute right-4 top-4">
-            <X data-icon="inline-start" />
+            <img
+              src="/close-svgrepo-com.svg"
+              alt=""
+              aria-hidden="true"
+              data-icon="inline-start"
+              className="size-5 opacity-65 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.68)]"
+            />
             <span className="sr-only">Close</span>
           </DialogClose>
         )}

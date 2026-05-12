@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog"
-import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -154,12 +153,18 @@ function AlertDialogClose({
     <AlertDialogPrimitive.Close
       data-slot="alert-dialog-close"
       className={cn(
-        "absolute right-4 top-4 inline-flex size-9 items-center justify-center rounded-xl text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+        "group absolute right-4 top-4 inline-flex size-9 items-center justify-center rounded-xl text-white/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
         className
       )}
       {...props}
     >
-      <X data-icon="inline-start" />
+      <img
+        src="/close-svgrepo-com.svg"
+        alt=""
+        aria-hidden="true"
+        data-icon="inline-start"
+        className="size-5 opacity-65 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.68)]"
+      />
       <span className="sr-only">Close</span>
     </AlertDialogPrimitive.Close>
   )

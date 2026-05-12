@@ -17,6 +17,8 @@ import {
     User,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { cn } from "@/lib/utils";
+import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -31,9 +33,11 @@ import { Input } from "@/components/ui/input";
 export default function ProfileMenu({
     compact = false,
     onSettingsClick,
+    onProfileClick,
 }: {
     compact?: boolean;
     onSettingsClick?: () => void;
+    onProfileClick?: () => void;
 }) {
     const router = useRouter();
     const { user, error: authError, signIn, signUp, signOut } = useAuth();
@@ -84,14 +88,15 @@ export default function ProfileMenu({
                 ref={triggerRef}
                 aria-label="Open profile menu"
                 className={compact
-                    ? "flex size-10 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.035] text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-white/[0.07] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                    ? "flex size-11 items-center justify-center rounded-full bg-transparent p-0 text-left transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     : "flex w-full items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.035] px-2.5 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-white/[0.065] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                 }
             >
-                <div className="relative flex size-8 shrink-0 items-center justify-center rounded-full bg-indigo-primary/20 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/30">
-                    {initial}
-                    <span className="absolute bottom-0 right-0 size-2.5 rounded-full border border-space-black bg-green-positive shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-                </div>
+                <ProfileAvatar
+                    avatarUrl={user?.avatar_url}
+                    initial={initial}
+                    size={compact ? "lg" : "default"}
+                />
                 {!compact && (
                     <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium text-white/85">{currentUserName}</div>
@@ -107,9 +112,7 @@ export default function ProfileMenu({
                         onClick={() => setAccountSwitcherOpen((open) => !open)}
                         className="h-auto py-3"
                     >
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-indigo-primary/20 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/30">
-                            {initial}
-                        </div>
+                        <ProfileAvatar avatarUrl={user?.avatar_url} initial={initial} size="lg" />
                         <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-semibold text-[var(--text-primary)]">{currentUserName}</div>
                             <div className="truncate text-xs text-[var(--text-muted)]">Current plan: {formatPlan(currentPlan)}</div>
@@ -158,7 +161,7 @@ export default function ProfileMenu({
                         />
                     )}
                     <MenuItem icon={Sparkles} label={isGuest ? "Upgrade plan" : "Plans & billing"} onClick={() => router.push("/pricing")} />
-                    {!isGuest && <MenuItem icon={User} label="Profile" />}
+                    {!isGuest && <MenuItem icon={User} label="Profile" onClick={() => { onProfileClick?.(); }} />}
                     <MenuItem icon={Shield} label="Security" />
                     <MenuItem icon={HelpCircle} label="Help center" />
                     <MenuItem icon={Settings} label="Settings" onClick={openSettings} />
@@ -221,6 +224,38 @@ export default function ProfileMenu({
                 )}
             </DropdownMenuContent>
         </DropdownMenu>
+    );
+}
+
+function ProfileAvatar({
+    avatarUrl,
+    initial,
+    size = "default",
+}: {
+    avatarUrl?: string | null;
+    initial: string;
+    size?: "default" | "lg";
+}) {
+    return (
+        <Avatar
+            size={size}
+            className={cn(
+                "bg-indigo-primary/14 text-indigo-primary after:border-indigo-primary/24 after:mix-blend-normal",
+                size === "lg" && "size-10"
+            )}
+        >
+            {avatarUrl && (
+                <AvatarImage
+                    src={avatarUrl}
+                    alt=""
+                    className="bg-[var(--surface-card)] object-contain p-0.5"
+                />
+            )}
+            <AvatarFallback className="bg-indigo-primary/14 text-xs font-semibold text-indigo-primary">
+                {initial}
+            </AvatarFallback>
+            <AvatarBadge className="bg-green-positive shadow-[0_0_8px_rgba(52,211,153,0.72)] ring-[var(--surface-sidebar)]" />
+        </Avatar>
     );
 }
 

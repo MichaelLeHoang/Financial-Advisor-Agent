@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { Check, Lock, Crown, Zap, ArrowRight, X, CreditCard, AlertCircle } from "lucide-react";
+import { Check, Lock, Crown, Zap, ArrowRight, CreditCard, AlertCircle } from "lucide-react";
 import { PLANS, type PlanId } from "@/config/plans";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { api, type AuthUser as ApiAuthUser, type BillingSubscription } from "@/lib/api";
@@ -111,7 +111,7 @@ export default function PricingPage() {
         <div className="absolute bottom-0 right-0 h-[500px] w-[500px] translate-x-1/4 translate-y-1/4 rounded-full bg-cyan-500/[0.04] blur-[100px]" />
       </div>
 
-      {/* X close button */}
+      {/* Close button */}
       <button
         type="button"
         onClick={() => {
@@ -124,9 +124,14 @@ export default function PricingPage() {
           }
         }}
         aria-label="Close pricing"
-        className="fixed right-6 top-6 z-50 flex h-10 w-10 items-center justify-center"
+        className="group fixed right-6 top-6 z-50 flex h-10 w-10 items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
       >
-        <X className="h-5 w-5 text-white/30 transition-colors duration-200 hover:text-white/80" />
+        <img
+          src="/close-svgrepo-com.svg"
+          alt=""
+          aria-hidden="true"
+          className="h-5 w-5 opacity-55 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]"
+        />
       </button>
 
       <div className="relative z-10 mx-auto max-w-6xl px-4 py-16 sm:px-8 sm:py-20">

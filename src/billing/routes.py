@@ -54,9 +54,21 @@ async def read_subscription(
         configured=billing_configured(),
     )
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request) -> dict[str, str]:
     payload = await request.body()
-    event = verify_webhook_payload(payload, request.headers.get("stripe-signature"))
-    return handle_stripe_event(event)
+    sig = request.headers.get("stripe-signature")
+    logger.info("[billing/webhook] received %d bytes sig=%s", len(payload), "present" if sig else "MISSING")
+    try:
+        event = verify_webhook_payload(payload, sig)
+    except HTTPException:
+        logger.exception("[billing/webhook] signature verification failed")
+        raise
+    result = handle_stripe_event(event)
+    logger.info("[billing/webhook] result=%s", result)
+    return result

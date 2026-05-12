@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { ChangeEvent, ComponentType } from "react";
-import { ClipboardList, FileText, TableProperties, X } from "lucide-react";
+import { ClipboardList, FileText, TableProperties } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { SentimentResult } from "@/lib/api";
@@ -117,8 +117,18 @@ export default function SentimentPage() {
                     {headlines.map((h) => (
                         <Badge key={h} variant="outline" className="h-9 rounded-full border-white/[0.06] bg-white/[0.045] px-4 text-sm text-white/72">
                             {h.length > 50 ? h.slice(0, 50) + "…" : h}
-                            <button onClick={() => setHeadlines((prev) => prev.filter((x) => x !== h))}>
-                                <X className="w-4 h-4 text-white/40 hover:text-white" />
+                            <button
+                                type="button"
+                                onClick={() => setHeadlines((prev) => prev.filter((x) => x !== h))}
+                                className="group inline-flex size-5 items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                                aria-label="Remove headline"
+                            >
+                                <img
+                                    src="/close-svgrepo-com.svg"
+                                    alt=""
+                                    aria-hidden="true"
+                                    className="size-4 opacity-55 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_7px_rgba(255,255,255,0.65)]"
+                                />
                             </button>
                         </Badge>
                     ))}

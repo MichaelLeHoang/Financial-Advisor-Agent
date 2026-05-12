@@ -8,6 +8,25 @@ export interface ChatResponse {
   session_id: string;
 }
 
+export interface ChatMessage {
+  id: number | string;
+  role: "user" | "assistant";
+  content: string;
+  created_at?: string;
+}
+
+export interface ChatSession {
+  session_id: string;
+  title: string;
+  message_count: number;
+  last_active: string;
+}
+
+export interface ChatSessionMessages {
+  session_id: string;
+  messages: ChatMessage[];
+}
+
 export interface SentimentResult {
   individual: Array<{ label: string; score: number; all_scores: Record<string, number> }>;
   market_mood: {
@@ -125,6 +144,14 @@ export interface MarketQuote {
   history: MarketQuotePoint[];
 }
 
+export interface MarketSymbolSearchResult {
+  ticker: string;
+  name: string;
+  exchange?: string | null;
+  sector?: string | null;
+  quote_type?: string | null;
+}
+
 export interface Subscription {
   id: string;
   user_id: string;
@@ -160,6 +187,31 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { headers: requestHeaders(false) });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new ApiError(res.status, err.detail ?? err);
+  }
+  return res.json();
+}
+
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "PATCH",
+    headers: requestHeaders(),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new ApiError(res.status, err.detail ?? err);
+  }
+  return res.json();
+}
+
+async function del<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "DELETE",
+    headers: requestHeaders(false),
+  });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new ApiError(res.status, err.detail ?? err);
@@ -218,9 +270,21 @@ export const api = {
   chat: (message: string, sessionId = "default", remember = true) =>
     post<ChatResponse>("/api/v1/agent/chat", { message, session_id: sessionId, remember }),
 
+  /** Conversation sessions */
+  chatSessions: () => get<ChatSession[]>("/api/v1/agent/sessions"),
+
+  chatSessionMessages: (sessionId = "default") =>
+    get<ChatSessionMessages>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`),
+
+  renameChatSession: (sessionId: string, title: string) =>
+    patch<ChatSession>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}`, { title }),
+
+  deleteChatSession: (sessionId: string) =>
+    del<{ status: string; session_id: string }>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}`),
+
   /** Reset conversation history */
   resetChat: (sessionId = "default") =>
-    post<{ status: string }>(`/api/v1/agent/reset?session_id=${sessionId}`, {}),
+    post<{ status: string }>(`/api/v1/agent/reset?session_id=${encodeURIComponent(sessionId)}`, {}),
 
   /** FinBERT sentiment analysis */
   sentiment: (texts: string[]) =>
@@ -238,6 +302,9 @@ export const api = {
 
   marketQuote: (ticker: string, period = "1mo", interval = "1d") =>
     get<MarketQuote>(`/api/v1/market/quote/${encodeURIComponent(ticker)}?period=${period}&interval=${interval}`),
+
+  marketSearch: (query: string, limit = 12) =>
+    get<MarketSymbolSearchResult[]>(`/api/v1/market/search?q=${encodeURIComponent(query)}&limit=${limit}`),
 
   /** Health check */
   health: () => get<{ status: string }>("/health"),

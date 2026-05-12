@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Atom, Plus, X } from "lucide-react";
+import { Atom, Plus } from "lucide-react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
@@ -110,8 +110,18 @@ export default function QuantumPage() {
                             {tickers.map((t) => (
                                 <Badge key={t} variant="outline" className="h-7 rounded-lg border-white/[0.06] bg-white/[0.045] text-white">
                                     {t}
-                                    <button onClick={() => setTickers((p) => p.filter((x) => x !== t))}>
-                                        <X className="w-3 h-3 text-white/40" />
+                                    <button
+                                        type="button"
+                                        onClick={() => setTickers((p) => p.filter((x) => x !== t))}
+                                        className="group inline-flex size-4 items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                                        aria-label={`Remove ${t}`}
+                                    >
+                                        <img
+                                            src="/close-svgrepo-com.svg"
+                                            alt=""
+                                            aria-hidden="true"
+                                            className="size-3 opacity-55 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.65)]"
+                                        />
                                     </button>
                                 </Badge>
                             ))}

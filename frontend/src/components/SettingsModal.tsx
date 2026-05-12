@@ -74,9 +74,14 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                 <Card className="flex max-h-full w-full flex-col rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-settings)] py-0 text-white shadow-[var(--shadow-settings)]">
                     <CardHeader className="flex shrink-0 flex-row items-center justify-between px-5 pt-5 sm:px-8 sm:pt-8">
                         <CardTitle className="text-2xl font-bold sm:text-3xl">Settings</CardTitle>
-                        <Button onClick={onClose} variant="ghost" size="icon" className="rounded-full text-white/40 hover:bg-white/5 hover:text-white">
-                            <img src="/close-svgrepo-com.svg" alt="" aria-hidden="true" className="size-5 opacity-80 transition-opacity group-hover/button:opacity-100" />
-                        </Button>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            aria-label="Close settings"
+                            className="group inline-flex size-9 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                        >
+                            <img src="/close-svgrepo-com.svg" alt="" aria-hidden="true" className="size-5 opacity-70 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" />
+                        </button>
                     </CardHeader>
 
                     <CardContent className="flex min-h-0 flex-1 flex-col px-5 pb-5 sm:px-8 sm:pb-8">

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
 import {
     PieChart as RePieChart, Pie, Cell, ResponsiveContainer
 } from "recharts";
@@ -116,8 +115,18 @@ export default function PortfolioPage() {
                             {tickers.map((t) => (
                                 <div key={t} className="bg-indigo-primary/20 text-indigo-primary px-4 py-2 rounded-xl flex items-center gap-2 font-bold">
                                     {t}
-                                    <button onClick={() => setTickers((prev) => prev.filter((x) => x !== t))}>
-                                        <X className="w-4 h-4" />
+                                    <button
+                                        type="button"
+                                        onClick={() => setTickers((prev) => prev.filter((x) => x !== t))}
+                                        className="group inline-flex size-5 items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                                        aria-label={`Remove ${t}`}
+                                    >
+                                        <img
+                                            src="/close-svgrepo-com.svg"
+                                            alt=""
+                                            aria-hidden="true"
+                                            className="size-4 opacity-70 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_7px_rgba(255,255,255,0.65)]"
+                                        />
                                     </button>
                                 </div>
                             ))}

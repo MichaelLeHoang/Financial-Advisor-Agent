@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import hmac
 import json
 import time
@@ -167,36 +168,53 @@ def verify_webhook_payload(payload: bytes, signature_header: str | None, toleran
 
     return json.loads(payload.decode("utf-8"))
 
+logger = logging.getLogger(__name__)
+
 
 def handle_stripe_event(event: dict[str, Any]) -> dict[str, str]:
     event_type = event.get("type")
     obj = (event.get("data") or {}).get("object") or {}
+    logger.info("[webhook] received event_type=%s event_id=%s", event_type, event.get("id", "?"))
 
     if event_type == "checkout.session.completed":
         user_id = _user_id_from_obj(obj)
+        logger.info("[webhook] checkout.session.completed user_id=%s customer=%s subscription=%s metadata=%s",
+                    user_id, obj.get("customer"), obj.get("subscription"), obj.get("metadata"))
         if user_id:
             plan = Plan((obj.get("metadata") or {}).get("plan", Plan.FREE.value))
-            get_store().upsert_subscription(
-                user_id,
-                stripe_customer_id=obj.get("customer"),
-                stripe_subscription_id=obj.get("subscription"),
-                plan=plan,
-                status="active",
-            )
+            logger.info("[webhook] upserting subscription: user_id=%s plan=%s status=active", user_id, plan.value)
+            try:
+                result = get_store().upsert_subscription(
+                    user_id,
+                    stripe_customer_id=obj.get("customer"),
+                    stripe_subscription_id=obj.get("subscription"),
+                    plan=plan,
+                    status="active",
+                )
+                logger.info("[webhook] upsert done: plan=%s status=%s", result.plan.value, result.status)
+            except Exception:
+                logger.exception("[webhook] upsert_subscription failed")
+        else:
+            logger.warning("[webhook] checkout.session.completed but no user_id found")
         return {"status": "processed"}
 
     if event_type in {"customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"}:
+        logger.info("[webhook] subscription lifecycle event: %s subscription_id=%s status=%s",
+                    event_type, obj.get("id"), obj.get("status"))
         _sync_subscription_object(obj)
         return {"status": "processed"}
 
     if event_type == "invoice.paid":
+        logger.info("[webhook] invoice.paid subscription=%s customer=%s", obj.get("subscription"), obj.get("customer"))
         _sync_invoice_status(obj, "active")
         return {"status": "processed"}
 
     if event_type == "invoice.payment_failed":
+        logger.info("[webhook] invoice.payment_failed subscription=%s", obj.get("subscription"))
         _sync_invoice_status(obj, "past_due")
         return {"status": "processed"}
 
+    logger.info("[webhook] ignoring event_type=%s", event_type)
     return {"status": "ignored"}
 
 

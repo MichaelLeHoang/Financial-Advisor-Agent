@@ -315,7 +315,9 @@ class SupabaseRestStore:
         status: str = "inactive",
         current_period_end: datetime | None = None,
     ) -> SubscriptionRead:
-        existing = self.get_subscription(user_id)
+        existing_rows = self._request("GET", "subscriptions", {"select": "*", "user_id": f"eq.{user_id}", "limit": "1"})
+        has_existing = bool(existing_rows)
+        existing = SubscriptionRead.model_validate(existing_rows[0]) if has_existing else SubscriptionRead(user_id=user_id)
         body = {
             "user_id": str(user_id),
             "stripe_customer_id": stripe_customer_id or existing.stripe_customer_id,
@@ -323,14 +325,15 @@ class SupabaseRestStore:
             "plan": plan.value,
             "status": status,
             "current_period_end": current_period_end.isoformat() if current_period_end else None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        if existing.status != "inactive" or existing.stripe_customer_id or existing.stripe_subscription_id:
+        if has_existing:
             rows = self._request("PATCH", "subscriptions", {"user_id": f"eq.{user_id}"}, body=body)
         else:
             rows = self._request("POST", "subscriptions", body=body)
 
         effective_plan = plan if status in {"active", "trialing"} else Plan.FREE
-        self._request("PATCH", "profiles", {"id": f"eq.{user_id}"}, body={"plan": effective_plan.value})
+        self._request("PATCH", "profiles", {"id": f"eq.{user_id}"}, body={"plan": effective_plan.value, "updated_at": datetime.now(timezone.utc).isoformat()})
         return SubscriptionRead.model_validate(rows[0]) if rows else self.get_subscription(user_id)
 
     def find_subscription_by_customer(self, stripe_customer_id: str) -> SubscriptionRead | None:

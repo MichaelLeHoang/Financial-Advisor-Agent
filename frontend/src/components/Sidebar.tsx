@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ComponentType } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
-    Archive,
     Atom,
     Brain,
     ChevronRight,
@@ -19,16 +18,19 @@ import {
     Pencil,
     PieChart,
     Pin,
-    Share2,
+    Search,
     Sparkles,
     Trash2,
     TrendingUp,
-    X,
     Zap,
 } from "lucide-react";
+import { api } from "@/lib/api";
+import type { ChatSession } from "@/lib/api";
+import { DEMO_CHAT_SESSIONS, isDemoChatSession } from "@/lib/demo-chat-history";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { Plan } from "@/components/auth/AuthProvider";
+import ChatSearchDialog from "@/components/ChatSearchDialog";
 import ProfileMenu from "@/components/ProfileMenu";
 
 type NavItem = {
@@ -48,31 +50,91 @@ const NAV: NavItem[] = [
     { href: "/quantum", icon: Atom, label: "Quantum", minPlan: "quant" },
 ];
 
-const RECENT_THREADS = [
-    "Market outlook 2026",
-    "NVDA earnings risk",
-    "AAPL sentiment brief",
-    "Rebalance growth portfolio",
-    "Quantum stock selection",
-];
-
 export default function Sidebar({
     isOpen,
     onToggle,
     onSettingsClick,
+    onProfileClick,
 }: {
     isOpen: boolean;
     onToggle: () => void;
     onSettingsClick?: () => void;
+    onProfileClick?: () => void;
 }) {
     const path = usePathname();
+    const router = useRouter();
+    const searchParams = useSearchParams();
     const { user } = useAuth();
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [sessions, setSessions] = useState<ChatSession[]>([]);
     const visibleNav = getVisibleNav(user?.plan ?? "free");
+    const activeSessionId = path === "/" ? searchParams.get("session") || "default" : null;
+    const displaySessions = useMemo(() => {
+        const realSessionIds = new Set(sessions.map((session) => session.session_id));
+        return [
+            ...sessions,
+            ...DEMO_CHAT_SESSIONS.filter((session) => !realSessionIds.has(session.session_id)),
+        ];
+    }, [sessions]);
+
+    const openSearch = useCallback(() => {
+        setSearchOpen(true);
+        setMobileOpen(false);
+    }, []);
+
+    const refreshSessions = useCallback(async () => {
+        try {
+            setSessions(await api.chatSessions());
+        } catch {
+            setSessions([]);
+        }
+    }, [user?.id]);
+
+    const startNewAnalysis = useCallback(() => {
+        const nextSessionId = typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `session-${Date.now()}`;
+        router.push(`/?session=${encodeURIComponent(nextSessionId)}`);
+        setMobileOpen(false);
+    }, [router]);
+
+    const handleSessionDeleted = useCallback((sessionId: string) => {
+        refreshSessions();
+        if (activeSessionId === sessionId) {
+            router.push("/");
+        }
+    }, [activeSessionId, refreshSessions, router]);
 
     useEffect(() => {
         setMobileOpen(false);
     }, [path]);
+
+    useEffect(() => {
+        const handleShortcut = (event: KeyboardEvent) => {
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+                event.preventDefault();
+                openSearch();
+            }
+        };
+
+        window.addEventListener("keydown", handleShortcut);
+
+        return () => {
+            window.removeEventListener("keydown", handleShortcut);
+        };
+    }, [openSearch]);
+
+    useEffect(() => {
+        refreshSessions();
+
+        const handleChanged = () => refreshSessions();
+        window.addEventListener("chat-sessions:changed", handleChanged);
+
+        return () => {
+            window.removeEventListener("chat-sessions:changed", handleChanged);
+        };
+    }, [refreshSessions]);
 
     return (
         <>
@@ -81,12 +143,34 @@ export default function Sidebar({
                 aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
                 aria-expanded={mobileOpen}
                 onClick={() => setMobileOpen((open) => !open)}
-                className="fixed left-4 top-4 z-[70] flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--theme-border)] bg-[var(--surface-mobile-trigger)] text-[var(--text-secondary)] shadow-[var(--shadow-control)] transition-colors hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)] md:hidden"
+                className="group fixed left-4 top-4 z-[70] flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--theme-border)] bg-[var(--surface-mobile-trigger)] text-[var(--text-secondary)] shadow-[var(--shadow-control)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 md:hidden"
             >
-                {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                {mobileOpen ? (
+                    <img
+                        src="/close-svgrepo-com.svg"
+                        alt=""
+                        aria-hidden="true"
+                        className="h-5 w-5 opacity-70 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]"
+                    />
+                ) : (
+                    <Menu className="h-5 w-5 transition-colors group-hover:text-[var(--text-primary)]" />
+                )}
             </button>
 
-            <DesktopSidebar path={path} isOpen={isOpen} onToggle={onToggle} nav={visibleNav} onSettingsClick={onSettingsClick} />
+            <DesktopSidebar
+                path={path}
+                isOpen={isOpen}
+                onToggle={onToggle}
+                nav={visibleNav}
+                sessions={displaySessions}
+                activeSessionId={activeSessionId}
+                onNewAnalysis={startNewAnalysis}
+                onSearchClick={openSearch}
+                onSessionsChanged={refreshSessions}
+                onSessionDeleted={handleSessionDeleted}
+                onSettingsClick={onSettingsClick}
+                onProfileClick={onProfileClick}
+            />
 
             <AnimatePresence>
                 {mobileOpen && (
@@ -108,11 +192,23 @@ export default function Sidebar({
                             exit={{ x: -340, opacity: 0.8 }}
                             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                         >
-                            <SidebarSurface path={path} nav={visibleNav} onSettingsClick={onSettingsClick} />
+                            <SidebarSurface
+                                path={path}
+                                nav={visibleNav}
+                                sessions={displaySessions}
+                                activeSessionId={activeSessionId}
+                                onNewAnalysis={startNewAnalysis}
+                                onSearchClick={openSearch}
+                                onSessionsChanged={refreshSessions}
+                                onSessionDeleted={handleSessionDeleted}
+                                onSettingsClick={onSettingsClick}
+                                onProfileClick={onProfileClick}
+                            />
                         </motion.div>
                     </>
                 )}
             </AnimatePresence>
+            <ChatSearchDialog open={searchOpen} onOpenChange={setSearchOpen} sessions={sessions} />
         </>
     );
 }
@@ -122,13 +218,27 @@ function DesktopSidebar({
     isOpen,
     onToggle,
     nav,
+    sessions,
+    activeSessionId,
+    onNewAnalysis,
+    onSearchClick,
+    onSessionsChanged,
+    onSessionDeleted,
     onSettingsClick,
+    onProfileClick,
 }: {
     path: string;
     isOpen: boolean;
     onToggle: () => void;
     nav: NavItem[];
+    sessions: ChatSession[];
+    activeSessionId: string | null;
+    onNewAnalysis: () => void;
+    onSearchClick: () => void;
+    onSessionsChanged: () => void;
+    onSessionDeleted: (sessionId: string) => void;
     onSettingsClick?: () => void;
+    onProfileClick?: () => void;
 }) {
     const [recentsOpen, setRecentsOpen] = useState(false);
 
@@ -142,15 +252,34 @@ function DesktopSidebar({
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
         >
             {isOpen ? (
-                <SidebarSurface path={path} onToggle={onToggle} nav={nav} onSettingsClick={onSettingsClick} />
+                <SidebarSurface
+                    path={path}
+                    onToggle={onToggle}
+                    nav={nav}
+                    sessions={sessions}
+                    activeSessionId={activeSessionId}
+                    onNewAnalysis={onNewAnalysis}
+                    onSearchClick={onSearchClick}
+                    onSessionsChanged={onSessionsChanged}
+                    onSessionDeleted={onSessionDeleted}
+                    onSettingsClick={onSettingsClick}
+                    onProfileClick={onProfileClick}
+                />
             ) : (
                 <MiniSidebar
                     path={path}
                     nav={nav}
+                    sessions={sessions}
+                    activeSessionId={activeSessionId}
                     recentsOpen={recentsOpen}
+                    onNewAnalysis={onNewAnalysis}
+                    onSearchClick={onSearchClick}
                     onToggleRecents={() => setRecentsOpen((open) => !open)}
                     onToggleSidebar={onToggle}
+                    onSessionsChanged={onSessionsChanged}
+                    onSessionDeleted={onSessionDeleted}
                     onSettingsClick={onSettingsClick}
+                    onProfileClick={onProfileClick}
                 />
             )}
         </motion.aside>
@@ -160,17 +289,31 @@ function DesktopSidebar({
 function MiniSidebar({
     path,
     nav,
+    sessions,
+    activeSessionId,
     recentsOpen,
+    onNewAnalysis,
+    onSearchClick,
     onToggleRecents,
     onToggleSidebar,
+    onSessionsChanged,
+    onSessionDeleted,
     onSettingsClick,
+    onProfileClick,
 }: {
     path: string;
     nav: NavItem[];
+    sessions: ChatSession[];
+    activeSessionId: string | null;
     recentsOpen: boolean;
+    onNewAnalysis: () => void;
+    onSearchClick: () => void;
     onToggleRecents: () => void;
     onToggleSidebar: () => void;
+    onSessionsChanged: () => void;
+    onSessionDeleted: (sessionId: string) => void;
     onSettingsClick?: () => void;
+    onProfileClick?: () => void;
 }) {
     return (
         <div className="relative flex h-full flex-col items-center border-r border-[var(--theme-border)] bg-[var(--surface-popover-strong)] py-3 shadow-[var(--shadow-sidebar)]">
@@ -188,13 +331,23 @@ function MiniSidebar({
                 </span>
             </button>
 
-            <Link
-                href="/"
+            <button
+                type="button"
+                onClick={onNewAnalysis}
                 aria-label="New analysis"
                 className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
                 <PenLine className="h-5 w-5" />
-            </Link>
+            </button>
+
+            <button
+                type="button"
+                onClick={onSearchClick}
+                aria-label="Search chats"
+                className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+            >
+                <Search className="h-5 w-5" />
+            </button>
 
             <div className="relative mb-3">
                 <button
@@ -223,9 +376,21 @@ function MiniSidebar({
                             className="absolute left-12 top-0 w-72 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
                         >
                             <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/38">Recent conversations</div>
-                            {RECENT_THREADS.map((thread) => (
-                                <RecentThreadRow key={thread} thread={thread} />
-                            ))}
+                            {sessions.length > 0 ? (
+                                <div className="max-h-72 overflow-y-auto pr-1">
+                                    {sessions.map((session) => (
+                                        <RecentThreadRow
+                                            key={session.session_id}
+                                            session={session}
+                                            active={activeSessionId === session.session_id}
+                                            onSessionsChanged={onSessionsChanged}
+                                            onSessionDeleted={onSessionDeleted}
+                                        />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="px-3 py-2 text-sm text-white/38">No recent chats yet.</div>
+                            )}
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -255,7 +420,7 @@ function MiniSidebar({
             </nav>
 
             <div className="mt-auto">
-                <ProfileMenu compact onSettingsClick={onSettingsClick} />
+                <ProfileMenu compact onSettingsClick={onSettingsClick} onProfileClick={onProfileClick} />
             </div>
         </div>
     );
@@ -264,13 +429,27 @@ function MiniSidebar({
 function SidebarSurface({
     path,
     nav,
+    sessions,
+    activeSessionId,
+    onNewAnalysis,
+    onSearchClick,
     onToggle,
+    onSessionsChanged,
+    onSessionDeleted,
     onSettingsClick,
+    onProfileClick,
 }: {
     path: string;
     nav: NavItem[];
+    sessions: ChatSession[];
+    activeSessionId: string | null;
+    onNewAnalysis: () => void;
+    onSearchClick: () => void;
     onToggle?: () => void;
+    onSessionsChanged: () => void;
+    onSessionDeleted: (sessionId: string) => void;
     onSettingsClick?: () => void;
+    onProfileClick?: () => void;
 }) {
     const [showProCard, setShowProCard] = useState(true);
 
@@ -298,8 +477,9 @@ function SidebarSurface({
                     )}
                 </div>
 
-                <Link
-                    href="/"
+                <button
+                    type="button"
+                    onClick={onNewAnalysis}
                     className="accent-gradient-surface on-accent mb-4 flex h-11 items-center justify-between rounded-xl px-3 text-sm font-semibold shadow-[var(--shadow-create-action)] outline-none transition-all duration-200 hover:shadow-[var(--shadow-create-action-hover)] active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-space-black"
                 >
                     <span className="flex items-center gap-2">
@@ -307,10 +487,22 @@ function SidebarSurface({
                         New analysis
                     </span>
                     <Sparkles className="h-4 w-4 text-white/70" />
-                </Link>
+                </button>
 
-                <div className="space-y-6 overflow-y-auto pr-1">
-                    <section>
+                <button
+                    type="button"
+                    onClick={onSearchClick}
+                    className="mb-4 flex h-10 items-center gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card)] px-3 text-sm font-medium text-[var(--text-secondary)] shadow-[var(--shadow-control)] outline-none transition-colors hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                >
+                    <Search className="h-4 w-4" />
+                    <span className="min-w-0 flex-1 text-left">Search chats</span>
+                    <span className="rounded-md border border-[var(--theme-border)] bg-[var(--surface-card-hover)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-tertiary)] opacity-55 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] blur-[0.1px]">
+                        ⌘ K
+                    </span>
+                </button>
+
+                <div className="flex min-h-0 flex-1 flex-col gap-6 pr-1">
+                    <section className="shrink-0">
                         <div className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-widest text-white/35">
                             Workspace
                         </div>
@@ -346,14 +538,25 @@ function SidebarSurface({
                         </nav>
                     </section>
 
-                    <section>
+                    <section className="flex min-h-0 flex-1 flex-col">
                         <div className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-widest text-white/35">
                             Recent
                         </div>
-                        <div className="space-y-1" aria-label="Recent analysis threads">
-                            {RECENT_THREADS.map((thread) => (
-                                <RecentThreadRow key={thread} thread={thread} compact />
-                            ))}
+                        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" aria-label="Recent analysis threads">
+                            {sessions.length > 0 ? (
+                                sessions.map((session) => (
+                                    <RecentThreadRow
+                                        key={session.session_id}
+                                        session={session}
+                                        compact
+                                        active={activeSessionId === session.session_id}
+                                        onSessionsChanged={onSessionsChanged}
+                                        onSessionDeleted={onSessionDeleted}
+                                    />
+                                ))
+                            ) : (
+                                <div className="rounded-xl px-3 py-2 text-sm text-white/38">No recent chats yet.</div>
+                            )}
                         </div>
                     </section>
                 </div>
@@ -366,9 +569,9 @@ function SidebarSurface({
                                 type="button"
                                 aria-label="Dismiss upgrade prompt"
                                 onClick={() => setShowProCard(false)}
-                                className="absolute right-2 top-2 z-10 flex size-6 items-center justify-center rounded-lg text-white/45 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                                className="group absolute right-2 top-2 z-10 flex size-6 items-center justify-center rounded-lg text-white/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                             >
-                                <img src="/close-svgrepo-com.svg" alt="" aria-hidden="true" className="size-3.5 opacity-80" />
+                                <img src="/close-svgrepo-com.svg" alt="" aria-hidden="true" className="size-3.5 opacity-70 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_7px_rgba(255,255,255,0.65)]" />
                             </button>
                             <div className="relative pr-6">
                                 <div className="text-sm font-semibold text-white">
@@ -387,7 +590,7 @@ function SidebarSurface({
                             </div>
                         </div>
                     )}
-                    <ProfileMenu onSettingsClick={onSettingsClick} />
+                    <ProfileMenu onSettingsClick={onSettingsClick} onProfileClick={onProfileClick} />
                 </div>
             </div>
         </div>
@@ -405,10 +608,23 @@ function getVisibleNav(plan: Plan): NavItem[] {
     return NAV.filter((item) => !item.minPlan || rank[plan] >= rank[item.minPlan]);
 }
 
-function RecentThreadRow({ thread, compact = false }: { thread: string; compact?: boolean }) {
+function RecentThreadRow({
+    session,
+    compact = false,
+    active = false,
+    onSessionsChanged,
+    onSessionDeleted,
+}: {
+    session: ChatSession;
+    compact?: boolean;
+    active?: boolean;
+    onSessionsChanged: () => void;
+    onSessionDeleted: (sessionId: string) => void;
+}) {
     const [menuOpen, setMenuOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0 });
+    const isDemoSession = isDemoChatSession(session.session_id);
     const rowRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -447,42 +663,73 @@ function RecentThreadRow({ thread, compact = false }: { thread: string; compact?
         };
     }, [menuOpen]);
 
+    const renameSession = async () => {
+        setMenuOpen(false);
+        const title = window.prompt("Rename chat", session.title);
+        const nextTitle = title?.trim();
+        if (!nextTitle || nextTitle === session.title) return;
+
+        try {
+            await api.renameChatSession(session.session_id, nextTitle);
+            onSessionsChanged();
+        } catch (error) {
+            window.alert(error instanceof Error ? error.message : "Unable to rename this chat.");
+        }
+    };
+
+    const deleteSession = async () => {
+        setMenuOpen(false);
+        if (!window.confirm(`Delete "${session.title}"?`)) return;
+
+        try {
+            await api.deleteChatSession(session.session_id);
+            onSessionDeleted(session.session_id);
+        } catch (error) {
+            window.alert(error instanceof Error ? error.message : "Unable to delete this chat.");
+        }
+    };
+
     return (
         <div ref={rowRef} className="group/thread relative">
             <Link
-                href="/"
+                href={`/?session=${encodeURIComponent(session.session_id)}`}
+                aria-current={active ? "page" : undefined}
                 className={cn(
-                    "flex items-center rounded-xl pr-10 text-sm outline-none transition-all duration-200 hover:bg-white/[0.05] hover:text-white focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
-                    compact ? "h-9 px-3 text-white/48" : "h-10 px-3 text-white/62"
+                    "flex items-center rounded-xl text-sm outline-none transition-all duration-200 hover:bg-white/[0.05] hover:text-white focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                    isDemoSession ? "pr-3" : "pr-10",
+                    compact ? "h-9 px-3 text-white/48" : "h-10 px-3 text-white/62",
+                    active && "bg-white/[0.07] text-white"
                 )}
             >
-                <span className="truncate">{thread}</span>
+                <span className="truncate">{session.title}</span>
             </Link>
-            <button
-                ref={triggerRef}
-                type="button"
-                aria-label={`Open actions for ${thread}`}
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-                onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    const rect = event.currentTarget.getBoundingClientRect();
-                    setMenuPosition({
-                        left: Math.min(rect.right, window.innerWidth - 176),
-                        top: Math.min(rect.top, window.innerHeight - 230),
-                    });
-                    setMenuOpen((open) => !open);
-                }}
-                className={cn(
-                    "absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg bg-transparent text-white/40 opacity-0 transition-colors hover:bg-transparent hover:text-white group-hover/thread:opacity-100 focus:bg-transparent focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
-                    menuOpen && "bg-transparent text-white opacity-100"
-                )}
-            >
-                <MoreHorizontal className="h-4 w-4" />
-            </button>
+            {!isDemoSession && (
+                <button
+                    ref={triggerRef}
+                    type="button"
+                    aria-label={`Open actions for ${session.title}`}
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                    onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        setMenuPosition({
+                            left: Math.min(rect.right, window.innerWidth - 176),
+                            top: Math.min(rect.top, window.innerHeight - 230),
+                        });
+                        setMenuOpen((open) => !open);
+                    }}
+                    className={cn(
+                        "absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg bg-transparent text-white/40 opacity-0 transition-colors hover:bg-transparent hover:text-white group-hover/thread:opacity-100 focus:bg-transparent focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                        menuOpen && "bg-transparent text-white opacity-100"
+                    )}
+                >
+                    <MoreHorizontal className="h-4 w-4" />
+                </button>
+            )}
 
-            {mounted && createPortal(
+            {!isDemoSession && mounted && createPortal(
                 <AnimatePresence>
                     {menuOpen && (
                     <motion.div
@@ -495,12 +742,9 @@ function RecentThreadRow({ thread, compact = false }: { thread: string; compact?
                         className="fixed z-[100] w-40 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-1.5 shadow-[var(--shadow-popover)]"
                         style={{ left: menuPosition.left, top: menuPosition.top, transformOrigin: "top left" }}
                     >
-                        <RecentAction icon={Share2} label="Share" />
-                        <RecentAction icon={Pencil} label="Rename" />
+                        <RecentAction icon={Pencil} label="Rename" onClick={renameSession} />
                         <div className="my-1 h-px bg-white/[0.08]" />
-                        <RecentAction icon={Pin} label="Pin chat" />
-                        <RecentAction icon={Archive} label="Archive" />
-                        <RecentAction icon={Trash2} label="Delete" danger />
+                        <RecentAction icon={Trash2} label="Delete" danger onClick={deleteSession} />
                     </motion.div>
                     )}
                 </AnimatePresence>,
@@ -513,15 +757,18 @@ function RecentThreadRow({ thread, compact = false }: { thread: string; compact?
 function RecentAction({
     icon: Icon,
     label,
+    onClick,
     danger = false,
 }: {
     icon: ComponentType<{ className?: string }>;
     label: string;
+    onClick: () => void;
     danger?: boolean;
 }) {
     return (
         <button
             type="button"
+            onClick={onClick}
             className={cn(
                 "flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm transition-colors",
                 danger ? "text-red-negative/85 hover:bg-red-negative/10 hover:text-red-negative" : "text-white/72 hover:bg-white/[0.06] hover:text-white"

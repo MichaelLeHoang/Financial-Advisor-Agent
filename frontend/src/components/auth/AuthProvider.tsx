@@ -11,6 +11,8 @@ export interface AuthUser {
   id: string;
   email: string | null;
   display_name?: string | null;
+  username?: string | null;
+  avatar_url?: string | null;
   plan: Plan;
   is_guest?: boolean;
 }
@@ -41,6 +43,8 @@ function normalizeUser(payload: User): AuthUser {
     id: payload.id,
     email: payload.email ?? null,
     display_name: metadata.display_name ?? metadata.full_name ?? null,
+    username: metadata.username ?? null,
+    avatar_url: metadata.avatar_url ?? null,
     plan: isPlan(appMetadata.plan) ? appMetadata.plan : "free",
     is_guest: false,
   };

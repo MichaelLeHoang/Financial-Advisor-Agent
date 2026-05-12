@@ -34,10 +34,10 @@ def test_agent_reset_uses_default_session(monkeypatch):
             self.reset = True
 
     monkeypatch.setattr(api_app, "get_agent", lambda: FakeAgent())
-    monkeypatch.setattr("src.agent.history.clear_history", lambda session_id: cleared_sessions.append(session_id))
+    monkeypatch.setattr("src.agent.history.clear_history", lambda session_id, user_id=None: cleared_sessions.append((session_id, user_id)))
 
     response = TestClient(api_app.app).post("/api/v1/agent/reset")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "session_id": "default"}
-    assert cleared_sessions == ["default"]
+    assert cleared_sessions == [("default", "00000000-0000-0000-0000-000000000001")]

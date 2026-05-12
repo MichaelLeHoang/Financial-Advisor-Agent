@@ -10,7 +10,6 @@ import {
     Search,
     Trash2,
     Trash2Icon,
-    X,
 } from "lucide-react";
 import { motion } from "motion/react";
 import {
@@ -129,6 +128,8 @@ export default function MarketPage() {
     const [stocks, setStocks] = useState<StockInfo[]>(() => DEFAULT_MARKET_TICKERS.map(createStock));
     const [query, setQuery] = useState("");
     const [searchOpen, setSearchOpen] = useState(false);
+    const [symbolMatches, setSymbolMatches] = useState<MarketSymbol[]>([]);
+    const [searchingSymbols, setSearchingSymbols] = useState(false);
     const [loading, setLoading] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
@@ -139,7 +140,8 @@ export default function MarketPage() {
     const [skipRemoveConfirm, setSkipRemoveConfirm] = useState(false);
     const [skipRemoveConfirmDraft, setSkipRemoveConfirmDraft] = useState(false);
 
-    const matches = useMemo(() => searchMarketSymbols(query), [query]);
+    const localMatches = useMemo(() => searchMarketSymbols(query), [query]);
+    const matches = symbolMatches.length > 0 ? symbolMatches : localMatches;
 
     useEffect(() => {
         setMounted(true);
@@ -151,6 +153,44 @@ export default function MarketPage() {
         refresh();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [mounted]);
+
+    useEffect(() => {
+        const normalized = query.trim();
+        if (normalized.length < 1) {
+            setSymbolMatches([]);
+            setSearchingSymbols(false);
+            return;
+        }
+
+        let cancelled = false;
+        setSearchingSymbols(true);
+        const timer = window.setTimeout(() => {
+            api.marketSearch(normalized)
+                .then((results) => {
+                    if (cancelled) return;
+                    setSymbolMatches(results.map((result) => ({
+                        ticker: result.ticker,
+                        name: result.name,
+                        exchange: result.exchange || "Market",
+                        sector: result.sector || result.quote_type || "Instrument",
+                        price: 0,
+                        change: 0,
+                    })));
+                })
+                .catch(() => {
+                    if (cancelled) return;
+                    setSymbolMatches([]);
+                })
+                .finally(() => {
+                    if (!cancelled) setSearchingSymbols(false);
+                });
+        }, 220);
+
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
+    }, [query]);
 
     useEffect(() => {
         const focusSearch = () => {
@@ -277,6 +317,7 @@ export default function MarketPage() {
                             inputRef={searchInputRef}
                             query={query}
                             matches={matches}
+                            searching={searchingSymbols}
                             open={searchOpen}
                             onOpenChange={setSearchOpen}
                             onQueryChange={setQuery}
@@ -373,6 +414,7 @@ function MarketSearch({
     inputRef,
     query,
     matches,
+    searching,
     open,
     onOpenChange,
     onQueryChange,
@@ -382,13 +424,15 @@ function MarketSearch({
     inputRef: RefObject<HTMLInputElement | null>;
     query: string;
     matches: MarketSymbol[];
+    searching: boolean;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onQueryChange: (query: string) => void;
     onSelect: (ticker: string) => void;
     onPreview: (ticker: string) => void;
 }) {
-    const canAddCustom = normalizeTicker(query).length > 0 && !matches.some((match) => match.ticker === normalizeTicker(query));
+    const normalizedQuery = normalizeTicker(query);
+    const canAddCustom = /^[A-Z0-9.-]{1,16}$/.test(normalizedQuery) && matches.length === 0;
 
     return (
         <div className="relative flex-1">
@@ -419,10 +463,15 @@ function MarketSearch({
                         onOpenChange(false);
                         inputRef.current?.focus();
                     }}
-                    className="absolute right-3 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-lg text-white/36 transition-colors hover:bg-white/[0.06] hover:text-white"
+                    className="group absolute right-3 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     aria-label="Clear search"
                 >
-                    <X className="size-4" />
+                    <img
+                        src="/close-svgrepo-com.svg"
+                        alt=""
+                        aria-hidden="true"
+                        className="size-4 opacity-55 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_7px_rgba(255,255,255,0.65)]"
+                    />
                 </button>
             )}
 
@@ -468,7 +517,15 @@ function MarketSearch({
                             </div>
                         ))}
 
-                        {canAddCustom && (
+                        {searching && matches.length === 0 && (
+                            <div className="px-3 py-3 text-sm text-white/42">Searching symbols...</div>
+                        )}
+
+                        {!searching && matches.length === 0 && !canAddCustom && (
+                            <div className="px-3 py-3 text-sm text-white/42">No symbols found.</div>
+                        )}
+
+                        {canAddCustom && !searching && (
                             <button
                                 type="button"
                                 onMouseDown={(event) => event.preventDefault()}
@@ -514,7 +571,7 @@ function MarketCard({
                 onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") onOpen();
                 }}
-                className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[var(--shadow-accent-card)] transition-all duration-300 group-hover:border-white/[0.12] group-hover:bg-white/[0.07] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[var(--shadow-accent-card)] transition-all duration-300 group-hover:border-white/[0.12] group-hover:bg-white/[0.07] focus:outline-none focus-visible:border-white/[0.12] focus-visible:ring-0"
             >
                 <CardContent className="p-6">
                     <div className="mb-4 flex items-start justify-between gap-4">
@@ -533,19 +590,23 @@ function MarketCard({
                                 {up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
                                 {formatChange(stock.change)}
                             </Badge>
-                            <Button
+                            <button
                                 type="button"
-                                size="icon-sm"
-                                variant="ghost"
-                                className="rounded-lg text-white/32 hover:bg-white/[0.06] hover:text-white"
+                                className="group inline-flex size-8 items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     onRequestRemove();
                                 }}
                                 aria-label={`Remove ${stock.ticker}`}
                             >
-                                <X data-icon="inline-start" />
-                            </Button>
+                                <img
+                                    src="/close-svgrepo-com.svg"
+                                    alt=""
+                                    aria-hidden="true"
+                                    data-icon="inline-start"
+                                    className="size-4 opacity-55 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_7px_rgba(255,255,255,0.65)]"
+                                />
+                            </button>
                         </div>
                     </div>
 
@@ -592,7 +653,7 @@ function SafeChartContainer({ children, className }: { children: React.ReactNode
     }, []);
 
     return (
-        <div ref={containerRef} className={cn("h-full w-full", className)}>
+        <div ref={containerRef} className={cn("h-full w-full [&_.recharts-surface]:outline-none [&_.recharts-wrapper]:outline-none", className)}>
             {ready && (
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     {children as React.ReactElement}
@@ -608,13 +669,14 @@ function MiniChart({ stock }: { stock: StockInfo }) {
 
     return (
         <SafeChartContainer>
-            <AreaChart data={stock.data}>
+            <AreaChart data={stock.data} accessibilityLayer={false} margin={{ left: 0, right: 0, top: 6, bottom: 0 }}>
                 <defs>
                     <linearGradient id={`grad-${stock.ticker}`} x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor={color} stopOpacity={0.3} />
                         <stop offset="95%" stopColor={color} stopOpacity={0} />
                     </linearGradient>
                 </defs>
+                <Tooltip content={<MiniChartTooltip />} cursor={{ stroke: color, strokeWidth: 1, strokeOpacity: 0.28 }} />
                 <Area
                     type="monotone"
                     dataKey="price"
@@ -622,9 +684,22 @@ function MiniChart({ stock }: { stock: StockInfo }) {
                     strokeWidth={2}
                     fillOpacity={1}
                     fill={`url(#grad-${stock.ticker})`}
+                    activeDot={{ r: 3, strokeWidth: 0, fill: color }}
                 />
             </AreaChart>
         </SafeChartContainer>
+    );
+}
+
+function MiniChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value?: number }>; label?: string }) {
+    if (!active || !payload?.length) return null;
+    const price = payload[0]?.value;
+
+    return (
+        <div className="rounded-lg border border-[var(--theme-border)] bg-[var(--surface-tooltip)] px-2 py-1.5 shadow-[var(--shadow-tooltip)]">
+            <div className="text-[10px] text-white/38">{label}</div>
+            <div className="text-xs font-semibold text-white">{formatCurrency(price ?? 0)}</div>
+        </div>
     );
 }
 
@@ -736,7 +811,14 @@ function MarketChartDialog({
                                                             </linearGradient>
                                                         </defs>
                                                         <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
-                                                        <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "var(--chart-axis)", fontSize: 11 }} minTickGap={24} />
+                                                        <XAxis
+                                                            dataKey="label"
+                                                            tickLine={false}
+                                                            axisLine={false}
+                                                            tick={{ fill: "var(--chart-axis)", fontSize: 11 }}
+                                                            minTickGap={range === "1D" ? 16 : 24}
+                                                            tickFormatter={(value) => range === "1D" ? formatIntradayLabel(String(value)) : String(value)}
+                                                        />
                                                         <YAxis yAxisId="price" orientation="right" tickLine={false} axisLine={false} tick={{ fill: "var(--chart-axis)", fontSize: 11 }} width={64} domain={["dataMin - 3", "dataMax + 3"]} />
                                                         <YAxis yAxisId="volume" hide />
                                                         <Tooltip content={<ChartTooltip />} cursor={{ stroke: "var(--chart-cursor)", strokeWidth: 1 }} />
@@ -897,6 +979,17 @@ function formatPercent(value: number | null | undefined) {
 
 function formatChange(value: number) {
     return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
+function formatIntradayLabel(value: string) {
+    const timeMatch = value.match(/\b(\d{1,2}):(\d{2})\b/);
+    if (!timeMatch) return value;
+
+    const hour = Number(timeMatch[1]);
+    const minute = timeMatch[2];
+    if (Number.isNaN(hour)) return value;
+
+    return `${hour.toString().padStart(2, "0")}:${minute}`;
 }
 
 function formatLargeNumber(value: number) {

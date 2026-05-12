@@ -82,10 +82,20 @@ class AgentChatRequest(BaseModel):
     remember: bool = True  # maintain multi-turn conversation history
     session_id: str = "default"
 
+class AgentSessionRenameRequest(BaseModel):
+    title: str
+
 class MarketQuotePoint(BaseModel):
     label: str
     price: float
     volume: int
+
+class MarketSymbolSearchResult(BaseModel):
+    ticker: str
+    name: str
+    exchange: str | None = None
+    sector: str | None = None
+    quote_type: str | None = None
 
 class MarketQuoteResponse(BaseModel):
     ticker: str
@@ -230,15 +240,24 @@ async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
         change = ((latest_price - previous_close) / previous_close * 100) if previous_close else 0.0
         volume_series = history["Volume"] if "Volume" in history else None
 
-        points = [
-            MarketQuotePoint(
-                label=index.strftime("%b %d") if hasattr(index, "strftime") else str(index),
-                price=round(float(row["Close"]), 2),
-                volume=int(row.get("Volume", 0) or 0),
+        point_rows = history.tail(90)
+        points = []
+        for index, row in point_rows.iterrows():
+            if row.get("Close") is None:
+                continue
+
+            if hasattr(index, "strftime"):
+                label = index.strftime("%H:%M") if period == "1d" else index.strftime("%b %d")
+            else:
+                label = str(index)
+
+            points.append(
+                MarketQuotePoint(
+                    label=label,
+                    price=round(float(row["Close"]), 2),
+                    volume=int(row.get("Volume", 0) or 0),
+                )
             )
-            for index, row in history.tail(90).iterrows()
-            if row.get("Close") is not None
-        ]
 
         return MarketQuoteResponse(
             ticker=normalized,
@@ -265,6 +284,52 @@ async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
         raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Unable to fetch market data for {normalized}: {exc}")
+
+
+@app.get("/api/v1/market/search", response_model=list[MarketSymbolSearchResult])
+async def market_search(q: str, limit: int = 12):
+    """
+    Search market symbols using Yahoo Finance search via yfinance.
+    """
+    query = q.strip()
+    if len(query) < 1:
+        return []
+
+    safe_limit = max(1, min(limit, 25))
+
+    try:
+        search = yf.Search(
+            query,
+            max_results=safe_limit,
+            news_count=0,
+            lists_count=0,
+            include_research=False,
+            include_cultural_assets=False,
+            enable_fuzzy_query=True,
+        )
+        results = []
+        seen = set()
+
+        for quote in search.quotes or []:
+            symbol = str(quote.get("symbol") or "").strip().upper()
+            if not symbol or symbol in seen:
+                continue
+            seen.add(symbol)
+            results.append(
+                MarketSymbolSearchResult(
+                    ticker=symbol,
+                    name=quote.get("longname") or quote.get("shortname") or symbol,
+                    exchange=quote.get("exchDisp") or quote.get("exchange"),
+                    sector=quote.get("sectorDisp") or quote.get("sector") or quote.get("quoteType"),
+                    quote_type=quote.get("typeDisp") or quote.get("quoteType"),
+                )
+            )
+            if len(results) >= safe_limit:
+                break
+
+        return results
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Unable to search market symbols: {exc}")
 
 def _round_optional(value: float | int | None, digits: int = 4) -> float | None:
     if value is None:
@@ -392,14 +457,14 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
         agent = get_agent()
 
         # Load persistent history for this session
-        history = load_history(req.session_id)
-        agent._history = history
+        history = load_history(req.session_id, str(user.id))
+        agent._history = [{"role": item["role"], "content": item["content"]} for item in history]
         response = agent.chat(req.message, remember=False)  # we handle persistence
 
         # Persist both turns
         if req.remember:
-            append_message(req.session_id, "user", req.message)
-            append_message(req.session_id, "assistant", response)
+            append_message(req.session_id, "user", req.message, str(user.id))
+            append_message(req.session_id, "assistant", response, str(user.id))
         return {"response": response, "session_id": req.session_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -407,23 +472,61 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
 
 
 @app.post("/api/v1/agent/reset")
-async def agent_reset(session_id: str = "default"):
+async def agent_reset(
+    session_id: str = "default",
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+):
     """
     Clear the agent's conversation history to start a fresh session.
     """
     from src.agent.history import clear_history
 
-    clear_history(session_id)
+    clear_history(session_id, str(user.id))
     get_agent().reset_history()
 
     return {"status": "ok", "session_id": session_id}
 
 @app.get("/api/v1/agent/sessions")
-async def list_sessions():
+async def list_agent_sessions(user: AuthenticatedUser = Depends(get_current_or_guest_user)):
     """List all conversation sessions."""
     from src.agent.history import list_sessions
 
-    return list_sessions()
+    return list_sessions(str(user.id))
+
+
+@app.get("/api/v1/agent/sessions/{session_id}/messages")
+async def get_agent_session_messages(
+    session_id: str,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+):
+    """Load all messages for a conversation session."""
+    from src.agent.history import load_history
+
+    return {"session_id": session_id, "messages": load_history(session_id, str(user.id))}
+
+
+@app.patch("/api/v1/agent/sessions/{session_id}")
+async def rename_agent_session(
+    session_id: str,
+    req: AgentSessionRenameRequest,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+):
+    """Rename a conversation session."""
+    from src.agent.history import rename_session
+
+    return rename_session(session_id, req.title, str(user.id))
+
+
+@app.delete("/api/v1/agent/sessions/{session_id}")
+async def delete_agent_session(
+    session_id: str,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+):
+    """Delete a conversation session."""
+    from src.agent.history import clear_history
+
+    clear_history(session_id, str(user.id))
+    return {"status": "ok", "session_id": session_id}
 
 
 @app.websocket("/ws/agent/chat")

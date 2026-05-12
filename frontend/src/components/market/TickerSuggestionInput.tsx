@@ -1,7 +1,7 @@
 "use client";
 
 import { type RefObject, useMemo, useRef, useState } from "react";
-import { Plus, Search, X } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 
 import { normalizeTicker, searchMarketSymbols } from "@/lib/market-data";
 import { Badge } from "@/components/ui/badge";
@@ -78,10 +78,15 @@ export default function TickerSuggestionInput({
                         setOpen(false);
                         ref.current?.focus();
                     }}
-                    className="absolute right-2 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-lg text-white/32 transition-colors hover:bg-white/[0.06] hover:text-white"
+                    className="group absolute right-2 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     aria-label="Clear ticker search"
                 >
-                    <X className="size-4" />
+                    <img
+                        src="/close-svgrepo-com.svg"
+                        alt=""
+                        aria-hidden="true"
+                        className="size-4 opacity-55 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_7px_rgba(255,255,255,0.65)]"
+                    />
                 </button>
             )}
 
