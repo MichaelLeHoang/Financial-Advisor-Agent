@@ -95,9 +95,10 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                                     key={m}
                                     type="button"
                                     variant="outline"
+                                    data-selected={settings.model === m}
                                     onClick={() => setSettings({ ...settings, model: m })}
                                     className={cn(
-                                        "h-auto flex-col items-start justify-start rounded-2xl border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-primary-action-hover)] focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                                        "theme-section-button h-auto flex-col items-start justify-start rounded-2xl border p-4 text-left hover:-translate-y-0.5 hover:shadow-[var(--shadow-primary-action-hover)] focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                                         settings.model === m
                                             ? "border-indigo-primary bg-indigo-primary/20 text-white shadow-[var(--shadow-primary-action)]"
                                             : "border-white/[0.06] bg-white/5 text-white/40 hover:border-indigo-primary/50 hover:bg-indigo-primary/10 hover:text-white"
@@ -119,6 +120,7 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                                     key={t.name}
                                     type="button"
                                     variant="outline"
+                                    data-selected={settings.theme === t.name}
                                     onClick={() => setSettings({ ...settings, theme: t.name })}
                                     style={{
                                         "--theme-option-surface": t.surface,
@@ -129,7 +131,7 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                                         "--theme-option-shadow": t.shadow,
                                     } as CSSProperties}
                                     className={cn(
-                                        "h-auto rounded-2xl border p-3 transition-all duration-200 flex flex-col items-center gap-2 bg-[var(--theme-option-surface)] text-white/62 shadow-none hover:-translate-y-0.5 hover:border-[var(--theme-option-border)] hover:bg-[var(--theme-option-hover)] hover:text-white hover:shadow-[var(--theme-option-shadow)] focus-visible:border-[var(--theme-option-border)] focus-visible:ring-2 focus-visible:ring-[var(--theme-option-ring)] sm:p-4",
+                                        "theme-section-button h-auto rounded-2xl border p-3 flex flex-col items-center gap-2 bg-[var(--theme-option-surface)] text-white/62 shadow-none hover:-translate-y-0.5 hover:border-[var(--theme-option-border)] hover:bg-[var(--theme-option-hover)] hover:text-white hover:shadow-[var(--theme-option-shadow)] focus-visible:border-[var(--theme-option-border)] focus-visible:ring-2 focus-visible:ring-[var(--theme-option-ring)] sm:p-4",
                                         settings.theme === t.name
                                             ? "border-[var(--theme-option-border)] bg-[var(--theme-option-selected)] text-white shadow-[var(--theme-option-shadow)]"
                                             : "border-white/[0.06]"
@@ -168,9 +170,10 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                                     key={q}
                                     type="button"
                                     variant="outline"
+                                    data-selected={settings.quantum === q}
                                     onClick={() => setSettings({ ...settings, quantum: q })}
                                     className={cn(
-                                        "h-auto w-full rounded-2xl border p-4 transition-all flex justify-between items-center",
+                                        "theme-section-button h-auto w-full rounded-2xl border p-4 flex justify-between items-center",
                                         settings.quantum === q
                                             ? "bg-cyan-secondary/20 border-cyan-secondary text-white"
                                             : "bg-white/5 border-white/[0.06] text-white/40 hover:border-white/[0.12]"

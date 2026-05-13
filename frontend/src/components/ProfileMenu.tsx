@@ -140,7 +140,7 @@ export default function ProfileMenu({
                         <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-widest text-white/35">Switch account</div>
                         <button
                             type="button"
-                            className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-white/[0.055]"
+                            className="theme-menu-item flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-white/[0.055]"
                         >
                             <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/[0.055] text-white/60 ring-1 ring-white/10">
                                 <Building2 className="size-4" />
@@ -154,7 +154,7 @@ export default function ProfileMenu({
                         <div className="my-1 h-px bg-white/[0.08]" />
                         <button
                             type="button"
-                            className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-white/[0.055]"
+                            className="theme-menu-item flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-white/[0.055]"
                         >
                             <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-indigo-primary/14 text-indigo-primary ring-1 ring-indigo-primary/25">
                                 <Plus className="size-4" />
@@ -230,7 +230,7 @@ export default function ProfileMenu({
                         <Button
                             type="submit"
                             disabled={authSubmitting}
-                            className="h-10 w-full rounded-lg bg-indigo-primary text-sm font-semibold text-white hover:bg-indigo-primary/90"
+                            className="theme-solid-action h-10 w-full rounded-lg text-sm font-semibold"
                         >
                             {authSubmitting ? "Working..." : authMode === "signin" ? "Sign in" : "Create account"}
                         </Button>

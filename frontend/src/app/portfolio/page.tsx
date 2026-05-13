@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import {
     PieChart as RePieChart, Pie, Cell, ResponsiveContainer
 } from "recharts";
@@ -72,6 +73,7 @@ export default function PortfolioPage() {
     const pieData = result?.weights
         ? Object.entries(result.weights).map(([name, value]) => ({ name, value: Math.round(value * 1000) / 10, color: COLORS[Object.keys(result.weights!).indexOf(name) % COLORS.length] }))
         : [];
+    const riskProgress = `${((risk - 0.1) / (3 - 0.1)) * 100}%`;
 
     return (
         <div className="flex-1 p-8 overflow-y-auto">
@@ -91,7 +93,7 @@ export default function PortfolioPage() {
                         <Button
                             onClick={createPortfolio}
                             disabled={loading}
-                            className="h-11 rounded-xl bg-white/[0.08] px-4 text-sm font-semibold text-white hover:bg-white/[0.12]"
+                            className="theme-solid-action h-11 rounded-xl px-4 text-sm font-semibold"
                         >
                             Create Portfolio
                         </Button>
@@ -108,12 +110,12 @@ export default function PortfolioPage() {
                 </Card>
 
                 {/* Config card */}
-                <div className="glass p-8 rounded-[32px] space-y-8">
+                <div className="portfolio-config-surface glass p-8 rounded-[32px] space-y-8">
                     <div className="space-y-4">
-                        <label className="text-sm text-white/40">Target Assets</label>
-                        <div className="flex flex-wrap gap-3 p-4 glass rounded-2xl">
+                        <label className="portfolio-label text-sm text-white/40">Target Assets</label>
+                        <div className="portfolio-control-panel flex flex-wrap gap-3 rounded-2xl border border-white/[0.06] p-4">
                             {tickers.map((t) => (
-                                <div key={t} className="bg-indigo-primary/20 text-indigo-primary px-4 py-2 rounded-xl flex items-center gap-2 font-bold">
+                                <div key={t} className="portfolio-token bg-indigo-primary/20 text-indigo-primary px-4 py-2 rounded-xl flex items-center gap-2 font-bold">
                                     {t}
                                     <button
                                         type="button"
@@ -137,38 +139,41 @@ export default function PortfolioPage() {
                                 existingTickers={tickers}
                                 placeholder="Add ticker..."
                                 className="max-w-72"
-                                inputClassName="border-transparent bg-transparent shadow-none focus-visible:ring-0"
+                                inputClassName="portfolio-input border-transparent bg-transparent shadow-none focus-visible:ring-0"
                             />
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div className="space-y-4">
-                            <label className="text-sm text-white/40">Optimization Strategy</label>
-                            <div className="flex p-1 glass rounded-2xl">
+                            <label className="portfolio-label text-sm text-white/40">Optimization Strategy</label>
+                            <div className="portfolio-control-panel flex rounded-2xl border border-white/[0.06] p-1">
                                 <button
                                     onClick={() => setMode("classical")}
-                                    className={cn("flex-1 py-3 rounded-xl transition-all", mode === "classical" ? "bg-white/10 text-white" : "text-white/40")}
+                                    data-selected={mode === "classical"}
+                                    className={cn("portfolio-segment flex-1 py-3 rounded-xl transition-all", mode === "classical" ? "bg-white/10 text-white" : "text-white/40")}
                                 >
                                     Classical
                                 </button>
                                 <button
                                     onClick={() => setMode("quantum")}
-                                    className={cn("flex-1 py-3 rounded-xl transition-all", mode === "quantum" ? "bg-indigo-primary text-white glow-indigo" : "text-white/40")}
+                                    data-selected={mode === "quantum"}
+                                    className={cn("portfolio-segment flex-1 py-3 rounded-xl transition-all", mode === "quantum" ? "bg-indigo-primary text-white glow-indigo" : "text-white/40")}
                                 >
                                     Quantum
                                 </button>
                             </div>
                         </div>
                         <div className="space-y-4">
-                            <label className="text-sm text-white/40">Risk Tolerance — {risk.toFixed(1)}</label>
-                            <div className="px-4 py-6">
+                            <label className="portfolio-label text-sm text-white/40">Risk Tolerance — {risk.toFixed(1)}</label>
+                            <div className="portfolio-control-panel rounded-2xl border border-white/[0.06] px-4 py-6">
                                 <input
                                     type="range" min="0.1" max="3" step="0.1" value={risk}
                                     onChange={(e) => setRisk(parseFloat(e.target.value))}
-                                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-primary"
+                                    style={{ "--risk-progress": riskProgress } as CSSProperties}
+                                    className="portfolio-range w-full h-2 rounded-lg appearance-none cursor-pointer accent-indigo-primary"
                                 />
-                                <div className="flex justify-between mt-2 text-xs text-white/40">
+                                <div className="portfolio-label flex justify-between mt-2 text-xs text-white/40">
                                     <span>Conservative</span>
                                     <span>Aggressive</span>
                                 </div>
@@ -178,13 +183,13 @@ export default function PortfolioPage() {
 
                     {error && <p className="text-sm text-red-negative">{error}</p>}
 
-                    <button
+                    <Button
                         onClick={optimize}
                         disabled={loading}
-                        className="w-full bg-indigo-primary py-5 rounded-2xl font-bold text-lg glow-indigo hover:scale-[1.01] transition-transform disabled:opacity-40"
+                        className="on-accent accent-gradient-surface h-auto w-full rounded-2xl py-5 text-lg font-bold shadow-[var(--shadow-primary-wide)] transition-transform hover:scale-[1.01] hover:shadow-[var(--shadow-primary-wide-hover)] disabled:opacity-40"
                     >
                         {loading ? "Optimizing…" : "Optimize Portfolio"}
-                    </button>
+                    </Button>
                 </div>
 
                 {/* Results */}

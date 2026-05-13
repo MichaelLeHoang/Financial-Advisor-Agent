@@ -56,7 +56,7 @@ export default function WatchlistPage() {
           <Button
             onClick={create}
             disabled={loading}
-            className="h-11 gap-2 rounded-xl bg-indigo-primary px-4 text-sm font-semibold text-white hover:bg-indigo-primary/90"
+            className="theme-solid-action h-11 gap-2 rounded-xl px-4 text-sm font-semibold"
           >
             <Plus className="h-4 w-4" />
             Create

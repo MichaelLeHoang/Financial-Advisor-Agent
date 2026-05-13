@@ -84,7 +84,7 @@ export default function SentimentPage() {
                         />
                         <Button
                             onClick={addHeadline}
-                            className="h-11 rounded-xl bg-indigo-primary px-5 text-sm font-semibold text-white shadow-[var(--shadow-primary-action)] hover:bg-indigo-primary/90"
+                            className="theme-solid-action h-11 rounded-xl px-5 text-sm font-semibold"
                         >
                             Add
                         </Button>
@@ -138,7 +138,7 @@ export default function SentimentPage() {
                 <Button
                     onClick={analyze}
                     disabled={headlines.length === 0 || loading}
-                    className="h-14 w-full rounded-2xl bg-indigo-primary text-lg font-bold text-white shadow-[var(--shadow-primary-wide)] hover:bg-indigo-primary/90 hover:shadow-[var(--shadow-primary-wide-hover)] disabled:opacity-40"
+                    className="on-accent accent-gradient-surface h-14 w-full rounded-2xl text-lg font-bold shadow-[var(--shadow-primary-wide)] hover:shadow-[var(--shadow-primary-wide-hover)] disabled:opacity-40"
                 >
                     {loading ? "Analyzing…" : `Analyze ${headlines.length} headline${headlines.length !== 1 ? "s" : ""}`}
                 </Button>

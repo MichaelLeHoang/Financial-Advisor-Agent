@@ -167,7 +167,7 @@ export default function EditProfileModal({ isOpen, onClose }: EditProfileModalPr
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-[var(--surface-settings-backdrop)] backdrop-blur-sm"
       />
       <motion.div
         initial={{ opacity: 0, scale: 0.92, y: 20 }}
@@ -176,8 +176,8 @@ export default function EditProfileModal({ isOpen, onClose }: EditProfileModalPr
         transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
         className="relative z-10 w-full max-w-lg"
       >
-        <Card className="rounded-2xl border border-white/[0.08] bg-[#1a1a1e] px-6 pb-6 pt-5 text-white shadow-[0_24px_80px_rgba(0,0,0,0.5)] sm:px-8 sm:pb-4 sm:pt-4">
-          <h2 className="text-xl font-semibold text-white/90 sm:text-2xl">Edit profile</h2>
+        <Card className="profile-modal rounded-2xl border px-6 pb-6 pt-5 sm:px-8 sm:pb-4 sm:pt-4">
+          <h2 className="text-xl font-semibold text-[var(--text-primary)] sm:text-2xl">Edit profile</h2>
 
           {/* Avatar */}
           <div className="flex justify-center">
@@ -199,7 +199,7 @@ export default function EditProfileModal({ isOpen, onClose }: EditProfileModalPr
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#1a1a1e] bg-[#2a2a2e] text-white/70 shadow-lg transition-colors hover:bg-[#3a3a3e] hover:text-white"
+                className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[var(--surface-dialog)] bg-[var(--surface-control)] text-[var(--text-secondary)] shadow-[var(--shadow-control)] transition-colors hover:bg-[var(--surface-control-hover)] hover:text-[var(--text-primary)]"
                 aria-label="Change avatar"
               >
                 <Camera className="h-4 w-4" />
@@ -216,32 +216,32 @@ export default function EditProfileModal({ isOpen, onClose }: EditProfileModalPr
 
           {/* Form fields */}
           <div className=" space-y-2">
-            <div className="group rounded-xl border border-white/[0.1] bg-transparent px-4 pb-2.5 pt-2 transition-colors focus-within:border-white/[0.25]">
-              <label className="block text-xs font-medium text-white/45">Display name</label>
+            <div className="profile-field group rounded-xl border px-4 pb-2.5 pt-2 transition-colors">
+              <label className="block text-xs font-medium text-[var(--text-subtle)]">Display name</label>
               <input
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="Your display name"
-                className="mt-0.5 w-full border-0 bg-transparent p-0 text-base font-medium text-white/90 placeholder:text-white/20 focus:outline-none focus:ring-0"
+                className="mt-0.5 w-full border-0 bg-transparent p-0 text-base font-medium text-[var(--text-primary)] placeholder:text-[var(--text-placeholder)] focus:outline-none focus:ring-0"
                 maxLength={64}
               />
             </div>
 
-            <div className="group rounded-xl border border-white/[0.1] bg-transparent px-4 pb-2.5 pt-2 transition-colors focus-within:border-white/[0.25]">
-              <label className="block text-xs font-medium text-white/45">Username</label>
+            <div className="profile-field group rounded-xl border px-4 pb-2.5 pt-2 transition-colors">
+              <label className="block text-xs font-medium text-[var(--text-subtle)]">Username</label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ""))}
                 placeholder="your_username"
-                className="mt-0.5 w-full border-0 bg-transparent p-0 text-base font-medium text-white/90 placeholder:text-white/20 focus:outline-none focus:ring-0"
+                className="mt-0.5 w-full border-0 bg-transparent p-0 text-base font-medium text-[var(--text-primary)] placeholder:text-[var(--text-placeholder)] focus:outline-none focus:ring-0"
                 maxLength={32}
               />
             </div>
           </div>
 
-          <p className="text-center text-sm italic text-white/30">
+          <p className="text-center text-sm italic text-[var(--text-subtle)]">
             Customize your profile to your liking.
           </p>
 
@@ -273,7 +273,7 @@ export default function EditProfileModal({ isOpen, onClose }: EditProfileModalPr
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="h-10 rounded-full px-6 text-sm font-semibold text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
+              className="h-10 rounded-full px-6 text-sm font-semibold text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-selected)] hover:text-[var(--text-primary)] disabled:opacity-50"
             >
               Cancel
             </button>
@@ -281,7 +281,7 @@ export default function EditProfileModal({ isOpen, onClose }: EditProfileModalPr
               type="button"
               onClick={handleSave}
               disabled={saving || !hasChanges}
-              className="flex h-10 items-center gap-2 rounded-full bg-white px-6 text-sm font-semibold text-black transition-all hover:bg-white/90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+              className="theme-primary-action flex h-10 items-center gap-2 rounded-full px-6 text-sm font-semibold transition-all active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               Save

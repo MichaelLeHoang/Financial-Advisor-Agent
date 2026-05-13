@@ -136,14 +136,14 @@ export default function QuantumPage() {
                                 onSelect={add}
                                 existingTickers={tickers}
                             />
-                            <Button onClick={() => add()} variant="outline" size="icon" className="h-10 w-10 rounded-xl border-white/[0.06] bg-white/[0.045] text-cyan-secondary hover:bg-white/[0.08] hover:text-cyan-secondary">
+                            <Button onClick={() => add()} size="icon" className="theme-solid-action h-10 w-10 rounded-xl">
                                 <Plus className="w-4 h-4" />
                             </Button>
                         </div>
                         <Button
                             onClick={run}
                             disabled={loading || tickers.length < 2}
-                            className="h-12 w-full rounded-2xl bg-gradient-to-r from-indigo-primary to-cyan-secondary font-bold text-white glow-indigo disabled:opacity-40"
+                            className="theme-primary-action-wide h-12 w-full rounded-2xl font-bold disabled:opacity-40"
                         >
                             {loading ? "Running QAOA…" : "Run Quantum Optimization"}
                         </Button>
