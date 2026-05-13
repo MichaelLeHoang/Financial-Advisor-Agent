@@ -24,6 +24,7 @@ from src.saas.models import AuthenticatedUser
 from src.saas.routes import router as saas_router
 from src.saas.usage import usage_tracker
 from src.billing.routes import router as billing_router
+from src.llm.routing_policy import LLMMode
 
 from pydantic import BaseModel
 import yfinance as yf
@@ -53,14 +54,27 @@ inngest.fast_api.serve(
     [scheduled_new_ingestion, on_demand_news_ingestion],
 )
 
-# Lazy singleton: agent is expensive to initialize (downloads models)
-_agent: FinancialAdvisorAgent | None = None
+# Lazy cache: agent setup is expensive, but model routing can vary by user plan/mode.
+_agents: dict[tuple[str, str, str, str], FinancialAdvisorAgent] = {}
 
-def get_agent() -> FinancialAdvisorAgent:
-    global _agent
-    if _agent is None:
-        _agent = FinancialAdvisorAgent()
-    return _agent
+def get_agent(
+    *,
+    user: AuthenticatedUser | None = None,
+    task_type: str = "chat",
+    preferred_mode: LLMMode | None = None,
+) -> FinancialAdvisorAgent:
+    user_id = str(user.id) if user else "guest"
+    plan = user.plan if user else "free"
+    mode = preferred_mode or settings.default_llm_mode
+    key = (user_id, str(plan), task_type, mode)
+    if key not in _agents:
+        _agents[key] = FinancialAdvisorAgent(
+            user_id=user_id,
+            plan=plan,
+            task_type=task_type,
+            preferred_mode=preferred_mode,
+        )
+    return _agents[key]
 
 # Request/Response Models
 class PredictRequest(BaseModel):
@@ -81,6 +95,7 @@ class AgentChatRequest(BaseModel):
     message: str
     remember: bool = True  # maintain multi-turn conversation history
     session_id: str = "default"
+    preferred_mode: LLMMode | None = None
 
 class AgentSessionRenameRequest(BaseModel):
     title: str
@@ -454,7 +469,7 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
     try:
-        agent = get_agent()
+        agent = get_agent(user=user, task_type="chat", preferred_mode=req.preferred_mode)
 
         # Load persistent history for this session
         history = load_history(req.session_id, str(user.id))

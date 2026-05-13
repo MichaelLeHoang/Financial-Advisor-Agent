@@ -1,7 +1,8 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
-from src.config import settings
 from src.agent.tools import ALL_TOOLS
+from src.llm.gateway import LLMGateway, RoutedChatModel, llm_gateway
+from src.llm.routing_policy import LLMMode
+from src.saas.models import Plan
 
 SYSTEM_PROMPT = """You are a professional Financial Advisor AI Agent with access to real-time tools.
 
@@ -34,8 +35,23 @@ class FinancialAdvisorAgent:
         agent = FinancialAdvisorAgent(provider="openai")
     """
 
-    def __init__(self, provider: str = "google"):
-        self._llm = self._create_llm(provider)
+    def __init__(
+        self,
+        provider: str = "google",
+        *,
+        user_id: str = "guest",
+        plan: Plan | str = Plan.FREE,
+        task_type: str = "chat",
+        preferred_mode: LLMMode | None = None,
+        gateway: LLMGateway = llm_gateway,
+    ):
+        self.user_id = user_id
+        self.plan = plan if isinstance(plan, Plan) else Plan(plan)
+        self.task_type = task_type
+        self.preferred_mode = preferred_mode
+        self.gateway = gateway
+        self._routed_model = self._create_llm(provider)
+        self._llm = self._routed_model.chat_model
         self._agent = create_react_agent(
             self._llm,
             ALL_TOOLS,
@@ -43,29 +59,21 @@ class FinancialAdvisorAgent:
         )
         self._history: list[dict] = []  # Multi-turn conversation history
 
-    def _create_llm(self, provider: str):
+    def _create_llm(self, provider: str) -> RoutedChatModel:
         """
-        Create LLM instance. Swap providers here.
-        This is the ONLY place you need to change to switch LLMs.
-        """
-        if provider == "google":
-            api_key = settings.secret_value("gemini_api_key")
-            if not api_key:
-                raise RuntimeError("GEMINI_API_KEY is required for the Google LLM provider")
+        Create LLM instance through the Sprint 4 gateway.
 
-            return ChatGoogleGenerativeAI(
-                model="gemini-2.0-flash",
-                google_api_key=api_key,
-                temperature=0.3,
-            )
-        elif provider == "openai":
-            from langchain_openai import ChatOpenAI
-            return ChatOpenAI(model="gpt-4o", temperature=0.3)
-        elif provider == "anthropic":
-            from langchain_anthropic import ChatAnthropic
-            return ChatAnthropic(model="claude-sonnet-4-20250514", temperature=0.3)
-        else:
-            raise ValueError(f"Unknown provider: {provider}")
+        The legacy ``provider`` argument is kept for call-site compatibility;
+        routing policy now owns provider and model selection.
+        """
+        del provider
+        return self.gateway.get_chat_model(
+            user_id=self.user_id,
+            plan=self.plan,
+            task_type=self.task_type,
+            messages=[],
+            preferred_mode=self.preferred_mode,
+        )
 
     def chat(self, message: str, remember: bool = True) -> str:
         """
@@ -90,6 +98,14 @@ class FinancialAdvisorAgent:
         if remember:
             self._history.append({"role": "user", "content": message})
             self._history.append({"role": "assistant", "content": response_text})
+
+        self.gateway.record_usage(
+            user_id=self.user_id,
+            task_type=self.task_type,
+            routed_model=self._routed_model,
+            input_text="\n".join(str(item.get("content", "")) for item in messages),
+            output_text=response_text,
+        )
 
         return response_text
 
