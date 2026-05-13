@@ -14,7 +14,10 @@ const COVER_SEEN_STORAGE_KEY = "financial-advisor.coverSeen";
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const isStandalonePage = pathname.startsWith("/introduction") || pathname.startsWith("/login") || pathname.startsWith("/pricing");
+  const isStandalonePage = pathname.startsWith("/introduction")
+    || pathname.startsWith("/login")
+    || pathname.startsWith("/news")
+    || pathname.startsWith("/pricing");
 
   const [entryChecked, setEntryChecked] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);

@@ -4,6 +4,7 @@ import { useCallback, useRef, useState, useEffect } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { getAvatarColor, getAvatarInitials } from "@/lib/avatar";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 
@@ -12,29 +13,10 @@ interface EditProfileModalProps {
   onClose: () => void;
 }
 
-const AVATAR_COLORS = [
-  "#f472b6", "#a78bfa", "#60a5fa", "#34d399", "#fbbf24",
-  "#fb923c", "#f87171", "#c084fc", "#22d3ee", "#4ade80",
-];
-
-function hashToColor(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function getInitials(displayName: string | null | undefined, email: string | null | undefined): string {
-  if (displayName?.trim()) {
-    const parts = displayName.trim().split(/\s+/);
-    if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-  if (email) return email.slice(0, 2).toUpperCase();
-  return "??";
-}
+const ALLOWED_AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 export default function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [displayName, setDisplayName] = useState("");
@@ -84,14 +66,14 @@ export default function EditProfileModal({ isOpen, onClose }: EditProfileModalPr
         });
       }
     }
-  }, [isOpen, user]);
+  }, [isOpen, user?.id]);
 
   const handleAvatarChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      setError("Please select an image file.");
+    if (!ALLOWED_AVATAR_TYPES.has(file.type)) {
+      setError("Please select a JPG, PNG, WebP, or GIF image.");
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
@@ -120,7 +102,7 @@ export default function EditProfileModal({ isOpen, onClose }: EditProfileModalPr
 
       if (avatarFile) {
         const ext = avatarFile.name.split(".").pop() || "png";
-        const filePath = `avatars/${user.id}/${Date.now()}.${ext}`;
+        const filePath = `${user.id}/${Date.now()}.${ext}`;
 
         const { error: uploadError } = await supabase.storage
           .from("avatars")
@@ -146,10 +128,21 @@ export default function EditProfileModal({ isOpen, onClose }: EditProfileModalPr
 
       if (updateError) throw updateError;
 
+      const nextDisplayName = displayName.trim() || null;
+      const nextUsername = username.trim() || null;
+      updateProfile({
+        display_name: nextDisplayName,
+        username: nextUsername,
+        avatar_url: finalAvatarUrl,
+      });
+      setAvatarUrl(finalAvatarUrl);
+      setAvatarPreview(finalAvatarUrl);
+      originalDisplayName.current = nextDisplayName || "";
+      originalUsername.current = nextUsername || "";
+      setAvatarFile(null);
       setSuccess(true);
       setTimeout(() => {
         onClose();
-        window.location.reload();
       }, 600);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update profile.");
@@ -158,8 +151,8 @@ export default function EditProfileModal({ isOpen, onClose }: EditProfileModalPr
     }
   };
 
-  const initials = getInitials(displayName || user?.display_name, user?.email);
-  const avatarBg = hashToColor(user?.id || user?.email || "default");
+  const initials = getAvatarInitials(displayName || user?.display_name, user?.email);
+  const avatarBg = getAvatarColor(user?.id || user?.email);
   const hasChanges =
     displayName !== originalDisplayName.current ||
     username !== originalUsername.current ||

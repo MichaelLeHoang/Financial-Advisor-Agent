@@ -174,6 +174,8 @@ async def get_current_user(
             id=UUID(claims["sub"]),
             email=claims.get("email"),
             display_name=user_metadata.get("display_name") or user_metadata.get("full_name"),
+            username=user_metadata.get("username"),
+            avatar_url=user_metadata.get("avatar_url"),
             plan=_plan_from_claims(claims),
         )
         try:
@@ -219,6 +221,8 @@ async def get_current_or_guest_user(
             id=UUID(claims["sub"]),
             email=claims.get("email"),
             display_name=user_metadata.get("display_name") or user_metadata.get("full_name"),
+            username=user_metadata.get("username"),
+            avatar_url=user_metadata.get("avatar_url"),
             plan=_plan_from_claims(claims),
             is_guest=False,
         )

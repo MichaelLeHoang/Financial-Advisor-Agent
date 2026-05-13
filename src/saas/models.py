@@ -17,6 +17,8 @@ class AuthenticatedUser(BaseModel):
     id: UUID
     email: str | None = None
     display_name: str | None = None
+    username: str | None = None
+    avatar_url: str | None = None
     plan: Plan = Plan.FREE
     is_guest: bool = False
 

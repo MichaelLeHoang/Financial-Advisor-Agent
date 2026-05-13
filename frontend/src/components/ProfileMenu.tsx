@@ -29,6 +29,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { getAvatarColor, getAvatarInitials } from "@/lib/avatar";
 
 export default function ProfileMenu({
     compact = false,
@@ -51,7 +52,8 @@ export default function ProfileMenu({
 
     const currentUserName = user?.display_name || user?.email?.split("@")[0] || "Researcher";
     const currentPlan = user?.plan ?? "free";
-    const initial = currentUserName.slice(0, 1).toUpperCase();
+    const initial = getAvatarInitials(user?.display_name, user?.email);
+    const avatarColor = getAvatarColor(user?.id || user?.email);
     const isGuest = user?.is_guest ?? false;
 
     const submitAuth = async (event: FormEvent) => {
@@ -75,6 +77,12 @@ export default function ProfileMenu({
         onSettingsClick?.();
     };
 
+    const openHelpCenter = () => {
+        setAccountSwitcherOpen(false);
+        setSignInOpen(false);
+        router.push("/introduction/help");
+    };
+
     return (
         <DropdownMenu
             onOpenChange={(open) => {
@@ -88,13 +96,14 @@ export default function ProfileMenu({
                 ref={triggerRef}
                 aria-label="Open profile menu"
                 className={compact
-                    ? "flex size-11 items-center justify-center rounded-full bg-transparent p-0 text-left transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                    ? "flex h-10 w-10 items-center justify-center rounded-xl bg-transparent p-0 text-left transition-colors hover:bg-white/[0.07] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     : "flex w-full items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.035] px-2.5 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-white/[0.065] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                 }
             >
                 <ProfileAvatar
                     avatarUrl={user?.avatar_url}
                     initial={initial}
+                    placeholderColor={avatarColor}
                     size={compact ? "lg" : "default"}
                 />
                 {!compact && (
@@ -112,7 +121,12 @@ export default function ProfileMenu({
                         onClick={() => setAccountSwitcherOpen((open) => !open)}
                         className="h-auto py-3"
                     >
-                        <ProfileAvatar avatarUrl={user?.avatar_url} initial={initial} size="lg" />
+                        <ProfileAvatar
+                            avatarUrl={user?.avatar_url}
+                            initial={initial}
+                            placeholderColor={avatarColor}
+                            size="lg"
+                        />
                         <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-semibold text-[var(--text-primary)]">{currentUserName}</div>
                             <div className="truncate text-xs text-[var(--text-muted)]">Current plan: {formatPlan(currentPlan)}</div>
@@ -163,7 +177,7 @@ export default function ProfileMenu({
                     <MenuItem icon={Sparkles} label={isGuest ? "Upgrade plan" : "Plans & billing"} onClick={() => router.push("/pricing")} />
                     {!isGuest && <MenuItem icon={User} label="Profile" onClick={() => { onProfileClick?.(); }} />}
                     <MenuItem icon={Shield} label="Security" />
-                    <MenuItem icon={HelpCircle} label="Help center" />
+                    <MenuItem icon={HelpCircle} label="Help center" onClick={openHelpCenter} />
                     <MenuItem icon={Settings} label="Settings" onClick={openSettings} />
                     {!isGuest && <MenuItem icon={LogOut} label="Sign out" onClick={signOut} />}
                 </DropdownMenuGroup>
@@ -230,28 +244,34 @@ export default function ProfileMenu({
 function ProfileAvatar({
     avatarUrl,
     initial,
+    placeholderColor,
     size = "default",
 }: {
     avatarUrl?: string | null;
     initial: string;
+    placeholderColor: string;
     size?: "default" | "lg";
 }) {
     return (
         <Avatar
             size={size}
             className={cn(
-                "bg-indigo-primary/14 text-indigo-primary after:border-indigo-primary/24 after:mix-blend-normal",
+                "text-white after:border-white/20 after:mix-blend-normal",
                 size === "lg" && "size-10"
             )}
+            style={{ backgroundColor: placeholderColor }}
         >
             {avatarUrl && (
                 <AvatarImage
                     src={avatarUrl}
                     alt=""
-                    className="bg-[var(--surface-card)] object-contain p-0.5"
+                    className="object-cover"
                 />
             )}
-            <AvatarFallback className="bg-indigo-primary/14 text-xs font-semibold text-indigo-primary">
+            <AvatarFallback
+                className="text-xs font-semibold text-white"
+                style={{ backgroundColor: placeholderColor }}
+            >
                 {initial}
             </AvatarFallback>
             <AvatarBadge className="bg-green-positive shadow-[0_0_8px_rgba(52,211,153,0.72)] ring-[var(--surface-sidebar)]" />

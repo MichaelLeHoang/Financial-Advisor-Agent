@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { api } from "@/lib/api";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
@@ -22,6 +22,7 @@ interface AuthContextValue {
   token: string | null;
   loading: boolean;
   error: string | null;
+  updateProfile: (profile: Partial<Pick<AuthUser, "display_name" | "username" | "avatar_url">>) => void;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -87,12 +88,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const fallbackUser = normalizeUser(nextSession.user);
+      let fallbackUser = normalizeUser(nextSession.user);
       setUser(fallbackUser);
 
       try {
+        const { data: freshUserData } = await supabase.auth.getUser();
+        if (freshUserData.user) {
+          fallbackUser = normalizeUser(freshUserData.user);
+          if (mounted) setUser(fallbackUser);
+        }
+
         const apiUser = await api.me();
-        if (mounted && !apiUser.is_guest) setUser(apiUser);
+        if (mounted && !apiUser.is_guest) {
+          setUser({
+            ...fallbackUser,
+            ...apiUser,
+            display_name: apiUser.display_name ?? fallbackUser.display_name,
+            username: apiUser.username ?? fallbackUser.username,
+            avatar_url: apiUser.avatar_url ?? fallbackUser.avatar_url,
+          });
+        }
       } catch {
         if (mounted) setUser(fallbackUser);
       } finally {
@@ -172,17 +187,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api.setAuthToken(null);
   };
 
+  const updateProfile = useCallback<AuthContextValue["updateProfile"]>((profile) => {
+    setUser((currentUser) => {
+      if (currentUser.is_guest) return currentUser;
+
+      return {
+        ...currentUser,
+        ...profile,
+      };
+    });
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       token: authSession?.access_token ?? null,
       loading,
       error,
+      updateProfile,
       signIn,
       signUp,
       signOut,
     }),
-    [authSession, user, loading, error]
+    [authSession, user, loading, error, updateProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -7,6 +7,12 @@ const supabasePublishableKey =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
   ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+type BrowserSupabaseClient = ReturnType<typeof createClient>;
+
+const globalForSupabase = globalThis as typeof globalThis & {
+  __financialAdvisorSupabaseClient?: BrowserSupabaseClient;
+};
+
 export function isSupabaseConfigured() {
   return Boolean(supabaseUrl && supabasePublishableKey);
 }
@@ -16,11 +22,17 @@ export function getSupabaseBrowserClient() {
     throw new Error("Supabase Auth is not configured for this environment.");
   }
 
-  return createClient(supabaseUrl, supabasePublishableKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
-  });
+  globalForSupabase.__financialAdvisorSupabaseClient ??= createClient(
+    supabaseUrl,
+    supabasePublishableKey,
+    {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    }
+  );
+
+  return globalForSupabase.__financialAdvisorSupabaseClient;
 }

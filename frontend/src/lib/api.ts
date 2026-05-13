@@ -70,6 +70,8 @@ export interface AuthUser {
   id: string;
   email: string | null;
   display_name?: string | null;
+  username?: string | null;
+  avatar_url?: string | null;
   plan: "free" | "pro" | "trader" | "quant" | "execution_addon";
   is_guest?: boolean;
 }

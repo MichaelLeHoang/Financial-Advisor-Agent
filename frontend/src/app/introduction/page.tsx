@@ -7,6 +7,7 @@ import {
   Shield, Zap, ExternalLink, ChevronDown, Check, Lock,
 } from "lucide-react";
 import { PLANS, COMPARISON_TABLE, type PlanId, type CheckState } from "@/config/plans";
+import { IntroductionFooter, IntroductionNav } from "./components";
 
 /* ───── data ───── */
 
@@ -82,7 +83,7 @@ export default function IntroductionPage() {
         <div className="absolute right-0 top-1/3 h-[600px] w-[600px] translate-x-1/3 rounded-full bg-cyan-500/[0.05] blur-[100px]" />
       </div>
 
-      <Nav />
+      <IntroductionNav />
 
       {/* hero */}
       <section ref={heroRef} className="relative z-10 flex min-h-[100dvh] flex-col items-center justify-center px-6 text-center">
@@ -123,36 +124,8 @@ export default function IntroductionPage() {
       <FeaturesSection />
       <PricingSection />
       <TechSection />
-      <Footer />
+      <IntroductionFooter />
     </div>
-  );
-}
-
-/* ── Nav ── */
-function Nav() {
-  return (
-    <motion.nav initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="fixed left-0 right-0 top-0 z-50 px-6 py-4 sm:px-10">
-      <div className="mx-auto flex max-w-6xl items-center justify-between rounded-2xl border border-white/[0.06] bg-white/[0.03] px-5 py-2.5 backdrop-blur-xl">
-        <a href="/introduction" className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400 shadow-[0_0_0_1px_rgba(255,255,255,0.14),0_6px_16px_rgba(99,102,241,0.25)]">
-            <Zap className="h-4 w-4 text-white" />
-          </div>
-          <span className="text-sm font-semibold text-white/80">Quantum Advisor</span>
-        </a>
-        <div className="hidden items-center gap-6 sm:flex">
-          <a href="#features" className="text-sm text-white/40 transition-colors hover:text-white">Features</a>
-          <a href="#samples" className="text-sm text-white/40 transition-colors hover:text-white">Samples</a>
-          <a href="#pricing" className="text-sm text-white/40 transition-colors hover:text-white">Pricing</a>
-          <a href="#tech" className="text-sm text-white/40 transition-colors hover:text-white">Stack</a>
-        </div>
-        <div className="flex items-center gap-3">
-          <a href="/login" className="hidden text-sm text-white/50 transition-colors hover:text-white sm:block">Log in</a>
-          <a href="/" className="inline-flex h-9 items-center rounded-lg bg-indigo-500 px-4 text-sm font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4),0_4px_12px_rgba(99,102,241,0.25)] transition-all hover:bg-indigo-400">
-            Open App
-          </a>
-        </div>
-      </div>
-    </motion.nav>
   );
 }
 
@@ -414,20 +387,5 @@ function TechSection() {
         </motion.div>
       </div>
     </section>
-  );
-}
-
-/* ── Footer ── */
-function Footer() {
-  return (
-    <footer className="relative z-10 border-t border-white/[0.06] px-6 py-10">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 sm:flex-row">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400"><Zap className="h-3.5 w-3.5 text-white" /></div>
-          <span className="text-sm text-white/40">Quantum Financial Advisor</span>
-        </div>
-        <p className="text-xs text-white/25">AI-generated analysis only. Not professional financial advice. © 2026 Michael Le.</p>
-      </div>
-    </footer>
   );
 }
