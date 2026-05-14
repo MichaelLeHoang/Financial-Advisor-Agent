@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
     Atom,
+    BookOpen,
     Brain,
     ChevronRight,
     ExternalLink,
@@ -20,6 +21,7 @@ import {
     PieChart,
     Pin,
     Search,
+    Shield,
     Sparkles,
     Trash2,
     TrendingUp,
@@ -52,6 +54,11 @@ const NAV: NavItem[] = [
     { href: "/quantum", icon: Atom, label: "Quantum", minPlan: "quant" },
 ];
 
+const MORE_NAV: NavItem[] = [
+    { href: "/risk", icon: Shield, label: "Risk", minPlan: "pro" },
+    { href: "/journal", icon: BookOpen, label: "Journal", minPlan: "trader" },
+];
+
 export default function Sidebar({
     isOpen,
     onToggle,
@@ -73,6 +80,7 @@ export default function Sidebar({
     const [searchOpen, setSearchOpen] = useState(false);
     const [sessions, setSessions] = useState<ChatSession[]>([]);
     const visibleNav = getVisibleNav(user?.plan ?? "free");
+    const visibleMoreNav = getVisibleMoreNav(user?.plan ?? "free");
     const activeSessionId = path === "/" ? searchParams.get("session") || "default" : null;
     const displaySessions = useMemo(() => {
         const realSessionIds = new Set(sessions.map((session) => session.session_id));
@@ -166,6 +174,7 @@ export default function Sidebar({
                 isOpen={isOpen}
                 onToggle={onToggle}
                 nav={visibleNav}
+                moreNav={visibleMoreNav}
                 sessions={displaySessions}
                 activeSessionId={activeSessionId}
                 onNewAnalysis={startNewAnalysis}
@@ -200,6 +209,7 @@ export default function Sidebar({
                             <SidebarSurface
                                 path={path}
                                 nav={visibleNav}
+                                moreNav={visibleMoreNav}
                                 sessions={displaySessions}
                                 activeSessionId={activeSessionId}
                                 onNewAnalysis={startNewAnalysis}
@@ -224,6 +234,7 @@ function DesktopSidebar({
     isOpen,
     onToggle,
     nav,
+    moreNav,
     sessions,
     activeSessionId,
     onNewAnalysis,
@@ -238,6 +249,7 @@ function DesktopSidebar({
     isOpen: boolean;
     onToggle: () => void;
     nav: NavItem[];
+    moreNav: NavItem[];
     sessions: ChatSession[];
     activeSessionId: string | null;
     onNewAnalysis: () => void;
@@ -264,6 +276,7 @@ function DesktopSidebar({
                     path={path}
                     onToggle={onToggle}
                     nav={nav}
+                    moreNav={moreNav}
                     sessions={sessions}
                     activeSessionId={activeSessionId}
                     onNewAnalysis={onNewAnalysis}
@@ -278,6 +291,7 @@ function DesktopSidebar({
                 <MiniSidebar
                     path={path}
                     nav={nav}
+                    moreNav={moreNav}
                     sessions={sessions}
                     activeSessionId={activeSessionId}
                     recentsOpen={recentsOpen}
@@ -299,6 +313,7 @@ function DesktopSidebar({
 function MiniSidebar({
     path,
     nav,
+    moreNav,
     sessions,
     activeSessionId,
     recentsOpen,
@@ -314,6 +329,7 @@ function MiniSidebar({
 }: {
     path: string;
     nav: NavItem[];
+    moreNav: NavItem[];
     sessions: ChatSession[];
     activeSessionId: string | null;
     recentsOpen: boolean;
@@ -327,6 +343,9 @@ function MiniSidebar({
     onProfileClick?: () => void;
     onAlertsClick?: () => void;
 }) {
+    const [moreOpen, setMoreOpen] = useState(false);
+    const moreActive = moreNav.some((item) => path === item.href);
+
     return (
         <div className="relative flex h-full flex-col items-center border-r border-[var(--theme-border)] bg-[var(--surface-popover-strong)] py-4 shadow-[var(--shadow-sidebar)]">
             <button
@@ -383,6 +402,55 @@ function MiniSidebar({
                     );
                 })}
             </nav>
+
+            {moreNav.length > 0 && (
+                <div className="relative mt-1">
+                    <button
+                        type="button"
+                        aria-label="More sections"
+                        aria-haspopup="menu"
+                        aria-expanded={moreOpen}
+                        onClick={() => setMoreOpen((open) => !open)}
+                        className={cn(
+                            "flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                            moreOpen || moreActive ? "bg-white/[0.09] text-indigo-primary" : "text-white/42 hover:bg-white/[0.07] hover:text-white"
+                        )}
+                    >
+                        <MoreHorizontal className="h-5 w-5" />
+                    </button>
+                    <AnimatePresence>
+                        {moreOpen && (
+                            <motion.div
+                                role="menu"
+                                initial={{ opacity: 0, x: -8, scale: 0.98 }}
+                                animate={{ opacity: 1, x: 0, scale: 1 }}
+                                exit={{ opacity: 0, x: -8, scale: 0.98 }}
+                                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                                className="absolute left-12 top-0 w-48 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
+                            >
+                                {moreNav.map(({ href, icon: Icon, label }) => {
+                                    const active = path === href;
+                                    return (
+                                        <Link
+                                            key={href}
+                                            href={href}
+                                            role="menuitem"
+                                            onClick={() => setMoreOpen(false)}
+                                            className={cn(
+                                                "flex h-10 items-center gap-3 rounded-xl px-3 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                                                active ? "bg-white/[0.09] text-white" : "text-white/62 hover:bg-white/[0.06] hover:text-white"
+                                            )}
+                                        >
+                                            <Icon className={cn("h-4 w-4", active ? "text-indigo-primary" : "text-white/45")} />
+                                            {label}
+                                        </Link>
+                                    );
+                                })}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+            )}
 
             <div className="mt-6 h-px w-8 bg-white/[0.08]" />
 
@@ -443,6 +511,7 @@ function MiniSidebar({
 function SidebarSurface({
     path,
     nav,
+    moreNav,
     sessions,
     activeSessionId,
     onNewAnalysis,
@@ -456,6 +525,7 @@ function SidebarSurface({
 }: {
     path: string;
     nav: NavItem[];
+    moreNav: NavItem[];
     sessions: ChatSession[];
     activeSessionId: string | null;
     onNewAnalysis: () => void;
@@ -468,6 +538,8 @@ function SidebarSurface({
     onAlertsClick?: () => void;
 }) {
     const [showProCard, setShowProCard] = useState(true);
+    const [moreOpen, setMoreOpen] = useState(false);
+    const moreActive = moreNav.some((item) => path === item.href);
 
     return (
         <div className="relative flex h-full flex-col overflow-hidden border-r border-[var(--theme-border)] bg-[var(--surface-sidebar)] px-3 py-4 shadow-[var(--shadow-sidebar)]">
@@ -552,6 +624,63 @@ function SidebarSurface({
                                 );
                             })}
                         </nav>
+                        {moreNav.length > 0 && (
+                            <div className="mt-1">
+                                <button
+                                    type="button"
+                                    aria-expanded={moreOpen}
+                                    onClick={() => setMoreOpen((open) => !open)}
+                                    className={cn(
+                                        "group relative flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                                        moreOpen || moreActive
+                                            ? "bg-white/[0.09] text-white shadow-[var(--shadow-selected-nav)]"
+                                            : "text-white/55 hover:bg-white/[0.055] hover:text-white"
+                                    )}
+                                >
+                                    {(moreOpen || moreActive) && (
+                                        <motion.span
+                                            layoutId="active-sidebar-more-pill"
+                                            className="absolute inset-0 rounded-xl border border-indigo-primary/25 bg-gradient-to-r from-indigo-primary/14 to-cyan-secondary/5"
+                                            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                                        />
+                                    )}
+                                    <MoreHorizontal className={cn("relative h-5 w-5 shrink-0", moreOpen || moreActive ? "text-indigo-primary" : "text-white/40 group-hover:text-white/75")} />
+                                    <span className="relative min-w-0 flex-1 text-left">More</span>
+                                    <ChevronRight className={cn("relative h-4 w-4 text-white/35 transition-transform", moreOpen && "rotate-90")} />
+                                </button>
+                                <AnimatePresence initial={false}>
+                                    {moreOpen && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: "auto", opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                                            className="overflow-hidden"
+                                        >
+                                            <div className="mt-1 space-y-1 pl-3">
+                                                {moreNav.map(({ href, icon: Icon, label }) => {
+                                                    const active = path === href;
+                                                    return (
+                                                        <Link
+                                                            key={href}
+                                                            href={href}
+                                                            aria-current={active ? "page" : undefined}
+                                                            className={cn(
+                                                                "group flex h-9 items-center gap-3 rounded-xl px-3 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                                                                active ? "bg-white/[0.08] text-white" : "text-white/48 hover:bg-white/[0.05] hover:text-white"
+                                                            )}
+                                                        >
+                                                            <Icon className={cn("h-4 w-4 shrink-0", active ? "text-indigo-primary" : "text-white/35 group-hover:text-white/70")} />
+                                                            <span className="min-w-0 flex-1 truncate">{label}</span>
+                                                        </Link>
+                                                    );
+                                                })}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        )}
                     </section>
 
                     <section className="flex min-h-0 flex-1 flex-col">
@@ -622,6 +751,17 @@ function getVisibleNav(plan: Plan): NavItem[] {
         execution_addon: 4,
     };
     return NAV.filter((item) => !item.minPlan || rank[plan] >= rank[item.minPlan]);
+}
+
+function getVisibleMoreNav(plan: Plan): NavItem[] {
+    const rank: Record<Plan, number> = {
+        free: 0,
+        pro: 1,
+        trader: 2,
+        quant: 3,
+        execution_addon: 4,
+    };
+    return MORE_NAV.filter((item) => !item.minPlan || rank[plan] >= rank[item.minPlan]);
 }
 
 function RecentThreadRow({

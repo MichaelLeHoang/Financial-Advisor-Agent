@@ -19,6 +19,7 @@ class FeatureKey(str, Enum):
     WATCHLIST_ASSET = "watchlist_asset"
     BACKTESTING = "backtesting"
     ALERTS = "alerts"
+    RISK_DASHBOARD = "risk_dashboard"
     TRADE_JOURNAL = "trade_journal"
     PREMIUM_LLM = "premium_llm"
 
@@ -61,6 +62,7 @@ PLAN_ENTITLEMENTS: dict[Plan, PlanEntitlement] = {
             FeatureKey.AI_RESEARCH,
             FeatureKey.SENTIMENT,
             FeatureKey.CLASSICAL_OPTIMIZATION,
+            FeatureKey.RISK_DASHBOARD,
             FeatureKey.PORTFOLIO,
             FeatureKey.WATCHLIST,
             FeatureKey.WATCHLIST_ASSET,
@@ -85,6 +87,7 @@ PLAN_ENTITLEMENTS: dict[Plan, PlanEntitlement] = {
             FeatureKey.WATCHLIST_ASSET,
             FeatureKey.BACKTESTING,
             FeatureKey.ALERTS,
+            FeatureKey.RISK_DASHBOARD,
             FeatureKey.TRADE_JOURNAL,
         },
         limits={

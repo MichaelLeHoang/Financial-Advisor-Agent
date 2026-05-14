@@ -308,6 +308,71 @@ export interface AlertEvent {
   created_at: string;
 }
 
+export interface RiskSnapshot {
+  id: string;
+  user_id: string;
+  portfolio_id: string;
+  metrics: {
+    portfolio_name?: string;
+    base_currency?: string;
+    total_value?: number;
+    concentration_risk?: number;
+    annualized_volatility?: number;
+    max_drawdown_estimate?: number;
+    risk_score?: number;
+    holdings_count?: number;
+  };
+  allocations: {
+    by_asset?: Record<string, { market_value: number; weight: number; asset_type: string }>;
+    by_asset_class?: Record<string, number>;
+  };
+  correlation_matrix: Record<string, Record<string, number | null>>;
+  ai_explanation?: string | null;
+  created_at: string;
+}
+
+export interface RiskSnapshotResult {
+  snapshot: RiskSnapshot;
+  disclaimer: string;
+}
+
+export interface JournalEntry {
+  id: string;
+  user_id: string;
+  symbol: string;
+  direction: "long" | "short";
+  entry_price: number;
+  exit_price?: number | null;
+  quantity: number;
+  fees: number;
+  strategy_id?: string | null;
+  reason_entry?: string | null;
+  reason_exit?: string | null;
+  emotion_tag?: string | null;
+  mistake_tag?: string | null;
+  notes?: string | null;
+  tags: string[];
+  pnl?: number | null;
+  return_pct?: number | null;
+  opened_at?: string | null;
+  closed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type JournalEntryRequest = Omit<JournalEntry, "id" | "user_id" | "pnl" | "return_pct" | "created_at" | "updated_at">;
+
+export interface JournalAnalytics {
+  total_entries: number;
+  closed_entries: number;
+  total_pnl: number;
+  win_rate: number;
+  by_symbol: Record<string, { count: number; pnl: number }>;
+  by_strategy: Record<string, { count: number; pnl: number }>;
+  by_tag: Record<string, { count: number; pnl: number }>;
+  by_weekday: Record<string, { count: number; pnl: number }>;
+}
+
 // ─── API helpers ────────────────────
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -439,6 +504,19 @@ export const api = {
   alertEvents: () => get<AlertEvent[]>("/api/v1/alerts/events"),
 
   evaluateAlerts: () => post<{ evaluated: number; triggered: number }>("/api/v1/alerts/evaluate", {}),
+
+  portfolioRisk: (portfolioId: string) =>
+    get<RiskSnapshotResult>(`/api/v1/risk/portfolios/${encodeURIComponent(portfolioId)}`),
+
+  riskSnapshots: (portfolioId: string) =>
+    get<RiskSnapshot[]>(`/api/v1/risk/portfolios/${encodeURIComponent(portfolioId)}/snapshots`),
+
+  journalEntries: () => get<JournalEntry[]>("/api/v1/journal/entries"),
+
+  createJournalEntry: (payload: JournalEntryRequest) =>
+    post<JournalEntry>("/api/v1/journal/entries", payload),
+
+  journalAnalytics: () => get<JournalAnalytics>("/api/v1/journal/analytics"),
 
   /** Chat with the full LangGraph agent */
   chat: (message: string, sessionId = "default", remember = true) =>

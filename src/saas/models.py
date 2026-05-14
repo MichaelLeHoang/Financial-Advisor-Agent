@@ -225,3 +225,44 @@ class AlertEventCreate(BaseModel):
 class AlertEventRead(AlertEventCreate):
     id: UUID = Field(default_factory=uuid4)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class RiskSnapshotCreate(BaseModel):
+    portfolio_id: UUID
+    metrics: dict = Field(default_factory=dict)
+    allocations: dict = Field(default_factory=dict)
+    correlation_matrix: dict = Field(default_factory=dict)
+    ai_explanation: str | None = None
+
+
+class RiskSnapshotRead(RiskSnapshotCreate):
+    id: UUID = Field(default_factory=uuid4)
+    user_id: UUID
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class JournalEntryCreate(BaseModel):
+    symbol: str = Field(min_length=1, max_length=20)
+    direction: str = Field(default="long", pattern="^(long|short)$")
+    entry_price: float = Field(gt=0)
+    exit_price: float | None = Field(default=None, gt=0)
+    quantity: float = Field(gt=0)
+    fees: float = Field(default=0, ge=0)
+    strategy_id: UUID | None = None
+    reason_entry: str | None = None
+    reason_exit: str | None = None
+    emotion_tag: str | None = None
+    mistake_tag: str | None = None
+    notes: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    opened_at: datetime | None = None
+    closed_at: datetime | None = None
+
+
+class JournalEntryRead(JournalEntryCreate):
+    id: UUID = Field(default_factory=uuid4)
+    user_id: UUID
+    pnl: float | None = None
+    return_pct: float | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

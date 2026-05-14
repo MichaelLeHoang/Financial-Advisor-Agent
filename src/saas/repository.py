@@ -18,11 +18,15 @@ from src.saas.models import (
     BacktestTradeRead,
     HoldingCreate,
     HoldingRead,
+    JournalEntryCreate,
+    JournalEntryRead,
     PortfolioCreate,
     PortfolioRead,
     Plan,
     NotificationChannelCreate,
     NotificationChannelRead,
+    RiskSnapshotCreate,
+    RiskSnapshotRead,
     StrategyCreate,
     StrategyRead,
     SubscriptionRead,
@@ -54,6 +58,8 @@ class UserScopedStore:
         self._notification_secrets: dict[UUID, dict[str, Any]] = {}
         self._alerts: dict[UUID, AlertRead] = {}
         self._alert_events: dict[UUID, AlertEventRead] = {}
+        self._risk_snapshots: dict[UUID, RiskSnapshotRead] = {}
+        self._journal_entries: dict[UUID, JournalEntryRead] = {}
 
     def reset(self) -> None:
         with self._lock:
@@ -69,6 +75,8 @@ class UserScopedStore:
             self._notification_secrets.clear()
             self._alerts.clear()
             self._alert_events.clear()
+            self._risk_snapshots.clear()
+            self._journal_entries.clear()
 
     def get_subscription(self, user_id: UUID) -> SubscriptionRead:
         with self._lock:
@@ -328,6 +336,58 @@ class UserScopedStore:
         with self._lock:
             events = [event for event in self._alert_events.values() if event.user_id == user_id]
             return sorted(events, key=lambda row: row.created_at, reverse=True)[:limit]
+
+    def create_risk_snapshot(self, user_id: UUID, payload: RiskSnapshotCreate) -> RiskSnapshotRead:
+        if self.get_portfolio(user_id, payload.portfolio_id) is None:
+            raise ValueError("Portfolio not found")
+        snapshot = RiskSnapshotRead(id=uuid4(), user_id=user_id, **payload.model_dump())
+        with self._lock:
+            self._risk_snapshots[snapshot.id] = snapshot
+        return snapshot
+
+    def list_risk_snapshots(self, user_id: UUID, portfolio_id: UUID, limit: int = 10) -> list[RiskSnapshotRead]:
+        with self._lock:
+            snapshots = [
+                snapshot
+                for snapshot in self._risk_snapshots.values()
+                if snapshot.user_id == user_id and snapshot.portfolio_id == portfolio_id
+            ]
+            return sorted(snapshots, key=lambda row: row.created_at, reverse=True)[:limit]
+
+    def create_journal_entry(self, user_id: UUID, payload: JournalEntryCreate) -> JournalEntryRead:
+        pnl, return_pct = _trade_result(payload)
+        now = datetime.now(timezone.utc)
+        entry = JournalEntryRead(
+            id=uuid4(),
+            user_id=user_id,
+            symbol=payload.symbol.upper(),
+            direction=payload.direction,
+            entry_price=payload.entry_price,
+            exit_price=payload.exit_price,
+            quantity=payload.quantity,
+            fees=payload.fees,
+            strategy_id=payload.strategy_id,
+            reason_entry=payload.reason_entry,
+            reason_exit=payload.reason_exit,
+            emotion_tag=payload.emotion_tag,
+            mistake_tag=payload.mistake_tag,
+            notes=payload.notes,
+            tags=payload.tags,
+            opened_at=payload.opened_at,
+            closed_at=payload.closed_at,
+            pnl=pnl,
+            return_pct=return_pct,
+            created_at=now,
+            updated_at=now,
+        )
+        with self._lock:
+            self._journal_entries[entry.id] = entry
+        return entry
+
+    def list_journal_entries(self, user_id: UUID, limit: int = 50) -> list[JournalEntryRead]:
+        with self._lock:
+            entries = [entry for entry in self._journal_entries.values() if entry.user_id == user_id]
+            return sorted(entries, key=lambda row: row.created_at, reverse=True)[:limit]
 
 
 store = UserScopedStore()
@@ -612,6 +672,73 @@ class SupabaseRestStore:
         )
         return [AlertEventRead.model_validate(row) for row in rows]
 
+    def create_risk_snapshot(self, user_id: UUID, payload: RiskSnapshotCreate) -> RiskSnapshotRead:
+        if self.get_portfolio(user_id, payload.portfolio_id) is None:
+            raise ValueError("Portfolio not found")
+        rows = self._request(
+            "POST",
+            "risk_snapshots",
+            body={
+                "user_id": str(user_id),
+                "portfolio_id": str(payload.portfolio_id),
+                "metrics": payload.metrics,
+                "allocations": payload.allocations,
+                "correlation_matrix": payload.correlation_matrix,
+                "ai_explanation": payload.ai_explanation,
+            },
+        )
+        return RiskSnapshotRead.model_validate(rows[0])
+
+    def list_risk_snapshots(self, user_id: UUID, portfolio_id: UUID, limit: int = 10) -> list[RiskSnapshotRead]:
+        rows = self._request(
+            "GET",
+            "risk_snapshots",
+            {
+                "select": "*",
+                "user_id": f"eq.{user_id}",
+                "portfolio_id": f"eq.{portfolio_id}",
+                "order": "created_at.desc",
+                "limit": str(limit),
+            },
+        )
+        return [RiskSnapshotRead.model_validate(row) for row in rows]
+
+    def create_journal_entry(self, user_id: UUID, payload: JournalEntryCreate) -> JournalEntryRead:
+        pnl, return_pct = _trade_result(payload)
+        rows = self._request(
+            "POST",
+            "journal_entries",
+            body={
+                "user_id": str(user_id),
+                "symbol": payload.symbol.upper(),
+                "direction": payload.direction,
+                "entry_price": payload.entry_price,
+                "exit_price": payload.exit_price,
+                "quantity": payload.quantity,
+                "fees": payload.fees,
+                "strategy_id": str(payload.strategy_id) if payload.strategy_id else None,
+                "reason_entry": payload.reason_entry,
+                "reason_exit": payload.reason_exit,
+                "emotion_tag": payload.emotion_tag,
+                "mistake_tag": payload.mistake_tag,
+                "notes": payload.notes,
+                "pnl": pnl,
+                "return_pct": return_pct,
+                "tags": payload.tags,
+                "opened_at": payload.opened_at.isoformat() if payload.opened_at else None,
+                "closed_at": payload.closed_at.isoformat() if payload.closed_at else None,
+            },
+        )
+        return JournalEntryRead.model_validate(rows[0])
+
+    def list_journal_entries(self, user_id: UUID, limit: int = 50) -> list[JournalEntryRead]:
+        rows = self._request(
+            "GET",
+            "journal_entries",
+            {"select": "*", "user_id": f"eq.{user_id}", "order": "created_at.desc", "limit": str(limit)},
+        )
+        return [JournalEntryRead.model_validate(row) for row in rows]
+
     def get_subscription(self, user_id: UUID) -> SubscriptionRead:
         rows = self._request("GET", "subscriptions", {"select": "*", "user_id": f"eq.{user_id}", "limit": "1"})
         return SubscriptionRead.model_validate(rows[0]) if rows else SubscriptionRead(user_id=user_id)
@@ -698,3 +825,18 @@ def _redacted_config(config: dict) -> dict:
         else:
             redacted[key] = value
     return redacted
+
+
+def _trade_result(payload: JournalEntryCreate) -> tuple[float | None, float | None]:
+    if payload.exit_price is None:
+        return None, None
+
+    gross = (
+        (payload.exit_price - payload.entry_price) * payload.quantity
+        if payload.direction == "long"
+        else (payload.entry_price - payload.exit_price) * payload.quantity
+    )
+    pnl = gross - payload.fees
+    basis = payload.entry_price * payload.quantity
+    return_pct = pnl / basis if basis else None
+    return round(pnl, 6), round(return_pct, 6) if return_pct is not None else None
