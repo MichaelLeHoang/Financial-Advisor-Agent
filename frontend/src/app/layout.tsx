@@ -6,6 +6,7 @@ import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import SettingsModal from "@/components/SettingsModal";
 import EditProfileModal from "@/components/EditProfileModal";
+import AlertsModal from "@/components/AlertsModal";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 
 const SETTINGS_STORAGE_KEY = "financial-advisor.settings";
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const [entryChecked, setEntryChecked] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isAlertsOpen, setIsAlertsOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [settings, setSettings] = useState({
     model: "Gemini 3 Flash",
@@ -91,6 +93,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             onToggle={() => setIsSidebarOpen((open) => !open)}
             onSettingsClick={() => setIsSettingsOpen(true)}
             onProfileClick={() => setIsProfileOpen(true)}
+            onAlertsClick={() => setIsAlertsOpen(true)}
           />
 
           {/* Main content area */}
@@ -112,6 +115,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <EditProfileModal
             isOpen={isProfileOpen}
             onClose={() => setIsProfileOpen(false)}
+          />
+
+          {/* Alerts Modal */}
+          <AlertsModal
+            isOpen={isAlertsOpen}
+            onClose={() => setIsAlertsOpen(false)}
           />
         </AuthProvider>
       </body>

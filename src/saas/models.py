@@ -167,3 +167,61 @@ class BacktestRunRead(BaseModel):
     equity_curve: list[dict] = Field(default_factory=list)
     trades: list[BacktestTradeRead] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class NotificationChannelCreate(BaseModel):
+    channel_type: str = Field(min_length=1, max_length=40)
+    name: str = Field(min_length=1, max_length=120)
+    destination: str | None = None
+    config: dict = Field(default_factory=dict)
+    is_active: bool = True
+
+
+class NotificationChannelRead(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    user_id: UUID
+    channel_type: str
+    name: str
+    destination_label: str | None = None
+    config: dict = Field(default_factory=dict)
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class AlertCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    alert_type: str = Field(min_length=1, max_length=60)
+    symbol: str | None = Field(default=None, max_length=20)
+    condition: dict = Field(default_factory=dict)
+    channels: list[UUID] = Field(default_factory=list)
+    is_active: bool = True
+
+
+class AlertRead(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    user_id: UUID
+    name: str
+    alert_type: str
+    symbol: str | None = None
+    condition: dict = Field(default_factory=dict)
+    channels: list[UUID] = Field(default_factory=list)
+    is_active: bool = True
+    last_triggered_at: datetime | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class AlertEventCreate(BaseModel):
+    alert_id: UUID
+    user_id: UUID
+    alert_type: str
+    symbol: str | None = None
+    message: str
+    value: float | None = None
+    metadata: dict = Field(default_factory=dict)
+
+
+class AlertEventRead(AlertEventCreate):
+    id: UUID = Field(default_factory=uuid4)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -1,5 +1,6 @@
 import inngest 
 from src.jobs.inngest_client import inngest_client
+from src.notifications.evaluator import evaluate_active_alerts
 from src.services.ingestion import ingest_news
 from src.config import settings
 
@@ -60,3 +61,15 @@ async def on_demand_news_ingestion(
     )
 
     return {"status": "completed", "tickers": tickers, "stats": stats}
+
+
+@inngest_client.create_function(
+    fn_id="scheduled_alert_evaluation",
+    trigger=inngest.TriggerCron(cron="*/15 * * * *"),
+)
+async def scheduled_alert_evaluation(
+    ctx: inngest.Context,
+    step: inngest.Step,
+) -> dict:
+    stats = await step.run("evaluate-alerts", evaluate_active_alerts)
+    return {"status": "completed", "stats": stats}

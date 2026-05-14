@@ -17,7 +17,6 @@ import {
     Plus,
     Search,
     Settings,
-    Shield,
     Sparkles,
     User,
     Zap,
@@ -26,7 +25,13 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export default function Header({ onSettingsClick }: { onSettingsClick?: () => void }) {
+export default function Header({
+    onSettingsClick,
+    onAlertsClick,
+}: {
+    onSettingsClick?: () => void;
+    onAlertsClick?: () => void;
+}) {
     const router = useRouter();
     const pathname = usePathname();
     const { user, error: authError, signIn, signUp, signOut } = useAuth();
@@ -67,6 +72,13 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
         setAccountSwitcherOpen(false);
         setSignInOpen(false);
         onSettingsClick?.();
+    };
+
+    const openAlerts = () => {
+        setProfileOpen(false);
+        setAccountSwitcherOpen(false);
+        setSignInOpen(false);
+        onAlertsClick?.();
     };
 
     const focusMarketSearch = () => {
@@ -232,7 +244,7 @@ export default function Header({ onSettingsClick }: { onSettingsClick?: () => vo
                                 )}
                                 <MenuItem icon={Sparkles} label={isGuest ? "Upgrade plan" : "Plans & billing"} onClick={() => router.push("/pricing")} />
                                 {!isGuest && <MenuItem icon={User} label="Profile" />}
-                                <MenuItem icon={Shield} label="Security" />
+                                <MenuItem icon={Bell} label="Alerts" onClick={openAlerts} />
                                 <MenuItem icon={HelpCircle} label="Help center" />
                                 <MenuItem icon={Settings} label="Settings" onClick={openSettings} />
                                 {!isGuest && <MenuItem icon={LogOut} label="Sign out" onClick={signOut} />}

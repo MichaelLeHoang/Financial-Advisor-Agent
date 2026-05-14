@@ -7,6 +7,10 @@ from datetime import datetime, timezone
 
 from src.config import settings
 from src.saas.models import (
+    AlertCreate,
+    AlertEventCreate,
+    AlertEventRead,
+    AlertRead,
     AuthenticatedUser,
     BacktestRunCreate,
     BacktestRunRead,
@@ -17,6 +21,8 @@ from src.saas.models import (
     PortfolioCreate,
     PortfolioRead,
     Plan,
+    NotificationChannelCreate,
+    NotificationChannelRead,
     StrategyCreate,
     StrategyRead,
     SubscriptionRead,
@@ -44,6 +50,10 @@ class UserScopedStore:
         self._strategies: dict[UUID, StrategyRead] = {}
         self._backtest_runs: dict[UUID, BacktestRunRead] = {}
         self._backtest_trades: dict[UUID, list[BacktestTradeRead]] = {}
+        self._notification_channels: dict[UUID, NotificationChannelRead] = {}
+        self._notification_secrets: dict[UUID, dict[str, Any]] = {}
+        self._alerts: dict[UUID, AlertRead] = {}
+        self._alert_events: dict[UUID, AlertEventRead] = {}
 
     def reset(self) -> None:
         with self._lock:
@@ -55,6 +65,10 @@ class UserScopedStore:
             self._strategies.clear()
             self._backtest_runs.clear()
             self._backtest_trades.clear()
+            self._notification_channels.clear()
+            self._notification_secrets.clear()
+            self._alerts.clear()
+            self._alert_events.clear()
 
     def get_subscription(self, user_id: UUID) -> SubscriptionRead:
         with self._lock:
@@ -241,6 +255,79 @@ class UserScopedStore:
         with self._lock:
             runs = [run for run in self._backtest_runs.values() if run.user_id == user_id]
             return sorted(runs, key=lambda row: row.created_at, reverse=True)[:limit]
+
+    def create_notification_channel(
+        self,
+        user_id: UUID,
+        payload: NotificationChannelCreate,
+        *,
+        encrypted_destination: str | None,
+        encrypted_config: dict,
+    ) -> NotificationChannelRead:
+        channel = NotificationChannelRead(
+            id=uuid4(),
+            user_id=user_id,
+            channel_type=payload.channel_type,
+            name=payload.name,
+            destination_label=_destination_label(payload.destination),
+            config=_redacted_config(payload.config),
+            is_active=payload.is_active,
+        )
+        with self._lock:
+            self._notification_channels[channel.id] = channel
+            self._notification_secrets[channel.id] = {
+                "encrypted_destination": encrypted_destination,
+                "encrypted_config": encrypted_config,
+            }
+        return channel
+
+    def list_notification_channels(self, user_id: UUID) -> list[NotificationChannelRead]:
+        with self._lock:
+            return [channel for channel in self._notification_channels.values() if channel.user_id == user_id]
+
+    def create_alert(self, user_id: UUID, payload: AlertCreate) -> AlertRead:
+        alert = AlertRead(
+            id=uuid4(),
+            user_id=user_id,
+            name=payload.name,
+            alert_type=payload.alert_type,
+            symbol=payload.symbol.upper() if payload.symbol else None,
+            condition=payload.condition,
+            channels=payload.channels,
+            is_active=payload.is_active,
+        )
+        with self._lock:
+            self._alerts[alert.id] = alert
+        return alert
+
+    def list_alerts(self, user_id: UUID) -> list[AlertRead]:
+        with self._lock:
+            alerts = [alert for alert in self._alerts.values() if alert.user_id == user_id]
+            return sorted(alerts, key=lambda row: row.created_at, reverse=True)
+
+    def list_active_alerts(self) -> list[AlertRead]:
+        with self._lock:
+            return [alert for alert in self._alerts.values() if alert.is_active]
+
+    def update_alert_triggered_at(self, alert_id: UUID, triggered_at: datetime) -> AlertRead | None:
+        with self._lock:
+            current = self._alerts.get(alert_id)
+            if current is None:
+                return None
+            updated = current.model_copy(update={"last_triggered_at": triggered_at, "updated_at": triggered_at})
+            self._alerts[alert_id] = updated
+            return updated
+
+    def create_alert_event(self, payload: AlertEventCreate) -> AlertEventRead:
+        event = AlertEventRead(id=uuid4(), **payload.model_dump())
+        with self._lock:
+            self._alert_events[event.id] = event
+        return event
+
+    def list_alert_events(self, user_id: UUID, limit: int = 20) -> list[AlertEventRead]:
+        with self._lock:
+            events = [event for event in self._alert_events.values() if event.user_id == user_id]
+            return sorted(events, key=lambda row: row.created_at, reverse=True)[:limit]
 
 
 store = UserScopedStore()
@@ -436,6 +523,95 @@ class SupabaseRestStore:
                 row["trades"] = row.pop("backtest_trades")
         return [BacktestRunRead.model_validate(row) for row in rows]
 
+    def create_notification_channel(
+        self,
+        user_id: UUID,
+        payload: NotificationChannelCreate,
+        *,
+        encrypted_destination: str | None,
+        encrypted_config: dict,
+    ) -> NotificationChannelRead:
+        rows = self._request(
+            "POST",
+            "notification_channels",
+            body={
+                "user_id": str(user_id),
+                "channel_type": payload.channel_type,
+                "name": payload.name,
+                "destination_encrypted": encrypted_destination,
+                "destination_label": _destination_label(payload.destination),
+                "config_encrypted": encrypted_config,
+                "config": _redacted_config(payload.config),
+                "is_active": payload.is_active,
+            },
+        )
+        return NotificationChannelRead.model_validate(rows[0])
+
+    def list_notification_channels(self, user_id: UUID) -> list[NotificationChannelRead]:
+        rows = self._request(
+            "GET",
+            "notification_channels",
+            {"select": "id,user_id,channel_type,name,destination_label,config,is_active,created_at,updated_at", "user_id": f"eq.{user_id}", "order": "created_at.desc"},
+        )
+        return [NotificationChannelRead.model_validate(row) for row in rows]
+
+    def create_alert(self, user_id: UUID, payload: AlertCreate) -> AlertRead:
+        rows = self._request(
+            "POST",
+            "alerts",
+            body={
+                "user_id": str(user_id),
+                "name": payload.name,
+                "alert_type": payload.alert_type,
+                "symbol": payload.symbol.upper() if payload.symbol else None,
+                "condition": payload.condition,
+                "channels": [str(channel_id) for channel_id in payload.channels],
+                "is_active": payload.is_active,
+            },
+        )
+        return AlertRead.model_validate(rows[0])
+
+    def list_alerts(self, user_id: UUID) -> list[AlertRead]:
+        rows = self._request("GET", "alerts", {"select": "*", "user_id": f"eq.{user_id}", "order": "created_at.desc"})
+        return [AlertRead.model_validate(row) for row in rows]
+
+    def list_active_alerts(self) -> list[AlertRead]:
+        rows = self._request("GET", "alerts", {"select": "*", "is_active": "eq.true"})
+        return [AlertRead.model_validate(row) for row in rows]
+
+    def update_alert_triggered_at(self, alert_id: UUID, triggered_at: datetime) -> AlertRead | None:
+        rows = self._request(
+            "PATCH",
+            "alerts",
+            {"id": f"eq.{alert_id}"},
+            body={"last_triggered_at": triggered_at.isoformat(), "updated_at": triggered_at.isoformat()},
+        )
+        return AlertRead.model_validate(rows[0]) if rows else None
+
+    def create_alert_event(self, payload: AlertEventCreate) -> AlertEventRead:
+        rows = self._request(
+            "POST",
+            "alert_events",
+            body={
+                "alert_id": str(payload.alert_id),
+                "user_id": str(payload.user_id),
+                "alert_type": payload.alert_type,
+                "symbol": payload.symbol,
+                "message": payload.message,
+                "value": payload.value,
+                "metadata": payload.metadata,
+            },
+        )
+        return AlertEventRead.model_validate(rows[0])
+
+    def list_alert_events(self, user_id: UUID, limit: int = 20) -> list[AlertEventRead]:
+        rows = self._request(
+            "GET",
+            "alert_events",
+            {"select": "*", "user_id": f"eq.{user_id}", "order": "created_at.desc", "limit": str(limit)},
+        )
+        return [AlertEventRead.model_validate(row) for row in rows]
+
     def get_subscription(self, user_id: UUID) -> SubscriptionRead:
         rows = self._request("GET", "subscriptions", {"select": "*", "user_id": f"eq.{user_id}", "limit": "1"})
         return SubscriptionRead.model_validate(rows[0]) if rows else SubscriptionRead(user_id=user_id)
@@ -501,3 +677,24 @@ def get_store(user: AuthenticatedUser | None = None) -> UserScopedStore | Supaba
     if settings.supabase_url and service_role_key:
         return SupabaseRestStore(settings.supabase_url, service_role_key)
     return store
+
+
+def _destination_label(destination: str | None) -> str | None:
+    if not destination:
+        return None
+    if destination.startswith("http"):
+        return destination[:24] + "..." if len(destination) > 27 else destination
+    if "@" in destination:
+        name, domain = destination.split("@", 1)
+        return f"{name[:2]}***@{domain}"
+    return destination[-4:].rjust(len(destination), "*")
+
+
+def _redacted_config(config: dict) -> dict:
+    redacted = {}
+    for key, value in config.items():
+        if any(token in key.lower() for token in ("token", "secret", "webhook", "url")):
+            redacted[key] = "***"
+        else:
+            redacted[key] = value
+    return redacted

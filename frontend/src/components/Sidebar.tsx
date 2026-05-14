@@ -57,11 +57,13 @@ export default function Sidebar({
     onToggle,
     onSettingsClick,
     onProfileClick,
+    onAlertsClick,
 }: {
     isOpen: boolean;
     onToggle: () => void;
     onSettingsClick?: () => void;
     onProfileClick?: () => void;
+    onAlertsClick?: () => void;
 }) {
     const path = usePathname();
     const router = useRouter();
@@ -172,6 +174,7 @@ export default function Sidebar({
                 onSessionDeleted={handleSessionDeleted}
                 onSettingsClick={onSettingsClick}
                 onProfileClick={onProfileClick}
+                onAlertsClick={onAlertsClick}
             />
 
             <AnimatePresence>
@@ -205,6 +208,7 @@ export default function Sidebar({
                                 onSessionDeleted={handleSessionDeleted}
                                 onSettingsClick={onSettingsClick}
                                 onProfileClick={onProfileClick}
+                                onAlertsClick={onAlertsClick}
                             />
                         </motion.div>
                     </>
@@ -228,6 +232,7 @@ function DesktopSidebar({
     onSessionDeleted,
     onSettingsClick,
     onProfileClick,
+    onAlertsClick,
 }: {
     path: string;
     isOpen: boolean;
@@ -241,6 +246,7 @@ function DesktopSidebar({
     onSessionDeleted: (sessionId: string) => void;
     onSettingsClick?: () => void;
     onProfileClick?: () => void;
+    onAlertsClick?: () => void;
 }) {
     const [recentsOpen, setRecentsOpen] = useState(false);
 
@@ -266,6 +272,7 @@ function DesktopSidebar({
                     onSessionDeleted={onSessionDeleted}
                     onSettingsClick={onSettingsClick}
                     onProfileClick={onProfileClick}
+                    onAlertsClick={onAlertsClick}
                 />
             ) : (
                 <MiniSidebar
@@ -282,6 +289,7 @@ function DesktopSidebar({
                     onSessionDeleted={onSessionDeleted}
                     onSettingsClick={onSettingsClick}
                     onProfileClick={onProfileClick}
+                    onAlertsClick={onAlertsClick}
                 />
             )}
         </motion.aside>
@@ -302,6 +310,7 @@ function MiniSidebar({
     onSessionDeleted,
     onSettingsClick,
     onProfileClick,
+    onAlertsClick,
 }: {
     path: string;
     nav: NavItem[];
@@ -316,6 +325,7 @@ function MiniSidebar({
     onSessionDeleted: (sessionId: string) => void;
     onSettingsClick?: () => void;
     onProfileClick?: () => void;
+    onAlertsClick?: () => void;
 }) {
     return (
         <div className="relative flex h-full flex-col items-center border-r border-[var(--theme-border)] bg-[var(--surface-popover-strong)] py-4 shadow-[var(--shadow-sidebar)]">
@@ -424,7 +434,7 @@ function MiniSidebar({
             </div>
 
             <div className="mt-auto">
-                <ProfileMenu compact onSettingsClick={onSettingsClick} onProfileClick={onProfileClick} />
+                <ProfileMenu compact onSettingsClick={onSettingsClick} onProfileClick={onProfileClick} onAlertsClick={onAlertsClick} />
             </div>
         </div>
     );
@@ -442,6 +452,7 @@ function SidebarSurface({
     onSessionDeleted,
     onSettingsClick,
     onProfileClick,
+    onAlertsClick,
 }: {
     path: string;
     nav: NavItem[];
@@ -454,6 +465,7 @@ function SidebarSurface({
     onSessionDeleted: (sessionId: string) => void;
     onSettingsClick?: () => void;
     onProfileClick?: () => void;
+    onAlertsClick?: () => void;
 }) {
     const [showProCard, setShowProCard] = useState(true);
 
@@ -594,7 +606,7 @@ function SidebarSurface({
                             </div>
                         </div>
                     )}
-                    <ProfileMenu onSettingsClick={onSettingsClick} onProfileClick={onProfileClick} />
+                    <ProfileMenu onSettingsClick={onSettingsClick} onProfileClick={onProfileClick} onAlertsClick={onAlertsClick} />
                 </div>
             </div>
         </div>

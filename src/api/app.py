@@ -6,6 +6,7 @@ from src.jobs.inngest_client import inngest_client
 from src.jobs.functions import (
     scheduled_new_ingestion,   
     on_demand_news_ingestion,
+    scheduled_alert_evaluation,
 )
 from src.rag.pipeline import ask as rag_ask
 from src.services.ingestion import ingest_news
@@ -25,6 +26,7 @@ from src.saas.routes import router as saas_router
 from src.saas.usage import usage_tracker
 from src.billing.routes import router as billing_router
 from src.backtesting.routes import router as backtesting_router
+from src.notifications.routes import router as notifications_router
 from src.llm.routing_policy import LLMMode
 
 from pydantic import BaseModel
@@ -49,12 +51,13 @@ app.add_middleware(
 app.include_router(saas_router)
 app.include_router(billing_router)
 app.include_router(backtesting_router)
+app.include_router(notifications_router)
 
 # Register Inngest with FastAPI
 inngest.fast_api.serve(
     app,
     inngest_client,
-    [scheduled_new_ingestion, on_demand_news_ingestion],
+    [scheduled_new_ingestion, on_demand_news_ingestion, scheduled_alert_evaluation],
 )
 
 # Lazy cache: agent setup is expensive, but model routing can vary by user plan/mode.

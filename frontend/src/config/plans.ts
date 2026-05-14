@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import {
   Sparkles, TrendingUp, Pin, PieChart, Brain, MessageSquare,
-  Shield, Atom, FlaskConical, LineChart, Bell, BookOpen,
+  Shield, Atom, FlaskConical, LineChart, BookOpen,
   BarChart3, Layers, TestTube, Signal, Download, Zap,
 } from "lucide-react";
 
@@ -142,7 +142,6 @@ export const ALL_NAV: NavEntry[] = [
   { href: "/reports", icon: BarChart3, label: "Reports", minPlan: "pro" },
   { href: "/backtest", icon: FlaskConical, label: "Backtest Lab", minPlan: "trader" },
   { href: "/strategies", icon: Layers, label: "Strategies", minPlan: "trader" },
-  { href: "/alerts", icon: Bell, label: "Alerts", minPlan: "trader" },
   { href: "/journal", icon: BookOpen, label: "Journal", minPlan: "trader" },
   { href: "/quantum", icon: Atom, label: "Quantum", minPlan: "quant" },
   { href: "/strategy-compare", icon: LineChart, label: "Strategy Compare", minPlan: "quant" },

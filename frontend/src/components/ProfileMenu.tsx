@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ComponentType, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
+    Bell,
     Building2,
     Check,
     ChevronRight,
@@ -12,7 +13,6 @@ import {
     LogOut,
     Plus,
     Settings,
-    Shield,
     Sparkles,
     User,
 } from "lucide-react";
@@ -35,10 +35,12 @@ export default function ProfileMenu({
     compact = false,
     onSettingsClick,
     onProfileClick,
+    onAlertsClick,
 }: {
     compact?: boolean;
     onSettingsClick?: () => void;
     onProfileClick?: () => void;
+    onAlertsClick?: () => void;
 }) {
     const router = useRouter();
     const { user, error: authError, signIn, signUp, signOut } = useAuth();
@@ -81,6 +83,12 @@ export default function ProfileMenu({
         setAccountSwitcherOpen(false);
         setSignInOpen(false);
         router.push("/introduction/help");
+    };
+
+    const openAlerts = () => {
+        setAccountSwitcherOpen(false);
+        setSignInOpen(false);
+        onAlertsClick?.();
     };
 
     return (
@@ -176,7 +184,7 @@ export default function ProfileMenu({
                     )}
                     <MenuItem icon={Sparkles} label={isGuest ? "Upgrade plan" : "Plans & billing"} onClick={() => router.push("/pricing")} />
                     {!isGuest && <MenuItem icon={User} label="Profile" onClick={() => { onProfileClick?.(); }} />}
-                    <MenuItem icon={Shield} label="Security" />
+                    <MenuItem icon={Bell} label="Alerts" onClick={openAlerts} />
                     <MenuItem icon={HelpCircle} label="Help center" onClick={openHelpCenter} />
                     <MenuItem icon={Settings} label="Settings" onClick={openSettings} />
                     {!isGuest && <MenuItem icon={LogOut} label="Sign out" onClick={signOut} />}

@@ -253,6 +253,61 @@ export interface BacktestRequest {
   save_strategy: boolean;
 }
 
+export interface NotificationChannel {
+  id: string;
+  user_id: string;
+  channel_type: "in_app" | "email" | "telegram" | "discord_webhook" | string;
+  name: string;
+  destination_label?: string | null;
+  config: Record<string, unknown>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NotificationChannelRequest {
+  channel_type: string;
+  name: string;
+  destination?: string | null;
+  config: Record<string, unknown>;
+  is_active?: boolean;
+}
+
+export interface Alert {
+  id: string;
+  user_id: string;
+  name: string;
+  alert_type: string;
+  symbol?: string | null;
+  condition: Record<string, unknown>;
+  channels: string[];
+  is_active: boolean;
+  last_triggered_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AlertRequest {
+  name: string;
+  alert_type: string;
+  symbol?: string | null;
+  condition: Record<string, unknown>;
+  channels: string[];
+  is_active?: boolean;
+}
+
+export interface AlertEvent {
+  id: string;
+  alert_id: string;
+  user_id: string;
+  alert_type: string;
+  symbol?: string | null;
+  message: string;
+  value?: number | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
 // ─── API helpers ────────────────────
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -370,6 +425,20 @@ export const api = {
 
   runBacktest: (payload: BacktestRequest) =>
     post<BacktestResult>("/api/v1/backtests/run", payload),
+
+  notificationChannels: () => get<NotificationChannel[]>("/api/v1/notification-channels"),
+
+  createNotificationChannel: (payload: NotificationChannelRequest) =>
+    post<NotificationChannel>("/api/v1/notification-channels", payload),
+
+  alerts: () => get<Alert[]>("/api/v1/alerts"),
+
+  createAlert: (payload: AlertRequest) =>
+    post<Alert>("/api/v1/alerts", payload),
+
+  alertEvents: () => get<AlertEvent[]>("/api/v1/alerts/events"),
+
+  evaluateAlerts: () => post<{ evaluated: number; triggered: number }>("/api/v1/alerts/evaluate", {}),
 
   /** Chat with the full LangGraph agent */
   chat: (message: string, sessionId = "default", remember = true) =>
