@@ -11,6 +11,7 @@ import {
     Brain,
     ChevronRight,
     ExternalLink,
+    FlaskConical,
     Menu,
     MessageSquare,
     MoreHorizontal,
@@ -47,6 +48,7 @@ const NAV: NavItem[] = [
     { href: "/sentiment", icon: Brain, label: "Sentiment" },
     { href: "/watchlist", icon: Pin, label: "Watchlist" },
     { href: "/portfolio", icon: PieChart, label: "Portfolio" },
+    { href: "/backtest", icon: FlaskConical, label: "Backtest Lab", minPlan: "trader" },
     { href: "/quantum", icon: Atom, label: "Quantum", minPlan: "quant" },
 ];
 

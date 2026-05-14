@@ -172,6 +172,87 @@ export interface BillingSubscription {
   configured: boolean;
 }
 
+export interface BacktestMetrics {
+  total_return: number;
+  annualized_return: number;
+  max_drawdown: number;
+  sharpe_ratio: number;
+  win_rate: number;
+  profit_factor: number | null;
+  number_of_trades: number;
+  fees_paid: number;
+}
+
+export interface BacktestEquityPoint {
+  date: string;
+  value: number;
+}
+
+export interface BacktestTrade {
+  symbol: string;
+  side: "buy" | "sell";
+  quantity: number;
+  price: number;
+  fees: number;
+  pnl?: number | null;
+  reason?: string | null;
+  executed_at: string;
+}
+
+export interface BacktestRun {
+  id: string;
+  user_id: string;
+  strategy_id?: string | null;
+  strategy_name: string;
+  strategy_type: string;
+  symbols: string[];
+  parameters: Record<string, unknown>;
+  assumptions: Record<string, unknown>;
+  metrics: BacktestMetrics;
+  equity_curve: BacktestEquityPoint[];
+  trades: BacktestTrade[];
+  created_at: string;
+}
+
+export interface BacktestResult {
+  run: BacktestRun;
+  metrics: BacktestMetrics;
+  equity_curve: BacktestEquityPoint[];
+  trades: BacktestTrade[];
+  disclaimer: string;
+}
+
+export interface StrategyOption {
+  type: "buy_and_hold" | "moving_average_crossover" | "rsi_mean_reversion";
+  name: string;
+  description: string;
+  default_parameters: Record<string, unknown>;
+}
+
+export interface Strategy {
+  id: string;
+  user_id: string;
+  name: string;
+  strategy_type: StrategyOption["type"];
+  parameters: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BacktestRequest {
+  strategy_name: string;
+  strategy_type: StrategyOption["type"];
+  symbols: string[];
+  start_date: string;
+  end_date: string;
+  initial_capital: number;
+  fees_bps: number;
+  slippage_bps: number;
+  position_size: number;
+  parameters: Record<string, unknown>;
+  save_strategy: boolean;
+}
+
 // ─── API helpers ────────────────────
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -280,6 +361,15 @@ export const api = {
 
   createCustomerPortalSession: (returnUrl?: string) =>
     post<{ url: string }>("/api/v1/billing/create-customer-portal-session", { return_url: returnUrl }),
+
+  backtestStrategyOptions: () => get<StrategyOption[]>("/api/v1/backtests/strategies/options"),
+
+  backtestStrategies: () => get<Strategy[]>("/api/v1/backtests/strategies"),
+
+  backtestRuns: () => get<BacktestRun[]>("/api/v1/backtests/runs"),
+
+  runBacktest: (payload: BacktestRequest) =>
+    post<BacktestResult>("/api/v1/backtests/run", payload),
 
   /** Chat with the full LangGraph agent */
   chat: (message: string, sessionId = "default", remember = true) =>

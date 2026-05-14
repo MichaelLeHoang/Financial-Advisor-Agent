@@ -97,3 +97,73 @@ class SubscriptionRead(BaseModel):
     current_period_end: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class AssetRead(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    symbol: str
+    name: str | None = None
+    asset_type: str = "equity"
+    exchange: str | None = None
+    currency: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class StrategyCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    strategy_type: str = Field(min_length=1, max_length=80)
+    parameters: dict = Field(default_factory=dict)
+
+
+class StrategyRead(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    user_id: UUID
+    name: str
+    strategy_type: str
+    parameters: dict = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class BacktestRunCreate(BaseModel):
+    strategy_id: UUID | None = None
+    strategy_name: str
+    strategy_type: str
+    symbols: list[str]
+    parameters: dict = Field(default_factory=dict)
+    assumptions: dict = Field(default_factory=dict)
+    metrics: dict = Field(default_factory=dict)
+    equity_curve: list[dict] = Field(default_factory=list)
+
+
+class BacktestTradeCreate(BaseModel):
+    symbol: str
+    side: str
+    quantity: float
+    price: float
+    fees: float = 0
+    pnl: float | None = None
+    reason: str | None = None
+    executed_at: datetime
+
+
+class BacktestTradeRead(BacktestTradeCreate):
+    id: UUID = Field(default_factory=uuid4)
+    backtest_run_id: UUID
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class BacktestRunRead(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    user_id: UUID
+    strategy_id: UUID | None = None
+    strategy_name: str
+    strategy_type: str
+    symbols: list[str]
+    parameters: dict = Field(default_factory=dict)
+    assumptions: dict = Field(default_factory=dict)
+    metrics: dict = Field(default_factory=dict)
+    equity_curve: list[dict] = Field(default_factory=list)
+    trades: list[BacktestTradeRead] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

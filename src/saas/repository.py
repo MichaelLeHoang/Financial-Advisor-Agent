@@ -8,11 +8,17 @@ from datetime import datetime, timezone
 from src.config import settings
 from src.saas.models import (
     AuthenticatedUser,
+    BacktestRunCreate,
+    BacktestRunRead,
+    BacktestTradeCreate,
+    BacktestTradeRead,
     HoldingCreate,
     HoldingRead,
     PortfolioCreate,
     PortfolioRead,
     Plan,
+    StrategyCreate,
+    StrategyRead,
     SubscriptionRead,
     WatchlistAssetCreate,
     WatchlistAssetRead,
@@ -35,6 +41,9 @@ class UserScopedStore:
         self._watchlists: dict[UUID, WatchlistRead] = {}
         self._watchlist_assets: dict[UUID, list[WatchlistAssetRead]] = {}
         self._subscriptions: dict[UUID, SubscriptionRead] = {}
+        self._strategies: dict[UUID, StrategyRead] = {}
+        self._backtest_runs: dict[UUID, BacktestRunRead] = {}
+        self._backtest_trades: dict[UUID, list[BacktestTradeRead]] = {}
 
     def reset(self) -> None:
         with self._lock:
@@ -43,6 +52,9 @@ class UserScopedStore:
             self._watchlists.clear()
             self._watchlist_assets.clear()
             self._subscriptions.clear()
+            self._strategies.clear()
+            self._backtest_runs.clear()
+            self._backtest_trades.clear()
 
     def get_subscription(self, user_id: UUID) -> SubscriptionRead:
         with self._lock:
@@ -169,6 +181,67 @@ class UserScopedStore:
         with self._lock:
             return list(self._watchlist_assets.get(watchlist_id, []))
 
+    def list_strategies(self, user_id: UUID) -> list[StrategyRead]:
+        with self._lock:
+            return [strategy for strategy in self._strategies.values() if strategy.user_id == user_id]
+
+    def create_strategy(self, user_id: UUID, payload: StrategyCreate) -> StrategyRead:
+        strategy = StrategyRead(
+            id=uuid4(),
+            user_id=user_id,
+            name=payload.name,
+            strategy_type=payload.strategy_type,
+            parameters=payload.parameters,
+        )
+        with self._lock:
+            self._strategies[strategy.id] = strategy
+        return strategy
+
+    def create_backtest_run(
+        self,
+        user_id: UUID,
+        payload: BacktestRunCreate,
+        trades: list[BacktestTradeCreate],
+    ) -> BacktestRunRead:
+        run_id = uuid4()
+        trade_rows = [
+            BacktestTradeRead(
+                id=uuid4(),
+                backtest_run_id=run_id,
+                symbol=trade.symbol,
+                side=trade.side,
+                quantity=trade.quantity,
+                price=trade.price,
+                fees=trade.fees,
+                pnl=trade.pnl,
+                reason=trade.reason,
+                executed_at=trade.executed_at,
+            )
+            for trade in trades
+        ]
+        run = BacktestRunRead(
+            id=run_id,
+            user_id=user_id,
+            strategy_id=payload.strategy_id,
+            strategy_name=payload.strategy_name,
+            strategy_type=payload.strategy_type,
+            symbols=payload.symbols,
+            parameters=payload.parameters,
+            assumptions=payload.assumptions,
+            metrics=payload.metrics,
+            equity_curve=payload.equity_curve,
+            trades=trade_rows,
+        )
+        with self._lock:
+            self._backtest_runs[run.id] = run
+            self._backtest_trades[run.id] = trade_rows
+        return run
+
+    def list_backtest_runs(self, user_id: UUID, limit: int = 20) -> list[BacktestRunRead]:
+        with self._lock:
+            runs = [run for run in self._backtest_runs.values() if run.user_id == user_id]
+            return sorted(runs, key=lambda row: row.created_at, reverse=True)[:limit]
+
 
 store = UserScopedStore()
 
@@ -180,7 +253,13 @@ class SupabaseRestStore:
         self._base_url = supabase_url.rstrip("/")
         self._service_role_key = service_role_key
 
-    def _request(self, method: str, table: str, query: dict[str, str] | None = None, body: dict[str, Any] | None = None) -> list[dict]:
+    def _request(
+        self,
+        method: str,
+        table: str,
+        query: dict[str, str] | None = None,
+        body: dict[str, Any] | list[dict[str, Any]] | None = None,
+    ) -> list[dict]:
         url = f"{self._base_url}/rest/v1/{table}"
         if query:
             url = f"{url}?{urlencode(query)}"
@@ -287,6 +366,75 @@ class SupabaseRestStore:
             return None
         rows = self._request("GET", "watchlist_assets", {"select": "*", "watchlist_id": f"eq.{watchlist_id}"})
         return [WatchlistAssetRead.model_validate(row) for row in rows]
+
+    def list_strategies(self, user_id: UUID) -> list[StrategyRead]:
+        rows = self._request("GET", "strategies", {"select": "*", "user_id": f"eq.{user_id}", "order": "created_at.desc"})
+        return [StrategyRead.model_validate(row) for row in rows]
+
+    def create_strategy(self, user_id: UUID, payload: StrategyCreate) -> StrategyRead:
+        rows = self._request(
+            "POST",
+            "strategies",
+            body={
+                "user_id": str(user_id),
+                "name": payload.name,
+                "strategy_type": payload.strategy_type,
+                "parameters": payload.parameters,
+            },
+        )
+        return StrategyRead.model_validate(rows[0])
+
+    def create_backtest_run(
+        self,
+        user_id: UUID,
+        payload: BacktestRunCreate,
+        trades: list[BacktestTradeCreate],
+    ) -> BacktestRunRead:
+        body = {
+            "user_id": str(user_id),
+            "strategy_id": str(payload.strategy_id) if payload.strategy_id else None,
+            "strategy_name": payload.strategy_name,
+            "strategy_type": payload.strategy_type,
+            "symbols": payload.symbols,
+            "parameters": payload.parameters,
+            "assumptions": payload.assumptions,
+            "metrics": payload.metrics,
+            "equity_curve": payload.equity_curve,
+        }
+        run_rows = self._request("POST", "backtest_runs", body=body)
+        run = BacktestRunRead.model_validate(run_rows[0])
+        if trades:
+            trade_rows = self._request(
+                "POST",
+                "backtest_trades",
+                body=[
+                    {
+                        "backtest_run_id": str(run.id),
+                        "symbol": trade.symbol,
+                        "side": trade.side,
+                        "quantity": trade.quantity,
+                        "price": trade.price,
+                        "fees": trade.fees,
+                        "pnl": trade.pnl,
+                        "reason": trade.reason,
+                        "executed_at": trade.executed_at.isoformat(),
+                    }
+                    for trade in trades
+                ],
+            )
+            run.trades = [BacktestTradeRead.model_validate(row) for row in trade_rows]
+        return run
+
+    def list_backtest_runs(self, user_id: UUID, limit: int = 20) -> list[BacktestRunRead]:
+        rows = self._request(
+            "GET",
+            "backtest_runs",
+            {"select": "*,backtest_trades(*)", "user_id": f"eq.{user_id}", "order": "created_at.desc", "limit": str(limit)},
+        )
+        for row in rows:
+            if "backtest_trades" in row and "trades" not in row:
+                row["trades"] = row.pop("backtest_trades")
+        return [BacktestRunRead.model_validate(row) for row in rows]
 
     def get_subscription(self, user_id: UUID) -> SubscriptionRead:
         rows = self._request("GET", "subscriptions", {"select": "*", "user_id": f"eq.{user_id}", "limit": "1"})

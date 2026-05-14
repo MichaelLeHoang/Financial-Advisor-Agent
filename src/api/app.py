@@ -24,6 +24,7 @@ from src.saas.models import AuthenticatedUser
 from src.saas.routes import router as saas_router
 from src.saas.usage import usage_tracker
 from src.billing.routes import router as billing_router
+from src.backtesting.routes import router as backtesting_router
 from src.llm.routing_policy import LLMMode
 
 from pydantic import BaseModel
@@ -47,6 +48,7 @@ app.add_middleware(
 
 app.include_router(saas_router)
 app.include_router(billing_router)
+app.include_router(backtesting_router)
 
 # Register Inngest with FastAPI
 inngest.fast_api.serve(
