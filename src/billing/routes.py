@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from src.auth.supabase import get_current_or_guest_user, get_current_user
@@ -12,11 +14,12 @@ from src.billing.stripe_service import (
     handle_stripe_event,
     verify_webhook_payload,
 )
-from src.saas.models import AuthenticatedUser, Plan
+from src.saas.models import AuthenticatedUser, Plan, SubscriptionRead
 from src.saas.repository import get_store
 
 
 router = APIRouter(prefix="/api/v1/billing", tags=["billing"])
+logger = logging.getLogger(__name__)
 
 
 def require_account(user: AuthenticatedUser) -> None:
@@ -46,17 +49,22 @@ async def create_customer_portal(
 async def read_subscription(
     user: AuthenticatedUser = Depends(get_current_or_guest_user),
 ) -> BillingSubscriptionResponse:
-    subscription = get_store(user).get_subscription(user.id)
+    try:
+        subscription = get_store(user).get_subscription(user.id)
+    except Exception as exc:
+        logger.warning("Unable to read billing subscription for user_id=%s: %s", user.id, exc)
+        fallback_plan = user.plan if not user.is_guest else Plan.FREE
+        subscription = SubscriptionRead(
+            user_id=user.id,
+            plan=fallback_plan,
+            status="active" if fallback_plan != Plan.FREE else "inactive",
+        )
     effective_plan = subscription.plan if subscription.status in {"active", "trialing"} else Plan.FREE
     return BillingSubscriptionResponse(
         subscription=subscription,
         publishable_plan=effective_plan,
         configured=billing_configured(),
     )
-
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 @router.post("/webhook")

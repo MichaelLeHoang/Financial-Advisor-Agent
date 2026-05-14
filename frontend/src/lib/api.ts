@@ -175,7 +175,7 @@ export interface BillingSubscription {
 // ─── API helpers ────────────────────
 
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await request(`${BASE}${path}`, {
     method: "POST",
     headers: requestHeaders(),
     body: JSON.stringify(body),
@@ -188,7 +188,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { headers: requestHeaders(false) });
+  const res = await request(`${BASE}${path}`, { headers: requestHeaders(false) });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new ApiError(res.status, err.detail ?? err);
@@ -197,7 +197,7 @@ async function get<T>(path: string): Promise<T> {
 }
 
 async function patch<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await request(`${BASE}${path}`, {
     method: "PATCH",
     headers: requestHeaders(),
     body: JSON.stringify(body),
@@ -210,7 +210,7 @@ async function patch<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function del<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await request(`${BASE}${path}`, {
     method: "DELETE",
     headers: requestHeaders(false),
   });
@@ -219,6 +219,19 @@ async function del<T>(path: string): Promise<T> {
     throw new ApiError(res.status, err.detail ?? err);
   }
   return res.json();
+}
+
+async function request(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(
+        `Cannot reach the backend API at ${BASE}. Start FastAPI on port 8000 or update NEXT_PUBLIC_API_URL.`
+      );
+    }
+    throw error;
+  }
 }
 
 function errorMessage(detail: unknown): string {

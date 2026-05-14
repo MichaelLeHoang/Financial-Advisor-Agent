@@ -97,14 +97,14 @@ export default function ProfileMenu({
                 aria-label="Open profile menu"
                 className={compact
                     ? "flex h-10 w-10 items-center justify-center rounded-xl bg-transparent p-0 text-left transition-colors hover:bg-white/[0.07] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
-                    : "flex w-full items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.035] px-2.5 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-white/[0.065] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                    : "flex w-full items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.035] py-2 pl-1 pr-2.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-white/[0.065] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                 }
             >
                 <ProfileAvatar
                     avatarUrl={user?.avatar_url}
                     initial={initial}
                     placeholderColor={avatarColor}
-                    size={compact ? "lg" : "default"}
+                    size="default"
                 />
                 {!compact && (
                     <div className="min-w-0 flex-1">

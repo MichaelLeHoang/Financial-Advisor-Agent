@@ -316,7 +316,7 @@ function MiniSidebar({
     onProfileClick?: () => void;
 }) {
     return (
-        <div className="relative flex h-full flex-col items-center border-r border-[var(--theme-border)] bg-[var(--surface-popover-strong)] py-3 shadow-[var(--shadow-sidebar)]">
+        <div className="relative flex h-full flex-col items-center border-r border-[var(--theme-border)] bg-[var(--surface-popover-strong)] py-4 shadow-[var(--shadow-sidebar)]">
             <button
                 type="button"
                 aria-label="Open sidebar"
@@ -335,7 +335,7 @@ function MiniSidebar({
                 type="button"
                 onClick={onNewAnalysis}
                 aria-label="New analysis"
-                className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                className="mb-4 flex h-11 w-10 items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
                 <PenLine className="h-5 w-5" />
             </button>
@@ -344,12 +344,37 @@ function MiniSidebar({
                 type="button"
                 onClick={onSearchClick}
                 aria-label="Search chats"
-                className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
                 <Search className="h-5 w-5" />
             </button>
 
-            <div className="relative mb-3">
+            <div className="h-6" />
+
+            <nav className="flex flex-col items-center gap-1" aria-label="Primary navigation">
+                {nav.map(({ href, icon: Icon, label }) => {
+                    const active = path === href;
+
+                    return (
+                        <Link
+                            key={href}
+                            href={href}
+                            aria-label={label}
+                            aria-current={active ? "page" : undefined}
+                            className={cn(
+                                "flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                                active ? "bg-white/[0.09] text-indigo-primary" : "text-white/42 hover:bg-white/[0.07] hover:text-white"
+                            )}
+                        >
+                            <Icon className="h-5 w-5" />
+                        </Link>
+                    );
+                })}
+            </nav>
+
+            <div className="mt-6 h-px w-8 bg-white/[0.08]" />
+
+            <div className="relative mt-3">
                 <button
                     type="button"
                     aria-label="Recents"
@@ -395,29 +420,6 @@ function MiniSidebar({
                     )}
                 </AnimatePresence>
             </div>
-
-            <div className="mb-3 h-px w-8 bg-white/[0.08]" />
-
-            <nav className="flex flex-col items-center gap-1" aria-label="Primary navigation">
-                {nav.map(({ href, icon: Icon, label }) => {
-                    const active = path === href;
-
-                    return (
-                        <Link
-                            key={href}
-                            href={href}
-                            aria-label={label}
-                            aria-current={active ? "page" : undefined}
-                            className={cn(
-                                "flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
-                                active ? "bg-white/[0.09] text-indigo-primary" : "text-white/42 hover:bg-white/[0.07] hover:text-white"
-                            )}
-                        >
-                            <Icon className="h-5 w-5" />
-                        </Link>
-                    );
-                })}
-            </nav>
 
             <div className="mt-auto">
                 <ProfileMenu compact onSettingsClick={onSettingsClick} onProfileClick={onProfileClick} />
@@ -483,7 +485,7 @@ function SidebarSurface({
                     className="accent-gradient-surface on-accent mb-4 flex h-11 items-center justify-between rounded-xl px-3 text-sm font-semibold shadow-[var(--shadow-create-action)] outline-none transition-all duration-200 hover:shadow-[var(--shadow-create-action-hover)] active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-space-black"
                 >
                     <span className="flex items-center gap-2">
-                        <PenLine className="h-4 w-4" />
+                        <PenLine className="h-5 w-5" />
                         New analysis
                     </span>
                     <Sparkles className="h-4 w-4 text-white/70" />
@@ -494,7 +496,7 @@ function SidebarSurface({
                     onClick={onSearchClick}
                     className="mb-4 flex h-10 items-center gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card)] px-3 text-sm font-medium text-[var(--text-secondary)] shadow-[var(--shadow-control)] outline-none transition-colors hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                 >
-                    <Search className="h-4 w-4" />
+                    <Search className="h-5 w-5" />
                     <span className="min-w-0 flex-1 text-left">Search chats</span>
                     <span className="rounded-md border border-[var(--theme-border)] bg-[var(--surface-card-hover)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-tertiary)] opacity-55 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] blur-[0.1px]">
                         ⌘ K
@@ -529,7 +531,7 @@ function SidebarSurface({
                                                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                                             />
                                         )}
-                                        <Icon className={cn("relative h-4 w-4 shrink-0", active ? "text-indigo-primary" : "text-white/40 group-hover:text-white/75")} />
+                                        <Icon className={cn("relative h-5 w-5 shrink-0", active ? "text-indigo-primary" : "text-white/40 group-hover:text-white/75")} />
                                         <span className="relative min-w-0 flex-1 truncate">{label}</span>
                                         {active && <ChevronRight className="relative h-4 w-4 text-white/35" />}
                                     </Link>

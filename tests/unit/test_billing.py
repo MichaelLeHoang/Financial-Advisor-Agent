@@ -81,6 +81,32 @@ def test_guest_cannot_create_checkout_session(monkeypatch):
     store.reset()
 
 
+def test_subscription_status_falls_back_when_store_unavailable(monkeypatch):
+    from src.api.app import app
+    from src.billing import routes as billing_routes
+
+    user_id = uuid4()
+    client = TestClient(app)
+    app.dependency_overrides[get_current_or_guest_user] = _override_user(user_id, plan=Plan.TRADER)
+
+    class BrokenStore:
+        def get_subscription(self, user_id):
+            raise RuntimeError("Supabase is unavailable")
+
+    monkeypatch.setattr(billing_routes, "get_store", lambda user: BrokenStore())
+
+    response = client.get("/api/v1/billing/subscription")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["subscription"]["user_id"] == str(user_id)
+    assert data["subscription"]["plan"] == "trader"
+    assert data["subscription"]["status"] == "active"
+    assert data["publishable_plan"] == "trader"
+
+    app.dependency_overrides.clear()
+
+
 def test_webhook_updates_subscription_and_effective_plan(monkeypatch):
     from src.api.app import app
     from src.billing import stripe_service
