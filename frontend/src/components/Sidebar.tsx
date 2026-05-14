@@ -9,10 +9,13 @@ import { AnimatePresence, motion } from "motion/react";
 import {
     Atom,
     BookOpen,
+    BarChart3,
     Brain,
     ChevronRight,
+    Code2,
     ExternalLink,
     FlaskConical,
+    LineChart,
     Menu,
     MessageSquare,
     MoreHorizontal,
@@ -22,6 +25,7 @@ import {
     Pin,
     Search,
     Shield,
+    Signal,
     Sparkles,
     Trash2,
     TrendingUp,
@@ -57,6 +61,10 @@ const NAV: NavItem[] = [
 const MORE_NAV: NavItem[] = [
     { href: "/risk", icon: Shield, label: "Risk", minPlan: "pro" },
     { href: "/journal", icon: BookOpen, label: "Journal", minPlan: "trader" },
+    { href: "/strategy-compare", icon: LineChart, label: "Strategy Compare", minPlan: "quant" },
+    { href: "/validation", icon: BarChart3, label: "Validation", minPlan: "quant" },
+    { href: "/signals", icon: Signal, label: "Signals", minPlan: "quant" },
+    { href: "/export", icon: Code2, label: "Export", minPlan: "quant" },
 ];
 
 export default function Sidebar({

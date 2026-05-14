@@ -266,3 +266,33 @@ class JournalEntryRead(JournalEntryCreate):
     return_pct: float | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class QuantValidationRunCreate(BaseModel):
+    strategy_name: str
+    strategy_type: str
+    symbols: list[str]
+    method: str
+    parameters: dict = Field(default_factory=dict)
+    assumptions: dict = Field(default_factory=dict)
+    results: dict = Field(default_factory=dict)
+
+
+class QuantValidationRunRead(QuantValidationRunCreate):
+    id: UUID = Field(default_factory=uuid4)
+    user_id: UUID
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class StrategyExportCreate(BaseModel):
+    strategy_name: str
+    strategy_type: str
+    language: str
+    parameters: dict = Field(default_factory=dict)
+    content: str
+
+
+class StrategyExportRead(StrategyExportCreate):
+    id: UUID = Field(default_factory=uuid4)
+    user_id: UUID
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

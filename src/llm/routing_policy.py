@@ -17,7 +17,7 @@ TASK_MODE_DEFAULTS: dict[str, LLMMode] = {
 PLAN_MODE_LIMITS: dict[Plan, set[LLMMode]] = {
     Plan.FREE: {"fast", "balanced"},
     Plan.PRO: {"fast", "balanced"},
-    Plan.TRADER: {"fast", "balanced", "deep_research", "coding_export"},
+    Plan.TRADER: {"fast", "balanced"},
     Plan.QUANT: {"fast", "balanced", "deep_research", "coding_export"},
     Plan.EXECUTION_ADDON: {"fast", "balanced", "deep_research", "coding_export"},
 }

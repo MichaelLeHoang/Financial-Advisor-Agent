@@ -25,8 +25,12 @@ from src.saas.models import (
     Plan,
     NotificationChannelCreate,
     NotificationChannelRead,
+    QuantValidationRunCreate,
+    QuantValidationRunRead,
     RiskSnapshotCreate,
     RiskSnapshotRead,
+    StrategyExportCreate,
+    StrategyExportRead,
     StrategyCreate,
     StrategyRead,
     SubscriptionRead,
@@ -60,6 +64,8 @@ class UserScopedStore:
         self._alert_events: dict[UUID, AlertEventRead] = {}
         self._risk_snapshots: dict[UUID, RiskSnapshotRead] = {}
         self._journal_entries: dict[UUID, JournalEntryRead] = {}
+        self._quant_validation_runs: dict[UUID, QuantValidationRunRead] = {}
+        self._strategy_exports: dict[UUID, StrategyExportRead] = {}
 
     def reset(self) -> None:
         with self._lock:
@@ -77,6 +83,8 @@ class UserScopedStore:
             self._alert_events.clear()
             self._risk_snapshots.clear()
             self._journal_entries.clear()
+            self._quant_validation_runs.clear()
+            self._strategy_exports.clear()
 
     def get_subscription(self, user_id: UUID) -> SubscriptionRead:
         with self._lock:
@@ -388,6 +396,18 @@ class UserScopedStore:
         with self._lock:
             entries = [entry for entry in self._journal_entries.values() if entry.user_id == user_id]
             return sorted(entries, key=lambda row: row.created_at, reverse=True)[:limit]
+
+    def create_quant_validation_run(self, user_id: UUID, payload: QuantValidationRunCreate) -> QuantValidationRunRead:
+        run = QuantValidationRunRead(id=uuid4(), user_id=user_id, **payload.model_dump())
+        with self._lock:
+            self._quant_validation_runs[run.id] = run
+        return run
+
+    def create_strategy_export(self, user_id: UUID, payload: StrategyExportCreate) -> StrategyExportRead:
+        export = StrategyExportRead(id=uuid4(), user_id=user_id, **payload.model_dump())
+        with self._lock:
+            self._strategy_exports[export.id] = export
+        return export
 
 
 store = UserScopedStore()
@@ -738,6 +758,38 @@ class SupabaseRestStore:
             {"select": "*", "user_id": f"eq.{user_id}", "order": "created_at.desc", "limit": str(limit)},
         )
         return [JournalEntryRead.model_validate(row) for row in rows]
+
+    def create_quant_validation_run(self, user_id: UUID, payload: QuantValidationRunCreate) -> QuantValidationRunRead:
+        rows = self._request(
+            "POST",
+            "quant_validation_runs",
+            body={
+                "user_id": str(user_id),
+                "strategy_name": payload.strategy_name,
+                "strategy_type": payload.strategy_type,
+                "symbols": payload.symbols,
+                "method": payload.method,
+                "parameters": payload.parameters,
+                "assumptions": payload.assumptions,
+                "results": payload.results,
+            },
+        )
+        return QuantValidationRunRead.model_validate(rows[0])
+
+    def create_strategy_export(self, user_id: UUID, payload: StrategyExportCreate) -> StrategyExportRead:
+        rows = self._request(
+            "POST",
+            "strategy_exports",
+            body={
+                "user_id": str(user_id),
+                "strategy_name": payload.strategy_name,
+                "strategy_type": payload.strategy_type,
+                "language": payload.language,
+                "parameters": payload.parameters,
+                "content": payload.content,
+            },
+        )
+        return StrategyExportRead.model_validate(rows[0])
 
     def get_subscription(self, user_id: UUID) -> SubscriptionRead:
         rows = self._request("GET", "subscriptions", {"select": "*", "user_id": f"eq.{user_id}", "limit": "1"})

@@ -29,6 +29,7 @@ from src.backtesting.routes import router as backtesting_router
 from src.notifications.routes import router as notifications_router
 from src.risk.routes import router as risk_router
 from src.journal.routes import router as journal_router
+from src.quant.routes import router as quant_router
 from src.llm.routing_policy import LLMMode
 
 from pydantic import BaseModel
@@ -56,6 +57,7 @@ app.include_router(backtesting_router)
 app.include_router(notifications_router)
 app.include_router(risk_router)
 app.include_router(journal_router)
+app.include_router(quant_router)
 
 # Register Inngest with FastAPI
 inngest.fast_api.serve(

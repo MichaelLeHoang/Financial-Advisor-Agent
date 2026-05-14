@@ -39,6 +39,18 @@ def test_free_plan_deep_research_downgrades_to_friendly_balanced_mode():
     assert decision.selected.min_plan == Plan.FREE
 
 
+def test_trader_plan_premium_modes_downgrade_to_balanced():
+    decision = RoutingPolicy().choose(
+        plan=Plan.TRADER,
+        task_type="coding_export",
+        preferred_mode="coding_export",
+    )
+
+    assert decision.requested_mode == "coding_export"
+    assert decision.resolved_mode == "balanced"
+    assert decision.selected.min_plan.value in {"free", "pro"}
+
+
 def test_gateway_falls_back_when_selected_provider_fails(monkeypatch):
     import src.llm.routing_policy as routing_policy
 

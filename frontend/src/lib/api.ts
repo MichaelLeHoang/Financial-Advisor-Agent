@@ -373,6 +373,93 @@ export interface JournalAnalytics {
   by_weekday: Record<string, { count: number; pnl: number }>;
 }
 
+export type QuantStrategyType = StrategyOption["type"];
+
+export interface QuantStrategyConfig {
+  name: string;
+  strategy_type: QuantStrategyType;
+  parameters: Record<string, unknown>;
+}
+
+export interface StrategyComparisonRequest {
+  symbols: string[];
+  start_date: string;
+  end_date: string;
+  initial_capital: number;
+  fees_bps: number;
+  slippage_bps: number;
+  position_size: number;
+  strategies: QuantStrategyConfig[];
+}
+
+export interface StrategyComparisonResult {
+  results: Array<{ name: string; strategy_type: string; metrics: BacktestMetrics }>;
+  best_strategy?: string | null;
+  ranking_metric: string;
+  disclaimer: string;
+}
+
+export interface AdvancedValidationRequest {
+  strategy_name: string;
+  strategy_type: QuantStrategyType;
+  symbols: string[];
+  start_date: string;
+  end_date: string;
+  initial_capital: number;
+  fees_bps: number;
+  slippage_bps: number;
+  position_size: number;
+  parameters: Record<string, unknown>;
+  walk_forward_windows: number;
+  monte_carlo_paths: number;
+  bootstrap_samples: number;
+}
+
+export interface AdvancedValidationResult {
+  base_metrics: BacktestMetrics;
+  walk_forward: Array<{ window: number; start: string; end: string; return: number; max_drawdown: number }>;
+  monte_carlo: { paths: number; p05: number; p50: number; p95: number; loss_probability: number };
+  bootstrap: { samples: number; mean_return: number; ci_5: number; ci_95: number };
+  saved_run_id?: string | null;
+  disclaimer: string;
+}
+
+export interface SignalRankingRequest {
+  symbols: string[];
+  start_date: string;
+  end_date: string;
+}
+
+export interface SignalRank {
+  symbol: string;
+  score: number;
+  momentum_20d: number;
+  momentum_60d: number;
+  volatility_20d: number;
+  trend_label: string;
+}
+
+export interface SignalRankingResult {
+  rankings: SignalRank[];
+  disclaimer: string;
+}
+
+export interface StrategyExportRequest {
+  strategy_name: string;
+  strategy_type: QuantStrategyType;
+  symbols: string[];
+  parameters: Record<string, unknown>;
+  language: "json" | "python" | "pine";
+}
+
+export interface StrategyExportResult {
+  language: StrategyExportRequest["language"];
+  content: string;
+  saved_export_id?: string | null;
+  routed_mode: string;
+  disclaimer: string;
+}
+
 // ─── API helpers ────────────────────
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -517,6 +604,18 @@ export const api = {
     post<JournalEntry>("/api/v1/journal/entries", payload),
 
   journalAnalytics: () => get<JournalAnalytics>("/api/v1/journal/analytics"),
+
+  compareStrategies: (payload: StrategyComparisonRequest) =>
+    post<StrategyComparisonResult>("/api/v1/quant/strategy-compare", payload),
+
+  validateStrategyAdvanced: (payload: AdvancedValidationRequest) =>
+    post<AdvancedValidationResult>("/api/v1/quant/validation", payload),
+
+  rankSignals: (payload: SignalRankingRequest) =>
+    post<SignalRankingResult>("/api/v1/quant/signals/rank", payload),
+
+  exportStrategy: (payload: StrategyExportRequest) =>
+    post<StrategyExportResult>("/api/v1/quant/export", payload),
 
   /** Chat with the full LangGraph agent */
   chat: (message: string, sessionId = "default", remember = true) =>
