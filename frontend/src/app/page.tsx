@@ -10,7 +10,7 @@ import { api, isUpgradeRequiredError } from "@/lib/api";
 import { getDemoChatConversation } from "@/lib/demo-chat-history";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
-import ModelSelector from "@/components/ModelSelector";
+import ModelSelector, { useModel, apiModeFromVersion } from "@/components/ModelSelector";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -83,6 +83,7 @@ const WORKFLOW_STEPS = [
 
 export default function ChatPage() {
   const { user } = useAuth();
+  const { version } = useModel();
   const searchParams = useSearchParams();
   const activeSessionId = searchParams.get("session") || "default";
   const [messages, setMessages] = useState<Message[]>([GREETING]);
@@ -159,14 +160,18 @@ export default function ChatPage() {
     setInput("");
 
     const userMsg: Message = { id: Date.now().toString(), role: "user", content: text };
-    const fetchingMsg: Message = { id: (Date.now() + 1).toString(), role: "assistant", content: "Analyzing market context...", status: "fetching" };
+    const fetchingLabel = version === "2.0"
+      ? "Running multi-agent consensus analysis..."
+      : "Analyzing market context...";
+    const fetchingMsg: Message = { id: (Date.now() + 1).toString(), role: "assistant", content: fetchingLabel, status: "fetching" };
 
     setMessages((prev) => [...prev, userMsg, fetchingMsg]);
     setIsLoading(true);
     setUpgradeMessage(null);
 
     try {
-      const res = await api.chat(text, activeSessionId);
+      const mode = apiModeFromVersion(version);
+      const res = await api.chat(text, activeSessionId, true, mode);
       setMessages((prev) =>
         prev.filter((m) => m.status !== "fetching").concat({
           id: Date.now().toString(),

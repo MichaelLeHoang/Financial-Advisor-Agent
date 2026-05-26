@@ -8,6 +8,7 @@ import SettingsModal from "@/components/SettingsModal";
 import EditProfileModal from "@/components/EditProfileModal";
 import AlertsModal from "@/components/AlertsModal";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { ModelProvider } from "@/components/ModelSelector";
 
 const SETTINGS_STORAGE_KEY = "financial-advisor.settings";
 const COVER_SEEN_STORAGE_KEY = "financial-advisor.coverSeen";
@@ -67,9 +68,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   if (isStandalonePage) {
     return (
       <html lang="en" className="dark">
-        <body className="bg-[#050507] text-white font-sans antialiased overflow-x-hidden">
+      <body className="bg-[#050507] text-white font-sans antialiased overflow-x-hidden">
           <AuthProvider>
-            {children}
+            <ModelProvider>
+              {children}
+            </ModelProvider>
           </AuthProvider>
         </body>
       </html>
@@ -88,6 +91,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body data-theme={settings.theme} className="flex h-screen overflow-hidden relative">
         <AuthProvider>
+          <ModelProvider>
           <Sidebar
             isOpen={isSidebarOpen}
             onToggle={() => setIsSidebarOpen((open) => !open)}
@@ -122,6 +126,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             isOpen={isAlertsOpen}
             onClose={() => setIsAlertsOpen(false)}
           />
+          </ModelProvider>
         </AuthProvider>
       </body>
     </html>

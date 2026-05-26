@@ -6,6 +6,31 @@ let authToken: string | null = null;
 export interface ChatResponse {
   response: string;
   session_id: string;
+  mode?: "single" | "consensus" | "auto";
+}
+
+export interface ConsensusOpinion {
+  agent: string;
+  verdict: string;
+  confidence: number;
+  reasoning: string;
+  data_points: Record<string, unknown>;
+  risk_flags: string[];
+}
+
+export interface ConsensusMetadata {
+  verdict: string;
+  confidence: number;
+  consensus_score: number;
+  agreement_ratio: number;
+  risk_vetoed: boolean;
+  risk_flags: string[];
+  dissenting_agents: string[];
+  opinions: ConsensusOpinion[];
+}
+
+export interface ConsensusResponse extends ChatResponse {
+  consensus: ConsensusMetadata;
 }
 
 export interface ChatMessage {
@@ -617,9 +642,13 @@ export const api = {
   exportStrategy: (payload: StrategyExportRequest) =>
     post<StrategyExportResult>("/api/v1/quant/export", payload),
 
-  /** Chat with the full LangGraph agent */
-  chat: (message: string, sessionId = "default", remember = true) =>
-    post<ChatResponse>("/api/v1/agent/chat", { message, session_id: sessionId, remember }),
+  /** Chat with the LangGraph agent — mode controls QuanAd version */
+  chat: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single") =>
+    post<ChatResponse>("/api/v1/agent/chat", { message, session_id: sessionId, remember, mode }),
+
+  /** Full QuanAd 2.0 multi-agent consensus with metadata */
+  consensus: (message: string, sessionId = "default", remember = true) =>
+    post<ConsensusResponse>("/api/v1/agent/consensus", { message, session_id: sessionId, remember }),
 
   /** Conversation sessions */
   chatSessions: () => get<ChatSession[]>("/api/v1/agent/sessions"),

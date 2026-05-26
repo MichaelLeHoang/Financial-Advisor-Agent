@@ -1,3 +1,17 @@
+"""
+Financial Advisor Agent — QuanAd 2.0
+
+Supports two modes:
+- **Single-agent** (legacy): A single LangGraph ReAct agent with all tools.
+  Fast, suitable for simple queries like "What is the price of AAPL?"
+- **Multi-agent consensus** (QuanAd 2.0): 5 specialist agents analyze
+  independently, then a consensus engine aggregates their opinions.
+  Suitable for investment analysis queries.
+
+The API defaults to single-agent for speed; consensus mode is opt-in via
+`mode="consensus"` or auto-detected for complex investment queries.
+"""
+
 from langgraph.prebuilt import create_react_agent
 from src.agent.tools import ALL_TOOLS
 from src.llm.gateway import LLMGateway, RoutedChatModel, llm_gateway
@@ -21,18 +35,45 @@ RULES:
 6. If multiple stocks are mentioned, analyze each one
 """
 
-class FinancialAdvisorAgent: 
+
+# Keywords that suggest a complex investment query (triggers consensus mode).
+_CONSENSUS_KEYWORDS = {
+    "should i invest",
+    "should i buy",
+    "should i sell",
+    "is it a good time",
+    "investment analysis",
+    "full analysis",
+    "comprehensive analysis",
+    "deep analysis",
+    "consensus",
+    "multi-agent",
+    "quanad",
+    "risk assessment",
+    "portfolio review",
+}
+
+
+def _is_consensus_query(message: str) -> bool:
+    """Heuristic: detect if the query warrants multi-agent consensus analysis."""
+    lower = message.lower()
+    return any(kw in lower for kw in _CONSENSUS_KEYWORDS)
+
+
+class FinancialAdvisorAgent:
     """
-    LangChain-powered financial advisor agent.
+    LangChain-powered financial advisor agent with QuanAd 2.0 consensus support.
+
     Usage:
+        # Single-agent mode (default)
         agent = FinancialAdvisorAgent()
-        response = agent.chat("Should I invest in NVDA?")
-        print(response)
-    To swap LLM providers:
-        # Gemini (default)
-        agent = FinancialAdvisorAgent(provider="google")
-        # OpenAI (if you add the key)
-        agent = FinancialAdvisorAgent(provider="openai")
+        response = agent.chat("What is the price of AAPL?")
+
+        # Force consensus mode
+        response = agent.chat("Should I invest in NVDA?", mode="consensus")
+
+        # Auto-detect mode
+        response = agent.chat("Should I invest in NVDA?", mode="auto")
     """
 
     def __init__(
@@ -55,9 +96,12 @@ class FinancialAdvisorAgent:
         self._agent = create_react_agent(
             self._llm,
             ALL_TOOLS,
-            state_modifier=SYSTEM_PROMPT,  
+            state_modifier=SYSTEM_PROMPT,
         )
         self._history: list[dict] = []  # Multi-turn conversation history
+
+        # Lazy-init the QuanAd orchestrator only when needed.
+        self._orchestrator = None
 
     def _create_llm(self, provider: str) -> RoutedChatModel:
         """
@@ -75,14 +119,40 @@ class FinancialAdvisorAgent:
             preferred_mode=self.preferred_mode,
         )
 
-    def chat(self, message: str, remember: bool = True) -> str:
+    def _get_orchestrator(self):
+        """Lazy-initialize the QuanAd 2.0 orchestrator."""
+        if self._orchestrator is None:
+            from src.agent.orchestrator import QuanAdOrchestrator
+
+            self._orchestrator = QuanAdOrchestrator(
+                user_id=self.user_id,
+                plan=self.plan,
+                preferred_mode=self.preferred_mode,
+                gateway=self.gateway,
+            )
+        return self._orchestrator
+
+    def chat(self, message: str, remember: bool = True, mode: str = "single") -> str:
         """
         Send a message and get the agent's response.
 
         Args:
             message: User's message.
             remember: If True, maintains conversation history for multi-turn context.
+            mode: "single" (default ReAct agent), "consensus" (QuanAd 2.0),
+                  or "auto" (auto-detect based on query complexity).
         """
+        use_consensus = (
+            mode == "consensus"
+            or (mode == "auto" and _is_consensus_query(message))
+        )
+
+        if use_consensus:
+            return self._chat_consensus(message, remember)
+        return self._chat_single(message, remember)
+
+    def _chat_single(self, message: str, remember: bool) -> str:
+        """Single-agent ReAct path (fast, original behavior)."""
         print(f"\n Agent processing: '{message[:60]}...'")
 
         # Build message list: history + new user message
@@ -109,7 +179,20 @@ class FinancialAdvisorAgent:
 
         return response_text
 
+    def _chat_consensus(self, message: str, remember: bool) -> str:
+        """QuanAd 2.0 multi-agent consensus path."""
+        orchestrator = self._get_orchestrator()
+        response_text = orchestrator.chat(message, remember=remember)
+
+        if remember:
+            self._history.append({"role": "user", "content": message})
+            self._history.append({"role": "assistant", "content": response_text})
+
+        return response_text
+
     def reset_history(self) -> None:
         """Clear conversation history to start a fresh session."""
         self._history = []
+        if self._orchestrator is not None:
+            self._orchestrator.reset_history()
         print("Conversation history cleared.")

@@ -108,6 +108,7 @@ class AgentChatRequest(BaseModel):
     remember: bool = True  # maintain multi-turn conversation history
     session_id: str = "default"
     preferred_mode: LLMMode | None = None
+    mode: str = "single"  # "single" | "consensus" | "auto"
 
 class AgentSessionRenameRequest(BaseModel):
     title: str
@@ -470,12 +471,15 @@ async def optimize(req: OptimizeRequest, user: AuthenticatedUser = Depends(get_c
 @app.post("/api/v1/agent/chat")
 async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
     """
-    Chat with the full Financial Advisor AI Agent.
-    The agent has access to all tools: stock data, sentiment analysis,
-    ML prediction, and portfolio optimization.
+    Chat with the Financial Advisor AI Agent.
+
+    Supports three modes:
+    - "single": Fast single-agent ReAct (default)
+    - "consensus": QuanAd 2.0 multi-agent consensus analysis
+    - "auto": Auto-detect based on query complexity
 
     POST /api/v1/agent/chat
-    {"message": "Should I invest in NVDA?", "remember": true}
+    {"message": "Should I invest in NVDA?", "mode": "consensus"}
     """
     from src.agent.history import load_history, append_message
     enforce_feature(user, FeatureKey.AI_RESEARCH)
@@ -486,13 +490,74 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
         # Load persistent history for this session
         history = load_history(req.session_id, str(user.id))
         agent._history = [{"role": item["role"], "content": item["content"]} for item in history]
-        response = agent.chat(req.message, remember=False)  # we handle persistence
+        response = agent.chat(req.message, remember=False, mode=req.mode)  # we handle persistence
 
         # Persist both turns
         if req.remember:
             append_message(req.session_id, "user", req.message, str(user.id))
             append_message(req.session_id, "assistant", response, str(user.id))
-        return {"response": response, "session_id": req.session_id}
+        return {"response": response, "session_id": req.session_id, "mode": req.mode}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/agent/consensus")
+async def agent_consensus(req: AgentChatRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
+    """
+    QuanAd 2.0 — Multi-agent consensus analysis.
+
+    Dispatches the query to 5 specialist agents (Quant Researcher, Quant Analyst,
+    Financial Data Scientist, Risk Analyst, Portfolio Analytics), collects their
+    structured opinions, and returns the consensus result with full metadata.
+
+    POST /api/v1/agent/consensus
+    {"message": "Should I invest in NVDA right now?"}
+    """
+    from src.agent.orchestrator import QuanAdOrchestrator
+    from src.agent.history import append_message
+
+    enforce_feature(user, FeatureKey.AI_RESEARCH)
+    usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
+    try:
+        orchestrator = QuanAdOrchestrator(
+            user_id=str(user.id),
+            plan=user.plan,
+            preferred_mode=req.preferred_mode,
+            gateway=get_agent(user=user).gateway,
+        )
+        result = orchestrator.analyze(req.message)
+        synthesis = orchestrator._synthesize_response(req.message, result)
+
+        # Persist
+        if req.remember:
+            append_message(req.session_id, "user", req.message, str(user.id))
+            append_message(req.session_id, "assistant", synthesis, str(user.id))
+
+        return {
+            "response": synthesis,
+            "session_id": req.session_id,
+            "mode": "consensus",
+            "consensus": {
+                "verdict": result.verdict.value,
+                "confidence": result.confidence,
+                "consensus_score": result.consensus_score,
+                "agreement_ratio": result.agreement_ratio,
+                "risk_vetoed": result.risk_vetoed,
+                "risk_flags": result.risk_flags,
+                "dissenting_agents": result.dissenting_agents,
+                "opinions": [
+                    {
+                        "agent": o.agent_name,
+                        "verdict": o.verdict.value,
+                        "confidence": o.confidence,
+                        "reasoning": o.reasoning,
+                        "data_points": o.data_points,
+                        "risk_flags": o.risk_flags,
+                    }
+                    for o in result.opinions
+                ],
+            },
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
