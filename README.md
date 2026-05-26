@@ -212,6 +212,7 @@ docker run -p 6333:6333 qdrant/qdrant
 ### 5. Run the interactive CLI agent
 
 ```bash
+cd backend
 uv run python main.py
 
 # Or with a different LLM provider:
@@ -221,6 +222,7 @@ uv run python main.py --provider openai
 ### 6. Start the REST API
 
 ```bash
+cd backend
 uv run uvicorn src.api.app:app --reload --port 8000
 # → Swagger UI: http://localhost:8000/docs
 ```
@@ -342,6 +344,8 @@ curl -X POST http://localhost:8000/api/v1/optimize \
 ## Running Tests
 
 ```bash
+cd backend
+
 # Unit tests (fast, no network, no GPU)
 uv run pytest tests/unit/ -v
 
@@ -357,47 +361,54 @@ uv run pytest -v
 ## 📁 Project Structure
 
 ```
-src/
-├── agent/
-│   ├── agent.py            # Main agent — QuanAd 1.0 (single) + 2.0 (consensus) selector
-│   ├── orchestrator.py     # QuanAd 2.0 orchestrator — dispatches to 5 specialists
-│   ├── consensus.py        # Consensus engine — weighted voting + risk veto
-│   ├── specialists/
-│   │   ├── base.py              # BaseSpecialist abstract class
-│   │   ├── quant_researcher.py  # Market data + sentiment
-│   │   ├── quant_analyst.py     # Technical signals + backtesting
-│   │   ├── data_scientist.py    # ML predictions + statistics
-│   │   ├── risk_analyst.py      # VaR, drawdown, concentration
-│   │   └── portfolio_analytics.py # Markowitz + QAOA optimization
-│   ├── tools.py            # Tool definitions for LangGraph agents
-│   └── history.py          # SQLite-backed conversation persistence
-├── api/                    # FastAPI app with all endpoints
-├── auth/                   # Supabase JWT authentication
-├── backtesting/            # Strategy backtesting engine
-├── billing/                # Stripe subscription management
-├── core/                   # App configuration
-├── data/                   # yfinance fetchers + Qdrant vector DB helpers
-├── jobs/                   # Inngest scheduled/event-driven jobs
-├── journal/                # Trade journal
-├── llm/                    # Multi-provider LLM gateway (Google, OpenAI, Anthropic, OpenRouter)
-├── ml/                     # FinBERT sentiment, RF + LSTM predictors
-├── models/                 # Pydantic schemas
-├── notifications/          # Alerts evaluation + delivery
-├── quant/                  # Strategy comparison, validation, signal ranking, export
-├── quantum/                # QAOA circuit (PennyLane) + Markowitz optimizer
-├── rag/                    # Retriever → context_builder → generator pipeline
-├── risk/                   # Portfolio risk calculations
-├── saas/                   # Entitlements, plans, usage tracking
-└── services/               # Chunker, embedding providers, news ingestion
-frontend/                   # Next.js dashboard with Tailwind CSS + shadcn/ui
-├── src/app/                # App routes (dashboard, market, portfolio, etc.)
-├── src/components/         # UI components (Sidebar, Header, Chat, ModelSelector, etc.)
-└── src/lib/                # API client, Supabase client
-supabase/
-└── migrations/             # 8 migration files (profiles, billing, backtesting, etc.)
-tests/
-├── unit/                   # Fast mocked tests (no network)
-└── integration/            # Real embedding model tests
+Financial-Advisor-Agent/       ← project root
+├── backend/                   ← all Python backend
+│   ├── src/
+│   │   ├── agent/
+│   │   │   ├── agent.py            # QuanAd 1.0 + 2.0 selector
+│   │   │   ├── orchestrator.py     # QuanAd 2.0 orchestrator
+│   │   │   ├── consensus.py        # Consensus engine
+│   │   │   ├── specialists/        # 5 specialist agents
+│   │   │   ├── tools.py
+│   │   │   └── history.py
+│   │   ├── api/                    # FastAPI endpoints
+│   │   ├── auth/                   # Supabase JWT auth
+│   │   ├── backtesting/
+│   │   ├── billing/
+│   │   ├── core/                   # App configuration
+│   │   ├── data/                   # yfinance + Qdrant helpers
+│   │   ├── jobs/                   # Inngest scheduled jobs
+│   │   ├── journal/
+│   │   ├── llm/                    # Multi-provider LLM gateway
+│   │   ├── ml/                     # FinBERT, RF, LSTM
+│   │   ├── models/                 # Pydantic schemas
+│   │   ├── notifications/
+│   │   ├── quant/                  # Strategy toolkit
+│   │   ├── quantum/                # QAOA + Markowitz
+│   │   ├── rag/                    # RAG pipeline
+│   │   ├── risk/
+│   │   ├── saas/                   # Entitlements + usage
+│   │   └── services/               # Embeddings + ingestion
+│   ├── tests/
+│   │   ├── unit/
+│   │   └── integration/
+│   ├── data/                       # conversations.db
+│   ├── qdrant_storage/             # local Qdrant data
+│   ├── main.py                     # CLI entry point
+│   ├── pyproject.toml
+│   └── uv.lock
+├── frontend/                  ← Next.js dashboard
+│   ├── src/app/                    # App routes
+│   ├── src/components/             # UI components
+│   └── src/lib/                    # API client, Supabase client
+├── quantum-finance-ai/        ← Vite prototype
+├── supabase/
+│   └── migrations/                 # 8 SQL migration files
+├── .env                       ← shared secrets (gitignored)
+├── .env.example
+├── .gitignore
+├── README.md
+└── PRODUCT.md
 ```
 
 ---
