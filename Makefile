@@ -9,7 +9,8 @@ BACKEND_PORT := 8000
 FRONTEND_PORT := 3000
 
 .PHONY: help dev backend frontend install install-backend install-frontend \
-        test test-unit test-integration cli stop clean
+        test test-unit test-integration cli stop clean \
+        docker-up docker-up-d docker-down docker-build docker-logs docker-shell docker-ps
 
 # Default target
 .DEFAULT_GOAL := help
@@ -84,3 +85,31 @@ clean: ## Remove Python cache, build artifacts, and Next.js cache
 	find $(BACKEND_DIR) -name "*.pyc" -delete 2>/dev/null || true
 	rm -rf $(FRONTEND_DIR)/.next 2>/dev/null || true
 	@echo "  Done."
+
+# ─── Docker ──────────────────────────────────────────────────────────────────
+
+docker-up: ## Build images and start backend + Qdrant (foreground)
+	docker compose up --build
+
+docker-up-d: ## Build images and start backend + Qdrant (detached)
+	@echo "  Starting QuanAd via Docker..."
+	docker compose up --build -d
+	@echo ""
+	@echo "  Backend  → http://localhost:$(BACKEND_PORT)/docs"
+	@echo "  Qdrant   → http://localhost:6333"
+	@echo "  Run 'make docker-logs' to stream logs."
+
+docker-down: ## Stop and remove containers (keeps volumes)
+	docker compose down
+
+docker-build: ## Rebuild the backend image without starting
+	docker compose build backend
+
+docker-logs: ## Stream logs from all Docker services
+	docker compose logs -f
+
+docker-shell: ## Open a shell inside the running backend container
+	docker compose exec backend bash
+
+docker-ps: ## Show status of all Docker services
+	docker compose ps

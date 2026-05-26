@@ -1,0 +1,27 @@
+# Python runtime artifacts
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Local runtime data (mounted as volumes in Docker)
+data/
+qdrant_storage/
+
+# Dev / notebook files
+Untitled.ipynb
+.ipynb_checkpoints/
+skills-lock.json
+
+# Secrets — never bake into the image
+.env
+.env.*
+
+# Git
+.git/
+.gitignore
+
+# Docs
+*.md
