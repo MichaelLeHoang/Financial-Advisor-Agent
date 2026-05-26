@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { Session, User } from "@supabase/supabase-js";
+import type { Provider, Session, User } from "@supabase/supabase-js";
 import { api } from "@/lib/api";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 
@@ -25,6 +25,7 @@ interface AuthContextValue {
   updateProfile: (profile: Partial<Pick<AuthUser, "display_name" | "username" | "avatar_url">>) => void;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
+  signInWithOAuth: (provider: Provider) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -187,6 +188,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api.setAuthToken(null);
   };
 
+  const signInWithOAuth = async (provider: Provider) => {
+    setError(null);
+    const supabase = getSupabaseBrowserClient();
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    if (oauthError) {
+      setError(oauthError.message);
+      throw oauthError;
+    }
+  };
+
   const updateProfile = useCallback<AuthContextValue["updateProfile"]>((profile) => {
     setUser((currentUser) => {
       if (currentUser.is_guest) return currentUser;
@@ -207,6 +223,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       updateProfile,
       signIn,
       signUp,
+      signInWithOAuth,
       signOut,
     }),
     [authSession, user, loading, error, updateProfile]

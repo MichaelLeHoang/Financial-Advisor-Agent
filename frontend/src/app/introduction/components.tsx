@@ -29,6 +29,11 @@ export function IntroductionNav() {
     router.push("/introduction");
   };
 
+  const handleOpenApp = () => {
+    window.localStorage.setItem("financial-advisor.coverSeen", "true");
+    router.push("/");
+  };
+
   return (
     <motion.nav
       initial={{ opacity: 0, y: -20 }}
@@ -93,16 +98,24 @@ export function IntroductionNav() {
                   </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Link href="/" className="inline-flex h-9 items-center rounded-lg bg-indigo-500 px-4 text-sm font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4),0_4px_12px_rgba(99,102,241,0.25)] transition-all hover:bg-indigo-400">
+              <button
+                type="button"
+                onClick={handleOpenApp}
+                className="inline-flex h-9 items-center rounded-lg bg-indigo-500 px-4 text-sm font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4),0_4px_12px_rgba(99,102,241,0.25)] transition-all hover:bg-indigo-400"
+              >
                 Open App
-              </Link>
+              </button>
             </>
           ) : (
             <>
               <Link href="/login" className="hidden text-sm text-white/50 transition-colors hover:text-white sm:block">Log in</Link>
-              <Link href="/" className="inline-flex h-9 items-center rounded-lg bg-indigo-500 px-4 text-sm font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4),0_4px_12px_rgba(99,102,241,0.25)] transition-all hover:bg-indigo-400">
+              <button
+                type="button"
+                onClick={handleOpenApp}
+                className="inline-flex h-9 items-center rounded-lg bg-indigo-500 px-4 text-sm font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4),0_4px_12px_rgba(99,102,241,0.25)] transition-all hover:bg-indigo-400"
+              >
                 Open App
-              </Link>
+              </button>
             </>
           )}
         </div>
