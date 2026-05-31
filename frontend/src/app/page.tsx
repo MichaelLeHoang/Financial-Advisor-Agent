@@ -150,7 +150,7 @@ export default function ChatPage() {
   }, [isActive, input]);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: globalThis.MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
         if (!input) setIsActive(false);
       }

@@ -64,10 +64,9 @@ export function IntroductionNav() {
           <span className="text-sm font-semibold text-white/80">Quantum Advisor</span>
         </Link>
         <div className="hidden items-center gap-6 lg:flex">
-          <Link href="/introduction#features" className="text-sm text-white/40 transition-colors hover:text-white">Features</Link>
+          <Link href="/introduction#features" className="text-sm text-white/40 transition-colors hover:text-white">Home</Link>
           <Link href="/introduction#samples" className="text-sm text-white/40 transition-colors hover:text-white">Samples</Link>
           <Link href="/introduction#pricing" className="text-sm text-white/40 transition-colors hover:text-white">Pricing</Link>
-          <Link href="/introduction#tech" className="text-sm text-white/40 transition-colors hover:text-white">Stack</Link>
           <Link href="/news" className="inline-flex items-center gap-1.5 text-sm text-white/40 transition-colors hover:text-white">
             <Newspaper className="h-3.5 w-3.5" />
             News
