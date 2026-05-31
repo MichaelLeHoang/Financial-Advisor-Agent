@@ -686,9 +686,40 @@ export const api = {
   marketSearch: (query: string, limit = 12) =>
     get<MarketSymbolSearchResult[]>(`/api/v1/market/search?q=${encodeURIComponent(query)}&limit=${limit}`),
 
+  /** News */
+  newsCategories: () => get<CategoryInfo[]>("/api/v1/news/categories"),
+
+  news: (categories: string[], limit = 20) =>
+    get<NewsResponse>(`/api/v1/news?categories=${encodeURIComponent(categories.join(","))}&limit=${limit}`),
+
   /** Health check */
   health: () => get<{ status: string }>("/health"),
 };
+
+// ─── News Types ────────────────────
+
+export interface NewsArticle {
+  id: string;
+  title: string;
+  summary: string;
+  publisher: string;
+  published_at: string | null;
+  url: string;
+  thumbnail: string | null;
+  tickers: string[];
+  category: string;
+}
+
+export interface NewsResponse {
+  articles: NewsArticle[];
+  categories_fetched: string[];
+  total: number;
+}
+
+export interface CategoryInfo {
+  key: string;
+  label: string;
+}
 
 /** WebSocket URL for streaming agent chat */
 export const wsUrl = (sessionId = "default") =>

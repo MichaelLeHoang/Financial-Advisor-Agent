@@ -19,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const isStandalonePage = pathname.startsWith("/introduction")
     || pathname.startsWith("/login")
     || pathname.startsWith("/news")
+    || pathname.startsWith("/blog")
     || pathname.startsWith("/pricing");
 
   const [entryChecked, setEntryChecked] = useState(false);

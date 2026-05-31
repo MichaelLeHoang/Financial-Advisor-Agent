@@ -81,6 +81,32 @@ const WORKFLOW_STEPS = [
   },
 ];
 
+const PLACEHOLDERS = [
+  "Ask anything about markets, stocks, or your portfolio...",
+  "Analyze AAPL sentiment from recent news...",
+  "Run a multi-agent consensus on NVDA...",
+  "Optimize my portfolio for lower correlation...",
+  "What are the risks of holding SMCI right now?",
+];
+
+const placeholderContainerVariants = {
+  initial: {},
+  animate: { transition: { staggerChildren: 0.015 } },
+  exit: { transition: { staggerChildren: 0.01, staggerDirection: -1 } },
+};
+
+const letterVariants = {
+  initial: { opacity: 0, filter: "blur(12px)", y: 10 },
+  animate: {
+    opacity: 1, filter: "blur(0px)", y: 0,
+    transition: { opacity: { duration: 0.25 }, filter: { duration: 0.4 }, y: { type: "spring", stiffness: 80, damping: 20 } },
+  },
+  exit: {
+    opacity: 0, filter: "blur(12px)", y: -10,
+    transition: { opacity: { duration: 0.2 }, filter: { duration: 0.3 }, y: { type: "spring", stiffness: 80, damping: 20 } },
+  },
+};
+
 export default function ChatPage() {
   const { user } = useAuth();
   const { version } = useModel();
@@ -92,7 +118,46 @@ export default function ChatPage() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [showPlaceholder, setShowPlaceholder] = useState(true);
+  const [isActive, setIsActive] = useState(false);
   const firstName = getFirstName(user?.display_name || user?.email || "");
+
+  const handleInput = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    e.target.style.height = "auto";
+    e.target.style.height = `${e.target.scrollHeight}px`;
+  };
+
+  useEffect(() => {
+    if (!input && textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+  }, [input]);
+
+  useEffect(() => {
+    if (isActive || input) return;
+    const interval = setInterval(() => {
+      setShowPlaceholder(false);
+      setTimeout(() => {
+        setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDERS.length);
+        setShowPlaceholder(true);
+      }, 400);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [isActive, input]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        if (!input) setIsActive(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [input]);
 
   useEffect(() => {
     let cancelled = false;
@@ -302,52 +367,101 @@ export default function ChatPage() {
 
       {/* Input */}
       <div className="shrink-0 px-3 pb-3 pt-1 sm:px-8 sm:pb-6 sm:pt-0">
-        <Card className="mx-auto w-full max-w-5xl rounded-2xl border border-white/[0.06] bg-white/[0.045] p-1.5 text-white shadow-[var(--shadow-accent-composer)] transition-colors sm:p-2">
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder="Ask anything about markets, stocks, or your portfolio..."
-            rows={2}
-            className="max-h-36 min-h-12 border-transparent bg-transparent px-3 py-2.5 text-sm text-white placeholder:text-white/24 focus-visible:border-indigo-primary/45 focus-visible:ring-2 focus-visible:ring-indigo-primary/20 sm:min-h-14 sm:px-4 sm:py-3"
-          />
-          <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] px-1.5 pt-1.5 sm:gap-3 sm:px-2 sm:pt-2">
-            <div className="flex items-center gap-1 sm:gap-1.5">
-              <UploadPill
-                icon={Paperclip}
-                label="PDF"
-                accept=".pdf,.txt,.md"
-                onChange={(event) => handleUpload(event, "document")}
-              />
-              <UploadPill
-                icon={TableProperties}
-                label="Data"
-                accept=".csv,.json,.txt"
-                onChange={(event) => handleUpload(event, "data")}
-              />
-              <UploadPill
-                icon={Image}
-                label="Image"
-                accept="image/*"
-                onChange={(event) => handleUpload(event, "image")}
-              />
+        <motion.div
+          layout
+          ref={wrapperRef}
+          onClick={() => setIsActive(true)}
+          className="mx-auto w-full max-w-5xl overflow-hidden rounded-[24px] border bg-white/[0.045] p-1.5 text-white transition-colors sm:p-2 cursor-text"
+          animate={{
+            borderColor: isActive || input ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)",
+            backgroundColor: isActive || input ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.035)",
+            boxShadow: isActive || input ? "0 8px 32px 0 rgba(0,0,0,0.25)" : "var(--shadow-accent-composer)",
+          }}
+          transition={{ type: "spring", stiffness: 120, damping: 18 }}
+        >
+          <div className="relative flex items-end">
+            <Textarea
+              ref={textareaRef}
+              value={input}
+              onChange={handleInput}
+              onFocus={() => setIsActive(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              rows={1}
+              className="relative z-10 w-full max-h-[240px] min-h-12 border-transparent bg-transparent pl-3 pr-12 py-3 text-sm text-white focus-visible:border-transparent focus-visible:ring-0 sm:min-h-14 sm:pl-4 sm:pr-14 sm:py-3.5 resize-none overflow-y-auto"
+            />
+            <div className="absolute inset-0 pointer-events-none flex items-start pl-3 pr-12 py-3 sm:pl-4 sm:pr-14 sm:py-3.5">
+              <AnimatePresence mode="wait">
+                {showPlaceholder && !isActive && !input && (
+                  <motion.span
+                    key={placeholderIndex}
+                    className="text-sm text-white/24 select-none pointer-events-none max-w-full overflow-hidden text-ellipsis whitespace-nowrap mt-0.5"
+                    variants={placeholderContainerVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                  >
+                    {PLACEHOLDERS[placeholderIndex].split("").map((char, i) => (
+                      <motion.span key={i} variants={letterVariants} style={{ display: "inline-block" }}>
+                        {char === " " ? "\u00A0" : char}
+                      </motion.span>
+                    ))}
+                  </motion.span>
+                )}
+              </AnimatePresence>
             </div>
-            <Button
-              onClick={handleSend}
-              disabled={isLoading}
-              size="icon"
-              className="on-accent accent-gradient-surface h-9 w-9 shrink-0 rounded-xl shadow-[var(--shadow-primary-action)] hover:shadow-[var(--shadow-primary-action-hover)]"
-              aria-label="Send message"
-            >
-              <Send className="w-4 h-4" />
-            </Button>
+            
+            <div className="absolute right-1.5 bottom-1.5 z-20 sm:right-2 sm:bottom-2">
+              <Button
+                onClick={handleSend}
+                disabled={isLoading}
+                size="icon"
+                className="on-accent accent-gradient-surface h-9 w-9 shrink-0 rounded-xl shadow-[var(--shadow-primary-action)] hover:shadow-[var(--shadow-primary-action-hover)]"
+                aria-label="Send message"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
-        </Card>
+          <AnimatePresence>
+            {(isActive || input) && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, filter: "blur(8px)" }}
+                animate={{ opacity: 1, height: "auto", filter: "blur(0px)" }}
+                exit={{ opacity: 0, height: 0, filter: "blur(8px)" }}
+                transition={{ duration: 0.25 }}
+                className="overflow-hidden"
+              >
+                <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] px-1.5 pt-2 sm:gap-3 sm:px-2 sm:pt-3">
+                  <div className="flex items-center gap-1 sm:gap-1.5">
+                    <UploadPill
+                      icon={Paperclip}
+                      label="PDF"
+                      accept=".pdf,.txt,.md"
+                      onChange={(event) => handleUpload(event, "document")}
+                    />
+                    <UploadPill
+                      icon={TableProperties}
+                      label="Data"
+                      accept=".csv,.json,.txt"
+                      onChange={(event) => handleUpload(event, "data")}
+                    />
+                    <UploadPill
+                      icon={Image}
+                      label="Image"
+                      accept="image/*"
+                      onChange={(event) => handleUpload(event, "image")}
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
         <p className="mt-2 text-center text-[11px] text-white/20 sm:mt-3 sm:text-xs">
           AI-generated analysis only. Not professional financial advice.
         </p>

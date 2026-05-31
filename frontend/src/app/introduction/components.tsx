@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { HelpCircle, LogOut, Newspaper, User, Zap } from "lucide-react";
+import { BookOpen, HelpCircle, LogOut, Newspaper, Search, User, Zap } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -15,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getAvatarColor, getAvatarInitials } from "@/lib/avatar";
+import SearchModal from "@/components/SearchModal";
 
 export function IntroductionNav() {
   const router = useRouter();
@@ -23,6 +25,19 @@ export function IntroductionNav() {
   const displayName = user?.display_name || user?.email?.split("@")[0] || "Researcher";
   const initials = getAvatarInitials(user?.display_name, user?.email);
   const avatarColor = getAvatarColor(user?.id || user?.email);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Cmd/Ctrl+K shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
@@ -53,18 +68,28 @@ export function IntroductionNav() {
           <Link href="/introduction#samples" className="text-sm text-white/40 transition-colors hover:text-white">Samples</Link>
           <Link href="/introduction#pricing" className="text-sm text-white/40 transition-colors hover:text-white">Pricing</Link>
           <Link href="/introduction#tech" className="text-sm text-white/40 transition-colors hover:text-white">Stack</Link>
-          {isSignedIn && (
-            <Link href="/news" className="inline-flex items-center gap-1.5 text-sm text-white/40 transition-colors hover:text-white">
-              <Newspaper className="h-3.5 w-3.5" />
-              News
-            </Link>
-          )}
+          <Link href="/news" className="inline-flex items-center gap-1.5 text-sm text-white/40 transition-colors hover:text-white">
+            <Newspaper className="h-3.5 w-3.5" />
+            News
+          </Link>
+          <Link href="/blog" className="inline-flex items-center gap-1.5 text-sm text-white/40 transition-colors hover:text-white">
+            <BookOpen className="h-3.5 w-3.5" />
+            Blog
+          </Link>
           <Link href="/introduction/help" className="inline-flex items-center gap-1.5 text-sm text-white/40 transition-colors hover:text-white">
             <HelpCircle className="h-3.5 w-3.5" />
             Help
           </Link>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            aria-label="Search (⌘K)"
+            onClick={() => setSearchOpen(true)}
+            className="flex size-9 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.03] text-white/40 transition-colors hover:bg-white/[0.08] hover:text-white/70"
+          >
+            <Search className="size-4" />
+          </button>
           {isSignedIn ? (
             <>
               <DropdownMenu>
@@ -120,6 +145,7 @@ export function IntroductionNav() {
           )}
         </div>
       </div>
+      <SearchModal open={searchOpen} onOpenChange={setSearchOpen} />
     </motion.nav>
   );
 }

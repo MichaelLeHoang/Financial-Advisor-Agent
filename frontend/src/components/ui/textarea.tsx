@@ -2,17 +2,21 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
-  return (
-    <textarea
-      data-slot="textarea"
-      className={cn(
-        "min-h-20 w-full min-w-0 resize-none rounded-2xl border border-[var(--border-card)] bg-[var(--surface-card)] px-3 py-2 text-base text-[var(--text-primary)] transition-[color,box-shadow,background-color,border-color] outline-none shadow-[var(--shadow-control)] placeholder:text-[var(--text-placeholder)] focus-visible:border-indigo-primary/50 focus-visible:ring-3 focus-visible:ring-indigo-primary/20 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+const Textarea = React.forwardRef<HTMLTextAreaElement, React.ComponentProps<"textarea">>(
+  ({ className, ...props }, ref) => {
+    return (
+      <textarea
+        ref={ref}
+        data-slot="textarea"
+        className={cn(
+          "min-h-20 w-full min-w-0 resize-none rounded-2xl border border-[var(--border-card)] bg-[var(--surface-card)] px-3 py-2 text-base text-[var(--text-primary)] transition-[color,box-shadow,background-color,border-color] outline-none shadow-[var(--shadow-control)] placeholder:text-[var(--text-placeholder)] focus-visible:border-indigo-primary/50 focus-visible:ring-3 focus-visible:ring-indigo-primary/20 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
+          className
+        )}
+        {...props}
+      />
+    )
+  }
+)
+Textarea.displayName = "Textarea"
 
 export { Textarea }

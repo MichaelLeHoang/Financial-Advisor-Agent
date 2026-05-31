@@ -67,6 +67,17 @@ export default function Header({
         return () => document.removeEventListener("pointerdown", handlePointerDown);
     }, []);
 
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+                e.preventDefault();
+                focusMarketSearch();
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [pathname, router]);
+
     const openSettings = () => {
         setProfileOpen(false);
         setAccountSwitcherOpen(false);
@@ -176,8 +187,11 @@ export default function Header({
                         onClick={focusMarketSearch}
                         onFocus={focusMarketSearch}
                         placeholder="Search markets..."
-                        className="glass w-64 cursor-pointer rounded-xl border-white/[0.06] bg-white/5 py-2 pl-10 pr-4 text-sm text-white placeholder:text-white/42 focus:outline-none focus:border-indigo-primary/50"
+                        className="glass w-64 cursor-pointer rounded-xl border-white/[0.06] bg-white/5 py-2 pl-10 pr-12 text-sm text-white placeholder:text-white/42 focus:outline-none focus:border-indigo-primary/50"
                     />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-white/40">
+                        ⌘K
+                    </div>
                 </div>
                 <button type="button" aria-label="Notifications" className="relative text-white/40 hover:text-white transition-colors">
                     <Bell className="w-6 h-6" />
