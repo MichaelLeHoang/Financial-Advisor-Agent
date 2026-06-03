@@ -15,6 +15,7 @@ import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import Plan from "@/components/ui/agent-plan";
 
 interface Message {
   id: string;
@@ -280,7 +281,7 @@ export default function ChatPage() {
     event.target.value = "";
   };
 
-    return (
+  return (
     <div className="flex flex-col h-full relative overflow-hidden">
       <div className="absolute left-4 top-3 z-20 sm:left-8 sm:top-6">
         <ModelSelector />
@@ -342,12 +343,12 @@ export default function ChatPage() {
               className={cn("flex w-full min-w-0", msg.role === "user" ? "justify-end" : "justify-start")}
             >
               {msg.status === "fetching" ? (
-                <Card className="max-w-full rounded-xl border-indigo-primary/30 bg-indigo-primary/10 px-4 py-2 text-sm text-indigo-primary shadow-none">
-                  <CardContent className="flex items-center gap-3 p-0">
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-                  <span className="truncate">{msg.content}</span>
-                  </CardContent>
-                </Card>
+                <div className="w-full max-w-[92%] sm:max-w-[75%]">
+                  <Plan
+                    mode={version === "2.0" ? "consensus" : "single"}
+                    isActive={true}
+                  />
+                </div>
               ) : (
                 <div
                   className={cn(
@@ -414,7 +415,7 @@ export default function ChatPage() {
                 )}
               </AnimatePresence>
             </div>
-            
+
             <div className="absolute right-1.5 bottom-1.5 z-20 sm:right-2 sm:bottom-2">
               <Button
                 onClick={handleSend}

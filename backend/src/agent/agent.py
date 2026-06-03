@@ -96,7 +96,7 @@ class FinancialAdvisorAgent:
         self._agent = create_react_agent(
             self._llm,
             ALL_TOOLS,
-            state_modifier=SYSTEM_PROMPT,
+            prompt=SYSTEM_PROMPT,
         )
         self._history: list[dict] = []  # Multi-turn conversation history
 

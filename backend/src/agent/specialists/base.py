@@ -93,7 +93,7 @@ class BaseSpecialist(ABC):
 
             full_prompt = self.system_prompt + "\n\n" + OPINION_SCHEMA_PROMPT
 
-            agent = create_react_agent(llm, tools, state_modifier=full_prompt)
+            agent = create_react_agent(llm, tools, prompt=full_prompt)
             result = agent.invoke({"messages": [{"role": "user", "content": query}]})
 
             # Extract the final message content.

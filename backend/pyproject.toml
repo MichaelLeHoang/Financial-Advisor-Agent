@@ -34,3 +34,10 @@ dev = [
     "pytest>=9.0.2",
     "ruff>=0.14.14",
 ]
+
+[tool.pyrefly]
+python_interpreter = ".venv/bin/python"
+search_path = ["."]
+disable_search_path_heuristics = true
+disable-search-path-heuristics = true
+
