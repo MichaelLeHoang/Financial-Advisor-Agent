@@ -9,7 +9,7 @@ BACKEND_PORT := 8000
 FRONTEND_PORT := 3000
 
 .PHONY: help dev backend frontend install install-backend install-frontend \
-        test test-unit test-integration cli stop clean \
+        test test-unit test-integration cli stop clean ngrok ngrok-static \
         docker-up docker-up-d docker-down docker-build docker-logs docker-shell docker-ps
 
 # Default target
@@ -85,6 +85,27 @@ clean: ## Remove Python cache, build artifacts, and Next.js cache
 	find $(BACKEND_DIR) -name "*.pyc" -delete 2>/dev/null || true
 	rm -rf $(FRONTEND_DIR)/.next 2>/dev/null || true
 	@echo "  Done."
+
+# ─── Ngrok Tunnel ────────────────────────────────────────────────────────────
+
+ngrok: ## Start ngrok tunnel for the backend (random URL)
+	@echo ""
+	@echo "  Starting ngrok tunnel → localhost:$(BACKEND_PORT)"
+	@echo "  Copy the Forwarding URL and set it as NEXT_PUBLIC_API_URL in Vercel."
+	@echo ""
+	ngrok http $(BACKEND_PORT)
+
+ngrok-static: ## Start ngrok tunnel with a static domain (set NGROK_DOMAIN env var)
+	@if [ -z "$(NGROK_DOMAIN)" ]; then \
+		echo "  Error: Set NGROK_DOMAIN first."; \
+		echo "  Usage: make ngrok-static NGROK_DOMAIN=your-domain.ngrok-free.app"; \
+		exit 1; \
+	fi
+	@echo ""
+	@echo "  Starting ngrok tunnel → localhost:$(BACKEND_PORT)"
+	@echo "  Static domain: https://$(NGROK_DOMAIN)"
+	@echo ""
+	ngrok http $(BACKEND_PORT) --url=$(NGROK_DOMAIN)
 
 # ─── Docker ──────────────────────────────────────────────────────────────────
 
