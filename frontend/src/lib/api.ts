@@ -561,6 +561,8 @@ function requestHeaders(includeJson = true): HeadersInit {
   return {
     ...(includeJson ? { "Content-Type": "application/json" } : {}),
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    // Bypass ngrok free-tier browser interstitial warning page
+    "ngrok-skip-browser-warning": "true",
   };
 }
 
