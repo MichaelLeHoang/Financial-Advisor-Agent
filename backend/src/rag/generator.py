@@ -16,7 +16,7 @@ class Generator:
             raise RuntimeError("GEMINI_API_KEY is required for RAG generation")
 
         genai.configure(api_key=api_key)
-        self._model = genai.GenerativeModel("gemini-2.0-flash")
+        self._model = genai.GenerativeModel("gemini-2.5-flash")
     def generate(
         self,
         query: str,

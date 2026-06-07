@@ -164,6 +164,13 @@ class FinancialAdvisorAgent:
         final_message = result["messages"][-1]
         response_text = final_message.content
 
+        # Gemini 2.5 may return content as a list of parts instead of a string.
+        if isinstance(response_text, list):
+            response_text = "\n".join(
+                part.get("text", str(part)) if isinstance(part, dict) else str(part)
+                for part in response_text
+            )
+
         # Update conversation history for next turn
         if remember:
             self._history.append({"role": "user", "content": message})
@@ -174,7 +181,7 @@ class FinancialAdvisorAgent:
             task_type=self.task_type,
             routed_model=self._routed_model,
             input_text="\n".join(str(item.get("content", "")) for item in messages),
-            output_text=response_text,
+            output_text=response_text if isinstance(response_text, str) else str(response_text),
         )
 
         return response_text

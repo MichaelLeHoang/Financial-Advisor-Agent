@@ -34,7 +34,7 @@ MODEL_REGISTRY: tuple[ModelSpec, ...] = (
     ModelSpec(
         key="google.gemini_flash.fast",
         provider="google",
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         mode="fast",
         min_plan=Plan.FREE,
         input_cost_per_million=0.10,
@@ -43,7 +43,7 @@ MODEL_REGISTRY: tuple[ModelSpec, ...] = (
     ModelSpec(
         key="google.gemini_flash.balanced",
         provider="google",
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         mode="balanced",
         min_plan=Plan.FREE,
         input_cost_per_million=0.10,
