@@ -98,6 +98,14 @@ class BaseSpecialist(ABC):
 
             # Extract the final message content.
             final_content = result["messages"][-1].content
+
+            # Gemini 2.5 may return content as a list of parts.
+            if isinstance(final_content, list):
+                final_content = "\n".join(
+                    part.get("text", str(part)) if isinstance(part, dict) else str(part)
+                    for part in final_content
+                )
+
             opinion = self._parse_opinion(final_content)
 
             # Record usage.
@@ -106,19 +114,23 @@ class BaseSpecialist(ABC):
                 task_type="consensus_analysis",
                 routed_model=routed,
                 input_text=query,
-                output_text=final_content,
+                output_text=final_content if isinstance(final_content, str) else str(final_content),
             )
 
             return opinion
 
-        except Exception:
+        except Exception as exc:
+            # Log the actual error for debugging.
+            error_detail = traceback.format_exc()
+            print(f"  ✗ {self.display_name} error: {error_detail[-300:]}")
+
             # On failure, return a neutral low-confidence opinion.
             return AgentOpinion(
                 agent_name=self.name,
                 verdict=Verdict.NEUTRAL,
                 confidence=0.1,
-                reasoning=f"{self.display_name} encountered an error during analysis: {traceback.format_exc()[:200]}",
-                data_points={"error": True},
+                reasoning=f"{self.display_name} encountered an error: {str(exc)[:200]}",
+                data_points={"error": True, "error_type": type(exc).__name__},
                 risk_flags=[f"{self.display_name} analysis unavailable"],
             )
 

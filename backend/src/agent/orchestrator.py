@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import time
 import traceback
 from typing import Any
 
@@ -81,32 +82,29 @@ class QuanAdOrchestrator:
         print(f"\n{'='*60}")
         print(f"  QuanAd 2.0 — Multi-Agent Consensus Analysis")
         print(f"  Query: {query[:80]}...")
-        print(f"  Dispatching to {len(specialists)} specialists...")
+        print(f"  Dispatching to {len(specialists)} specialists (sequential, rate-limit safe)...")
         print(f"{'='*60}\n")
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_specialist = {
-                executor.submit(self._run_specialist, specialist, query): specialist
-                for specialist in specialists
-            }
-
-            for future in concurrent.futures.as_completed(future_to_specialist):
-                specialist = future_to_specialist[future]
-                try:
-                    opinion = future.result(timeout=120)
-                    opinions.append(opinion)
-                    print(f"  ✓ {specialist.display_name}: {opinion.verdict.value} (confidence: {opinion.confidence:.0%})")
-                except Exception as exc:
-                    print(f"  ✗ {specialist.display_name}: failed — {exc}")
-                    opinions.append(
-                        AgentOpinion(
-                            agent_name=specialist.name,
-                            verdict=Verdict.NEUTRAL,
-                            confidence=0.1,
-                            reasoning=f"Specialist unavailable: {str(exc)[:100]}",
-                            risk_flags=[f"{specialist.display_name} analysis failed"],
-                        )
+        # Run specialists sequentially with a delay between each to stay
+        # within Gemini free-tier rate limits (~15 RPM).
+        for i, specialist in enumerate(specialists):
+            if i > 0:
+                time.sleep(5)  # 5s delay between specialists to avoid rate limit
+            try:
+                opinion = self._run_specialist(specialist, query)
+                opinions.append(opinion)
+                print(f"  ✓ {specialist.display_name}: {opinion.verdict.value} (confidence: {opinion.confidence:.0%})")
+            except Exception as exc:
+                print(f"  ✗ {specialist.display_name}: failed — {exc}")
+                opinions.append(
+                    AgentOpinion(
+                        agent_name=specialist.name,
+                        verdict=Verdict.NEUTRAL,
+                        confidence=0.1,
+                        reasoning=f"Specialist unavailable: {str(exc)[:100]}",
+                        risk_flags=[f"{specialist.display_name} analysis failed"],
                     )
+                )
 
         result = self.consensus_engine.aggregate(opinions)
         print(f"\n{'─'*60}")
@@ -190,15 +188,23 @@ Use clear formatting with headers and bullet points. Be specific with numbers.""
 
             response = llm.invoke([{"role": "user", "content": synthesis_prompt}])
 
+            # Normalize content for Gemini 2.5 list-of-parts responses.
+            response_content = response.content
+            if isinstance(response_content, list):
+                response_content = "\n".join(
+                    part.get("text", str(part)) if isinstance(part, dict) else str(part)
+                    for part in response_content
+                )
+
             self.gateway.record_usage(
                 user_id=self.user_id,
                 task_type="consensus_synthesis",
                 routed_model=routed,
                 input_text=synthesis_prompt,
-                output_text=response.content,
+                output_text=response_content if isinstance(response_content, str) else str(response_content),
             )
 
-            return response.content
+            return response_content
 
         except Exception:
             # Fallback: return the raw consensus summary.
