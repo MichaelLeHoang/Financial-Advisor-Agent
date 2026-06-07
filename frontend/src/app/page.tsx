@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import Plan from "@/components/ui/agent-plan";
+import Markdown from "@/components/ui/markdown";
 
 interface Message {
   id: string;
@@ -352,13 +353,17 @@ export default function ChatPage() {
               ) : (
                 <div
                   className={cn(
-                    "min-w-0 max-w-[92%] break-words rounded-2xl px-4 py-3 text-[15px] leading-relaxed whitespace-pre-wrap sm:max-w-[75%] sm:px-5 sm:py-4",
+                    "min-w-0 max-w-[92%] break-words rounded-2xl px-4 py-3 text-[15px] leading-relaxed sm:max-w-[75%] sm:px-5 sm:py-4",
                     msg.role === "user"
-                      ? "on-accent accent-gradient-surface glow-indigo"
+                      ? "on-accent accent-gradient-surface glow-indigo whitespace-pre-wrap"
                       : "glass text-white/90"
                   )}
                 >
-                  {msg.content}
+                  {msg.role === "assistant" ? (
+                    <Markdown content={msg.content} />
+                  ) : (
+                    msg.content
+                  )}
                 </div>
               )}
             </motion.div>
