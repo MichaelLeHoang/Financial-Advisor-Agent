@@ -20,7 +20,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     || pathname.startsWith("/login")
     || pathname.startsWith("/news")
     || pathname.startsWith("/blog")
-    || pathname.startsWith("/pricing");
+    || pathname.startsWith("/pricing")
+    || pathname.startsWith("/docs");
 
   const [entryChecked, setEntryChecked] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);

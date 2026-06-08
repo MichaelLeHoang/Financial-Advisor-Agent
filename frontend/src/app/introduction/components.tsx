@@ -17,6 +17,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getAvatarColor, getAvatarInitials } from "@/lib/avatar";
 import SearchModal from "@/components/SearchModal";
+import {
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
+  navigationMenuTriggerStyle,
+} from "@/components/ui/navigation-menu";
 
 export function IntroductionNav() {
   const router = useRouter();
@@ -63,22 +72,75 @@ export function IntroductionNav() {
           </div>
           <span className="text-sm font-semibold text-white/80">Quantum Advisor</span>
         </Link>
-        <div className="hidden items-center gap-6 lg:flex">
-          <Link href="/introduction#features" className="text-sm text-white/40 transition-colors hover:text-white">Home</Link>
-          <Link href="/introduction#samples" className="text-sm text-white/40 transition-colors hover:text-white">Samples</Link>
-          <Link href="/introduction#pricing" className="text-sm text-white/40 transition-colors hover:text-white">Pricing</Link>
-          <Link href="/news" className="inline-flex items-center gap-1.5 text-sm text-white/40 transition-colors hover:text-white">
-            <Newspaper className="h-3.5 w-3.5" />
-            News
-          </Link>
-          <Link href="/blog" className="inline-flex items-center gap-1.5 text-sm text-white/40 transition-colors hover:text-white">
-            <BookOpen className="h-3.5 w-3.5" />
-            Blog
-          </Link>
-          <Link href="/introduction/help" className="inline-flex items-center gap-1.5 text-sm text-white/40 transition-colors hover:text-white">
-            <HelpCircle className="h-3.5 w-3.5" />
-            Help
-          </Link>
+        <div className="hidden items-center lg:flex">
+          <NavigationMenu viewport={false}>
+            <NavigationMenuList className="gap-1">
+              <NavigationMenuItem>
+                <NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
+                  <Link href="/introduction#features">Home</Link>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+              <NavigationMenuItem>
+                <NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
+                  <Link href="/introduction#samples">Samples</Link>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+              <NavigationMenuItem>
+                <NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
+                  <Link href="/introduction#pricing">Pricing</Link>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+              
+              <NavigationMenuItem>
+                <NavigationMenuTrigger className="bg-transparent text-white/40 hover:text-white data-[state=open]:text-white">
+                  Resources
+                </NavigationMenuTrigger>
+                <NavigationMenuContent>
+                  <ul className="grid w-[220px] gap-1 p-2">
+                    {isSignedIn && (
+                      <li>
+                        <NavigationMenuLink asChild>
+                          <Link href="/news" className="flex flex-row items-center gap-3">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-400">
+                              <Newspaper className="h-4 w-4" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium text-white/90">News</span>
+                              <span className="text-xs text-white/40">Market insights</span>
+                            </div>
+                          </Link>
+                        </NavigationMenuLink>
+                      </li>
+                    )}
+                    <li>
+                      <NavigationMenuLink asChild>
+                        <Link href="/blog" className="flex flex-row items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-white/5 text-white/70">
+                            <BookOpen className="h-4 w-4" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium text-white/90">Blog</span>
+                            <span className="text-xs text-white/40">Our articles</span>
+                          </div>
+                        </Link>
+                      </NavigationMenuLink>
+                    </li>
+                  </ul>
+                </NavigationMenuContent>
+              </NavigationMenuItem>
+
+              <NavigationMenuItem>
+                <NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
+                  <Link href="/docs">Doc</Link>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+              <NavigationMenuItem>
+                <NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
+                  <Link href="/introduction/help">Help</Link>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+            </NavigationMenuList>
+          </NavigationMenu>
         </div>
         <div className="flex items-center gap-3">
           <button
