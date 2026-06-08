@@ -79,26 +79,23 @@ class GeminiEmbeddingProvider(EmbeddingProvider):
     """
 
     def __init__(self, api_key: str | None = None):
-        import google.generativeai as genai
+        from google import genai
 
         api_key = api_key or settings.secret_value("gemini_api_key")
         if not api_key:
             raise RuntimeError("GEMINI_API_KEY is required when EMBEDDING_PROVIDER=gemini")
 
-        genai.configure(api_key=api_key)
-
-        self.model = 'models/embedding-001'  # or latest embedding model
+        self._client = genai.Client(api_key=api_key)
+        self.model = 'text-embedding-004'  # using current recommended embedding model
         self._dimension = 768  # Fix: use private attr so @property works
 
     def embed(self, text: str) -> list[float]:
-        import google.generativeai as genai
-
-        result = genai.embed_content(
+        result = self._client.models.embed_content(
             model=self.model,
-            content=text,
-            task_type='retrieval_document',
+            contents=text,
+            config={"task_type": "RETRIEVAL_DOCUMENT"}
         )
-        return result['embedding']
+        return result.embeddings[0].values
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         # In production, you'd add rate limiting here and batch the requests if supported by the API

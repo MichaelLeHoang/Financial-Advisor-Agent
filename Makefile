@@ -24,16 +24,18 @@ help: ## Show available commands
 
 # ─── Dev (both together) ─────────────────────────────────────────────────────
 
-dev: ## Start backend + frontend together (Ctrl+C stops both)
+dev: ## Start backend + frontend + ngrok together (Ctrl+C stops all)
 	@echo ""
 	@echo "  Starting QuanAd..."
 	@echo "  Backend  → http://localhost:$(BACKEND_PORT)/docs"
 	@echo "  Frontend → http://localhost:$(FRONTEND_PORT)"
-	@echo "  Press Ctrl+C to stop both."
+	@echo "  Ngrok    → Tunneling backend port $(BACKEND_PORT)"
+	@echo "  Press Ctrl+C to stop all."
 	@echo ""
 	@trap 'kill 0' SIGINT SIGTERM; \
 		( cd $(BACKEND_DIR) && uv run uvicorn src.api.app:app --reload --port $(BACKEND_PORT) ) & \
 		( cd $(FRONTEND_DIR) && npm run dev -- --port $(FRONTEND_PORT) ) & \
+		( ngrok http $(BACKEND_PORT) ) & \
 		wait
 
 # ─── Individual services ─────────────────────────────────────────────────────

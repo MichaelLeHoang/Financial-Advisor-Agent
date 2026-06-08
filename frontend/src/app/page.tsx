@@ -289,7 +289,7 @@ export default function ChatPage() {
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-16 sm:space-y-6 sm:px-8 sm:pb-4 sm:pt-24">
+      <div ref={scrollRef} className="relative flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-16 sm:space-y-6 sm:px-8 sm:pb-4 sm:pt-24">
         {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
         {isHistoryLoading && (
           <Card className="mx-auto max-w-fit rounded-xl border-indigo-primary/30 bg-indigo-primary/10 px-4 py-2 text-sm text-indigo-primary shadow-none">

@@ -1,4 +1,4 @@
-import google.generativeai as genai
+from google import genai
 from src.config import settings
 from src.models.schemas import RAGResponse, RetrievalResult
 
@@ -15,8 +15,8 @@ class Generator:
         if not api_key:
             raise RuntimeError("GEMINI_API_KEY is required for RAG generation")
 
-        genai.configure(api_key=api_key)
-        self._model = genai.GenerativeModel("gemini-2.5-flash")
+        self._client = genai.Client(api_key=api_key)
+        self._model_name = "gemini-2.5-flash"
     def generate(
         self,
         query: str,
@@ -33,7 +33,10 @@ class Generator:
             RAGResponse with answer and source citations
         """
         try:
-            response = self._model.generate_content(prompt)
+            response = self._client.models.generate_content(
+                model=self._model_name,
+                contents=prompt
+            )
             answer = response.text
             # Estimate confidence based on retrieval scores
             if sources:
