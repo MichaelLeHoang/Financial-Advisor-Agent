@@ -282,13 +282,12 @@ export default function Plan({ mode = "single", isActive = true }: PlanProps) {
                   >
                     <StatusIcon status={task.status} size="md" />
                     <span
-                      className={`text-[13px] font-medium transition-colors ${
-                        task.status === "completed"
+                      className={`text-[13px] font-medium transition-colors ${task.status === "completed"
                           ? "text-white/35 line-through"
                           : task.status === "in-progress"
                             ? "text-white/90"
                             : "text-white/50"
-                      }`}
+                        }`}
                     >
                       {task.title}
                     </span>
@@ -316,13 +315,12 @@ export default function Plan({ mode = "single", isActive = true }: PlanProps) {
                             >
                               <StatusIcon status={sub.status} />
                               <span
-                                className={`text-xs transition-colors ${
-                                  sub.status === "completed"
+                                className={`text-xs transition-colors ${sub.status === "completed"
                                     ? "text-white/25 line-through"
                                     : sub.status === "in-progress"
                                       ? "text-white/75"
                                       : "text-white/35"
-                                }`}
+                                  }`}
                               >
                                 {sub.title}
                               </span>

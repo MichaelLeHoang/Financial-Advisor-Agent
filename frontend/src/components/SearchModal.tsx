@@ -112,11 +112,11 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
   const liveMatches =
     query.length >= 2
       ? blogPosts.filter(
-          (p) =>
-            p.title.toLowerCase().includes(query.toLowerCase()) ||
-            p.excerpt.toLowerCase().includes(query.toLowerCase()) ||
-            p.category.toLowerCase().includes(query.toLowerCase())
-        )
+        (p) =>
+          p.title.toLowerCase().includes(query.toLowerCase()) ||
+          p.excerpt.toLowerCase().includes(query.toLowerCase()) ||
+          p.category.toLowerCase().includes(query.toLowerCase())
+      )
       : [];
 
   return (

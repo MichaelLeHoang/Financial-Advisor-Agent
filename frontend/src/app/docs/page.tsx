@@ -274,9 +274,8 @@ export default function DocsPage() {
       <div className="mx-auto flex max-w-[1400px]">
         {/* ──── Sidebar ──── */}
         <aside
-          className={`fixed left-0 top-14 z-40 h-[calc(100vh-3.5rem)] w-64 shrink-0 overflow-y-auto border-r border-white/[0.06] bg-[#0c0d14] px-4 pb-10 pt-6 transition-transform sm:sticky sm:translate-x-0 ${
-            mobileNavOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
+          className={`fixed left-0 top-14 z-40 h-[calc(100vh-3.5rem)] w-64 shrink-0 overflow-y-auto border-r border-white/[0.06] bg-[#0c0d14] px-4 pb-10 pt-6 transition-transform sm:sticky sm:translate-x-0 ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"
+            }`}
         >
           <nav className="space-y-6">
             {NAV_SECTIONS.map((section) => (
@@ -290,11 +289,10 @@ export default function DocsPage() {
                       <button
                         type="button"
                         onClick={() => scrollToSection(item.id)}
-                        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition-all ${
-                          activeSection === item.id
+                        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition-all ${activeSection === item.id
                             ? "bg-indigo-500/10 text-indigo-300 font-medium"
                             : "text-white/45 hover:bg-white/[0.04] hover:text-white/70"
-                        }`}
+                          }`}
                       >
                         {item.icon}
                         {item.label}
