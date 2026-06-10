@@ -32,8 +32,8 @@ function getSingleAgentTasks(): Task[] {
       title: "Fetching market data",
       status: "pending",
       subtasks: [
-        { id: "1.1", title: "Querying stock prices & fundamentals", status: "pending", tools: ["yfinance"] },
-        { id: "1.2", title: "Loading recent news context", status: "pending", tools: ["news-search"] },
+        { id: "1.1", title: "Querying stock prices & fundamentals", status: "pending", tools: ["get_stock_info"] },
+        { id: "1.2", title: "Searching recent news", status: "pending", tools: ["search_financial_news"] },
       ],
     },
     {
@@ -41,8 +41,8 @@ function getSingleAgentTasks(): Task[] {
       title: "Running analysis tools",
       status: "pending",
       subtasks: [
-        { id: "2.1", title: "Sentiment analysis via FinBERT", status: "pending", tools: ["finbert"] },
-        { id: "2.2", title: "ML direction prediction", status: "pending", tools: ["random-forest"] },
+        { id: "2.1", title: "Sentiment analysis via FinBERT", status: "pending", tools: ["analyze_sentiment"] },
+        { id: "2.2", title: "ML direction prediction", status: "pending", tools: ["predict_stock_price"] },
       ],
     },
     {
@@ -50,8 +50,8 @@ function getSingleAgentTasks(): Task[] {
       title: "Composing response",
       status: "pending",
       subtasks: [
-        { id: "3.1", title: "Synthesizing findings", status: "pending", tools: ["llm"] },
-        { id: "3.2", title: "Formatting final answer", status: "pending", tools: ["llm"] },
+        { id: "3.1", title: "Synthesizing findings", status: "pending", tools: [] },
+        { id: "3.2", title: "Formatting final answer", status: "pending", tools: [] },
       ],
     },
   ];
@@ -64,8 +64,8 @@ function getConsensusTasks(): Task[] {
       title: "Quant Researcher",
       status: "pending",
       subtasks: [
-        { id: "1.1", title: "Gathering fundamental metrics", status: "pending", tools: ["yfinance", "sec-filings"] },
-        { id: "1.2", title: "Evaluating valuation models", status: "pending", tools: ["dcf-model"] },
+        { id: "1.1", title: "Gathering fundamental metrics", status: "pending", tools: ["get_stock_info"] },
+        { id: "1.2", title: "Searching financial news", status: "pending", tools: ["search_financial_news"] },
       ],
     },
     {
@@ -73,8 +73,8 @@ function getConsensusTasks(): Task[] {
       title: "Quant Analyst",
       status: "pending",
       subtasks: [
-        { id: "2.1", title: "Running technical indicators", status: "pending", tools: ["ta-lib", "rsi"] },
-        { id: "2.2", title: "Identifying price patterns", status: "pending", tools: ["pattern-detector"] },
+        { id: "2.1", title: "Running technical indicators", status: "pending", tools: ["predict_stock_price"] },
+        { id: "2.2", title: "Identifying price patterns", status: "pending", tools: ["predict_stock_price"] },
       ],
     },
     {
@@ -82,8 +82,8 @@ function getConsensusTasks(): Task[] {
       title: "Financial Data Scientist",
       status: "pending",
       subtasks: [
-        { id: "3.1", title: "Training ML prediction model", status: "pending", tools: ["random-forest", "lstm"] },
-        { id: "3.2", title: "Running sentiment analysis", status: "pending", tools: ["finbert"] },
+        { id: "3.1", title: "Training ML prediction model", status: "pending", tools: ["predict_stock_price"] },
+        { id: "3.2", title: "Running sentiment analysis", status: "pending", tools: ["analyze_sentiment"] },
       ],
     },
     {
@@ -91,8 +91,8 @@ function getConsensusTasks(): Task[] {
       title: "Risk Analyst",
       status: "pending",
       subtasks: [
-        { id: "4.1", title: "Evaluating downside scenarios", status: "pending", tools: ["var-model"] },
-        { id: "4.2", title: "Checking volatility metrics", status: "pending", tools: ["yfinance"] },
+        { id: "4.1", title: "Evaluating downside scenarios", status: "pending", tools: ["optimize_portfolio_tool"] },
+        { id: "4.2", title: "Checking volatility metrics", status: "pending", tools: ["get_stock_info"] },
       ],
     },
     {
@@ -100,78 +100,66 @@ function getConsensusTasks(): Task[] {
       title: "Portfolio Strategist",
       status: "pending",
       subtasks: [
-        { id: "5.1", title: "Optimizing allocation weights", status: "pending", tools: ["markowitz", "qaoa"] },
-        { id: "5.2", title: "Building consensus verdict", status: "pending", tools: ["consensus-engine"] },
+        { id: "5.1", title: "Optimizing allocation weights", status: "pending", tools: ["optimize_portfolio_tool"] },
+        { id: "5.2", title: "Building consensus verdict", status: "pending", tools: [] },
       ],
     },
   ];
 }
 
-// ─── Simulated progress engine ──────────────────────────────────────
+// ─── Live progress engine ───────────────────────────────────────────
 
-function useSimulatedProgress(mode: string, isActive: boolean): Task[] {
-  const [liveTasks, setLiveTasks] = useState<Task[]>(() =>
+function useLiveProgress(
+  mode: string,
+  isActive: boolean,
+  activeTool: string | null,
+  completedTools: string[],
+): Task[] {
+  const [tasks, setTasks] = useState<Task[]>(() =>
     mode === "consensus" ? getConsensusTasks() : getSingleAgentTasks()
   );
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const modeRef = useRef(mode);
 
   // Reset only when mode actually changes
   useEffect(() => {
     if (modeRef.current !== mode) {
       modeRef.current = mode;
-      setLiveTasks(mode === "consensus" ? getConsensusTasks() : getSingleAgentTasks());
+      setTasks(mode === "consensus" ? getConsensusTasks() : getSingleAgentTasks());
     }
   }, [mode]);
 
   useEffect(() => {
-    if (!isActive) {
-      // Mark everything completed when agent finishes
-      setLiveTasks((prev) =>
-        prev.map((t) => ({
-          ...t,
-          status: "completed" as const,
-          subtasks: t.subtasks.map((s) => ({ ...s, status: "completed" as const })),
-        }))
-      );
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      return;
-    }
-
-    // Advance one subtask every ~800ms
-    intervalRef.current = setInterval(() => {
-      setLiveTasks((prev) => {
-        const next = prev.map((t) => ({ ...t, subtasks: [...t.subtasks] }));
-
-        // Find the first non-completed subtask
-        for (const task of next) {
-          for (let i = 0; i < task.subtasks.length; i++) {
-            const sub = task.subtasks[i];
-            if (sub.status === "pending") {
-              task.subtasks[i] = { ...sub, status: "in-progress" };
-              task.status = "in-progress";
-              return next;
-            }
-            if (sub.status === "in-progress") {
-              task.subtasks[i] = { ...sub, status: "completed" };
-              const allDone = task.subtasks.every((s) => s.status === "completed");
-              if (allDone) task.status = "completed";
-              return next;
-            }
+    setTasks((prev) =>
+      prev.map((task) => {
+        const subtasks = task.subtasks.map((sub) => {
+          // When agent finishes, mark everything completed
+          if (!isActive && completedTools.length > 0) {
+            return { ...sub, status: "completed" as const };
           }
-        }
-        // All done — clear interval
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        return next;
-      });
-    }, 800);
+          // Tool currently running
+          if (activeTool && sub.tools && sub.tools.length > 0 && sub.tools.includes(activeTool)) {
+            return { ...sub, status: "in-progress" as const };
+          }
+          // Tool already finished
+          if (sub.tools && sub.tools.length > 0 && sub.tools.some((t) => completedTools.includes(t))) {
+            return { ...sub, status: "completed" as const };
+          }
+          return sub;
+        });
 
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [isActive]);
+        const allCompleted = subtasks.length > 0 && subtasks.every((s) => s.status === "completed");
+        const someActive = subtasks.some((s) => s.status === "in-progress" || s.status === "completed");
+        let taskStatus: Task["status"] = "pending";
+        if (!isActive && completedTools.length > 0) taskStatus = "completed";
+        else if (allCompleted) taskStatus = "completed";
+        else if (someActive) taskStatus = "in-progress";
 
-  return liveTasks;
+        return { ...task, status: taskStatus, subtasks };
+      })
+    );
+  }, [isActive, activeTool, completedTools]);
+
+  return tasks;
 }
 
 // ─── Status icon helper ─────────────────────────────────────────────
@@ -204,14 +192,35 @@ function StatusIcon({ status, size = "sm" }: { status: string; size?: "sm" | "md
 interface PlanProps {
   mode?: "single" | "consensus";
   isActive?: boolean;
+  activeTool?: string | null;
+  completedTools?: string[];
 }
 
-export default function Plan({ mode = "single", isActive = true }: PlanProps) {
-  const tasks = useSimulatedProgress(mode, isActive);
+export default function Plan({ mode = "single", isActive = true, activeTool = null, completedTools = [] }: PlanProps) {
+  const tasks = useLiveProgress(mode, isActive, activeTool, completedTools);
   const [expandedTasks, setExpandedTasks] = useState<string[]>(["1"]);
   const lastActiveTaskRef = useRef<string | null>(null);
 
-  // Auto-expand the currently in-progress task (ref-guarded to prevent loops)
+  // Elapsed time counter
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isActive) {
+      if (!startTimeRef.current) startTimeRef.current = Date.now();
+      timerRef.current = setInterval(() => {
+        setElapsed((Date.now() - (startTimeRef.current ?? Date.now())) / 1000);
+      }, 100);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isActive]);
+
+  // Auto-expand the currently in-progress task
   const activeTask = tasks.find((t) => t.status === "in-progress");
   const activeTaskId = activeTask?.id ?? null;
 
@@ -230,8 +239,8 @@ export default function Plan({ mode = "single", isActive = true }: PlanProps) {
     );
   };
 
-  const completedCount = tasks.filter((t) => t.status === "completed").length;
-  const totalCount = tasks.length;
+  const completedSubtasks = tasks.flatMap((t) => t.subtasks).filter((s) => s.status === "completed").length;
+  const totalSubtasks = tasks.flatMap((t) => t.subtasks).length;
 
   return (
     <div className="w-full overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.03]">
@@ -250,9 +259,14 @@ export default function Plan({ mode = "single", isActive = true }: PlanProps) {
             {mode === "consensus" ? "QuanAd 2.0 — Consensus Analysis" : "Agent Execution"}
           </span>
         </div>
-        <span className="text-[10px] font-medium text-white/30">
-          {completedCount}/{totalCount}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono font-medium text-white/25">
+            {elapsed.toFixed(1)}s
+          </span>
+          <span className="text-[10px] font-medium text-white/30">
+            {completedSubtasks}/{totalSubtasks}
+          </span>
+        </div>
       </div>
 
       {/* Progress bar */}
@@ -260,7 +274,7 @@ export default function Plan({ mode = "single", isActive = true }: PlanProps) {
         <motion.div
           className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400"
           initial={{ width: "0%" }}
-          animate={{ width: `${(completedCount / totalCount) * 100}%` }}
+          animate={{ width: `${totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0}%` }}
           transition={{ duration: 0.4, ease: "easeOut" }}
         />
       </div>
@@ -282,12 +296,13 @@ export default function Plan({ mode = "single", isActive = true }: PlanProps) {
                   >
                     <StatusIcon status={task.status} size="md" />
                     <span
-                      className={`text-[13px] font-medium transition-colors ${task.status === "completed"
+                      className={`text-[13px] font-medium transition-colors ${
+                        task.status === "completed"
                           ? "text-white/35 line-through"
                           : task.status === "in-progress"
                             ? "text-white/90"
                             : "text-white/50"
-                        }`}
+                      }`}
                     >
                       {task.title}
                     </span>
@@ -315,16 +330,17 @@ export default function Plan({ mode = "single", isActive = true }: PlanProps) {
                             >
                               <StatusIcon status={sub.status} />
                               <span
-                                className={`text-xs transition-colors ${sub.status === "completed"
+                                className={`text-xs transition-colors ${
+                                  sub.status === "completed"
                                     ? "text-white/25 line-through"
                                     : sub.status === "in-progress"
                                       ? "text-white/75"
                                       : "text-white/35"
-                                  }`}
+                                }`}
                               >
                                 {sub.title}
                               </span>
-                              {sub.tools && sub.status === "in-progress" && (
+                              {sub.tools && sub.tools.length > 0 && sub.status === "in-progress" && (
                                 <div className="flex gap-1">
                                   {sub.tools.map((tool) => (
                                     <span

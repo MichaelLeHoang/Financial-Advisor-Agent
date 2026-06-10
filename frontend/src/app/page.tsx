@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, Brain, ClipboardList, Image, Loader2, Paperclip, PieChart, Send, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { api, isUpgradeRequiredError } from "@/lib/api";
+import { api, isUpgradeRequiredError, wsUrl } from "@/lib/api";
 import { getDemoChatConversation } from "@/lib/demo-chat-history";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -125,6 +125,8 @@ export default function ChatPage() {
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [showPlaceholder, setShowPlaceholder] = useState(true);
   const [isActive, setIsActive] = useState(false);
+  const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [completedTools, setCompletedTools] = useState<string[]>([]);
   const firstName = getFirstName(user?.display_name || user?.email || "");
 
   const handleInput = (e: ChangeEvent<HTMLTextAreaElement>) => {
@@ -235,30 +237,112 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, userMsg, fetchingMsg]);
     setIsLoading(true);
     setUpgradeMessage(null);
+    setActiveTool(null);
+    setCompletedTools([]);
+
+    const assistantMsgId = (Date.now() + 2).toString();
+    let fullContent = "";
 
     try {
-      const mode = apiModeFromVersion(version);
-      const res = await api.chat(text, activeSessionId, true, mode);
-      setMessages((prev) =>
-        prev.filter((m) => m.status !== "fetching").concat({
-          id: Date.now().toString(),
-          role: "assistant",
-          content: res.response || "I'm sorry, I couldn't process that request.",
-        })
-      );
-      window.dispatchEvent(new Event("chat-sessions:changed"));
+      const ws = new WebSocket(wsUrl(activeSessionId));
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ message: text, remember: true }));
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "token") {
+          fullContent += data.content;
+          setMessages((prev) => {
+            // Remove fetching placeholder, upsert streaming message
+            const withoutFetching = prev.filter((m) => m.status !== "fetching");
+            const existing = withoutFetching.find((m) => m.id === assistantMsgId);
+            if (existing) {
+              return withoutFetching.map((m) =>
+                m.id === assistantMsgId ? { ...m, content: fullContent } : m
+              );
+            }
+            return [...withoutFetching, { id: assistantMsgId, role: "assistant" as const, content: fullContent }];
+          });
+        } else if (data.type === "tool_start") {
+          setActiveTool(data.tool);
+        } else if (data.type === "tool_end") {
+          setActiveTool(null);
+          setCompletedTools((prev) =>
+            prev.includes(data.tool) ? prev : [...prev, data.tool]
+          );
+        } else if (data.type === "done") {
+          ws.close();
+          setIsLoading(false);
+          setActiveTool(null);
+          window.dispatchEvent(new Event("chat-sessions:changed"));
+
+          // If no tokens were received, show fallback
+          if (!fullContent.trim()) {
+            setMessages((prev) =>
+              prev.filter((m) => m.status !== "fetching").concat({
+                id: assistantMsgId,
+                role: "assistant",
+                content: "I'm sorry, I couldn't process that request.",
+              })
+            );
+          }
+        } else if (data.type === "error") {
+          ws.close();
+          setIsLoading(false);
+          setActiveTool(null);
+          setMessages((prev) =>
+            prev.filter((m) => m.status !== "fetching").concat({
+              id: assistantMsgId,
+              role: "assistant",
+              content: `Error: ${data.message}`,
+            })
+          );
+        }
+      };
+
+      ws.onerror = () => {
+        // Fallback to REST API on WebSocket error
+        ws.close();
+        (async () => {
+          try {
+            const mode = apiModeFromVersion(version);
+            const res = await api.chat(text, activeSessionId, true, mode);
+            setMessages((prev) =>
+              prev.filter((m) => m.status !== "fetching").concat({
+                id: assistantMsgId,
+                role: "assistant",
+                content: res.response || "I'm sorry, I couldn't process that request.",
+              })
+            );
+            window.dispatchEvent(new Event("chat-sessions:changed"));
+          } catch (err: any) {
+            if (isUpgradeRequiredError(err)) {
+              setUpgradeMessage(err.detail.message);
+            }
+            setMessages((prev) =>
+              prev.filter((m) => m.status !== "fetching").concat({
+                id: assistantMsgId,
+                role: "assistant",
+                content: isUpgradeRequiredError(err) ? err.detail.message : `Error: ${err.message}`,
+              })
+            );
+          } finally {
+            setIsLoading(false);
+            setActiveTool(null);
+          }
+        })();
+      };
     } catch (err: any) {
-      if (isUpgradeRequiredError(err)) {
-        setUpgradeMessage(err.detail.message);
-      }
       setMessages((prev) =>
         prev.filter((m) => m.status !== "fetching").concat({
-          id: Date.now().toString(),
+          id: assistantMsgId,
           role: "assistant",
-          content: isUpgradeRequiredError(err) ? err.detail.message : `Error: ${err.message}`,
+          content: `Error: ${err.message}`,
         })
       );
-    } finally {
       setIsLoading(false);
     }
   };
@@ -348,6 +432,8 @@ export default function ChatPage() {
                   <Plan
                     mode={version === "2.0" ? "consensus" : "single"}
                     isActive={true}
+                    activeTool={activeTool}
+                    completedTools={completedTools}
                   />
                 </div>
               ) : (

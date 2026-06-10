@@ -654,10 +654,23 @@ async def agent_ws(websocket: WebSocket):
                         chunk = event["data"]["chunk"]
 
                         if chunk.content:
-                            await websocket.send_json({
-                                "type": "token",
-                                "content": chunk.content,
-                            })
+                            if isinstance(chunk.content, str):
+                                await websocket.send_json({
+                                    "type": "token",
+                                    "content": chunk.content,
+                                })
+                            elif isinstance(chunk.content, list):
+                                for block in chunk.content:
+                                    if isinstance(block, dict) and block.get("type") == "text":
+                                        await websocket.send_json({
+                                            "type": "token",
+                                            "content": block.get("text", ""),
+                                        })
+                                    elif isinstance(block, str):
+                                        await websocket.send_json({
+                                            "type": "token",
+                                            "content": block,
+                                        })
 
                     # Tool call started
                     elif kind == "on_tool_start":
@@ -674,15 +687,14 @@ async def agent_ws(websocket: WebSocket):
                             "tool": event["name"],
                             "result": str(event["data"].get("output", "")),
                         })
-                    
-                    # Signal end of stream
-                    await websocket.send_json({"type": "done"})
 
-                    # Persist to history if requested
-                    if remember:
-                        # We'll capture the final response via a non-streaming call
-                        # (history is already maintained inside the agent)
-                        pass
+            # Signal end of stream (after the async for loop)
+            await websocket.send_json({"type": "done"})
+
+            # Persist to history if requested
+            if remember:
+                # History is already maintained inside the agent
+                pass
 
     except WebSocketDisconnect:
         pass

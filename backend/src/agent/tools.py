@@ -58,8 +58,30 @@ def analyze_sentiment(texts: list[str]) -> str:
 @tool 
 def predict_stock_price(ticker: str) -> str: 
     """Predict stock price direction using Random Forest ML model. Returns model accuracy metrics and predicted direction."""
-    try: 
+    try:
+        # Normalize ticker
+        ticker = ticker.upper().strip()
+        if not ticker:
+            return "Error: Please provide a valid stock ticker symbol (e.g. AAPL, MSFT)."
+
+        # Fetch data first to check availability
+        raw = fetch_stock_history([ticker], period="2y")
+        if raw.empty:
+            return f"Error: No market data found for '{ticker}'. Please check the ticker symbol is correct (e.g. AAPL for Apple, MSFT for Microsoft)."
+
+        # Need at least ~40 trading days for feature engineering (30-day SMA + lookback)
+        if len(raw) < 40:
+            return (
+                f"Error: {ticker} has only {len(raw)} trading days of data. "
+                f"The prediction model needs at least 40 days of history to compute technical indicators. "
+                f"This ticker may be a recent IPO or have limited data."
+            )
+
         data = prepare_training_data(ticker, sequence_length=5, model_type="random_forest")
+
+        if data["X_train"].shape[0] == 0 or data["X_test"].shape[0] == 0:
+            return f"Error: Insufficient processed data for {ticker} after feature engineering. The stock may have too many missing values."
+
         model = RandomForestPredictor(n_estimators=200)
         model.train(data["X_train"], data["y_train"])
         metrics = evaluate_model(model, data["X_test"], data["y_test"], data["scaler"])
@@ -67,8 +89,7 @@ def predict_stock_price(ticker: str) -> str:
         last_pred = model.predict(data["X_test"][-1:])
         last_actual = data["y_test"][-1]
 
-        direction = "UP " if last_pred[0] > last_actual else "DOWN "
-
+        direction = "UP ↑" if last_pred[0] > last_actual else "DOWN ↓"
 
         return (
             f"Stock: {ticker}\n"
@@ -79,6 +100,56 @@ def predict_stock_price(ticker: str) -> str:
         )
     except Exception as e:
         return f"Error predicting {ticker}: {str(e)}"
+
+
+@tool
+def search_financial_news(ticker: str) -> str:
+    """Search for recent financial news headlines for a stock ticker. Returns titles, publishers, links, and dates. Use this before analyze_sentiment to get real headlines."""
+    import yfinance as yf
+    from datetime import datetime
+
+    try:
+        ticker = ticker.upper().strip()
+        if not ticker:
+            return "Error: Please provide a valid stock ticker symbol."
+
+        stock = yf.Ticker(ticker)
+        news = stock.news
+
+        if not news:
+            return f"No recent news found for {ticker}."
+
+        output = f"Recent news for {ticker}:\n\n"
+        headlines = []
+        for i, article in enumerate(news[:10], 1):
+            title = article.get("title", "No title")
+            publisher = article.get("publisher", "Unknown")
+            link = article.get("link", "")
+            pub_date = article.get("providerPublishTime")
+            date_str = ""
+            if pub_date:
+                try:
+                    date_str = datetime.fromtimestamp(pub_date).strftime("%Y-%m-%d %H:%M")
+                except Exception:
+                    date_str = str(pub_date)
+
+            output += f"{i}. [{publisher}] {title}\n"
+            if date_str:
+                output += f"   Published: {date_str}\n"
+            if link:
+                output += f"   Link: {link}\n"
+            output += "\n"
+            headlines.append(title)
+
+        output += f"\nHeadlines for sentiment analysis:\n"
+        for h in headlines:
+            output += f"- {h}\n"
+
+        return output
+
+    except Exception as e:
+        return f"Error fetching news for {ticker}: {str(e)}"
+
 
 @tool 
 def optimize_portfolio_tool(
@@ -113,7 +184,8 @@ def optimize_portfolio_tool(
     
 ALL_TOOLS = [
     get_stock_info, 
-    analyze_sentiment, 
+    analyze_sentiment,
+    search_financial_news,
     predict_stock_price, 
     optimize_portfolio_tool,
 ]

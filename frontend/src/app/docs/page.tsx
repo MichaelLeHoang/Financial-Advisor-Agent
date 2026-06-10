@@ -158,12 +158,152 @@ function DocTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
   );
 }
 
+/* ───────────────────── Docs Search Modal ───────────────────── */
+
+function DocsSearchModal({
+  open,
+  onOpenChange,
+  onNavigate,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onNavigate: (sectionId: string) => void;
+}) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [query, setQuery] = React.useState("");
+
+  // All searchable items flattened
+  const allItems = React.useMemo(
+    () =>
+      NAV_SECTIONS.flatMap((section) =>
+        section.items.map((item) => ({
+          id: item.id,
+          label: item.label,
+          section: section.title,
+          icon: item.icon,
+        }))
+      ),
+    []
+  );
+
+  const filtered = React.useMemo(() => {
+    if (query.length < 1) return allItems;
+    const q = query.toLowerCase();
+    return allItems.filter(
+      (item) =>
+        item.label.toLowerCase().includes(q) ||
+        item.section.toLowerCase().includes(q)
+    );
+  }, [query, allItems]);
+
+  // Auto-focus when modal opens
+  React.useEffect(() => {
+    if (open) {
+      setQuery("");
+      setTimeout(() => inputRef.current?.focus(), 80);
+    }
+  }, [open]);
+
+  // Escape to close
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onOpenChange(false);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, onOpenChange]);
+
+  if (!open) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm"
+        onClick={() => onOpenChange(false)}
+      />
+
+      {/* Panel */}
+      <motion.div
+        initial={{ opacity: 0, y: -16, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -16, scale: 0.98 }}
+        transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+        className="fixed left-1/2 top-[12vh] z-[110] w-[min(94vw,560px)] -translate-x-1/2 overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0a0a0e] shadow-[0_36px_120px_-48px_rgba(0,0,0,0.8),0_0_64px_rgba(99,102,241,0.08)]"
+      >
+        {/* Close button */}
+        <button
+          type="button"
+          aria-label="Close search"
+          onClick={() => onOpenChange(false)}
+          className="absolute right-5 top-5 z-20 flex size-8 items-center justify-center rounded-lg text-white/30 transition-colors hover:text-white/60"
+        >
+          <X className="size-[18px]" />
+        </button>
+
+        {/* Search input */}
+        <div className="border-b border-white/[0.06] px-5 py-5 sm:px-6">
+          <div className="flex items-center gap-3">
+            <Search className="size-5 shrink-0 text-white/25" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search documentation..."
+              autoComplete="off"
+              spellCheck={false}
+              className="w-full bg-transparent text-lg text-white outline-none placeholder:text-white/25"
+            />
+          </div>
+        </div>
+
+        {/* Results */}
+        <div className="max-h-[55vh] overflow-y-auto px-5 py-4 sm:px-6">
+          {filtered.length === 0 ? (
+            <p className="py-8 text-center text-sm text-white/30">No matching sections found.</p>
+          ) : (
+            <div className="space-y-1">
+              {filtered.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    onOpenChange(false);
+                    onNavigate(item.id);
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-white/[0.05]"
+                >
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-white/40">
+                    {item.icon}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-white/80">{item.label}</div>
+                    <div className="truncate text-xs text-white/30">{item.section}</div>
+                  </div>
+                  <ChevronRight className="size-4 shrink-0 text-white/15" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
 /* ═══════════════════════ MAIN PAGE ═══════════════════════ */
 
 export default function DocsPage() {
   const [activeSection, setActiveSection] = useState("introduction");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [theme, setTheme] = useState("dark");
+  const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -171,7 +311,7 @@ export default function DocsPage() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        searchInputRef.current?.focus();
+        setSearchOpen(true);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -237,10 +377,12 @@ export default function DocsPage() {
             <input
               ref={searchInputRef}
               type="text"
-              placeholder="Start searching..."
-              className="w-52 md:w-64 cursor-text rounded-full border border-white/[0.08] bg-white/[0.03] py-1.5 pl-9 pr-10 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all hover:bg-white/[0.06]"
+              readOnly
+              onClick={() => setSearchOpen(true)}
+              placeholder="Search docs..."
+              className="w-52 md:w-64 cursor-pointer rounded-full border border-white/[0.08] bg-white/[0.03] py-1.5 pl-9 pr-10 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all hover:bg-white/[0.06]"
             />
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/60">
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/60 pointer-events-none">
               ⌘K
             </div>
           </div>
@@ -822,6 +964,14 @@ Where:
       >
         <ArrowUp className="size-4" />
       </button>
+
+      <AnimatePresence>
+        <DocsSearchModal
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          onNavigate={scrollToSection}
+        />
+      </AnimatePresence>
     </div>
   );
 }
