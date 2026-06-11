@@ -128,6 +128,16 @@ export interface Portfolio {
   created_at: string;
 }
 
+export interface Holding {
+  id: string;
+  portfolio_id: string;
+  symbol: string;
+  asset_type: string;
+  quantity: number;
+  average_cost: number;
+  created_at: string;
+}
+
 export interface Watchlist {
   id: string;
   user_id: string;
@@ -572,6 +582,7 @@ export const api = {
   setAuthToken: (token: string | null) => {
     authToken = token;
   },
+  getToken: () => authToken,
 
   me: () => get<AuthUser>("/api/v1/me"),
 
@@ -579,6 +590,20 @@ export const api = {
 
   createPortfolio: (name: string, baseCurrency = "USD") =>
     post<Portfolio>("/api/v1/portfolios", { name, base_currency: baseCurrency }),
+
+  portfolioHoldings: (portfolioId: string) =>
+    get<Holding[]>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings`),
+
+  addHolding: (portfolioId: string, symbol: string, quantity: number, averageCost: number) =>
+    post<Holding>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings`, {
+      symbol,
+      asset_type: "equity",
+      quantity,
+      average_cost: averageCost,
+    }),
+
+  removeHolding: (portfolioId: string, holdingId: string) =>
+    del<void>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings/${encodeURIComponent(holdingId)}`),
 
   watchlists: () => get<Watchlist[]>("/api/v1/watchlists"),
 
@@ -724,5 +749,10 @@ export interface CategoryInfo {
 }
 
 /** WebSocket URL for streaming agent chat */
-export const wsUrl = (sessionId = "default") =>
-  `${BASE.replace("http", "ws")}/ws/agent/chat`;
+export const wsUrl = (sessionId = "default", token: string | null = null) => {
+  const url = new URL(`${BASE.replace("http", "ws").replace("https", "wss")}/ws/agent/chat/${sessionId}`);
+  if (token) {
+    url.searchParams.set("token", token);
+  }
+  return url.toString();
+};

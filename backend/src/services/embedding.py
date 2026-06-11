@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-import numpy as np 
 from src.config import settings
 
 class EmbeddingProvider(ABC): 

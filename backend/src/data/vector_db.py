@@ -1,10 +1,7 @@
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import (
-    Distance, VectorParams, PointStruct, 
-    Filter, FieldCondition, MatchValue, DatetimeRange,
-)
-from src.config import settings
+from qdrant_client.http.models import Distance, VectorParams, PointStruct
 from qdrant_client.models import Filter, FieldCondition, MatchValue
+from src.config import settings
 import uuid
 
 def get_qdrant_client()-> QdrantClient: 

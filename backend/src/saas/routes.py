@@ -72,6 +72,17 @@ async def create_holding(
     return holding
 
 
+@router.delete("/portfolios/{portfolio_id}/holdings/{holding_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_holding(
+    portfolio_id: UUID,
+    holding_id: UUID,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> None:
+    removed = get_store(user).delete_holding(user.id, portfolio_id, holding_id)
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+
 @router.get("/watchlists", response_model=list[WatchlistRead])
 async def list_watchlists(user: AuthenticatedUser = Depends(get_current_or_guest_user)) -> list[WatchlistRead]:
     return get_store(user).list_watchlists(user.id)

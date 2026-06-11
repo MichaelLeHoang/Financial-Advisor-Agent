@@ -63,6 +63,8 @@ class LLMGateway:
         candidates = (decision.selected, *decision.fallbacks)
         attempts: list[str] = []
         errors: list[str] = []
+        
+        valid_chat_models = []
 
         for index, model in enumerate(candidates):
             attempts.append(model.key)
@@ -72,22 +74,28 @@ class LLMGateway:
                 continue
             try:
                 chat_model = provider.create_chat_model(model)
-                if index > 0:
-                    print(f"  ⚡ Fallback: using {model.model} (primary was unavailable)")
-                else:
-                    print(f"  🤖 Model: {model.model}")
-                return RoutedChatModel(
-                    chat_model=chat_model,
-                    model=model,
-                    requested_mode=decision.requested_mode,
-                    resolved_mode=decision.resolved_mode,
-                    fallback_used=index > 0,
-                    attempts=tuple(attempts),
-                )
+                valid_chat_models.append(chat_model)
             except ProviderUnavailable as exc:
                 errors.append(f"{model.key}: {exc}")
 
-        raise ProviderUnavailable("No LLM provider is available. " + " | ".join(errors))
+        if not valid_chat_models:
+            raise ProviderUnavailable("No LLM provider is available. " + " | ".join(errors))
+            
+        primary_model = valid_chat_models[0]
+        if len(valid_chat_models) > 1:
+            primary_model = primary_model.with_fallbacks(valid_chat_models[1:])
+            print(f"  🤖 Model: {decision.selected.model} (with {len(valid_chat_models)-1} fallbacks)")
+        else:
+            print(f"  🤖 Model: {decision.selected.model}")
+
+        return RoutedChatModel(
+            chat_model=primary_model,
+            model=decision.selected,
+            requested_mode=decision.requested_mode,
+            resolved_mode=decision.resolved_mode,
+            fallback_used=False, # We don't know at init time if fallback will be used
+            attempts=tuple(attempts),
+        )
 
     def record_usage(
         self,

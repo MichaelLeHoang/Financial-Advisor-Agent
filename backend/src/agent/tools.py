@@ -2,7 +2,7 @@ from langchain_core.tools import tool
 from src.data.fetch import fetch_stock_history
 from src.ml.sentiment import SentimentAnalyzer 
 from src.ml.preprocessing import prepare_training_data
-from src.ml.models import RandomForestPredictor, LSTMPredictor, evaluate_model
+from src.ml.models import RandomForestPredictor, evaluate_model
 from src.quantum.portfolio import optimize_portfolio, quantum_optimize_portfolio
 
 @tool 
@@ -154,7 +154,7 @@ def search_financial_news(ticker: str) -> str:
             output += "\n"
             headlines.append(title)
 
-        output += f"\nHeadlines for sentiment analysis:\n"
+        output += "\nHeadlines for sentiment analysis:\n"
         for h in headlines:
             output += f"- {h}\n"
 

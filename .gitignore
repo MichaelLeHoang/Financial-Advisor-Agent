@@ -24,3 +24,5 @@ wheels/
 # Documentation
 doc/
 *.pages
+
+.claude/

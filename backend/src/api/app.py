@@ -1,5 +1,6 @@
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials
 import inngest.fast_api
 
 from src.jobs.inngest_client import inngest_client
@@ -420,6 +421,8 @@ async def predict_stock(req: PredictRequest, user: AuthenticatedUser = Depends(g
             model = RandomForestPredictor(n_estimators=200)
         elif req.model_type == "lstm":
             model = LSTMPredictor(epochs=20)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid model_type. Must be 'random_forest' or 'lstm'")
         
         train_metrics = model.train(data["X_train"], data["y_train"])
         test_metrics = evaluate_model(model, data["X_test"], data["y_test"], data["scaler"])
@@ -623,8 +626,8 @@ async def delete_agent_session(
     return {"status": "ok", "session_id": session_id}
 
 
-@app.websocket("/ws/agent/chat")
-async def agent_ws(websocket: WebSocket):
+@app.websocket("/ws/agent/chat/{session_id}")
+async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Query(default=None)):
     """
     WebSocket endpoint for streaming agent responses token by token.
     
@@ -634,15 +637,38 @@ async def agent_ws(websocket: WebSocket):
                    {"type": "tool_end", "tool": "get_stock_info", "result": "..."}
                    {"type": "done"}
     """
+    from src.auth.supabase import get_guest_user
+    from src.agent.history import load_history, append_message, rename_session
+    
     await websocket.accept()
+    
+    # Resolve user
+    user = get_guest_user()
+    if token:
+        try:
+            user = await get_current_or_guest_user(HTTPAuthorizationCredentials(scheme="Bearer", credentials=token))
+        except Exception:
+            pass
+            
     try: 
         while True: 
             data = await websocket.receive_json()
             message = data.get("message", "")
-            remember = data.get("remember", True)
 
-            agent = get_agent()
-            messages = agent._history + [{"role": "user", "content": message}]
+            agent = get_agent(user=user)
+            
+            # Load DB history and prepare for LangGraph
+            db_history = load_history(session_id, str(user.id))
+            is_new_session = len(db_history) == 0
+            
+            # Format history for LangChain
+            messages = [{"role": m["role"], "content": m["content"]} for m in db_history]
+            messages.append({"role": "user", "content": message})
+            
+            # Save user message
+            append_message(session_id, "user", message, str(user.id))
+
+            assistant_full_content = ""
 
             # Stream events from LangGraph
             async for event in agent._agent.astream_events(
@@ -655,6 +681,7 @@ async def agent_ws(websocket: WebSocket):
 
                         if chunk.content:
                             if isinstance(chunk.content, str):
+                                assistant_full_content += chunk.content
                                 await websocket.send_json({
                                     "type": "token",
                                     "content": chunk.content,
@@ -662,11 +689,13 @@ async def agent_ws(websocket: WebSocket):
                             elif isinstance(chunk.content, list):
                                 for block in chunk.content:
                                     if isinstance(block, dict) and block.get("type") == "text":
+                                        assistant_full_content += block.get("text", "")
                                         await websocket.send_json({
                                             "type": "token",
                                             "content": block.get("text", ""),
                                         })
                                     elif isinstance(block, str):
+                                        assistant_full_content += block
                                         await websocket.send_json({
                                             "type": "token",
                                             "content": block,
@@ -688,13 +717,26 @@ async def agent_ws(websocket: WebSocket):
                             "result": str(event["data"].get("output", "")),
                         })
 
-            # Signal end of stream (after the async for loop)
-            await websocket.send_json({"type": "done"})
+            # Save the final assistant response to DB
+            append_message(session_id, "assistant", assistant_full_content, str(user.id))
 
-            # Persist to history if requested
-            if remember:
-                # History is already maintained inside the agent
-                pass
+            # Generate smart AI title if it's the very first message
+            if is_new_session:
+                try:
+                    title_prompt = (
+                        "Summarize the following user prompt in 2 to 5 words for a chat session title. "
+                        "Do not include quotes, periods, or punctuation. Make it concise and descriptive.\n\n"
+                        f"User Prompt: {message}"
+                    )
+                    ai_response = agent._llm.invoke(title_prompt)
+                    new_title = str(ai_response.content).strip(' ".\'')
+                    if len(new_title) > 0 and len(new_title) < 60:
+                        rename_session(session_id, new_title, str(user.id))
+                except Exception as e:
+                    print(f"Failed to generate title: {e}")
+
+            # Signal end of stream
+            await websocket.send_json({"type": "done"})
 
     except WebSocketDisconnect:
         pass

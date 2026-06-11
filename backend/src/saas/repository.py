@@ -172,6 +172,17 @@ class UserScopedStore:
         with self._lock:
             return list(self._holdings.get(portfolio_id, []))
 
+    def delete_holding(self, user_id: UUID, portfolio_id: UUID, holding_id: UUID) -> bool:
+        if self.get_portfolio(user_id, portfolio_id) is None:
+            return False
+        with self._lock:
+            before = self._holdings.get(portfolio_id, [])
+            after = [h for h in before if h.id != holding_id]
+            if len(after) == len(before):
+                return False
+            self._holdings[portfolio_id] = after
+            return True
+
     def list_watchlists(self, user_id: UUID) -> list[WatchlistRead]:
         with self._lock:
             return [watchlist for watchlist in self._watchlists.values() if watchlist.user_id == user_id]
@@ -499,6 +510,12 @@ class SupabaseRestStore:
             return None
         rows = self._request("GET", "holdings", {"select": "*", "portfolio_id": f"eq.{portfolio_id}"})
         return [HoldingRead.model_validate(row) for row in rows]
+
+    def delete_holding(self, user_id: UUID, portfolio_id: UUID, holding_id: UUID) -> bool:
+        if self.get_portfolio(user_id, portfolio_id) is None:
+            return False
+        self._request("DELETE", "holdings", {"id": f"eq.{holding_id}", "portfolio_id": f"eq.{portfolio_id}"})
+        return True
 
     def list_watchlists(self, user_id: UUID) -> list[WatchlistRead]:
         rows = self._request("GET", "watchlists", {"select": "*", "user_id": f"eq.{user_id}"})

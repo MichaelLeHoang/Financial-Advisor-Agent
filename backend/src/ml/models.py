@@ -133,7 +133,6 @@ class LSTMPredictor(StockPredictor):
         batch_size: int = 32,
     ):
         import torch
-        import torch.nn as nn
 
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -314,7 +313,7 @@ def evaluate_model(
         metrics["test_mae_dollars"] = float(mean_absolute_error(actual_prices, pred_prices))
         metrics["test_rmse_dollars"] = float(np.sqrt(mean_squared_error(actual_prices, pred_prices)))
 
-    print(f"\nTest Results:")
+    print("\nTest Results:")
     print(f"  MAE:  {metrics['test_mae']:.6f}")
     print(f"  RMSE: {metrics['test_rmse']:.6f}")
 

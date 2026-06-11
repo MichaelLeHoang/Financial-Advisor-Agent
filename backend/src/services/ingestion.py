@@ -72,7 +72,7 @@ def ingest_documents(
     ids = upsert_batch(client, collection_name, texts, vectors, metadatas)
     # Report stats
     info = get_collection_info(client, collection_name)
-    print(f"\n Ingestion complete!")
+    print("\n Ingestion complete!")
     print(f"   Collection '{collection_name}' now has {info['points_count']} points")
     return {
         "documents": len(documents),

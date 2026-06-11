@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react";
 import type { ChangeEvent, ComponentType, MouseEvent } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Brain, ClipboardList, Image, Loader2, Paperclip, PieChart, Send, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { api, isUpgradeRequiredError, wsUrl } from "@/lib/api";
@@ -112,9 +112,12 @@ const letterVariants = {
 export default function ChatPage() {
   const { user } = useAuth();
   const { version } = useModel();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const activeSessionId = searchParams.get("session") || "default";
-  const [messages, setMessages] = useState<Message[]>([GREETING]);
+  const [messages, setMessages] = useState<Message[]>(() =>
+    activeSessionId === "default" ? [GREETING] : []
+  );
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
@@ -164,6 +167,7 @@ export default function ChatPage() {
   }, [input]);
 
   useEffect(() => {
+    if (isStreamingRef.current) return;
     let cancelled = false;
 
     async function loadSession() {
@@ -223,16 +227,31 @@ export default function ChatPage() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
+  const isStreamingRef = useRef(false);
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
     const text = input.trim();
     setInput("");
 
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: text };
+    // Guard the session-load effect before router.replace fires
+    isStreamingRef.current = true;
+
+    let targetSessionId = activeSessionId;
+    if (activeSessionId === "default") {
+      targetSessionId = typeof crypto !== "undefined" && "randomUUID" in crypto 
+        ? crypto.randomUUID() 
+        : `session-${Date.now()}`;
+      router.replace(`/?session=${encodeURIComponent(targetSessionId)}`);
+    }
+
+    const getUniqueId = () => typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `msg-${Date.now()}-${Math.random()}`;
+
+    const userMsg: Message = { id: getUniqueId(), role: "user", content: text };
     const fetchingLabel = version === "2.0"
       ? "Running multi-agent consensus analysis..."
       : "Analyzing market context...";
-    const fetchingMsg: Message = { id: (Date.now() + 1).toString(), role: "assistant", content: fetchingLabel, status: "fetching" };
+    const fetchingMsg: Message = { id: getUniqueId(), role: "assistant", content: fetchingLabel, status: "fetching" };
 
     setMessages((prev) => [...prev, userMsg, fetchingMsg]);
     setIsLoading(true);
@@ -240,11 +259,11 @@ export default function ChatPage() {
     setActiveTool(null);
     setCompletedTools([]);
 
-    const assistantMsgId = (Date.now() + 2).toString();
+    const assistantMsgId = getUniqueId();
     let fullContent = "";
 
     try {
-      const ws = new WebSocket(wsUrl(activeSessionId));
+      const ws = new WebSocket(wsUrl(targetSessionId, api.getToken()));
 
       ws.onopen = () => {
         ws.send(JSON.stringify({ message: text, remember: true }));
@@ -276,6 +295,7 @@ export default function ChatPage() {
         } else if (data.type === "done") {
           ws.close();
           setIsLoading(false);
+          isStreamingRef.current = false;
           setActiveTool(null);
           window.dispatchEvent(new Event("chat-sessions:changed"));
 
@@ -292,6 +312,7 @@ export default function ChatPage() {
         } else if (data.type === "error") {
           ws.close();
           setIsLoading(false);
+          isStreamingRef.current = false;
           setActiveTool(null);
           setMessages((prev) =>
             prev.filter((m) => m.status !== "fetching").concat({
@@ -331,6 +352,7 @@ export default function ChatPage() {
             );
           } finally {
             setIsLoading(false);
+            isStreamingRef.current = false;
             setActiveTool(null);
           }
         })();
@@ -344,6 +366,7 @@ export default function ChatPage() {
         })
       );
       setIsLoading(false);
+      isStreamingRef.current = false;
     }
   };
 
@@ -383,7 +406,7 @@ export default function ChatPage() {
             </CardContent>
           </Card>
         )}
-        {messages.length === 1 && (
+        {messages.length === 1 && messages[0].id === "welcome" && (
           <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-col items-center justify-start gap-5 py-2 sm:gap-8 sm:py-8 lg:min-h-full lg:justify-center">
             <div className="w-full text-left">
               <motion.h1

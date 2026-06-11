@@ -11,21 +11,12 @@ Top-level agent that:
 
 from __future__ import annotations
 
-import asyncio
-import concurrent.futures
 import time
-import traceback
-from typing import Any
 
 from src.agent.consensus import AgentOpinion, ConsensusEngine, ConsensusResult, Verdict
 from src.agent.specialists import (
     ALL_SPECIALISTS,
     BaseSpecialist,
-    FinancialDataScientist,
-    PortfolioAnalytics,
-    QuantAnalyst,
-    QuantResearcher,
-    RiskAnalyst,
 )
 from src.llm.gateway import LLMGateway, llm_gateway
 from src.llm.routing_policy import LLMMode
@@ -80,7 +71,7 @@ class QuanAdOrchestrator:
         opinions: list[AgentOpinion] = []
 
         print(f"\n{'='*60}")
-        print(f"  QuanAd 2.0 — Multi-Agent Consensus Analysis")
+        print("  QuanAd 2.0 — Multi-Agent Consensus Analysis")
         print(f"  Query: {query[:80]}...")
         print(f"  Dispatching to {len(specialists)} specialists (sequential, rate-limit safe)...")
         print(f"{'='*60}\n")
@@ -227,7 +218,7 @@ Use clear formatting with headers and bullet points. Be specific with numbers.""
             parts.append(f"- **{o.agent_name.replace('_', ' ').title()}**: {o.verdict.value} ({o.confidence:.0%}) — {o.reasoning[:150]}")
 
         if result.risk_flags:
-            parts.append(f"\n### Risk Flags\n" + "\n".join(f"- {f}" for f in result.risk_flags))
+            parts.append("\n### Risk Flags\n" + "\n".join(f"- {f}" for f in result.risk_flags))
 
         if result.dissenting_agents:
             parts.append(f"\n### Dissenting Views\n{', '.join(result.dissenting_agents)}")

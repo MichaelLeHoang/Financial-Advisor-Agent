@@ -1,7 +1,6 @@
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -75,7 +74,6 @@ def fetch_current_info(tickers: list[str]) -> pd.DataFrame:
             'trailingPE': info.get('trailingPE'),
             'forwardPE': info.get('forwardPE'),
             'sector': info.get('sector'),
-            'trailingPE': info.get('trailingPE'),
             'industry': info.get('industry'),
             'dividendYield': info.get('dividendYield'),
             'beta': info.get('beta'),
