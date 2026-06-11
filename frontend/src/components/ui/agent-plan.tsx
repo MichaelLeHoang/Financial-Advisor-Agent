@@ -33,7 +33,8 @@ function getSingleAgentTasks(): Task[] {
       status: "pending",
       subtasks: [
         { id: "1.1", title: "Querying stock prices & fundamentals", status: "pending", tools: ["get_stock_info"] },
-        { id: "1.2", title: "Searching recent news", status: "pending", tools: ["search_financial_news"] },
+        { id: "1.2", title: "Scanning market indices", status: "pending", tools: ["research_market"] },
+        { id: "1.3", title: "Searching recent news", status: "pending", tools: ["search_financial_news"] },
       ],
     },
     {

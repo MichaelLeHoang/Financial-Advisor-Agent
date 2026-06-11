@@ -71,8 +71,13 @@ class LLMGateway:
                 errors.append(f"{model.provider}: provider is not registered")
                 continue
             try:
+                chat_model = provider.create_chat_model(model)
+                if index > 0:
+                    print(f"  ⚡ Fallback: using {model.model} (primary was unavailable)")
+                else:
+                    print(f"  🤖 Model: {model.model}")
                 return RoutedChatModel(
-                    chat_model=provider.create_chat_model(model),
+                    chat_model=chat_model,
                     model=model,
                     requested_mode=decision.requested_mode,
                     resolved_mode=decision.resolved_mode,

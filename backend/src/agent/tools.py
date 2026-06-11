@@ -106,7 +106,6 @@ def predict_stock_price(ticker: str) -> str:
 def search_financial_news(ticker: str) -> str:
     """Search for recent financial news headlines for a stock ticker. Returns titles, publishers, links, and dates. Use this before analyze_sentiment to get real headlines."""
     import yfinance as yf
-    from datetime import datetime
 
     try:
         ticker = ticker.upper().strip()
@@ -122,16 +121,28 @@ def search_financial_news(ticker: str) -> str:
         output = f"Recent news for {ticker}:\n\n"
         headlines = []
         for i, article in enumerate(news[:10], 1):
-            title = article.get("title", "No title")
-            publisher = article.get("publisher", "Unknown")
-            link = article.get("link", "")
-            pub_date = article.get("providerPublishTime")
-            date_str = ""
-            if pub_date:
-                try:
-                    date_str = datetime.fromtimestamp(pub_date).strftime("%Y-%m-%d %H:%M")
-                except Exception:
-                    date_str = str(pub_date)
+            # yfinance now nests everything under article["content"]
+            content = article.get("content", article)  # fallback to flat structure
+            title = content.get("title", "No title")
+
+            # Provider is now a dict: {"displayName": "Yahoo Finance", ...}
+            provider = content.get("provider", {})
+            if isinstance(provider, dict):
+                publisher = provider.get("displayName", "Unknown")
+            else:
+                publisher = content.get("publisher", str(provider) if provider else "Unknown")
+
+            # URL is now nested: {"url": "https://...", "site": "finance"}
+            canonical = content.get("canonicalUrl", {})
+            if isinstance(canonical, dict):
+                link = canonical.get("url", "")
+            else:
+                link = content.get("link", str(canonical) if canonical else "")
+
+            # Date is now ISO string: "2026-06-11T18:42:57Z"
+            date_str = content.get("pubDate", content.get("displayTime", ""))
+            if date_str and len(str(date_str)) > 10:
+                date_str = str(date_str)[:19].replace("T", " ")
 
             output += f"{i}. [{publisher}] {title}\n"
             if date_str:
@@ -149,6 +160,63 @@ def search_financial_news(ticker: str) -> str:
 
     except Exception as e:
         return f"Error fetching news for {ticker}: {str(e)}"
+
+
+@tool
+def research_market() -> str:
+    """Get a broad market overview by scanning major indices and ETFs. Use this for 'market pulse', 'market overview', 'how is the market today', or any broad-market question. Returns prices and changes for SPY, QQQ, DIA, IWM, and VIX."""
+    try:
+        indices = [
+            ("SPY", "S&P 500"),
+            ("QQQ", "Nasdaq 100"),
+            ("DIA", "Dow Jones"),
+            ("IWM", "Russell 2000"),
+            ("^VIX", "VIX (Volatility)"),
+        ]
+
+        output = "Market Overview:\n\n"
+        for ticker, name in indices:
+            try:
+                data = fetch_stock_history([ticker], period="5d")
+                if data.empty:
+                    output += f"{name} ({ticker}): No data available\n"
+                    continue
+                latest = data.iloc[-1]
+                prev = data.iloc[-2] if len(data) > 1 else latest
+                change = ((latest["Close"] - prev["Close"]) / prev["Close"]) * 100
+                arrow = "↑" if change >= 0 else "↓"
+                output += (
+                    f"{name} ({ticker}): ${latest['Close']:.2f} "
+                    f"{arrow} {change:+.2f}% | "
+                    f"Vol: {int(latest['Volume']):,}\n"
+                )
+            except Exception:
+                output += f"{name} ({ticker}): Error fetching data\n"
+
+        # Also fetch market-wide news via SPY
+        import yfinance as yf
+        try:
+            spy_news = yf.Ticker("SPY").news
+            if spy_news:
+                output += "\nTop Market Headlines:\n"
+                headlines = []
+                for article in spy_news[:5]:
+                    content = article.get("content", article)
+                    title = content.get("title", "No title")
+                    provider = content.get("provider", {})
+                    pub = provider.get("displayName", "Unknown") if isinstance(provider, dict) else str(provider)
+                    output += f"  • [{pub}] {title}\n"
+                    headlines.append(title)
+                output += "\nHeadlines for sentiment analysis:\n"
+                for h in headlines:
+                    output += f"- {h}\n"
+        except Exception:
+            output += "\nUnable to fetch market headlines.\n"
+
+        return output
+
+    except Exception as e:
+        return f"Error scanning market: {str(e)}"
 
 
 @tool 
@@ -186,6 +254,7 @@ ALL_TOOLS = [
     get_stock_info, 
     analyze_sentiment,
     search_financial_news,
+    research_market,
     predict_stock_price, 
     optimize_portfolio_tool,
 ]

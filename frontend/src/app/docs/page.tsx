@@ -27,7 +27,17 @@ import {
   Network,
   CircleDollarSign,
   Moon,
-  Sun
+  Sun,
+  History,
+  Bell,
+  Newspaper,
+  MessageSquare,
+  LayoutDashboard,
+  TrendingUp,
+  Wallet,
+  AlertTriangle,
+  BookMarked,
+  Activity,
 } from "lucide-react";
 
 /* ───────────────────── Sidebar Navigation Data ───────────────────── */
@@ -77,6 +87,25 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { id: "plans", label: "Pricing Plans", icon: <CircleDollarSign className="size-4" /> },
       { id: "rate-limits", label: "Rate Limits", icon: <ShieldCheck className="size-4" /> },
+    ],
+  },
+  {
+    title: "Services",
+    items: [
+      { id: "backtesting", label: "Backtesting", icon: <History className="size-4" /> },
+      { id: "risk-analysis", label: "Risk Analysis", icon: <AlertTriangle className="size-4" /> },
+      { id: "trading-journal", label: "Trading Journal", icon: <BookMarked className="size-4" /> },
+      { id: "alerts-signals", label: "Alerts & Signals", icon: <Bell className="size-4" /> },
+      { id: "news-research", label: "News & Research", icon: <Newspaper className="size-4" /> },
+    ],
+  },
+  {
+    title: "Using the UI",
+    items: [
+      { id: "ui-chat", label: "Chat Interface", icon: <MessageSquare className="size-4" /> },
+      { id: "ui-dashboard", label: "Dashboard", icon: <LayoutDashboard className="size-4" /> },
+      { id: "ui-market", label: "Market Page", icon: <TrendingUp className="size-4" /> },
+      { id: "ui-portfolio", label: "Portfolio Page", icon: <Wallet className="size-4" /> },
     ],
   },
 ];
@@ -943,6 +972,265 @@ Where:
 
               <Callout type="info">
                 The system intentionally introduces 5-second delays between specialist dispatches in consensus mode. This is not a bug — it prevents rate-limit exhaustion on the upstream LLM provider (especially on Gemini free-tier, which allows ~15 requests/minute). If you have a paid API key, you can reduce this delay in the orchestrator configuration.
+              </Callout>
+            </section>
+
+            {/* ═══════════════════ SERVICES ═══════════════════ */}
+
+            <section id="backtesting" data-doc-section className="mt-16 scroll-mt-20">
+              <h2 className="mb-4 text-2xl font-bold">Backtesting</h2>
+              <p className="mb-6 text-white/60">
+                QuanAd includes a full backtesting engine that lets you test trading strategies against historical market data before risking real capital. The engine supports three built-in strategies and tracks detailed metrics including equity curves, trade logs, and risk-adjusted returns.
+              </p>
+
+              <h3 className="mb-3 mt-8 text-lg font-semibold text-white/80">Available Strategies</h3>
+              <DocTable
+                headers={["Strategy", "Type", "Description", "Key Parameters"]}
+                rows={[
+                  ["Buy & Hold", "Benchmark", "Buys each selected asset and holds through the full period", "None — pure benchmark"],
+                  ["Moving Average Crossover", "Trend-following", "Goes long when the short SMA crosses above the long SMA", "<code>short_window: 20</code>, <code>long_window: 50</code>"],
+                  ["RSI Mean Reversion", "Mean-reversion", "Enters long when RSI is oversold, exits on recovery", "<code>rsi_window: 14</code>, <code>buy_threshold: 30</code>, <code>sell_threshold: 55</code>"],
+                ]}
+              />
+
+              <h3 className="mb-3 mt-8 text-lg font-semibold text-white/80">Running a Backtest</h3>
+              <p className="mb-4 text-sm text-white/50">
+                Navigate to the <strong className="text-white/70">Backtest</strong> page from the sidebar, select your strategy, tickers, and date range, then click &quot;Run Backtest&quot;. You can also call the API directly:
+              </p>
+              <CodeBlock
+                title="POST /api/v1/backtests/run"
+                language="json"
+                code={`{
+  "strategy_type": "moving_average_crossover",
+  "strategy_name": "My SMA Strategy",
+  "symbols": ["AAPL", "MSFT", "GOOGL"],
+  "parameters": { "short_window": 20, "long_window": 50 },
+  "start_date": "2024-01-01",
+  "end_date": "2026-01-01",
+  "initial_capital": 100000,
+  "fees_bps": 10,
+  "slippage_bps": 5,
+  "position_size": 0.33
+}`}
+              />
+
+              <h3 className="mb-3 mt-8 text-lg font-semibold text-white/80">Understanding Results</h3>
+              <DocTable
+                headers={["Metric", "Description"]}
+                rows={[
+                  ["Total Return", "Net portfolio gain/loss as a percentage over the backtest period"],
+                  ["Sharpe Ratio", "Risk-adjusted return (higher = better, > 1.0 is good)"],
+                  ["Max Drawdown", "Largest peak-to-trough decline — measures worst-case scenario"],
+                  ["Win Rate", "Percentage of trades that were profitable"],
+                  ["Equity Curve", "Visual chart of portfolio value over time"],
+                ]}
+              />
+
+              <Callout type="tip">
+                Always compare your strategy against the Buy & Hold benchmark. If your active strategy doesn&apos;t beat buy-and-hold after fees, the added complexity may not be worth it.
+              </Callout>
+            </section>
+
+            <section id="risk-analysis" data-doc-section className="mt-16 scroll-mt-20">
+              <h2 className="mb-4 text-2xl font-bold">Risk Analysis</h2>
+              <p className="mb-6 text-white/60">
+                The Risk Analysis module provides quantitative risk metrics for individual stocks and portfolios. It calculates Value at Risk (VaR), Conditional VaR, maximum drawdown, beta, and volatility to help you understand downside exposure.
+              </p>
+
+              <h3 className="mb-3 mt-8 text-lg font-semibold text-white/80">Key Metrics</h3>
+              <DocTable
+                headers={["Metric", "What It Measures", "How to Interpret"]}
+                rows={[
+                  ["Value at Risk (VaR)", "Maximum expected loss at a given confidence level", "95% VaR of -3.2% means you can expect to lose at most 3.2% on 95% of days"],
+                  ["Conditional VaR (CVaR)", "Expected loss in the worst-case tail beyond VaR", "Answers: &quot;When things go really wrong, how bad?&quot;"],
+                  ["Maximum Drawdown", "Largest peak-to-trough decline historically", "A -40% max drawdown means the asset once fell 40% from its high"],
+                  ["Beta", "Sensitivity to overall market (S&P 500) movements", "Beta > 1 = more volatile than market; Beta < 1 = less volatile"],
+                  ["Annualized Volatility", "Standard deviation of returns scaled to one year", "Higher volatility = wider range of potential outcomes"],
+                ]}
+              />
+
+              <Callout type="warn">
+                Risk metrics are calculated from historical data and may not predict future risks. Black-swan events can exceed historical VaR estimates significantly.
+              </Callout>
+            </section>
+
+            <section id="trading-journal" data-doc-section className="mt-16 scroll-mt-20">
+              <h2 className="mb-4 text-2xl font-bold">Trading Journal</h2>
+              <p className="mb-6 text-white/60">
+                The Trading Journal helps you log trades, track your decision-making process, and review performance over time. Maintaining a journal is one of the most effective ways to improve trading discipline and avoid repeating mistakes.
+              </p>
+
+              <h3 className="mb-3 mt-8 text-lg font-semibold text-white/80">What to Log</h3>
+              <DocTable
+                headers={["Field", "Purpose"]}
+                rows={[
+                  ["Entry/Exit Prices", "Track the actual prices you traded at"],
+                  ["Position Size", "How much capital was allocated"],
+                  ["Thesis", "Why you took the trade — the original reasoning"],
+                  ["Outcome", "P&L result and whether the thesis played out"],
+                  ["Lessons Learned", "What worked, what didn't, and what to change next time"],
+                  ["Tags", "Categorize trades by strategy, sector, or setup type"],
+                ]}
+              />
+
+              <Callout type="tip">
+                Review your journal weekly. Look for patterns in your winning vs. losing trades — often the edge isn&apos;t the strategy, it&apos;s the discipline.
+              </Callout>
+            </section>
+
+            <section id="alerts-signals" data-doc-section className="mt-16 scroll-mt-20">
+              <h2 className="mb-4 text-2xl font-bold">Alerts & Signals</h2>
+              <p className="mb-6 text-white/60">
+                Set up price alerts, volume spikes, and ML-generated signals to stay informed without staring at charts all day. Alerts can be configured per ticker and delivered via the in-app notification system.
+              </p>
+
+              <h3 className="mb-3 mt-8 text-lg font-semibold text-white/80">Alert Types</h3>
+              <DocTable
+                headers={["Type", "Trigger", "Use Case"]}
+                rows={[
+                  ["Price Alert", "Stock crosses a specific price threshold", "Notify me when AAPL drops below $180"],
+                  ["Volume Spike", "Volume exceeds N× the 20-day average", "Detect unusual institutional activity"],
+                  ["ML Signal", "Random Forest model predicts direction change", "Get notified when the ML model flips from bearish to bullish"],
+                  ["Sentiment Shift", "FinBERT detects mood change in recent news", "Alert when market mood turns from neutral to bearish"],
+                ]}
+              />
+
+              <Callout type="info">
+                ML-generated signals are experimental and should be used alongside fundamental analysis, not as standalone trade triggers.
+              </Callout>
+            </section>
+
+            <section id="news-research" data-doc-section className="mt-16 scroll-mt-20">
+              <h2 className="mb-4 text-2xl font-bold">News & Research Pipeline</h2>
+              <p className="mb-6 text-white/60">
+                QuanAd fetches real-time financial news from Yahoo Finance via the yfinance API, runs FinBERT sentiment analysis on headlines, and can ingest articles into the Qdrant vector database for RAG-powered research queries.
+              </p>
+
+              <h3 className="mb-3 mt-8 text-lg font-semibold text-white/80">Pipeline Architecture</h3>
+              <DocTable
+                headers={["Stage", "Component", "Description"]}
+                rows={[
+                  ["Fetch", "<code>search_financial_news</code>", "Pulls up to 10 recent headlines for any ticker from Yahoo Finance"],
+                  ["Analyze", "<code>analyze_sentiment</code>", "Runs FinBERT AI on headlines to classify as bullish, bearish, or neutral"],
+                  ["Market Scan", "<code>research_market</code>", "Scans SPY, QQQ, DIA, IWM, and VIX for a broad market overview"],
+                  ["Store (RAG)", "Qdrant + Embeddings", "Articles are embedded and stored in the vector database for semantic search"],
+                  ["Retrieve", "RAG Pipeline", "When you ask a question, relevant articles are retrieved and used as context for the AI response"],
+                ]}
+              />
+
+              <h3 className="mb-3 mt-8 text-lg font-semibold text-white/80">How It Works in Chat</h3>
+              <p className="mb-4 text-sm text-white/50">
+                When you ask the AI about a stock without providing specific articles, it automatically:
+              </p>
+              <ol className="mb-6 space-y-2 text-sm text-white/50">
+                <li className="flex gap-2"><span className="font-mono text-indigo-400">1.</span> Calls <code className="text-white/60">search_financial_news</code> to fetch recent headlines</li>
+                <li className="flex gap-2"><span className="font-mono text-indigo-400">2.</span> Passes those headlines to <code className="text-white/60">analyze_sentiment</code> for FinBERT analysis</li>
+                <li className="flex gap-2"><span className="font-mono text-indigo-400">3.</span> Cites the publisher and headline title in its response</li>
+                <li className="flex gap-2"><span className="font-mono text-indigo-400">4.</span> For broad queries, uses <code className="text-white/60">research_market</code> to scan all major indices</li>
+              </ol>
+
+              <Callout type="info">
+                The Qdrant vector database uses cosine similarity with 384-dimensional embeddings (MiniLM-L6-v2) or 768-dimensional embeddings (Gemini text-embedding-004) depending on your configuration.
+              </Callout>
+            </section>
+
+            {/* ═══════════════════ USING THE UI ═══════════════════ */}
+
+            <section id="ui-chat" data-doc-section className="mt-16 scroll-mt-20">
+              <h2 className="mb-4 text-2xl font-bold">Chat Interface</h2>
+              <p className="mb-6 text-white/60">
+                The AI chat is the primary way to interact with QuanAd. It streams responses in real-time via WebSocket, shows live tool execution progress, and supports both single-agent and multi-agent consensus modes.
+              </p>
+
+              <h3 className="mb-3 mt-8 text-lg font-semibold text-white/80">Key Features</h3>
+              <DocTable
+                headers={["Feature", "Description"]}
+                rows={[
+                  ["Suggestion Chips", "Click pre-built prompts like &quot;Market pulse&quot;, &quot;Sentiment brief&quot;, or &quot;Portfolio check&quot; to get started quickly"],
+                  ["Model Selector", "Switch between QuanAd 1.0 (fast, single-agent) and QuanAd 2.0 (multi-agent consensus) in the top bar"],
+                  ["Live Agent Plan", "Watch the AI&apos;s execution plan update in real-time as tools are called — subtasks light up as they start and complete"],
+                  ["Elapsed Timer", "See exactly how long the agent has been running with a live wall-clock timer"],
+                  ["Streaming Output", "Responses stream token-by-token as the LLM generates them, so you see results immediately"],
+                  ["Session History", "Conversations are persisted — switch between sessions in the sidebar"],
+                ]}
+              />
+
+              <h3 className="mb-3 mt-8 text-lg font-semibold text-white/80">Example Prompts</h3>
+              <CodeBlock
+                title="Try these in the chat"
+                language="text"
+                code={`"Give me a concise market pulse for today with major risks and opportunities."
+"Analyze AAPL sentiment and explain what could move the stock next."
+"Optimize my portfolio with AAPL, MSFT, GOOGL and explain the tradeoffs."
+"Should I invest in NVDA?" (triggers multi-agent consensus on QuanAd 2.0)
+"Predict the stock price direction for TSLA."`}
+              />
+
+              <Callout type="tip">
+                For the most comprehensive analysis, use QuanAd 2.0 (consensus mode). It runs 5 specialist agents in parallel — a Quant Researcher, Quant Analyst, Data Scientist, Risk Analyst, and Portfolio Strategist — then synthesizes their opinions.
+              </Callout>
+            </section>
+
+            <section id="ui-dashboard" data-doc-section className="mt-16 scroll-mt-20">
+              <h2 className="mb-4 text-2xl font-bold">Dashboard</h2>
+              <p className="mb-6 text-white/60">
+                The Dashboard is your at-a-glance overview of portfolio performance, watchlist activity, and recent market signals. It aggregates key metrics into a single view so you can assess your positions without navigating multiple pages.
+              </p>
+
+              <h3 className="mb-3 mt-8 text-lg font-semibold text-white/80">Dashboard Widgets</h3>
+              <DocTable
+                headers={["Widget", "What It Shows"]}
+                rows={[
+                  ["Portfolio Summary", "Total value, daily P&L, and allocation breakdown by asset"],
+                  ["Watchlist", "Live prices and daily changes for your tracked tickers"],
+                  ["Recent Signals", "Latest ML predictions and sentiment alerts from your monitored stocks"],
+                  ["Market Overview", "Quick view of major indices (S&P 500, Nasdaq, Dow)"],
+                  ["Quick Actions", "Jump to chat, run a backtest, or check risk analysis with one click"],
+                ]}
+              />
+            </section>
+
+            <section id="ui-market" data-doc-section className="mt-16 scroll-mt-20">
+              <h2 className="mb-4 text-2xl font-bold">Market Page</h2>
+              <p className="mb-6 text-white/60">
+                The Market page provides a comprehensive view of live market data, sector performance, and trending tickers. Use it to scan the market landscape before diving into individual stock analysis.
+              </p>
+
+              <h3 className="mb-3 mt-8 text-lg font-semibold text-white/80">How to Use</h3>
+              <ol className="mb-6 space-y-2 text-sm text-white/50">
+                <li className="flex gap-2"><span className="font-mono text-indigo-400">1.</span> <strong className="text-white/70">Search</strong> — Use the search bar to look up any ticker symbol</li>
+                <li className="flex gap-2"><span className="font-mono text-indigo-400">2.</span> <strong className="text-white/70">Overview Cards</strong> — See price, change, volume, and high/low at a glance</li>
+                <li className="flex gap-2"><span className="font-mono text-indigo-400">3.</span> <strong className="text-white/70">News Feed</strong> — Browse recent financial news for the selected ticker</li>
+                <li className="flex gap-2"><span className="font-mono text-indigo-400">4.</span> <strong className="text-white/70">Add to Watchlist</strong> — Click the star icon to track a stock on your Dashboard</li>
+              </ol>
+            </section>
+
+            <section id="ui-portfolio" data-doc-section className="mt-16 scroll-mt-20">
+              <h2 className="mb-4 text-2xl font-bold">Portfolio Page</h2>
+              <p className="mb-6 text-white/60">
+                The Portfolio page lets you configure and run portfolio optimizations using Classical (Markowitz Mean-Variance) or Quantum (QAOA) methods. Enter your tickers, adjust risk tolerance, and get optimal allocation weights.
+              </p>
+
+              <h3 className="mb-3 mt-8 text-lg font-semibold text-white/80">Optimization Methods</h3>
+              <DocTable
+                headers={["Method", "Algorithm", "Output", "Best For"]}
+                rows={[
+                  ["Classical", "Markowitz Mean-Variance", "Continuous weight allocation (e.g., AAPL: 35%, MSFT: 40%)", "Traditional portfolio construction with precise allocations"],
+                  ["Quantum", "QAOA (Quantum Approximate Optimization)", "Binary selection of best N stocks from your universe", "Stock screening — selecting the best subset from a larger pool"],
+                ]}
+              />
+
+              <h3 className="mb-3 mt-8 text-lg font-semibold text-white/80">How to Use</h3>
+              <ol className="mb-6 space-y-2 text-sm text-white/50">
+                <li className="flex gap-2"><span className="font-mono text-indigo-400">1.</span> Enter your tickers separated by commas (e.g., AAPL, MSFT, GOOGL, AMZN)</li>
+                <li className="flex gap-2"><span className="font-mono text-indigo-400">2.</span> Select the optimization method (Classical or Quantum)</li>
+                <li className="flex gap-2"><span className="font-mono text-indigo-400">3.</span> Adjust risk tolerance (1.0 = balanced, higher = more aggressive)</li>
+                <li className="flex gap-2"><span className="font-mono text-indigo-400">4.</span> Click &quot;Optimize&quot; to run the analysis</li>
+                <li className="flex gap-2"><span className="font-mono text-indigo-400">5.</span> Review the allocation chart, expected return, volatility, and Sharpe ratio</li>
+              </ol>
+
+              <Callout type="warn">
+                Quantum optimization via QAOA is experimental and runs on a simulated quantum circuit. Results may differ from classical optimization. Use it as a complementary signal, not a replacement.
               </Callout>
             </section>
 
