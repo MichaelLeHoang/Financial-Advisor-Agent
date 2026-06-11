@@ -144,11 +144,13 @@ def search_financial_news(ticker: str) -> str:
             if date_str and len(str(date_str)) > 10:
                 date_str = str(date_str)[:19].replace("T", " ")
 
-            output += f"{i}. [{publisher}] {title}\n"
+            if link:
+                output += f"{i}. [{publisher}] [{title}]({link})\n"
+            else:
+                output += f"{i}. [{publisher}] {title}\n"
+            
             if date_str:
                 output += f"   Published: {date_str}\n"
-            if link:
-                output += f"   Link: {link}\n"
             output += "\n"
             headlines.append(title)
 
@@ -205,7 +207,13 @@ def research_market() -> str:
                     title = content.get("title", "No title")
                     provider = content.get("provider", {})
                     pub = provider.get("displayName", "Unknown") if isinstance(provider, dict) else str(provider)
-                    output += f"  • [{pub}] {title}\n"
+                    canonical = content.get("canonicalUrl", {})
+                    link = canonical.get("url", "") if isinstance(canonical, dict) else content.get("link", str(canonical) if canonical else "")
+                    
+                    if link:
+                        output += f"  • [{pub}] [{title}]({link})\n"
+                    else:
+                        output += f"  • [{pub}] {title}\n"
                     headlines.append(title)
                 output += "\nHeadlines for sentiment analysis:\n"
                 for h in headlines:
