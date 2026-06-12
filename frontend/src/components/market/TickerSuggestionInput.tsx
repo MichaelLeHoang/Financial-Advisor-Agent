@@ -1,13 +1,20 @@
 "use client";
 
-import { type RefObject, useMemo, useRef, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Plus, Search } from "lucide-react";
 
+import { api } from "@/lib/api";
 import { normalizeTicker, searchMarketSymbols } from "@/lib/market-data";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+
+interface SymbolMatch {
+  ticker: string;
+  name: string;
+  exchange: string;
+}
 
 export default function TickerSuggestionInput({
     value,
@@ -31,15 +38,72 @@ export default function TickerSuggestionInput({
     const localRef = useRef<HTMLInputElement>(null);
     const ref = inputRef ?? localRef;
     const [open, setOpen] = useState(false);
+    const [apiMatches, setApiMatches] = useState<SymbolMatch[]>([]);
+    const [searching, setSearching] = useState(false);
+
     const normalized = normalizeTicker(value);
     const existing = useMemo(() => new Set(existingTickers.map(normalizeTicker)), [existingTickers]);
-    const matches = useMemo(
-        () => searchMarketSymbols(value).filter((match) => !existing.has(match.ticker)),
+
+    const localMatches = useMemo<SymbolMatch[]>(
+        () =>
+            searchMarketSymbols(value)
+                .filter((m) => !existing.has(m.ticker))
+                .map((m) => ({ ticker: m.ticker, name: m.name, exchange: m.exchange })),
         [existing, value]
     );
-    const canAddCustom = normalized.length > 0
-        && !existing.has(normalized)
-        && !matches.some((match) => match.ticker === normalized);
+
+    // Debounced live search via backend
+    useEffect(() => {
+        const q = value.trim();
+        if (!q) {
+            setApiMatches([]);
+            setSearching(false);
+            return;
+        }
+
+        let cancelled = false;
+        setSearching(true);
+
+        const timer = window.setTimeout(() => {
+            api.marketSearch(q, 12)
+                .then((results) => {
+                    if (cancelled) return;
+                    setApiMatches(
+                        results
+                            .filter((r) => !existing.has(normalizeTicker(r.ticker)))
+                            .map((r) => ({
+                                ticker: r.ticker,
+                                name: r.name,
+                                exchange: r.exchange ?? "Market",
+                            }))
+                    );
+                })
+                .catch(() => {
+                    if (cancelled) return;
+                    setApiMatches([]);
+                })
+                .finally(() => {
+                    if (!cancelled) setSearching(false);
+                });
+        }, 150);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [value, existing]);
+
+    // Show local results instantly while API loads; replace with API when ready
+    const matches: SymbolMatch[] = searching
+        ? localMatches
+        : apiMatches.length > 0
+            ? apiMatches
+            : localMatches;
+
+    const canAddCustom =
+        normalized.length > 0 &&
+        !existing.has(normalized) &&
+        !matches.some((m) => m.ticker === normalized);
 
     const selectTicker = (ticker: string) => {
         const next = normalizeTicker(ticker);
@@ -47,6 +111,7 @@ export default function TickerSuggestionInput({
         onSelect(next);
         onValueChange("");
         setOpen(false);
+        setApiMatches([]);
     };
 
     return (
@@ -56,7 +121,7 @@ export default function TickerSuggestionInput({
                 ref={ref}
                 value={value}
                 onChange={(event) => {
-                    onValueChange(event.target.value.toUpperCase());
+                    onValueChange(event.target.value);
                     setOpen(true);
                 }}
                 onFocus={() => setOpen(true)}
@@ -70,25 +135,31 @@ export default function TickerSuggestionInput({
                 placeholder={placeholder}
                 className={cn("h-10 rounded-xl pl-9 pr-9 text-sm", inputClassName)}
             />
-            {value && (
-                <button
-                    type="button"
-                    onClick={() => {
-                        onValueChange("");
-                        setOpen(false);
-                        ref.current?.focus();
-                    }}
-                    className="group absolute right-2 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
-                    aria-label="Clear ticker search"
-                >
-                    <img
-                        src="/close-svgrepo-com.svg"
-                        alt=""
-                        aria-hidden="true"
-                        className="size-4 opacity-55 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_7px_rgba(255,255,255,0.65)]"
-                    />
-                </button>
-            )}
+            {/* Right-side indicator: spinner while searching, clear button otherwise */}
+            <div className="absolute right-2 top-1/2 z-10 -translate-y-1/2">
+                {searching ? (
+                    <Loader2 className="size-4 animate-spin text-white/25" />
+                ) : value ? (
+                    <button
+                        type="button"
+                        onClick={() => {
+                            onValueChange("");
+                            setApiMatches([]);
+                            setOpen(false);
+                            ref.current?.focus();
+                        }}
+                        className="group flex size-7 items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                        aria-label="Clear ticker search"
+                    >
+                        <img
+                            src="/close-svgrepo-com.svg"
+                            alt=""
+                            aria-hidden="true"
+                            className="size-4 opacity-55 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_7px_rgba(255,255,255,0.65)]"
+                        />
+                    </button>
+                ) : null}
+            </div>
 
             {open && normalized && (matches.length > 0 || canAddCustom) && (
                 <Card className="absolute left-0 right-0 top-12 z-40 rounded-2xl border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
@@ -127,7 +198,7 @@ export default function TickerSuggestionInput({
                                 </span>
                                 <span className="min-w-0 flex-1">
                                     <span className="block text-sm font-semibold text-white">Add {normalized}</span>
-                                    <span className="block text-xs text-white/42">Create a custom ticker</span>
+                                    <span className="block text-xs text-white/42">Use as custom ticker</span>
                                 </span>
                             </button>
                         )}

@@ -8,6 +8,7 @@ from src.saas.models import (
     AuthenticatedUser,
     HoldingCreate,
     HoldingRead,
+    HoldingUpdate,
     PortfolioCreate,
     PortfolioRead,
     WatchlistAssetCreate,
@@ -49,6 +50,16 @@ async def create_portfolio(
     return get_store(user).create_portfolio(user.id, payload)
 
 
+@router.delete("/portfolios/{portfolio_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_portfolio(
+    portfolio_id: UUID,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> None:
+    removed = get_store(user).delete_portfolio(user.id, portfolio_id)
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+
+
 @router.get("/portfolios/{portfolio_id}/holdings", response_model=list[HoldingRead])
 async def list_holdings(
     portfolio_id: UUID,
@@ -69,6 +80,19 @@ async def create_holding(
     holding = get_store(user).add_holding(user.id, portfolio_id, payload)
     if holding is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+    return holding
+
+
+@router.patch("/portfolios/{portfolio_id}/holdings/{holding_id}", response_model=HoldingRead)
+async def update_holding(
+    portfolio_id: UUID,
+    holding_id: UUID,
+    payload: HoldingUpdate,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> HoldingRead:
+    holding = get_store(user).update_holding(user.id, portfolio_id, holding_id, payload)
+    if holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
     return holding
 
 

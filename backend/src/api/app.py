@@ -36,6 +36,7 @@ from src.llm.routing_policy import LLMMode
 
 from pydantic import BaseModel
 import yfinance as yf
+import math
 
 app = FastAPI(
     title=settings.app_name,
@@ -116,6 +117,23 @@ class AgentChatRequest(BaseModel):
 class AgentSessionRenameRequest(BaseModel):
     title: str
 
+class EarningsPoint(BaseModel):
+    date: str
+    eps_actual: float | None = None
+    eps_estimate: float | None = None
+    beat_pct: float | None = None
+
+class QuarterlyFinancial(BaseModel):
+    period: str
+    revenue: float | None = None
+    net_income: float | None = None
+    diluted_eps: float | None = None
+    net_profit_margin: float | None = None
+    revenue_yoy: float | None = None
+    net_income_yoy: float | None = None
+    eps_yoy: float | None = None
+    margin_yoy: float | None = None
+
 class MarketQuotePoint(BaseModel):
     label: str
     price: float
@@ -148,6 +166,8 @@ class MarketQuoteResponse(BaseModel):
     dividend_rate: float | None = None
     quarterly_dividend_amount: float | None = None
     history: list[MarketQuotePoint]
+    earnings: list[EarningsPoint] = []
+    quarterly_financials: list[QuarterlyFinancial] = []
 
 
 def _service_state(configured: bool, ok: bool | None = None, detail: str | None = None) -> dict:
@@ -290,6 +310,77 @@ async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
                 )
             )
 
+        # Earnings (EPS beats)
+        earnings: list[EarningsPoint] = []
+        try:
+            earnings_df = stock.earnings_dates
+            if earnings_df is not None and not earnings_df.empty:
+                for date_idx, erow in earnings_df.iterrows():
+                    eps_actual = _safe_float(erow.get("Reported EPS"))
+                    if eps_actual is None:
+                        continue
+                    date_str = date_idx.strftime("%b %Y") if hasattr(date_idx, "strftime") else str(date_idx)
+                    earnings.append(EarningsPoint(
+                        date=date_str,
+                        eps_actual=eps_actual,
+                        eps_estimate=_safe_float(erow.get("EPS Estimate")),
+                        beat_pct=_safe_float(erow.get("Surprise(%)")),
+                    ))
+                    if len(earnings) >= 6:
+                        break
+        except Exception:
+            pass
+
+        # Quarterly financials
+        quarterly_financials: list[QuarterlyFinancial] = []
+        try:
+            fin = None
+            for attr in ("quarterly_income_stmt", "quarterly_financials"):
+                try:
+                    candidate = getattr(stock, attr, None)
+                    if candidate is not None and not candidate.empty:
+                        fin = candidate
+                        break
+                except Exception:
+                    pass
+
+            if fin is not None and not fin.empty:
+                cols_desc = sorted(fin.columns, reverse=True)
+                recent_cols = cols_desc[:4]
+
+                for fin_col in recent_cols:
+                    period_label = fin_col.strftime("%b %Y") if hasattr(fin_col, "strftime") else str(fin_col)
+                    rev = _get_fin_metric(fin, "Total Revenue", fin_col)
+                    ni = _get_fin_metric(fin, "Net Income", fin_col)
+                    deps = _get_fin_metric(fin, "Diluted EPS", fin_col)
+                    margin = round(ni / rev * 100, 2) if rev and ni else None
+
+                    yoy_col = None
+                    if hasattr(fin_col, "year") and hasattr(fin_col, "month"):
+                        for c in cols_desc:
+                            if hasattr(c, "year") and c.year == fin_col.year - 1 and abs(c.month - fin_col.month) <= 1:
+                                yoy_col = c
+                                break
+
+                    prev_rev = _get_fin_metric(fin, "Total Revenue", yoy_col) if yoy_col else None
+                    prev_ni = _get_fin_metric(fin, "Net Income", yoy_col) if yoy_col else None
+                    prev_deps = _get_fin_metric(fin, "Diluted EPS", yoy_col) if yoy_col else None
+                    prev_margin = round(prev_ni / prev_rev * 100, 2) if prev_rev and prev_ni else None
+
+                    quarterly_financials.append(QuarterlyFinancial(
+                        period=period_label,
+                        revenue=rev,
+                        net_income=ni,
+                        diluted_eps=round(deps, 2) if deps is not None else None,
+                        net_profit_margin=margin,
+                        revenue_yoy=_yoy_pct(rev, prev_rev),
+                        net_income_yoy=_yoy_pct(ni, prev_ni),
+                        eps_yoy=_yoy_pct(deps, prev_deps),
+                        margin_yoy=round(margin - prev_margin, 2) if margin is not None and prev_margin is not None else None,
+                    ))
+        except Exception:
+            pass
+
         return MarketQuoteResponse(
             ticker=normalized,
             name=info.get("longName") or info.get("shortName") or normalized,
@@ -310,6 +401,8 @@ async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
             dividend_rate=_round_optional(info.get("dividendRate")),
             quarterly_dividend_amount=_round_optional((info.get("dividendRate") / 4) if info.get("dividendRate") else None),
             history=points,
+            earnings=earnings,
+            quarterly_financials=quarterly_financials,
         )
     except HTTPException:
         raise
@@ -366,6 +459,23 @@ def _round_optional(value: float | int | None, digits: int = 4) -> float | None:
     if value is None:
         return None
     return round(float(value), digits)
+
+def _safe_float(val) -> float | None:
+    try:
+        f = float(val)
+        return None if math.isnan(f) or math.isinf(f) else f
+    except (TypeError, ValueError):
+        return None
+
+def _yoy_pct(current: float | None, previous: float | None) -> float | None:
+    if current is None or previous is None or previous == 0:
+        return None
+    return round((current - previous) / abs(previous) * 100, 2)
+
+def _get_fin_metric(df, row_key: str, col) -> float | None:
+    if row_key in df.index and col in df.columns:
+        return _safe_float(df.loc[row_key, col])
+    return None
 
 # Rag Endpoints
 

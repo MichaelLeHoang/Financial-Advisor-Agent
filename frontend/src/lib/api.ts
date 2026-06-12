@@ -159,6 +159,25 @@ export interface MarketQuotePoint {
   volume: number;
 }
 
+export interface EarningsPoint {
+  date: string;
+  eps_actual: number | null;
+  eps_estimate: number | null;
+  beat_pct: number | null;
+}
+
+export interface QuarterlyFinancial {
+  period: string;
+  revenue: number | null;
+  net_income: number | null;
+  diluted_eps: number | null;
+  net_profit_margin: number | null;
+  revenue_yoy: number | null;
+  net_income_yoy: number | null;
+  eps_yoy: number | null;
+  margin_yoy: number | null;
+}
+
 export interface MarketQuote {
   ticker: string;
   name: string;
@@ -179,6 +198,8 @@ export interface MarketQuote {
   dividend_rate?: number | null;
   quarterly_dividend_amount?: number | null;
   history: MarketQuotePoint[];
+  earnings?: EarningsPoint[];
+  quarterly_financials?: QuarterlyFinancial[];
 }
 
 export interface MarketSymbolSearchResult {
@@ -591,6 +612,9 @@ export const api = {
   createPortfolio: (name: string, baseCurrency = "USD") =>
     post<Portfolio>("/api/v1/portfolios", { name, base_currency: baseCurrency }),
 
+  deletePortfolio: (portfolioId: string) =>
+    del<void>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}`),
+
   portfolioHoldings: (portfolioId: string) =>
     get<Holding[]>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings`),
 
@@ -601,6 +625,9 @@ export const api = {
       quantity,
       average_cost: averageCost,
     }),
+
+  updateHolding: (portfolioId: string, holdingId: string, updates: { quantity?: number; average_cost?: number }) =>
+    patch<Holding>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings/${encodeURIComponent(holdingId)}`, updates),
 
   removeHolding: (portfolioId: string, holdingId: string) =>
     del<void>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings/${encodeURIComponent(holdingId)}`),

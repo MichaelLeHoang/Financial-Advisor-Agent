@@ -53,6 +53,11 @@ class HoldingCreate(BaseModel):
     average_cost: float = Field(ge=0)
 
 
+class HoldingUpdate(BaseModel):
+    quantity: float | None = Field(default=None, ge=0)
+    average_cost: float | None = Field(default=None, ge=0)
+
+
 class HoldingRead(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     portfolio_id: UUID

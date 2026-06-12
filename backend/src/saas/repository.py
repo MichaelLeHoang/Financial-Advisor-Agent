@@ -18,6 +18,7 @@ from src.saas.models import (
     BacktestTradeRead,
     HoldingCreate,
     HoldingRead,
+    HoldingUpdate,
     JournalEntryCreate,
     JournalEntryRead,
     PortfolioCreate,
@@ -150,6 +151,15 @@ class UserScopedStore:
                 return None
             return portfolio
 
+    def delete_portfolio(self, user_id: UUID, portfolio_id: UUID) -> bool:
+        with self._lock:
+            portfolio = self._portfolios.get(portfolio_id)
+            if portfolio is None or portfolio.user_id != user_id:
+                return False
+            del self._portfolios[portfolio_id]
+            self._holdings.pop(portfolio_id, None)
+            return True
+
     def add_holding(self, user_id: UUID, portfolio_id: UUID, payload: HoldingCreate) -> HoldingRead | None:
         if self.get_portfolio(user_id, portfolio_id) is None:
             return None
@@ -165,6 +175,18 @@ class UserScopedStore:
         with self._lock:
             self._holdings.setdefault(portfolio_id, []).append(holding)
         return holding
+
+    def update_holding(self, user_id: UUID, portfolio_id: UUID, holding_id: UUID, payload: HoldingUpdate) -> HoldingRead | None:
+        if self.get_portfolio(user_id, portfolio_id) is None:
+            return None
+        with self._lock:
+            holdings = self._holdings.get(portfolio_id, [])
+            for i, h in enumerate(holdings):
+                if h.id == holding_id:
+                    updated = h.model_copy(update={k: v for k, v in payload.model_dump(exclude_none=True).items()})
+                    holdings[i] = updated
+                    return updated
+        return None
 
     def list_holdings(self, user_id: UUID, portfolio_id: UUID) -> list[HoldingRead] | None:
         if self.get_portfolio(user_id, portfolio_id) is None:
@@ -489,6 +511,12 @@ class SupabaseRestStore:
         )
         return PortfolioRead.model_validate(rows[0]) if rows else None
 
+    def delete_portfolio(self, user_id: UUID, portfolio_id: UUID) -> bool:
+        if self.get_portfolio(user_id, portfolio_id) is None:
+            return False
+        self._request("DELETE", "portfolios", {"id": f"eq.{portfolio_id}", "user_id": f"eq.{user_id}"})
+        return True
+
     def add_holding(self, user_id: UUID, portfolio_id: UUID, payload: HoldingCreate) -> HoldingRead | None:
         if self.get_portfolio(user_id, portfolio_id) is None:
             return None
@@ -503,6 +531,15 @@ class SupabaseRestStore:
                 "average_cost": payload.average_cost,
             },
         )
+        return HoldingRead.model_validate(rows[0])
+
+    def update_holding(self, user_id: UUID, portfolio_id: UUID, holding_id: UUID, payload: HoldingUpdate) -> HoldingRead | None:
+        if self.get_portfolio(user_id, portfolio_id) is None:
+            return None
+        body = {k: v for k, v in payload.model_dump(exclude_none=True).items()}
+        rows = self._request("PATCH", "holdings", {"id": f"eq.{holding_id}", "portfolio_id": f"eq.{portfolio_id}"}, body=body)
+        if not rows:
+            return None
         return HoldingRead.model_validate(rows[0])
 
     def list_holdings(self, user_id: UUID, portfolio_id: UUID) -> list[HoldingRead] | None:

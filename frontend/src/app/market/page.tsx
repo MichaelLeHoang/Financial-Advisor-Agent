@@ -4,6 +4,10 @@ import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } fro
 import {
     ArrowDownRight,
     ArrowUpRight,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    ChevronUp,
     Maximize2,
     Plus,
     RefreshCw,
@@ -25,7 +29,8 @@ import {
     YAxis,
 } from "recharts";
 import { cn } from "@/lib/utils";
-import { api, type MarketQuote } from "@/lib/api";
+import { api, type EarningsPoint, type MarketQuote, type QuarterlyFinancial } from "@/lib/api";
+import { primeQuote } from "@/lib/quote-cache";
 import {
     CHART_RANGES,
     DEFAULT_MARKET_TICKERS,
@@ -73,6 +78,8 @@ interface StockInfo extends MarketSymbol {
     dividendYield?: number | null;
     dividendRate?: number | null;
     quarterlyDividendAmount?: number | null;
+    earnings?: EarningsPoint[];
+    quarterlyFinancials?: QuarterlyFinancial[];
 }
 
 type ChartStyle = "area" | "line";
@@ -106,6 +113,8 @@ function quoteToStock(quote: MarketQuote, fallback?: StockInfo): StockInfo {
         dividendRate: quote.dividend_rate,
         quarterlyDividendAmount: quote.quarterly_dividend_amount,
         data: quote.history.length > 0 ? quote.history : fallback?.data ?? createMarketSeries(createMarketSymbol(quote.ticker), "1M"),
+        earnings: quote.earnings,
+        quarterlyFinancials: quote.quarterly_financials,
     };
 }
 
@@ -209,6 +218,7 @@ export default function MarketPage() {
     const fetchQuote = async (ticker: string, fallback?: StockInfo, range: ChartRange = "1M") => {
         const [period, interval] = quotePeriod(range);
         const quote = await api.marketQuote(ticker, period, interval);
+        primeQuote(quote); // share with portfolio page cache
         return quoteToStock(quote, fallback);
     };
 
@@ -375,11 +385,7 @@ export default function MarketPage() {
                             key={stock.ticker}
                             stock={stock}
                             mounted={mounted}
-                            onOpen={() => {
-                                setSelectedStock(stock);
-                                setSelectedRange("1M");
-                                setChartStyle("area");
-                            }}
+                            onOpen={() => openChartForTicker(stock.ticker)}
                             onRemove={() => removeTicker(stock.ticker)}
                             onRequestRemove={() => requestRemoveTicker(stock)}
                         />
@@ -720,6 +726,14 @@ function MarketChartDialog({
     onStyleChange: (style: ChartStyle) => void;
     onOpenChange: (open: boolean) => void;
 }) {
+    const [earningsExpanded, setEarningsExpanded] = useState(false);
+    const [quarterIdx, setQuarterIdx] = useState(0);
+
+    useEffect(() => {
+        setEarningsExpanded(false);
+        setQuarterIdx(0);
+    }, [stock?.ticker]);
+
     const series = useMemo(() => {
         if (!stock) return [];
         return stock.data.length > 0 ? stock.data : createMarketSeries(stock, range);
@@ -852,17 +866,20 @@ function MarketChartDialog({
                                             ))}
                                         </CardContent>
                                     </Card>
-                                    <Card className="rounded-2xl border-white/[0.06] bg-gradient-to-b from-indigo-primary/12 to-cyan-secondary/8 py-0">
-                                        <CardContent className="p-4">
-                                            <div className="text-sm font-semibold text-white">Chart tools</div>
-                                            <div className="mt-3 flex flex-col gap-2 text-sm text-white/52">
-                                                <div className="flex justify-between gap-4"><span>Selected range</span><span className="text-white/80">{range}</span></div>
-                                                <div className="flex justify-between gap-4"><span>View mode</span><span className="text-white/80">{chartStyle === "area" ? "Area + volume" : "Line + volume"}</span></div>
-                                                <div className="flex justify-between gap-4"><span>Hover data</span><span className="text-white/80">Price, date, volume</span></div>
-                                                <div className="flex justify-between gap-4"><span>Latest quote</span><span className="text-white/80">{stock.loading ? "Updating" : "Loaded"}</span></div>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
+                                    <EarningsCard
+                                        earnings={stock.earnings ?? []}
+                                        expanded={earningsExpanded}
+                                        onToggle={() => setEarningsExpanded((x) => !x)}
+                                    />
+                                    {(stock.quarterlyFinancials?.length ?? 0) > 0 && (
+                                        <QuarterlyFinancialsCard
+                                            quarters={stock.quarterlyFinancials!}
+                                            quarterIdx={Math.min(quarterIdx, stock.quarterlyFinancials!.length - 1)}
+                                            currency={stock.currency ?? "USD"}
+                                            onPrev={() => setQuarterIdx((i) => Math.min(stock.quarterlyFinancials!.length - 1, i + 1))}
+                                            onNext={() => setQuarterIdx((i) => Math.max(0, i - 1))}
+                                        />
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -870,6 +887,129 @@ function MarketChartDialog({
                 )}
             </DialogContent>
         </Dialog>
+    );
+}
+
+function EarningsCard({
+    earnings,
+    expanded,
+    onToggle,
+}: {
+    earnings: EarningsPoint[];
+    expanded: boolean;
+    onToggle: () => void;
+}) {
+    const visible = expanded ? earnings : earnings.slice(0, 3);
+    return (
+        <Card className="rounded-2xl border-white/[0.06] bg-white/[0.025] py-0">
+            <CardHeader className="px-4 pt-4 pb-2">
+                <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm">Earnings</CardTitle>
+                    {earnings.length > 3 && (
+                        <button
+                            type="button"
+                            onClick={onToggle}
+                            className="flex items-center gap-0.5 text-xs text-white/40 transition-colors hover:text-white"
+                        >
+                            {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                        </button>
+                    )}
+                </div>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+                {earnings.length === 0 ? (
+                    <div className="text-xs text-white/32">No earnings data available.</div>
+                ) : (
+                    <div className="flex flex-col divide-y divide-white/[0.04]">
+                        {visible.map((e) => {
+                            const beat = (e.beat_pct ?? 0) >= 0;
+                            return (
+                                <div key={e.date} className="flex items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
+                                    <span className="text-[11px] text-white/45">{e.date}</span>
+                                    <span className={cn("text-[11px] font-medium", beat ? "text-green-positive" : "text-red-negative")}>
+                                        EPS {beat ? "beat" : "missed"} by {Math.abs(e.beat_pct ?? 0).toFixed(2)}%
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+function QuarterlyFinancialsCard({
+    quarters,
+    quarterIdx,
+    currency,
+    onPrev,
+    onNext,
+}: {
+    quarters: QuarterlyFinancial[];
+    quarterIdx: number;
+    currency: string;
+    onPrev: () => void;
+    onNext: () => void;
+}) {
+    const q = quarters[quarterIdx];
+    if (!q) return null;
+
+    const rows: { label: string; value: string; yoy: number | null }[] = [
+        { label: "Revenue", value: formatFinancial(q.revenue), yoy: q.revenue_yoy },
+        { label: "Net income", value: formatFinancial(q.net_income), yoy: q.net_income_yoy },
+        { label: "Diluted EPS", value: q.diluted_eps != null ? q.diluted_eps.toFixed(2) : "—", yoy: q.eps_yoy },
+        { label: "Net profit margin", value: q.net_profit_margin != null ? `${q.net_profit_margin.toFixed(1)}%` : "—", yoy: q.margin_yoy },
+    ];
+
+    return (
+        <Card className="rounded-2xl border-white/[0.06] bg-white/[0.025] py-0">
+            <CardHeader className="px-4 pt-4 pb-0">
+                <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-sm">Quarterly financials</CardTitle>
+                    <div className="flex items-center gap-0.5">
+                        <button
+                            type="button"
+                            disabled={quarterIdx >= quarters.length - 1}
+                            onClick={onPrev}
+                            className="flex size-5 items-center justify-center rounded text-white/40 transition-colors hover:text-white disabled:opacity-20"
+                        >
+                            <ChevronLeft className="size-3.5" />
+                        </button>
+                        <span className="min-w-[4.5rem] text-center text-[11px] text-white/52">{q.period}</span>
+                        <button
+                            type="button"
+                            disabled={quarterIdx <= 0}
+                            onClick={onNext}
+                            className="flex size-5 items-center justify-center rounded text-white/40 transition-colors hover:text-white disabled:opacity-20"
+                        >
+                            <ChevronRight className="size-3.5" />
+                        </button>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 pt-3">
+                <div className="mb-2 flex items-center text-[10px] text-white/28">
+                    <span className="flex-1">({currency})</span>
+                    <span className="w-[4.5rem] text-right">{q.period}</span>
+                    <span className="w-12 text-right">Y/Y</span>
+                </div>
+                <div className="flex flex-col divide-y divide-white/[0.04]">
+                    {rows.map((row) => {
+                        const isPos = (row.yoy ?? 0) >= 0;
+                        return (
+                            <div key={row.label} className="flex items-center gap-1 py-2 first:pt-0 last:pb-0">
+                                <span className="flex-1 text-[11px] text-white/45">{row.label}</span>
+                                <span className="w-[4.5rem] text-right text-[11px] font-semibold text-white">{row.value}</span>
+                                <span className={cn("w-12 text-right text-[11px] font-medium", row.yoy != null ? (isPos ? "text-green-positive" : "text-red-negative") : "text-white/30")}>
+                                    {row.yoy != null ? `${isPos ? "+" : ""}${row.yoy.toFixed(2)}%` : "—"}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </CardContent>
+        </Card>
     );
 }
 
@@ -998,4 +1138,11 @@ function formatLargeNumber(value: number) {
     if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
     if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
     return value.toString();
+}
+
+function formatFinancial(value: number | null) {
+    if (value == null) return "—";
+    const abs = Math.abs(value);
+    const formatted = formatLargeNumber(abs);
+    return value < 0 ? `-${formatted}` : formatted;
 }
