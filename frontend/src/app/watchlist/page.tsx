@@ -17,6 +17,7 @@ import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { Watchlist, WatchlistAsset, MarketQuote } from "@/lib/api";
 import { fetchQuote, invalidate } from "@/lib/quote-cache";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
+import MarketIndicesStrip from "@/components/market/MarketIndicesStrip";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
 import {
@@ -67,9 +68,47 @@ const compact = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
+// The market quote API returns `change` as a percentage, not a dollar amount.
 function changePct(q: MarketQuote): number {
-  const prev = q.price - q.change;
-  return prev !== 0 ? (q.change / prev) * 100 : 0;
+  return q.change;
+}
+
+// Derive the absolute (dollar) move from price and percent change.
+function changeAbs(q: MarketQuote): number {
+  const prev = q.price / (1 + q.change / 100);
+  return q.price - prev;
+}
+
+/* Deterministic monogram avatar color from the ticker, à la Google Finance logos. */
+const AVATAR_COLORS = [
+  "bg-indigo-500/20 text-indigo-300",
+  "bg-emerald-500/20 text-emerald-300",
+  "bg-amber-500/20 text-amber-300",
+  "bg-sky-500/20 text-sky-300",
+  "bg-rose-500/20 text-rose-300",
+  "bg-violet-500/20 text-violet-300",
+  "bg-teal-500/20 text-teal-300",
+  "bg-orange-500/20 text-orange-300",
+];
+
+function avatarColor(symbol: string): string {
+  let hash = 0;
+  for (let i = 0; i < symbol.length; i++) hash = (hash * 31 + symbol.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+
+function TickerAvatar({ symbol }: { symbol: string }) {
+  return (
+    <div
+      className={cn(
+        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold tracking-tight",
+        avatarColor(symbol)
+      )}
+      aria-hidden="true"
+    >
+      {symbol.replace(/[^A-Z0-9]/gi, "").slice(0, 2).toUpperCase()}
+    </div>
+  );
 }
 
 function sortValue(row: AssetRow, key: SortKey): number | string | null {
@@ -78,7 +117,7 @@ function sortValue(row: AssetRow, key: SortKey): number | string | null {
   if (!q) return null;
   switch (key) {
     case "price": return q.price;
-    case "change": return q.change;
+    case "change": return changeAbs(q);
     case "changePct": return changePct(q);
     case "open": return q.open_price ?? null;
     case "high": return q.day_high ?? null;
@@ -448,15 +487,20 @@ function WatchlistSection({
                       className="group border-b border-white/[0.04] transition-colors last:border-b-0 hover:bg-white/[0.025]"
                     >
                       {/* Symbol + name */}
-                      <td className="max-w-48 py-3 pl-6 pr-3">
-                        <p className="text-sm font-semibold text-white">{a.symbol}</p>
-                        {q ? (
-                          <p className="truncate text-xs text-white/35">{q.name}</p>
-                        ) : a.loading ? (
-                          <p className="mt-1 h-3 w-24 animate-pulse rounded bg-white/[0.07]" />
-                        ) : (
-                          <p className="text-xs text-white/25">Quote unavailable</p>
-                        )}
+                      <td className="max-w-60 py-3 pl-6 pr-3">
+                        <div className="flex items-center gap-3">
+                          <TickerAvatar symbol={a.symbol} />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-white">{a.symbol}</p>
+                            {q ? (
+                              <p className="truncate text-xs text-white/35">{q.name}</p>
+                            ) : a.loading ? (
+                              <p className="mt-1 h-3 w-24 animate-pulse rounded bg-white/[0.07]" />
+                            ) : (
+                              <p className="text-xs text-white/25">Quote unavailable</p>
+                            )}
+                          </div>
+                        </div>
                       </td>
 
                       {/* Price */}
@@ -479,7 +523,7 @@ function WatchlistSection({
                               positive ? "text-green-positive" : "text-red-negative"
                             )}
                           >
-                            {positive ? "+" : "-"}${fmt(Math.abs(q.change))}
+                            {positive ? "+" : "-"}${fmt(Math.abs(changeAbs(q)))}
                           </span>
                         )}
                       </td>
@@ -670,6 +714,11 @@ export default function WatchlistPage() {
             <UpgradePrompt message={upgradeMessage} />
           </div>
         )}
+
+        {/* Market summary — index strip, Google Finance style */}
+        <div className="py-4">
+          <MarketIndicesStrip />
+        </div>
 
         {/* List sections */}
         {listsLoading ? (
