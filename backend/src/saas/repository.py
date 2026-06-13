@@ -28,6 +28,9 @@ from src.saas.models import (
     NotificationChannelRead,
     QuantValidationRunCreate,
     QuantValidationRunRead,
+    ReplaySessionCreate,
+    ReplaySessionRead,
+    ReplaySessionUpdate,
     RiskSnapshotCreate,
     RiskSnapshotRead,
     StrategyExportCreate,
@@ -59,6 +62,7 @@ class UserScopedStore:
         self._strategies: dict[UUID, StrategyRead] = {}
         self._backtest_runs: dict[UUID, BacktestRunRead] = {}
         self._backtest_trades: dict[UUID, list[BacktestTradeRead]] = {}
+        self._replay_sessions: dict[UUID, ReplaySessionRead] = {}
         self._notification_channels: dict[UUID, NotificationChannelRead] = {}
         self._notification_secrets: dict[UUID, dict[str, Any]] = {}
         self._alerts: dict[UUID, AlertRead] = {}
@@ -78,6 +82,7 @@ class UserScopedStore:
             self._strategies.clear()
             self._backtest_runs.clear()
             self._backtest_trades.clear()
+            self._replay_sessions.clear()
             self._notification_channels.clear()
             self._notification_secrets.clear()
             self._alerts.clear()
@@ -215,6 +220,15 @@ class UserScopedStore:
             self._watchlists[watchlist.id] = watchlist
         return watchlist
 
+    def delete_watchlist(self, user_id: UUID, watchlist_id: UUID) -> bool:
+        with self._lock:
+            watchlist = self._watchlists.get(watchlist_id)
+            if watchlist is None or watchlist.user_id != user_id:
+                return False
+            del self._watchlists[watchlist_id]
+            self._watchlist_assets.pop(watchlist_id, None)
+            return True
+
     def get_watchlist(self, user_id: UUID, watchlist_id: UUID) -> WatchlistRead | None:
         with self._lock:
             watchlist = self._watchlists.get(watchlist_id)
@@ -237,6 +251,17 @@ class UserScopedStore:
         with self._lock:
             self._watchlist_assets.setdefault(watchlist_id, []).append(asset)
         return asset
+
+    def remove_watchlist_asset(self, user_id: UUID, watchlist_id: UUID, asset_id: UUID) -> bool:
+        if self.get_watchlist(user_id, watchlist_id) is None:
+            return False
+        with self._lock:
+            before = self._watchlist_assets.get(watchlist_id, [])
+            after = [a for a in before if a.id != asset_id]
+            if len(after) == len(before):
+                return False
+            self._watchlist_assets[watchlist_id] = after
+            return True
 
     def list_watchlist_assets(self, user_id: UUID, watchlist_id: UUID) -> list[WatchlistAssetRead] | None:
         if self.get_watchlist(user_id, watchlist_id) is None:
@@ -304,6 +329,64 @@ class UserScopedStore:
         with self._lock:
             runs = [run for run in self._backtest_runs.values() if run.user_id == user_id]
             return sorted(runs, key=lambda row: row.created_at, reverse=True)[:limit]
+
+    def get_backtest_run(self, user_id: UUID, run_id: UUID) -> BacktestRunRead | None:
+        with self._lock:
+            run = self._backtest_runs.get(run_id)
+            return run if run is not None and run.user_id == user_id else None
+
+    def delete_backtest_run(self, user_id: UUID, run_id: UUID) -> bool:
+        with self._lock:
+            run = self._backtest_runs.get(run_id)
+            if run is None or run.user_id != user_id:
+                return False
+            del self._backtest_runs[run_id]
+            self._backtest_trades.pop(run_id, None)
+            return True
+
+    def create_replay_session(self, user_id: UUID, payload: ReplaySessionCreate, *, total_bars: int) -> ReplaySessionRead:
+        session = ReplaySessionRead(
+            user_id=user_id,
+            name=payload.name,
+            symbol=payload.symbol,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            initial_balance=payload.initial_balance,
+            cash=payload.initial_balance,
+            total_bars=total_bars,
+        )
+        with self._lock:
+            self._replay_sessions[session.id] = session
+        return session
+
+    def list_replay_sessions(self, user_id: UUID, limit: int = 50) -> list[ReplaySessionRead]:
+        with self._lock:
+            sessions = [session for session in self._replay_sessions.values() if session.user_id == user_id]
+            return sorted(sessions, key=lambda row: row.created_at, reverse=True)[:limit]
+
+    def get_replay_session(self, user_id: UUID, session_id: UUID) -> ReplaySessionRead | None:
+        with self._lock:
+            session = self._replay_sessions.get(session_id)
+            return session if session is not None and session.user_id == user_id else None
+
+    def update_replay_session(self, user_id: UUID, session_id: UUID, payload: ReplaySessionUpdate) -> ReplaySessionRead | None:
+        with self._lock:
+            session = self._replay_sessions.get(session_id)
+            if session is None or session.user_id != user_id:
+                return None
+            updates = payload.model_dump(exclude_unset=True)
+            updates["updated_at"] = datetime.now(timezone.utc)
+            updated = session.model_copy(update=updates)
+            self._replay_sessions[session_id] = updated
+            return updated
+
+    def delete_replay_session(self, user_id: UUID, session_id: UUID) -> bool:
+        with self._lock:
+            session = self._replay_sessions.get(session_id)
+            if session is None or session.user_id != user_id:
+                return False
+            del self._replay_sessions[session_id]
+            return True
 
     def create_notification_channel(
         self,
@@ -582,6 +665,18 @@ class SupabaseRestStore:
         )
         return WatchlistAssetRead.model_validate(rows[0])
 
+    def delete_watchlist(self, user_id: UUID, watchlist_id: UUID) -> bool:
+        if self.get_watchlist(user_id, watchlist_id) is None:
+            return False
+        self._request("DELETE", "watchlists", {"id": f"eq.{watchlist_id}", "user_id": f"eq.{user_id}"})
+        return True
+
+    def remove_watchlist_asset(self, user_id: UUID, watchlist_id: UUID, asset_id: UUID) -> bool:
+        if self.get_watchlist(user_id, watchlist_id) is None:
+            return False
+        self._request("DELETE", "watchlist_assets", {"id": f"eq.{asset_id}", "watchlist_id": f"eq.{watchlist_id}"})
+        return True
+
     def list_watchlist_assets(self, user_id: UUID, watchlist_id: UUID) -> list[WatchlistAssetRead] | None:
         if self.get_watchlist(user_id, watchlist_id) is None:
             return None
@@ -656,6 +751,72 @@ class SupabaseRestStore:
             if "backtest_trades" in row and "trades" not in row:
                 row["trades"] = row.pop("backtest_trades")
         return [BacktestRunRead.model_validate(row) for row in rows]
+
+    def get_backtest_run(self, user_id: UUID, run_id: UUID) -> BacktestRunRead | None:
+        rows = self._request(
+            "GET",
+            "backtest_runs",
+            {"select": "*,backtest_trades(*)", "id": f"eq.{run_id}", "user_id": f"eq.{user_id}", "limit": "1"},
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        if "backtest_trades" in row and "trades" not in row:
+            row["trades"] = row.pop("backtest_trades")
+        return BacktestRunRead.model_validate(row)
+
+    def delete_backtest_run(self, user_id: UUID, run_id: UUID) -> bool:
+        if self.get_backtest_run(user_id, run_id) is None:
+            return False
+        self._request("DELETE", "backtest_runs", {"id": f"eq.{run_id}", "user_id": f"eq.{user_id}"})
+        return True
+
+    def create_replay_session(self, user_id: UUID, payload: ReplaySessionCreate, *, total_bars: int) -> ReplaySessionRead:
+        body = {
+            "user_id": str(user_id),
+            "name": payload.name,
+            "symbol": payload.symbol,
+            "start_date": payload.start_date.isoformat(),
+            "end_date": payload.end_date.isoformat(),
+            "initial_balance": payload.initial_balance,
+            "cash": payload.initial_balance,
+            "total_bars": total_bars,
+        }
+        rows = self._request("POST", "backtest_replay_sessions", body=body)
+        return ReplaySessionRead.model_validate(rows[0])
+
+    def list_replay_sessions(self, user_id: UUID, limit: int = 50) -> list[ReplaySessionRead]:
+        rows = self._request(
+            "GET",
+            "backtest_replay_sessions",
+            {"user_id": f"eq.{user_id}", "order": "created_at.desc", "limit": str(limit)},
+        )
+        return [ReplaySessionRead.model_validate(row) for row in rows]
+
+    def get_replay_session(self, user_id: UUID, session_id: UUID) -> ReplaySessionRead | None:
+        rows = self._request(
+            "GET",
+            "backtest_replay_sessions",
+            {"id": f"eq.{session_id}", "user_id": f"eq.{user_id}", "limit": "1"},
+        )
+        return ReplaySessionRead.model_validate(rows[0]) if rows else None
+
+    def update_replay_session(self, user_id: UUID, session_id: UUID, payload: ReplaySessionUpdate) -> ReplaySessionRead | None:
+        body = payload.model_dump(exclude_unset=True)
+        body["updated_at"] = datetime.now(timezone.utc).isoformat()
+        rows = self._request(
+            "PATCH",
+            "backtest_replay_sessions",
+            {"id": f"eq.{session_id}", "user_id": f"eq.{user_id}"},
+            body=body,
+        )
+        return ReplaySessionRead.model_validate(rows[0]) if rows else None
+
+    def delete_replay_session(self, user_id: UUID, session_id: UUID) -> bool:
+        if self.get_replay_session(user_id, session_id) is None:
+            return False
+        self._request("DELETE", "backtest_replay_sessions", {"id": f"eq.{session_id}", "user_id": f"eq.{user_id}"})
+        return True
 
     def create_notification_channel(
         self,

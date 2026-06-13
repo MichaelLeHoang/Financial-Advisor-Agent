@@ -164,6 +164,9 @@ export interface EarningsPoint {
   eps_actual: number | null;
   eps_estimate: number | null;
   beat_pct: number | null;
+  revenue_actual: number | null;
+  revenue_estimate: number | null;
+  revenue_beat_pct: number | null;
 }
 
 export interface QuarterlyFinancial {
@@ -270,13 +273,78 @@ export interface BacktestRun {
   created_at: string;
 }
 
+export interface BacktestPricePoint {
+  date: string;
+  close: number;
+}
+
 export interface BacktestResult {
   run: BacktestRun;
   metrics: BacktestMetrics;
   equity_curve: BacktestEquityPoint[];
   trades: BacktestTrade[];
+  price_series: Record<string, BacktestPricePoint[]>;
   disclaimer: string;
 }
+
+export interface Candle {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number | null;
+}
+
+export interface CandleResponse {
+  candles: Record<string, Candle[]>;
+  source: string;
+}
+
+export interface ReplayTrade {
+  date: string;
+  side: "buy" | "sell";
+  quantity: number;
+  price: number;
+  fee: number;
+  pnl?: number | null;
+}
+
+export interface ReplaySession {
+  id: string;
+  user_id: string;
+  name: string;
+  symbol: string;
+  start_date: string;
+  end_date: string;
+  initial_balance: number;
+  status: "active" | "completed";
+  current_index: number;
+  total_bars: number;
+  cash: number;
+  position_qty: number;
+  position_avg_price: number;
+  trades: ReplayTrade[];
+  equity_curve: BacktestEquityPoint[];
+  metrics: Record<string, number>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReplaySessionCreateRequest {
+  name: string;
+  symbol: string;
+  start_date: string;
+  end_date: string;
+  initial_balance: number;
+}
+
+export type ReplaySessionUpdateRequest = Partial<
+  Pick<
+    ReplaySession,
+    "name" | "status" | "current_index" | "cash" | "position_qty" | "position_avg_price" | "trades" | "equity_curve" | "metrics"
+  >
+>;
 
 export interface StrategyOption {
   type: "buy_and_hold" | "moving_average_crossover" | "rsi_mean_reversion";
@@ -562,6 +630,7 @@ async function del<T>(path: string): Promise<T> {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new ApiError(res.status, err.detail ?? err);
   }
+  if (res.status === 204) return undefined as T;
   return res.json();
 }
 
@@ -637,8 +706,17 @@ export const api = {
   createWatchlist: (name: string) =>
     post<Watchlist>("/api/v1/watchlists", { name }),
 
+  deleteWatchlist: (watchlistId: string) =>
+    del<void>(`/api/v1/watchlists/${encodeURIComponent(watchlistId)}`),
+
+  watchlistAssets: (watchlistId: string) =>
+    get<WatchlistAsset[]>(`/api/v1/watchlists/${encodeURIComponent(watchlistId)}/assets`),
+
   addWatchlistAsset: (watchlistId: string, symbol: string, assetType = "equity") =>
-    post<WatchlistAsset>(`/api/v1/watchlists/${watchlistId}/assets`, { symbol, asset_type: assetType }),
+    post<WatchlistAsset>(`/api/v1/watchlists/${encodeURIComponent(watchlistId)}/assets`, { symbol, asset_type: assetType }),
+
+  removeWatchlistAsset: (watchlistId: string, assetId: string) =>
+    del<void>(`/api/v1/watchlists/${encodeURIComponent(watchlistId)}/assets/${encodeURIComponent(assetId)}`),
 
   billingSubscription: () => get<BillingSubscription>("/api/v1/billing/subscription"),
 
@@ -653,6 +731,30 @@ export const api = {
   backtestStrategies: () => get<Strategy[]>("/api/v1/backtests/strategies"),
 
   backtestRuns: () => get<BacktestRun[]>("/api/v1/backtests/runs"),
+
+  backtestRun: (runId: string) => get<BacktestRun>(`/api/v1/backtests/runs/${encodeURIComponent(runId)}`),
+
+  deleteBacktestRun: (runId: string) =>
+    del<void>(`/api/v1/backtests/runs/${encodeURIComponent(runId)}`),
+
+  backtestCandles: (symbols: string[], start: string, end: string) =>
+    get<CandleResponse>(
+      `/api/v1/backtests/market-data/candles?symbols=${encodeURIComponent(symbols.join(","))}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
+    ),
+
+  replaySessions: () => get<ReplaySession[]>("/api/v1/backtests/replay-sessions"),
+
+  createReplaySession: (payload: ReplaySessionCreateRequest) =>
+    post<ReplaySession>("/api/v1/backtests/replay-sessions", payload),
+
+  replaySession: (sessionId: string) =>
+    get<ReplaySession>(`/api/v1/backtests/replay-sessions/${encodeURIComponent(sessionId)}`),
+
+  updateReplaySession: (sessionId: string, payload: ReplaySessionUpdateRequest) =>
+    patch<ReplaySession>(`/api/v1/backtests/replay-sessions/${encodeURIComponent(sessionId)}`, payload),
+
+  deleteReplaySession: (sessionId: string) =>
+    del<void>(`/api/v1/backtests/replay-sessions/${encodeURIComponent(sessionId)}`),
 
   runBacktest: (payload: BacktestRequest) =>
     post<BacktestResult>("/api/v1/backtests/run", payload),

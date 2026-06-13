@@ -130,6 +130,16 @@ async def create_watchlist(
     return get_store(user).create_watchlist(user.id, payload)
 
 
+@router.delete("/watchlists/{watchlist_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_watchlist(
+    watchlist_id: UUID,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> None:
+    removed = get_store(user).delete_watchlist(user.id, watchlist_id)
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Watchlist not found")
+
+
 @router.get("/watchlists/{watchlist_id}/assets", response_model=list[WatchlistAssetRead])
 async def list_watchlist_assets(
     watchlist_id: UUID,
@@ -165,3 +175,14 @@ async def create_watchlist_asset(
     if asset is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Watchlist not found")
     return asset
+
+
+@router.delete("/watchlists/{watchlist_id}/assets/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_watchlist_asset(
+    watchlist_id: UUID,
+    asset_id: UUID,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> None:
+    removed = get_store(user).remove_watchlist_asset(user.id, watchlist_id, asset_id)
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")

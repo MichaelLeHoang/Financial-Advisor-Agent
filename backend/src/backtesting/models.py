@@ -54,6 +54,11 @@ class EquityPoint(BaseModel):
     value: float
 
 
+class PricePoint(BaseModel):
+    date: datetime
+    close: float
+
+
 class BacktestMetrics(BaseModel):
     total_return: float
     annualized_return: float
@@ -70,6 +75,7 @@ class BacktestResult(BaseModel):
     metrics: BacktestMetrics
     equity_curve: list[EquityPoint]
     trades: list[BacktestTradeCreate]
+    price_series: dict[str, list[PricePoint]] = Field(default_factory=dict)
     disclaimer: str = BACKTEST_DISCLAIMER
 
 
@@ -80,6 +86,15 @@ class StrategyOption(BaseModel):
     default_parameters: dict
 
 
-class PricePoint(BaseModel):
-    date: datetime
+class Candle(BaseModel):
+    date: date
+    open: float
+    high: float
+    low: float
     close: float
+    volume: float | None = None
+
+
+class CandleResponse(BaseModel):
+    candles: dict[str, list[Candle]]
+    source: str = "yfinance_development"

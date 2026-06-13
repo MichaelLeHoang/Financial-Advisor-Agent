@@ -122,6 +122,9 @@ class EarningsPoint(BaseModel):
     eps_actual: float | None = None
     eps_estimate: float | None = None
     beat_pct: float | None = None
+    revenue_actual: float | None = None
+    revenue_estimate: float | None = None
+    revenue_beat_pct: float | None = None
 
 class QuarterlyFinancial(BaseModel):
     period: str
@@ -310,40 +313,82 @@ async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
                 )
             )
 
-        # Earnings (EPS beats)
+        # Quarterly income statement — shared by the earnings revenue match and the financials table
+        fin = None
+        for attr in ("quarterly_income_stmt", "quarterly_financials"):
+            try:
+                candidate = getattr(stock, attr, None)
+                if candidate is not None and not candidate.empty:
+                    fin = candidate
+                    break
+            except Exception:
+                pass
+
+        def _match_quarter_col(year: int, month: int, max_lag_months: int):
+            if fin is None:
+                return None
+            target = year * 12 + month
+            best = None
+            best_lag = None
+            for c in fin.columns:
+                if not hasattr(c, "year"):
+                    continue
+                lag = target - (c.year * 12 + c.month)
+                if 0 <= lag <= max_lag_months and (best_lag is None or lag < best_lag):
+                    best, best_lag = c, lag
+            return best
+
+        def _surprise_pct(actual: float | None, estimate: float | None) -> float | None:
+            if actual is None or estimate is None or estimate == 0:
+                return None
+            return round((actual - estimate) / abs(estimate) * 100, 2)
+
+        def _earnings_point(date_idx, eps_actual: float, eps_estimate: float | None, beat: float | None, max_lag_months: int) -> EarningsPoint:
+            quarter_col = _match_quarter_col(date_idx.year, date_idx.month, max_lag_months) if hasattr(date_idx, "year") else None
+            label_src = quarter_col if quarter_col is not None else date_idx
+            return EarningsPoint(
+                date=label_src.strftime("%b %Y") if hasattr(label_src, "strftime") else str(label_src),
+                eps_actual=eps_actual,
+                eps_estimate=eps_estimate,
+                beat_pct=beat if beat is not None else _surprise_pct(eps_actual, eps_estimate),
+                revenue_actual=_get_fin_metric(fin, "Total Revenue", quarter_col) if quarter_col is not None else None,
+                # yfinance does not expose historical revenue estimates
+                revenue_estimate=None,
+                revenue_beat_pct=None,
+            )
+
+        # Earnings: EPS expected vs reported per fiscal quarter
         earnings: list[EarningsPoint] = []
         try:
-            earnings_df = stock.earnings_dates
-            if earnings_df is not None and not earnings_df.empty:
-                for date_idx, erow in earnings_df.iterrows():
-                    eps_actual = _safe_float(erow.get("Reported EPS"))
+            hist_df = stock.earnings_history
+            if hist_df is not None and not hist_df.empty:
+                for date_idx, erow in hist_df.sort_index(ascending=False).iterrows():
+                    eps_actual = _safe_float(erow.get("epsActual"))
                     if eps_actual is None:
                         continue
-                    date_str = date_idx.strftime("%b %Y") if hasattr(date_idx, "strftime") else str(date_idx)
-                    earnings.append(EarningsPoint(
-                        date=date_str,
-                        eps_actual=eps_actual,
-                        eps_estimate=_safe_float(erow.get("EPS Estimate")),
-                        beat_pct=_safe_float(erow.get("Surprise(%)")),
-                    ))
+                    earnings.append(_earnings_point(date_idx, eps_actual, _safe_float(erow.get("epsEstimate")), None, 1))
                     if len(earnings) >= 6:
                         break
         except Exception:
             pass
 
+        if not earnings:
+            try:
+                earnings_df = stock.earnings_dates
+                if earnings_df is not None and not earnings_df.empty:
+                    for date_idx, erow in earnings_df.iterrows():
+                        eps_actual = _safe_float(erow.get("Reported EPS"))
+                        if eps_actual is None:
+                            continue
+                        earnings.append(_earnings_point(date_idx, eps_actual, _safe_float(erow.get("EPS Estimate")), _safe_float(erow.get("Surprise(%)")), 3))
+                        if len(earnings) >= 6:
+                            break
+            except Exception:
+                pass
+
         # Quarterly financials
         quarterly_financials: list[QuarterlyFinancial] = []
         try:
-            fin = None
-            for attr in ("quarterly_income_stmt", "quarterly_financials"):
-                try:
-                    candidate = getattr(stock, attr, None)
-                    if candidate is not None and not candidate.empty:
-                        fin = candidate
-                        break
-                except Exception:
-                    pass
-
             if fin is not None and not fin.empty:
                 cols_desc = sorted(fin.columns, reverse=True)
                 recent_cols = cols_desc[:4]

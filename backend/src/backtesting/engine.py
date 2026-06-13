@@ -5,11 +5,13 @@ import numpy as np
 import pandas as pd
 
 from src.backtesting.market_data import MarketDataAdapter
-from src.backtesting.models import BacktestMetrics, BacktestRequest, EquityPoint
+from src.backtesting.models import BacktestMetrics, BacktestRequest, EquityPoint, PricePoint
 from src.saas.models import BacktestTradeCreate
 
 
-def run_backtest(req: BacktestRequest, adapter: MarketDataAdapter) -> tuple[BacktestMetrics, list[EquityPoint], list[BacktestTradeCreate]]:
+def run_backtest(
+    req: BacktestRequest, adapter: MarketDataAdapter
+) -> tuple[BacktestMetrics, list[EquityPoint], list[BacktestTradeCreate], dict[str, list[PricePoint]]]:
     prices = adapter.fetch_prices(req.symbols, req.start_date, req.end_date)
     missing = sorted(set(req.symbols) - set(prices))
     if missing:
@@ -18,11 +20,13 @@ def run_backtest(req: BacktestRequest, adapter: MarketDataAdapter) -> tuple[Back
     allocation = req.initial_capital / len(req.symbols)
     curves = []
     all_trades: list[BacktestTradeCreate] = []
+    price_series: dict[str, list[PricePoint]] = {}
 
     for symbol in req.symbols:
         symbol_prices = prices[symbol].astype(float).dropna()
         if len(symbol_prices) < 3:
             raise ValueError(f"Not enough price data returned for {symbol}")
+        price_series[symbol] = series_to_price_points(symbol_prices)
         signals = _signals(req.strategy_type, symbol_prices, req.parameters)
         curve, trades = _simulate_symbol(
             symbol=symbol,
@@ -42,7 +46,22 @@ def run_backtest(req: BacktestRequest, adapter: MarketDataAdapter) -> tuple[Back
         EquityPoint(date=index.date() if hasattr(index, "date") else index, value=round(float(value), 2))
         for index, value in portfolio_curve.items()
     ]
-    return metrics, equity_curve, sorted(all_trades, key=lambda trade: trade.executed_at)
+    return metrics, equity_curve, sorted(all_trades, key=lambda trade: trade.executed_at), price_series
+
+
+def series_to_price_points(prices: pd.Series) -> list[PricePoint]:
+    points = []
+    for timestamp, value in prices.items():
+        if hasattr(timestamp, "to_pydatetime"):
+            moment = timestamp.to_pydatetime()
+        elif isinstance(timestamp, datetime):
+            moment = timestamp
+        else:
+            moment = datetime.combine(timestamp, datetime.min.time())
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=timezone.utc)
+        points.append(PricePoint(date=moment, close=round(float(value), 4)))
+    return points
 
 
 def _signals(strategy_type: str, prices: pd.Series, parameters: dict) -> pd.Series:
