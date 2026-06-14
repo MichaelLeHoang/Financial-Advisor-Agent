@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { Holding, OptimizeResult, Portfolio } from "@/lib/api";
 import { fetchQuote } from "@/lib/quote-cache";
+import { useAuth } from "@/components/auth/AuthProvider";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,7 @@ function computeMetrics(h: HoldingRow, price: number | null) {
 }
 
 export default function PortfolioPage() {
+  const { loading: authLoading, token } = useAuth();
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [holdings, setHoldings] = useState<HoldingRow[]>([]);
@@ -80,6 +82,7 @@ export default function PortfolioPage() {
   const [result, setResult] = useState<OptimizeResult | null>(null);
   const [saving, setSaving] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
+  const [portfoliosLoading, setPortfoliosLoading] = useState(true);
   const [holdingsLoading, setHoldingsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
@@ -89,11 +92,26 @@ export default function PortfolioPage() {
   const activePortfolio = portfolios.find((p) => p.id === activeId) ?? null;
 
   useEffect(() => {
-    api.portfolios().then((list) => {
-      setPortfolios(list);
-      if (list.length > 0) setActiveId(list[0].id);
-    }).catch(() => {});
-  }, []);
+    if (authLoading) return;
+    let cancelled = false;
+    setPortfoliosLoading(true);
+    setError(null);
+    api.portfolios()
+      .then((list) => {
+        if (cancelled) return;
+        setPortfolios(list);
+        setActiveId(list[0]?.id ?? null);
+      })
+      .catch((e: any) => {
+        if (!cancelled) setError(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setPortfoliosLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, token]);
 
   // Fetch live prices using the shared cache
   const fetchPricesForHoldings = useCallback((list: Holding[]) => {
@@ -383,7 +401,12 @@ export default function PortfolioPage() {
 
         {/* Portfolio tabs */}
         <div className="flex flex-wrap items-center gap-2">
-          {portfolios.map((p) => (
+          {portfoliosLoading ? (
+            <>
+              <div className="h-9 w-28 animate-pulse rounded-xl bg-white/[0.06]" />
+              <div className="h-9 w-24 animate-pulse rounded-xl bg-white/[0.04]" />
+            </>
+          ) : portfolios.map((p) => (
             <div
               key={p.id}
               className={cn(
@@ -430,7 +453,7 @@ export default function PortfolioPage() {
             </div>
           ))}
 
-          {showNewForm ? (
+          {!portfoliosLoading && showNewForm ? (
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -454,18 +477,30 @@ export default function PortfolioPage() {
               </Button>
               <button onClick={() => setShowNewForm(false)} className="text-sm text-white/30 hover:text-white">✕</button>
             </div>
-          ) : (
+          ) : !portfoliosLoading ? (
             <button
               onClick={() => setShowNewForm(true)}
               className="rounded-xl border border-dashed border-white/[0.10] px-3 py-2 text-sm text-white/35 transition-colors hover:border-white/20 hover:text-white/60"
             >
               + New portfolio
             </button>
-          )}
+          ) : null}
         </div>
 
         {/* Holdings section */}
-        {activePortfolio ? (
+        {portfoliosLoading ? (
+          <section className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.025]">
+            <div className="border-b border-white/[0.06] px-5 py-4">
+              <div className="h-5 w-40 animate-pulse rounded bg-white/[0.06]" />
+              <div className="mt-2 h-3 w-24 animate-pulse rounded bg-white/[0.04]" />
+            </div>
+            <div className="space-y-3 p-5">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="h-10 animate-pulse rounded-xl bg-white/[0.035]" />
+              ))}
+            </div>
+          </section>
+        ) : activePortfolio ? (
           <section className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.025]">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">

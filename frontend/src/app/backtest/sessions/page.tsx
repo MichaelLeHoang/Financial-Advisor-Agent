@@ -257,7 +257,7 @@ export default function BacktestSessionsPage() {
                         >
                           {session.status}
                         </span>
-                        <Button render={<Link href={`/backtest/replay/${session.id}`} />} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
+                        <Button render={<Link href={`/backtest/replay/${session.id}`} />} nativeButton={false} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
                           {session.status === "completed" ? "Review" : "Resume"}
                         </Button>
                         <button type="button" onClick={() => void deleteSession(session)} aria-label={`Delete ${session.name}`} className="text-[var(--text-muted)] hover:text-red-negative">
@@ -305,10 +305,10 @@ export default function BacktestSessionsPage() {
                     <span className={cn("text-xs font-semibold", run.metrics.total_return >= 0 ? "text-green-positive" : "text-red-negative")}>
                       {formatPercent(run.metrics.total_return)}
                     </span>
-                    <Button render={<Link href={`/backtest/runs/${run.id}`} />} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
+                    <Button render={<Link href={`/backtest/runs/${run.id}`} />} nativeButton={false} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
                       Open
                     </Button>
-                    <Button render={<Link href={`/backtest?rerun=${run.id}`} />} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
+                    <Button render={<Link href={`/backtest?rerun=${run.id}`} />} nativeButton={false} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
                       <RefreshCcw className="mr-1 h-3 w-3" />
                       Re-run
                     </Button>

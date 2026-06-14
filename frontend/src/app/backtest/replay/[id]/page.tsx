@@ -372,7 +372,7 @@ export default function ReplaySessionPage({ params }: { params: Promise<{ id: st
                       <Metric label="Win rate" value={formatPercent(Number(session.metrics.win_rate ?? 0))} />
                       <Metric label="Closed trades" value={String(session.metrics.number_of_trades ?? replay.trades.filter((trade) => trade.side === "sell").length)} />
                     </div>
-                    <Button render={<Link href="/backtest/sessions" />} variant="outline" className="h-10 w-full rounded-xl text-sm">
+                    <Button render={<Link href="/backtest/sessions" />} nativeButton={false} variant="outline" className="h-10 w-full rounded-xl text-sm">
                       Start another session
                     </Button>
                   </CardContent>
