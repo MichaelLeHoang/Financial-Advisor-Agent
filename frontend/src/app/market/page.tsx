@@ -2,18 +2,25 @@
 
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+    ArrowDown,
     ArrowDownRight,
+    ArrowUp,
     ArrowUpRight,
+    CandlestickChart,
+    ChartNoAxesColumn,
     ChevronDown,
     ChevronLeft,
     ChevronRight,
     ChevronUp,
+    LineChart,
+    Loader2,
     Maximize2,
     Plus,
     RefreshCw,
     Search,
     Trash2,
     Trash2Icon,
+    X,
 } from "lucide-react";
 import { motion } from "motion/react";
 import {
@@ -21,8 +28,10 @@ import {
     AreaChart,
     Bar,
     CartesianGrid,
+    Cell,
     ComposedChart,
     Line,
+    ReferenceLine,
     ResponsiveContainer,
     Tooltip,
     XAxis,
@@ -30,7 +39,7 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { api, type EarningsPoint, type MarketQuote, type QuarterlyFinancial } from "@/lib/api";
-import { primeQuote } from "@/lib/quote-cache";
+import { fetchQuote as fetchCachedQuote, invalidate as invalidateQuote } from "@/lib/quote-cache";
 import {
     CHART_RANGES,
     DEFAULT_MARKET_TICKERS,
@@ -82,7 +91,29 @@ interface StockInfo extends MarketSymbol {
     quarterlyFinancials?: QuarterlyFinancial[];
 }
 
-type ChartStyle = "area" | "line";
+type DetailChartStyle = "area" | "line" | "candle" | "bar";
+type MarketChartRange = ChartRange | "MAX";
+
+interface DetailChartPoint extends MarketPoint {
+    primaryPerformance: number;
+    open?: number;
+    high?: number;
+    low?: number;
+    candleBase?: number;
+    candleBody?: number;
+    candlePositive?: boolean;
+    [key: string]: string | number | boolean | null | undefined;
+}
+
+const MARKET_STOCKS_STORAGE_KEY = "market.savedStocks";
+const CHART_DETAIL_RANGES: MarketChartRange[] = ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "MAX"];
+const COMPARE_COLORS = ["#34d399", "#818cf8", "#22d3ee", "#fbbf24", "#f472b6"];
+const CHART_STYLE_LABELS: Record<DetailChartStyle, string> = {
+    area: "Area",
+    line: "Line",
+    candle: "Candle",
+    bar: "Bar",
+};
 
 function createStock(ticker: string): StockInfo {
     const symbol = createMarketSymbol(ticker);
@@ -118,17 +149,155 @@ function quoteToStock(quote: MarketQuote, fallback?: StockInfo): StockInfo {
     };
 }
 
-function quotePeriod(range: ChartRange): [string, string] {
-    const periods: Record<ChartRange, [string, string]> = {
-        "1D": ["1d", "15m"],
-        "5D": ["5d", "30m"],
-        "1M": ["1mo", "1d"],
+function quotePeriod(range: MarketChartRange): [string, string] {
+    const periods: Record<MarketChartRange, [string, string]> = {
+        "1D": ["1d", "1m"],
+        "5D": ["5d", "5m"],
+        "1M": ["1mo", "30m"],
         "6M": ["6mo", "1d"],
         "YTD": ["ytd", "1d"],
         "1Y": ["1y", "1d"],
         "5Y": ["5y", "1wk"],
+        "MAX": ["max", "1mo"],
     };
     return periods[range];
+}
+
+function rangeRefreshMs(range: MarketChartRange): number | null {
+    if (range === "1D") return 60_000;
+    if (range === "5D") return 5 * 60_000;
+    if (range === "1M") return 15 * 60_000;
+    if (range === "6M" || range === "YTD" || range === "1Y") return 60 * 60_000;
+    return null;
+}
+
+function readSavedMarketStocks(): string[] {
+    try {
+        const raw = window.localStorage.getItem(MARKET_STOCKS_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return normalizeSymbolList(parsed.filter((item): item is string => typeof item === "string"));
+    } catch {
+        return [];
+    }
+}
+
+function normalizeSymbolList(symbols: string[]): string[] {
+    const seen = new Set<string>();
+    return symbols
+        .map(normalizeTicker)
+        .filter((symbol) => {
+            if (!symbol || seen.has(symbol)) return false;
+            seen.add(symbol);
+            return true;
+        });
+}
+
+function pointToDetail(point: MarketPoint, previousPrice?: number): DetailChartPoint {
+    const ohlcPoint = point as MarketPoint & { open?: number; high?: number; low?: number };
+    const open = typeof ohlcPoint.open === "number" ? ohlcPoint.open : previousPrice ?? point.price;
+    const high = typeof ohlcPoint.high === "number" ? ohlcPoint.high : Math.max(open, point.price);
+    const low = typeof ohlcPoint.low === "number" ? ohlcPoint.low : Math.min(open, point.price);
+    const candlePositive = point.price >= open;
+    return {
+        ...point,
+        primaryPerformance: 0,
+        open,
+        high,
+        low,
+        candleBase: candlePositive ? open : point.price,
+        candleBody: Math.max(Math.abs(point.price - open), Math.max(point.price * 0.00008, 0.01)),
+        candlePositive,
+    };
+}
+
+function performanceFrom(start: number, current: number): number {
+    if (!Number.isFinite(start) || start === 0) return 0;
+    return ((current - start) / Math.abs(start)) * 100;
+}
+
+function domainWithPadding(values: number[]): [number, number] {
+    const finite = values.filter((value) => Number.isFinite(value));
+    if (finite.length === 0) return [0, 1];
+    const min = Math.min(...finite);
+    const max = Math.max(...finite);
+    const padding = Math.max((max - min) * 0.12, Math.abs(max || min || 1) * 0.01);
+    return [min - padding, max + padding];
+}
+
+function compareKey(symbol: string, suffix: "price" | "performance"): string {
+    return `compare_${symbol.replace(/[^A-Z0-9]/gi, "_")}_${suffix}`;
+}
+
+function estimateAbsoluteChange(stock: StockInfo): number {
+    const percent = stock.change / 100;
+    if (!Number.isFinite(percent) || percent === -1) return 0;
+    return stock.price - stock.price / (1 + percent);
+}
+
+function formatAxisPrice(value: number) {
+    if (Math.abs(value) >= 1000) return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function ChartModeIcon({ mode }: { mode: DetailChartStyle }) {
+    if (mode === "candle") return <CandlestickChart className="size-4" />;
+    if (mode === "bar") return <ChartNoAxesColumn className="size-4" />;
+    return <LineChart className="size-4" />;
+}
+
+function DetailChartTooltip({
+    active,
+    payload,
+    primaryTicker,
+    compareQuotes,
+    compareMode,
+}: {
+    active?: boolean;
+    payload?: Array<{ payload?: DetailChartPoint }>;
+    primaryTicker: string;
+    compareQuotes: StockInfo[];
+    compareMode: boolean;
+}) {
+    if (!active || !payload?.length) return null;
+    const point = payload[0]?.payload;
+    if (!point) return null;
+
+    return (
+        <div className="min-w-52 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-tooltip)] px-3 py-2 text-xs shadow-[var(--shadow-tooltip)]">
+            <p className="font-semibold text-white/85">{point.label}</p>
+            <div className="mt-2 space-y-1.5">
+                <div className="flex items-center justify-between gap-4">
+                    <span className="inline-flex items-center gap-2 text-white/55">
+                        <span className="size-2 rounded-full" style={{ backgroundColor: COMPARE_COLORS[0] }} />
+                        {primaryTicker}
+                    </span>
+                    <span className="font-semibold tabular-nums text-white">
+                        {compareMode
+                            ? `${formatCurrency(point.price)} · ${point.primaryPerformance >= 0 ? "+" : ""}${point.primaryPerformance.toFixed(2)}%`
+                            : formatCurrency(point.price)}
+                    </span>
+                </div>
+                {compareMode && compareQuotes.map((compareQuote, index) => {
+                    const price = point[compareKey(compareQuote.ticker, "price")];
+                    const performance = point[compareKey(compareQuote.ticker, "performance")];
+                    if (typeof price !== "number" || typeof performance !== "number") return null;
+                    return (
+                        <div key={compareQuote.ticker} className="flex items-center justify-between gap-4">
+                            <span className="inline-flex items-center gap-2 text-white/55">
+                                <span className="size-2 rounded-full" style={{ backgroundColor: COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length] }} />
+                                {compareQuote.ticker}
+                            </span>
+                            <span className="font-semibold tabular-nums text-white">
+                                {formatCurrency(price)} · {performance >= 0 ? "+" : ""}{performance.toFixed(2)}%
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
 }
 
 export default function MarketPage() {
@@ -143,8 +312,9 @@ export default function MarketPage() {
     const [mounted, setMounted] = useState(false);
     const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
     const [selectedStock, setSelectedStock] = useState<StockInfo | null>(null);
-    const [selectedRange, setSelectedRange] = useState<ChartRange>("1M");
-    const [chartStyle, setChartStyle] = useState<ChartStyle>("area");
+    const [selectedRange, setSelectedRange] = useState<MarketChartRange>("1M");
+    const [chartStyle, setChartStyle] = useState<DetailChartStyle>("area");
+    const [comparisonSymbols, setComparisonSymbols] = useState<string[]>([]);
     const [pendingRemoval, setPendingRemoval] = useState<StockInfo | null>(null);
     const [skipRemoveConfirm, setSkipRemoveConfirm] = useState(false);
     const [skipRemoveConfirmDraft, setSkipRemoveConfirmDraft] = useState(false);
@@ -153,8 +323,12 @@ export default function MarketPage() {
     const matches = symbolMatches.length > 0 ? symbolMatches : localMatches;
 
     useEffect(() => {
-        setMounted(true);
+        const saved = readSavedMarketStocks();
+        if (saved.length > 0) {
+            setStocks(saved.map(createStock));
+        }
         setSkipRemoveConfirm(window.localStorage.getItem("market.skipRemoveConfirm") === "true");
+        setMounted(true);
     }, []);
 
     useEffect(() => {
@@ -162,6 +336,11 @@ export default function MarketPage() {
         refresh();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [mounted]);
+
+    useEffect(() => {
+        if (!mounted) return;
+        window.localStorage.setItem(MARKET_STOCKS_STORAGE_KEY, JSON.stringify(stocks.map((stock) => stock.ticker)));
+    }, [mounted, stocks]);
 
     useEffect(() => {
         const normalized = query.trim();
@@ -215,10 +394,9 @@ export default function MarketPage() {
         return () => window.removeEventListener("market-search:focus", focusSearch);
     }, []);
 
-    const fetchQuote = async (ticker: string, fallback?: StockInfo, range: ChartRange = "1M") => {
+    const fetchQuote = async (ticker: string, fallback?: StockInfo, range: MarketChartRange = "1M") => {
         const [period, interval] = quotePeriod(range);
-        const quote = await api.marketQuote(ticker, period, interval);
-        primeQuote(quote, period, interval); // share range-specific quote data with the cache
+        const quote = await fetchCachedQuote(ticker, period, interval);
         return quoteToStock(quote, fallback);
     };
 
@@ -273,6 +451,7 @@ export default function MarketPage() {
         setSelectedStock(next);
         setSelectedRange("1M");
         setChartStyle("area");
+        setComparisonSymbols([]);
 
         fetchQuote(normalized, next)
             .then((fresh) => {
@@ -282,7 +461,7 @@ export default function MarketPage() {
             .catch(() => undefined);
     };
 
-    const changeChartRange = (range: ChartRange) => {
+    const changeChartRange = (range: MarketChartRange) => {
         setSelectedRange(range);
         if (!selectedStock) return;
 
@@ -293,6 +472,11 @@ export default function MarketPage() {
             })
             .catch(() => undefined);
     };
+
+    const handleStockLoaded = useCallback((fresh: StockInfo) => {
+        setSelectedStock((current) => current?.ticker === fresh.ticker ? fresh : current);
+        setStocks((current) => current.map((stock) => stock.ticker === fresh.ticker ? fresh : stock));
+    }, []);
 
     const refresh = async () => {
         if (stocks.length === 0) return;
@@ -398,8 +582,11 @@ export default function MarketPage() {
                 mounted={mounted}
                 range={selectedRange}
                 chartStyle={chartStyle}
+                comparisonSymbols={comparisonSymbols}
                 onRangeChange={changeChartRange}
                 onStyleChange={setChartStyle}
+                onComparisonChange={setComparisonSymbols}
+                onStockLoaded={handleStockLoaded}
                 onOpenChange={(open) => {
                     if (!open) setSelectedStock(null);
                 }}
@@ -714,112 +901,329 @@ function MarketChartDialog({
     mounted,
     range,
     chartStyle,
+    comparisonSymbols,
     onRangeChange,
     onStyleChange,
+    onComparisonChange,
+    onStockLoaded,
     onOpenChange,
 }: {
     stock: StockInfo | null;
     mounted: boolean;
-    range: ChartRange;
-    chartStyle: ChartStyle;
-    onRangeChange: (range: ChartRange) => void;
-    onStyleChange: (style: ChartStyle) => void;
+    range: MarketChartRange;
+    chartStyle: DetailChartStyle;
+    comparisonSymbols: string[];
+    onRangeChange: (range: MarketChartRange) => void;
+    onStyleChange: (style: DetailChartStyle) => void;
+    onComparisonChange: (symbols: string[]) => void;
+    onStockLoaded: (stock: StockInfo) => void;
     onOpenChange: (open: boolean) => void;
 }) {
     const [earningsExpanded, setEarningsExpanded] = useState(false);
     const [quarterIdx, setQuarterIdx] = useState(0);
+    const [detailStock, setDetailStock] = useState<StockInfo | null>(stock);
+    const [loading, setLoading] = useState(false);
+    const [compareQuery, setCompareQuery] = useState("");
+    const [compareQuotes, setCompareQuotes] = useState<StockInfo[]>([]);
+    const [compareLoading, setCompareLoading] = useState(false);
+    const [hoverPoint, setHoverPoint] = useState<DetailChartPoint | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
 
     useEffect(() => {
         setEarningsExpanded(false);
         setQuarterIdx(0);
-    }, [stock?.ticker]);
+        setDetailStock(stock);
+        setHoverPoint(null);
+        setNotice(null);
+    }, [stock]);
+
+    const [period, interval] = useMemo(() => quotePeriod(range), [range]);
+
+    useEffect(() => {
+        if (!stock) return;
+        let cancelled = false;
+        setLoading(true);
+        fetchCachedQuote(stock.ticker, period, interval)
+            .then((quote) => {
+                if (cancelled) return;
+                const fresh = quoteToStock(quote, stock);
+                setDetailStock(fresh);
+                onStockLoaded(fresh);
+            })
+            .catch(() => {
+                if (!cancelled) setDetailStock(stock);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    // Fetch on symbol/range changes only. `stock` object identity changes when fresh quotes land.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [interval, onStockLoaded, period, stock?.ticker]);
+
+    useEffect(() => {
+        if (!stock) return;
+        const refreshMs = rangeRefreshMs(range);
+        if (!refreshMs) return;
+
+        let cancelled = false;
+        const timer = window.setInterval(() => {
+            invalidateQuote(stock.ticker);
+            fetchCachedQuote(stock.ticker, period, interval)
+                .then((quote) => {
+                    if (cancelled) return;
+                    const fresh = quoteToStock(quote, detailStock ?? stock);
+                    setDetailStock(fresh);
+                    onStockLoaded(fresh);
+                })
+                .catch(() => undefined);
+
+            comparisonSymbols.forEach((symbol) => invalidateQuote(symbol));
+        }, refreshMs);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    // Auto-refresh follows the active symbol/range and uses the latest cached detail state as fallback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [comparisonSymbols, interval, onStockLoaded, period, range, stock?.ticker]);
+
+    const activeComparisonSymbols = useMemo(
+        () => normalizeSymbolList(comparisonSymbols).filter((symbol) => symbol !== stock?.ticker),
+        [comparisonSymbols, stock?.ticker]
+    );
+
+    useEffect(() => {
+        if (!stock || activeComparisonSymbols.length === 0) {
+            setCompareQuotes([]);
+            setCompareLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        setCompareLoading(true);
+        Promise.allSettled(activeComparisonSymbols.map((symbol) => fetchCachedQuote(symbol, period, interval))).then((results) => {
+            if (cancelled) return;
+            setCompareQuotes(
+                results
+                    .filter((result): result is PromiseFulfilledResult<MarketQuote> => result.status === "fulfilled")
+                    .map((result) => quoteToStock(result.value, createStock(result.value.ticker)))
+            );
+            setCompareLoading(false);
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [activeComparisonSymbols, interval, period, stock]);
+
+    const compareMode = activeComparisonSymbols.length > 0;
+    useEffect(() => {
+        if (compareMode && chartStyle !== "line") onStyleChange("line");
+    }, [chartStyle, compareMode, onStyleChange]);
 
     const series = useMemo(() => {
-        if (!stock) return [];
-        return stock.data.length > 0 ? stock.data : createMarketSeries(stock, range);
-    }, [stock, range]);
-    const up = (stock?.change ?? 0) >= 0;
-    const color = up ? "#34d399" : "#f87171";
-    const stats = useMemo(() => createStats(stock, series), [stock, series]);
+        if (!detailStock) return [];
+        return detailStock.data.length > 0 ? detailStock.data : createMarketSeries(detailStock, range === "MAX" ? "5Y" : range);
+    }, [detailStock, range]);
+    const chartData = useMemo(() => {
+        return series.map((point, index, history) => pointToDetail(point, history[index - 1]?.price));
+    }, [series]);
+    const displayedChartData = useMemo(() => {
+        if (chartData.length === 0) return [];
+        const primaryStart = chartData[0]?.price ?? 1;
+        return chartData.map((point, index) => {
+            const next: DetailChartPoint = {
+                ...point,
+                primaryPerformance: performanceFrom(primaryStart, point.price),
+            };
+            compareQuotes.forEach((compareQuote) => {
+                const compareHistory = compareQuote.data.slice(-chartData.length);
+                const compareStart = compareHistory[0]?.price ?? 1;
+                const compareIndex = index - Math.max(chartData.length - compareHistory.length, 0);
+                const comparePoint = compareIndex >= 0 ? compareHistory[compareIndex] : undefined;
+                next[compareKey(compareQuote.ticker, "price")] = comparePoint?.price ?? null;
+                next[compareKey(compareQuote.ticker, "performance")] = comparePoint?.price
+                    ? performanceFrom(compareStart, comparePoint.price)
+                    : null;
+            });
+            return next;
+        });
+    }, [chartData, compareQuotes]);
+
+    const up = (detailStock?.change ?? 0) >= 0;
+    const color = compareMode ? COMPARE_COLORS[0] : up ? "#34d399" : "#f87171";
+    const stats = useMemo(() => createStats(detailStock, series), [detailStock, series]);
+    const chartValues = compareMode
+        ? displayedChartData.flatMap((point) => [
+            point.primaryPerformance,
+            ...compareQuotes.flatMap((compareQuote) => {
+                const value = point[compareKey(compareQuote.ticker, "performance")];
+                return typeof value === "number" ? [value] : [];
+            }),
+        ])
+        : chartStyle === "candle"
+            ? displayedChartData.flatMap((point) => [
+                typeof point.high === "number" ? point.high : point.price,
+                typeof point.low === "number" ? point.low : point.price,
+            ])
+            : displayedChartData.map((point) => point.price);
+    const yDomain = domainWithPadding(chartValues);
+    const activePoint = hoverPoint ?? displayedChartData[displayedChartData.length - 1] ?? null;
+    const activePrice = activePoint?.price ?? detailStock?.price ?? 0;
+    const activePercentChange = detailStock ? performanceFrom(detailStock.price - estimateAbsoluteChange(detailStock), activePrice) : 0;
+    const activeAbsoluteChange = detailStock ? activePrice - (detailStock.price - estimateAbsoluteChange(detailStock)) : 0;
+    const filteredCompareMatches = useMemo(() => {
+        const excluded = new Set([stock?.ticker, ...activeComparisonSymbols]);
+        return searchMarketSymbols(compareQuery, 8).filter((match) => !excluded.has(match.ticker));
+    }, [activeComparisonSymbols, compareQuery, stock?.ticker]);
+
+    const addCompareSymbol = (symbol: string) => {
+        const normalized = normalizeTicker(symbol);
+        if (!normalized || normalized === stock?.ticker || activeComparisonSymbols.includes(normalized)) return;
+        onComparisonChange([...activeComparisonSymbols, normalized]);
+        setCompareQuery("");
+    };
+
+    const removeCompareSymbol = (symbol: string) => {
+        onComparisonChange(activeComparisonSymbols.filter((item) => item !== symbol));
+        setHoverPoint(null);
+    };
 
     return (
         <Dialog open={Boolean(stock)} onOpenChange={onOpenChange}>
             <DialogContent className="max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]">
-                {stock && (
+                {stock && detailStock && (
                     <>
                         <DialogHeader className="shrink-0 px-4 pt-4 pr-14 sm:px-6 sm:pt-6 sm:pr-16">
                             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                 <div>
                                     <DialogTitle className="flex flex-wrap items-center gap-3 text-xl sm:text-2xl">
-                                        {stock.ticker}
-                                        <Badge variant="outline" className="h-6 rounded-lg">{stock.exchange}</Badge>
+                                        {detailStock.ticker}
+                                        <Badge variant="outline" className="h-6 rounded-lg">{detailStock.exchange}</Badge>
                                     </DialogTitle>
-                                    <DialogDescription>{stock.name} · {stock.sector}</DialogDescription>
+                                    <DialogDescription>{detailStock.name} · {detailStock.sector}</DialogDescription>
                                 </div>
                                 <div className="text-left lg:text-right">
-                                    <div className="text-2xl font-bold text-white sm:text-3xl">{formatCurrency(stock.price)}</div>
+                                    <div className="text-2xl font-bold text-white sm:text-3xl">{formatCurrency(activePrice)}</div>
                                     <div className={cn("mt-1 inline-flex items-center gap-1 text-sm", up ? "text-green-positive" : "text-red-negative")}>
-                                        {up ? <ArrowUpRight className="size-4" /> : <ArrowDownRight className="size-4" />}
-                                        {formatChange(stock.change)}
+                                        {activePercentChange >= 0 ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
+                                        {formatChange(activePercentChange)}
+                                        <span className="text-white/42">({activeAbsoluteChange >= 0 ? "+" : "-"}{formatCurrency(Math.abs(activeAbsoluteChange))})</span>
                                     </div>
                                 </div>
                             </div>
                         </DialogHeader>
 
-                        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
-                            <div className="flex flex-wrap gap-2">
-                                {CHART_RANGES.map((value) => (
-                                    <Button
-                                        key={value}
-                                        type="button"
-                                        size="sm"
-                                        variant={range === value ? "secondary" : "outline"}
-                                        className="h-8 rounded-lg px-3 text-xs"
-                                        onClick={() => onRangeChange(value)}
-                                    >
-                                        {value}
-                                    </Button>
-                                ))}
+                        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-y border-white/[0.06] px-4 py-3 sm:px-6">
+                            <div className="flex flex-wrap items-center gap-2">
+                                {(Object.keys(CHART_STYLE_LABELS) as DetailChartStyle[]).map((style) => {
+                                    const disabled = compareMode && style !== "line";
+                                    return (
+                                        <Button
+                                            key={style}
+                                            type="button"
+                                            size="sm"
+                                            variant={chartStyle === style ? "secondary" : "outline"}
+                                            disabled={disabled}
+                                            className="h-8 rounded-lg px-3 text-xs"
+                                            onClick={() => onStyleChange(style)}
+                                        >
+                                            <ChartModeIcon mode={style} />
+                                            {CHART_STYLE_LABELS[style]}
+                                        </Button>
+                                    );
+                                })}
+                                {compareLoading && <Loader2 className="size-4 animate-spin text-white/40" />}
                             </div>
-                            <div className="flex gap-2">
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={chartStyle === "area" ? "secondary" : "outline"}
-                                    className="h-8 rounded-lg px-3 text-xs"
-                                    onClick={() => onStyleChange("area")}
-                                >
-                                    Area
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={chartStyle === "line" ? "secondary" : "outline"}
-                                    className="h-8 rounded-lg px-3 text-xs"
-                                    onClick={() => onStyleChange("line")}
-                                >
-                                    Line
-                                </Button>
+                            <div className="relative w-full sm:w-72">
+                                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/35" />
+                                <Input
+                                    value={compareQuery}
+                                    onChange={(event) => setCompareQuery(event.target.value)}
+                                    placeholder="Compare symbol..."
+                                    className="h-9 rounded-xl pl-9 text-sm"
+                                    onKeyDown={(event) => {
+                                        if (event.key === "Enter") {
+                                            event.preventDefault();
+                                            addCompareSymbol(filteredCompareMatches[0]?.ticker ?? compareQuery);
+                                        }
+                                    }}
+                                />
+                                {compareQuery && (
+                                    <Card className="absolute left-0 right-0 top-10 z-30 rounded-2xl border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
+                                        <CardContent className="flex max-h-56 flex-col gap-1 overflow-y-auto px-2 py-0">
+                                            {(filteredCompareMatches.length > 0 ? filteredCompareMatches : [createMarketSymbol(compareQuery)]).map((match) => (
+                                                <button
+                                                    key={match.ticker}
+                                                    type="button"
+                                                    onClick={() => addCompareSymbol(match.ticker)}
+                                                    className="flex items-center justify-between rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/[0.08]"
+                                                >
+                                                    <span>
+                                                        <span className="block text-sm font-semibold text-white">{match.ticker}</span>
+                                                        <span className="block text-xs text-white/42">{match.name}</span>
+                                                    </span>
+                                                    <Plus className="size-4 text-white/40" />
+                                                </button>
+                                            ))}
+                                        </CardContent>
+                                    </Card>
+                                )}
                             </div>
                         </div>
 
                         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6">
+                            {activeComparisonSymbols.length > 0 && (
+                                <div className="mb-3 flex flex-wrap items-center gap-2">
+                                    {activeComparisonSymbols.map((symbol, index) => (
+                                        <span
+                                            key={symbol}
+                                            className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-sm font-medium text-white/78"
+                                        >
+                                            <span className="size-2.5 rounded-full" style={{ backgroundColor: COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length] }} />
+                                            {symbol}
+                                            <button
+                                                type="button"
+                                                onClick={() => removeCompareSymbol(symbol)}
+                                                className="rounded-full p-0.5 text-white/45 transition-colors hover:bg-white/[0.08] hover:text-white"
+                                                aria-label={`Remove ${symbol} comparison`}
+                                            >
+                                                <X className="size-3.5" />
+                                            </button>
+                                        </span>
+                                    ))}
+                                    <span className="text-xs text-white/35">Comparison uses normalized percent performance.</span>
+                                </div>
+                            )}
                             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
                                 <Card className="rounded-2xl border-white/[0.06] bg-white/[0.025] py-0">
                                     <CardContent className="flex flex-col gap-3 p-4">
                                         <div className="flex items-center justify-between gap-4 px-1">
                                             <div>
-                                                <div className="text-sm font-semibold text-white">{stock.ticker} price chart</div>
-                                                <div className="text-xs text-white/38">{range} · Price on right axis · Volume below</div>
+                                                <div className="text-sm font-semibold text-white">{detailStock.ticker} price chart</div>
+                                                <div className="text-xs text-white/38">{range} · {compareMode ? "Performance on right axis" : "Price on right axis · Volume below"}</div>
                                             </div>
-                                            <Badge variant="outline" className="h-6 rounded-lg">{stock.currency ?? "USD"}</Badge>
+                                            <Badge variant="outline" className="h-6 rounded-lg">{detailStock.currency ?? "USD"}</Badge>
                                         </div>
                                         {mounted ? (
                                             <div className="h-[20rem] sm:h-[24rem] lg:h-[28rem]">
                                                 <SafeChartContainer>
-                                                    <ComposedChart data={series} margin={{ left: 0, right: 8, top: 12, bottom: 0 }}>
+                                                    <ComposedChart
+                                                        data={displayedChartData}
+                                                        margin={{ left: 0, right: 8, top: 12, bottom: 0 }}
+                                                        onMouseMove={(state: unknown) => {
+                                                            const payload = (state as { activePayload?: Array<{ payload?: DetailChartPoint }> })?.activePayload?.[0]?.payload;
+                                                            if (payload) setHoverPoint(payload);
+                                                        }}
+                                                        onMouseLeave={() => setHoverPoint(null)}
+                                                    >
                                                         <defs>
-                                                            <linearGradient id={`dialog-grad-${stock.ticker}`} x1="0" y1="0" x2="0" y2="1">
+                                                            <linearGradient id={`dialog-grad-${detailStock.ticker}`} x1="0" y1="0" x2="0" y2="1">
                                                                 <stop offset="5%" stopColor={color} stopOpacity={0.34} />
                                                                 <stop offset="95%" stopColor={color} stopOpacity={0.02} />
                                                             </linearGradient>
@@ -833,15 +1237,56 @@ function MarketChartDialog({
                                                             minTickGap={range === "1D" ? 16 : 24}
                                                             tickFormatter={(value) => range === "1D" ? formatIntradayLabel(String(value)) : String(value)}
                                                         />
-                                                        <YAxis yAxisId="price" orientation="right" tickLine={false} axisLine={false} tick={{ fill: "var(--chart-axis)", fontSize: 11 }} width={64} domain={["dataMin - 3", "dataMax + 3"]} />
+                                                        <YAxis
+                                                            yAxisId="price"
+                                                            orientation="right"
+                                                            tickLine={false}
+                                                            axisLine={false}
+                                                            tick={{ fill: "var(--chart-axis)", fontSize: 11 }}
+                                                            width={64}
+                                                            domain={yDomain}
+                                                            tickFormatter={(value) => compareMode ? `${Number(value).toFixed(1)}%` : formatAxisPrice(Number(value))}
+                                                        />
                                                         <YAxis yAxisId="volume" hide />
-                                                        <Tooltip content={<ChartTooltip />} cursor={{ stroke: "var(--chart-cursor)", strokeWidth: 1 }} />
-                                                        <Bar yAxisId="volume" dataKey="volume" fill="var(--chart-volume)" barSize={6} radius={[4, 4, 0, 0]} />
-                                                        {chartStyle === "area" && (
-                                                            <Area yAxisId="price" type="monotone" dataKey="price" stroke={color} strokeWidth={2.4} fill={`url(#dialog-grad-${stock.ticker})`} />
+                                                        <Tooltip
+                                                            content={<DetailChartTooltip primaryTicker={detailStock.ticker} compareQuotes={compareQuotes} compareMode={compareMode} />}
+                                                            cursor={{ stroke: "var(--chart-cursor)", strokeWidth: 1 }}
+                                                        />
+                                                        {compareMode && <ReferenceLine yAxisId="price" y={0} stroke="rgba(255,255,255,0.32)" strokeDasharray="4 4" />}
+                                                        {!compareMode && <Bar yAxisId="volume" dataKey="volume" fill="var(--chart-volume)" barSize={6} radius={[4, 4, 0, 0]} />}
+                                                        {chartStyle === "area" && !compareMode && (
+                                                            <Area yAxisId="price" type="monotone" dataKey="price" stroke={color} strokeWidth={2.4} fill={`url(#dialog-grad-${detailStock.ticker})`} dot={false} />
                                                         )}
-                                                        {chartStyle === "line" && (
-                                                            <Line yAxisId="price" type="monotone" dataKey="price" stroke={color} strokeWidth={2.4} dot={false} />
+                                                        {chartStyle === "bar" && !compareMode && (
+                                                            <Bar yAxisId="price" dataKey="price" fill={color} radius={[4, 4, 0, 0]} opacity={0.72} />
+                                                        )}
+                                                        {chartStyle === "candle" && !compareMode && (
+                                                            <>
+                                                                <Bar yAxisId="price" dataKey="candleBase" stackId="candle" fill="transparent" isAnimationActive={false} />
+                                                                <Bar yAxisId="price" dataKey="candleBody" stackId="candle" radius={[2, 2, 2, 2]}>
+                                                                    {displayedChartData.map((point, index) => (
+                                                                        <Cell key={`${point.label}-${index}`} fill={point.candlePositive ? "#34d399" : "#f87171"} opacity={0.78} />
+                                                                    ))}
+                                                                </Bar>
+                                                                <Line yAxisId="price" type="linear" dataKey="price" stroke="rgba(255,255,255,0.26)" strokeWidth={1} dot={false} />
+                                                            </>
+                                                        )}
+                                                        {(chartStyle === "line" || compareMode) && (
+                                                            <Line yAxisId="price" type="monotone" dataKey={compareMode ? "primaryPerformance" : "price"} stroke={color} strokeWidth={2.4} dot={false} />
+                                                        )}
+                                                        {compareMode && compareQuotes.map((compareQuote, index) => (
+                                                            <Line
+                                                                key={compareQuote.ticker}
+                                                                yAxisId="price"
+                                                                type="monotone"
+                                                                dataKey={compareKey(compareQuote.ticker, "performance")}
+                                                                stroke={COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length]}
+                                                                strokeWidth={2.2}
+                                                                dot={false}
+                                                            />
+                                                        ))}
+                                                        {loading && (
+                                                            <ReferenceLine yAxisId="price" y={yDomain[1]} label={{ value: "Refreshing...", fill: "rgba(255,255,255,0.42)", fontSize: 11 }} stroke="transparent" />
                                                         )}
                                                     </ComposedChart>
                                                 </SafeChartContainer>
@@ -867,21 +1312,56 @@ function MarketChartDialog({
                                         </CardContent>
                                     </Card>
                                     <EarningsCard
-                                        earnings={stock.earnings ?? []}
+                                        earnings={detailStock.earnings ?? []}
                                         expanded={earningsExpanded}
                                         onToggle={() => setEarningsExpanded((x) => !x)}
                                     />
-                                    {(stock.quarterlyFinancials?.length ?? 0) > 0 && (
+                                    {(detailStock.quarterlyFinancials?.length ?? 0) > 0 && (
                                         <QuarterlyFinancialsCard
-                                            quarters={stock.quarterlyFinancials!}
-                                            quarterIdx={Math.min(quarterIdx, stock.quarterlyFinancials!.length - 1)}
-                                            currency={stock.currency ?? "USD"}
-                                            onPrev={() => setQuarterIdx((i) => Math.min(stock.quarterlyFinancials!.length - 1, i + 1))}
+                                            quarters={detailStock.quarterlyFinancials!}
+                                            quarterIdx={Math.min(quarterIdx, detailStock.quarterlyFinancials!.length - 1)}
+                                            currency={detailStock.currency ?? "USD"}
+                                            onPrev={() => setQuarterIdx((i) => Math.min(detailStock.quarterlyFinancials!.length - 1, i + 1))}
                                             onNext={() => setQuarterIdx((i) => Math.max(0, i - 1))}
                                         />
                                     )}
                                 </div>
                             </div>
+                            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-3">
+                                <div className="flex flex-wrap gap-2">
+                                    {CHART_DETAIL_RANGES.map((value) => (
+                                        <Button
+                                            key={value}
+                                            type="button"
+                                            size="sm"
+                                            variant={range === value ? "secondary" : "outline"}
+                                            className="h-8 rounded-full px-3 text-xs"
+                                            onClick={() => onRangeChange(value)}
+                                        >
+                                            {value}
+                                        </Button>
+                                    ))}
+                                </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 rounded-full px-3 text-xs"
+                                    onClick={() => {
+                                        invalidateQuote(detailStock.ticker);
+                                        setNotice("Chart cache cleared. Refreshing latest quote.");
+                                        fetchCachedQuote(detailStock.ticker, period, interval).then((quote) => {
+                                            const fresh = quoteToStock(quote, detailStock);
+                                            setDetailStock(fresh);
+                                            onStockLoaded(fresh);
+                                        }).catch(() => undefined);
+                                    }}
+                                >
+                                    <RefreshCw className="size-3.5" />
+                                    Refresh cache
+                                </Button>
+                            </div>
+                            {notice && <p className="mt-3 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2 text-sm text-white/50">{notice}</p>}
                         </div>
                     </>
                 )}

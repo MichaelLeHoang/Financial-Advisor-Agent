@@ -42,8 +42,15 @@ const PALETTE = [
   "#e879f9",
 ];
 
+const SUPPORTED_BASE_CURRENCIES = ["USD", "CAD"] as const;
+
 interface HoldingRow extends Holding {
+  quoteCurrency: string | null;
+  baseCurrency: string | null;
   currentPrice: number | null;
+  convertedPrice: number | null;
+  fxRate: number | null;
+  originalValue: number | null;
   value: number | null;
   pnl: number | null;
   pnlPct: number | null;
@@ -57,13 +64,104 @@ interface EditState {
   saving: boolean;
 }
 
-function computeMetrics(h: HoldingRow, price: number | null) {
-  if (price == null) return { value: null, pnl: null, pnlPct: null };
-  const value = h.quantity * price;
+function normalizeCurrency(currency: string | null | undefined, fallback = "USD") {
+  return (currency || fallback).trim().toUpperCase();
+}
+
+function formatMoney(value: number, currency: string | null | undefined, digits = 2) {
+  const normalized = normalizeCurrency(currency);
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: normalized,
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(value);
+  } catch {
+    return `${normalized} ${value.toLocaleString("en-US", {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    })}`;
+  }
+}
+
+async function fetchCurrencyRate(sourceCurrency: string, targetCurrency: string): Promise<number> {
+  const source = normalizeCurrency(sourceCurrency);
+  const target = normalizeCurrency(targetCurrency);
+  if (source === target) return 1;
+
+  if (source === "USD" && target === "CAD") {
+    const quote = await fetchQuote("CAD=X", "1d", "1d");
+    return quote.price || 1;
+  }
+
+  if (source === "CAD" && target === "USD") {
+    const quote = await fetchQuote("CAD=X", "1d", "1d");
+    return quote.price ? 1 / quote.price : 1;
+  }
+
+  try {
+    const direct = await fetchQuote(`${source}${target}=X`, "1d", "1d");
+    if (direct.price) return direct.price;
+  } catch {
+    // Fall through to the inverse pair below.
+  }
+
+  try {
+    const inverse = await fetchQuote(`${target}${source}=X`, "1d", "1d");
+    if (inverse.price) return 1 / inverse.price;
+  } catch {
+    // Keep the portfolio usable if an uncommon FX pair is unavailable.
+  }
+
+  return 1;
+}
+
+function emptyMetrics(baseCurrency: string): Pick<
+  HoldingRow,
+  "quoteCurrency" | "baseCurrency" | "currentPrice" | "convertedPrice" | "fxRate" | "originalValue" | "value" | "pnl" | "pnlPct"
+> {
+  return {
+    quoteCurrency: null,
+    baseCurrency,
+    currentPrice: null,
+    convertedPrice: null,
+    fxRate: null,
+    originalValue: null,
+    value: null,
+    pnl: null,
+    pnlPct: null,
+  };
+}
+
+function computeMetrics(
+  h: HoldingRow,
+  price: number | null,
+  quoteCurrency: string | null | undefined,
+  baseCurrency: string | null | undefined,
+  fxRate = 1
+) {
+  const base = normalizeCurrency(baseCurrency);
+  const quote = normalizeCurrency(quoteCurrency, base);
+  if (price == null) return emptyMetrics(base);
+
+  const convertedPrice = price * fxRate;
+  const originalValue = h.quantity * price;
+  const value = h.quantity * convertedPrice;
   const costBasis = h.quantity * h.average_cost;
   const pnl = value - costBasis;
   const pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
-  return { value, pnl, pnlPct };
+  return {
+    quoteCurrency: quote,
+    baseCurrency: base,
+    currentPrice: price,
+    convertedPrice,
+    fxRate,
+    originalValue,
+    value,
+    pnl,
+    pnlPct,
+  };
 }
 
 export default function PortfolioPage() {
@@ -72,6 +170,7 @@ export default function PortfolioPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [holdings, setHoldings] = useState<HoldingRow[]>([]);
   const [newPortfolioName, setNewPortfolioName] = useState("");
+  const [newBaseCurrency, setNewBaseCurrency] = useState<(typeof SUPPORTED_BASE_CURRENCIES)[number]>("USD");
   const [showNewForm, setShowNewForm] = useState(false);
   const [tickerInput, setTickerInput] = useState("");
   const [addSymbol, setAddSymbol] = useState("");
@@ -90,6 +189,7 @@ export default function PortfolioPage() {
   const editRef = useRef<HTMLInputElement>(null);
 
   const activePortfolio = portfolios.find((p) => p.id === activeId) ?? null;
+  const activeBaseCurrency = normalizeCurrency(activePortfolio?.base_currency);
 
   useEffect(() => {
     if (authLoading) return;
@@ -114,15 +214,22 @@ export default function PortfolioPage() {
   }, [authLoading, token]);
 
   // Fetch live prices using the shared cache
-  const fetchPricesForHoldings = useCallback((list: Holding[]) => {
+  const fetchPricesForHoldings = useCallback((list: Holding[], baseCurrency: string) => {
+    const normalizedBase = normalizeCurrency(baseCurrency);
     const symbols = [...new Set(list.map((h) => h.symbol))];
     symbols.forEach((sym) => {
       fetchQuote(sym)
-        .then((quote) => {
+        .then(async (quote) => {
+          const quoteCurrency = normalizeCurrency(quote.currency, normalizedBase);
+          const fxRate = await fetchCurrencyRate(quoteCurrency, normalizedBase);
           setHoldings((prev) =>
             prev.map((h) => {
               if (h.symbol !== sym) return h;
-              return { ...h, currentPrice: quote.price, ...computeMetrics(h, quote.price) };
+              if (normalizeCurrency(h.baseCurrency, normalizedBase) !== normalizedBase) return h;
+              return {
+                ...h,
+                ...computeMetrics(h, quote.price, quoteCurrency, normalizedBase, fxRate),
+              };
             })
           );
         })
@@ -140,17 +247,14 @@ export default function PortfolioPage() {
       .then((list) => {
         const rows: HoldingRow[] = list.map((h) => ({
           ...h,
-          currentPrice: null,
-          value: null,
-          pnl: null,
-          pnlPct: null,
+          ...emptyMetrics(activeBaseCurrency),
         }));
         setHoldings(rows);
         setHoldingsLoading(false);
-        fetchPricesForHoldings(list);
+        fetchPricesForHoldings(list, activeBaseCurrency);
       })
       .catch(() => setHoldingsLoading(false));
-  }, [activeId, fetchPricesForHoldings]);
+  }, [activeId, activeBaseCurrency, fetchPricesForHoldings]);
 
   const createPortfolio = async () => {
     const name = newPortfolioName.trim();
@@ -158,11 +262,12 @@ export default function PortfolioPage() {
     setSaving(true);
     setError(null);
     try {
-      const p = await api.createPortfolio(name, "USD");
+      const p = await api.createPortfolio(name, newBaseCurrency);
       const updated = [...portfolios, p];
       setPortfolios(updated);
       setActiveId(p.id);
       setNewPortfolioName("");
+      setNewBaseCurrency("USD");
       setShowNewForm(false);
     } catch (e: any) {
       if (isUpgradeRequiredError(e)) setUpgradeMessage(e.detail.message);
@@ -199,7 +304,7 @@ export default function PortfolioPage() {
     setError(null);
     try {
       const holding = await api.addHolding(activeId, addSymbol.toUpperCase(), qty, cost);
-      const row: HoldingRow = { ...holding, currentPrice: null, value: null, pnl: null, pnlPct: null };
+      const row: HoldingRow = { ...holding, ...emptyMetrics(activeBaseCurrency) };
       setHoldings((prev) => [...prev, row]);
       setTickerInput("");
       setAddSymbol("");
@@ -207,11 +312,16 @@ export default function PortfolioPage() {
       setAddCost("");
 
       fetchQuote(holding.symbol)
-        .then((quote) => {
+        .then(async (quote) => {
+          const quoteCurrency = normalizeCurrency(quote.currency, activeBaseCurrency);
+          const fxRate = await fetchCurrencyRate(quoteCurrency, activeBaseCurrency);
           setHoldings((prev) =>
             prev.map((h) => {
               if (h.id !== holding.id) return h;
-              return { ...h, currentPrice: quote.price, ...computeMetrics(h, quote.price) };
+              return {
+                ...h,
+                ...computeMetrics(h, quote.price, quoteCurrency, activeBaseCurrency, fxRate),
+              };
             })
           );
         })
@@ -258,7 +368,16 @@ export default function PortfolioPage() {
       prev.map((r) => {
         if (r.id !== edit.holdingId) return r;
         const updated = { ...r, ...patch };
-        return { ...updated, ...computeMetrics(updated, updated.currentPrice) };
+        return {
+          ...updated,
+          ...computeMetrics(
+            updated,
+            updated.currentPrice,
+            updated.quoteCurrency,
+            updated.baseCurrency ?? activeBaseCurrency,
+            updated.fxRate ?? 1
+          ),
+        };
       })
     );
     setEdit((e) => e ? { ...e, saving: true } : null);
@@ -320,6 +439,20 @@ export default function PortfolioPage() {
       fill: PALETTE[i % PALETTE.length],
     }));
   }, [holdings]);
+
+  const crossCurrencyCount = holdings.filter(
+    (h) => h.quoteCurrency && normalizeCurrency(h.quoteCurrency) !== activeBaseCurrency
+  ).length;
+  const topWeight = totalValue > 0
+    ? Math.max(...allocationData.map((d) => (d.value / totalValue) * 100), 0)
+    : 0;
+  const portfolioBadges = [
+    activeBaseCurrency,
+    `${holdings.length} holding${holdings.length !== 1 ? "s" : ""}`,
+    `${uniqueSymbols.length} symbol${uniqueSymbols.length !== 1 ? "s" : ""}`,
+    crossCurrencyCount > 0 ? `${crossCurrencyCount} FX converted` : null,
+    totalValue > 0 ? (topWeight >= 50 ? "Concentrated" : "Balanced") : null,
+  ].filter((badge): badge is string => Boolean(badge));
 
   const chartConfig = useMemo<ChartConfig>(() => {
     const cfg: ChartConfig = {};
@@ -467,6 +600,18 @@ export default function PortfolioPage() {
                 autoFocus
                 className="h-9 rounded-xl border border-white/[0.10] bg-white/[0.04] px-3 text-sm text-white placeholder:text-white/25 focus:border-indigo-primary/50 focus:outline-none"
               />
+              <select
+                value={newBaseCurrency}
+                onChange={(e) => setNewBaseCurrency(e.target.value as (typeof SUPPORTED_BASE_CURRENCIES)[number])}
+                className="h-9 rounded-xl border border-white/[0.10] bg-white/[0.04] px-3 text-sm font-medium text-white focus:border-indigo-primary/50 focus:outline-none"
+                aria-label="Portfolio base currency"
+              >
+                {SUPPORTED_BASE_CURRENCIES.map((currency) => (
+                  <option key={currency} value={currency} className="bg-slate-950 text-white">
+                    {currency}
+                  </option>
+                ))}
+              </select>
               <Button
                 onClick={createPortfolio}
                 disabled={saving || !newPortfolioName.trim()}
@@ -506,18 +651,25 @@ export default function PortfolioPage() {
             <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
               <div>
                 <p className="font-semibold text-white">{activePortfolio.name}</p>
-                <p className="mt-0.5 text-xs text-white/35">
-                  {activePortfolio.base_currency} · {holdings.length} holding{holdings.length !== 1 ? "s" : ""}
-                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {portfolioBadges.map((badge) => (
+                    <span
+                      key={badge}
+                      className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-white/55"
+                    >
+                      {badge}
+                    </span>
+                  ))}
+                </div>
               </div>
               {totalValue > 0 && totalPnl != null && (
                 <div className="text-right">
                   <p className="text-base font-bold text-white">
-                    ${totalValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {formatMoney(totalValue, activeBaseCurrency)}
                   </p>
                   <p className={cn("text-xs font-medium", totalPnl >= 0 ? "text-green-positive" : "text-red-negative")}>
                     {totalPnl >= 0 ? "+" : ""}
-                    ${Math.abs(totalPnl).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {formatMoney(Math.abs(totalPnl), activeBaseCurrency)}
                     {" "}({totalPnlPct! >= 0 ? "+" : ""}{totalPnlPct!.toFixed(2)}%)
                   </p>
                 </div>
@@ -536,7 +688,7 @@ export default function PortfolioPage() {
                     <thead>
                       <tr className="border-b border-white/[0.04] text-xs text-white/30">
                         <th className="px-5 py-3 text-left font-medium">Symbol</th>
-                        <th className="px-4 py-3 text-right font-medium">
+                        <th className="border-l border-white/[0.06] px-4 py-3 text-right font-medium">
                           <span className="flex items-center justify-end gap-1">
                             Qty
                             <Pencil className="h-3 w-3 opacity-40" />
@@ -548,78 +700,115 @@ export default function PortfolioPage() {
                             <Pencil className="h-3 w-3 opacity-40" />
                           </span>
                         </th>
-                        <th className="px-4 py-3 text-right font-medium">Price</th>
+                        <th className="border-l border-white/[0.06] px-4 py-3 text-right font-medium">Price</th>
                         <th className="px-4 py-3 text-right font-medium">Value</th>
-                        <th className="px-4 py-3 text-right font-medium">P&amp;L</th>
+                        <th className="border-l border-white/[0.06] px-4 py-3 text-right font-medium">P&amp;L</th>
                         <th className="w-10 px-3 py-3" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.03]">
-                      {holdings.map((h) => (
-                        <tr key={h.id} className="group transition-colors hover:bg-white/[0.02]">
-                          <td className="px-5 py-3">
-                            <span className="flex items-center gap-2">
-                              <span
-                                className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                                style={{ backgroundColor: colorForSymbol(h.symbol) }}
+                      {holdings.map((h) => {
+                        const quoteCurrency = normalizeCurrency(h.quoteCurrency, activeBaseCurrency);
+                        const isConverted = quoteCurrency !== activeBaseCurrency;
+                        const rowWeight = totalValue > 0 && h.value != null ? (h.value / totalValue) * 100 : 0;
+
+                        return (
+                          <tr key={h.id} className="group transition-colors hover:bg-white/[0.02]">
+                            <td className="px-5 py-3">
+                              <span className="flex items-center gap-2">
+                                <span
+                                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                                  style={{ backgroundColor: colorForSymbol(h.symbol) }}
+                                />
+                                <span className="font-semibold text-white">{h.symbol}</span>
+                              </span>
+                            </td>
+                            <td className="border-l border-white/[0.06] px-4 py-3 text-right">
+                              <EditableCell
+                                holdingId={h.id}
+                                field="quantity"
+                                value={h.quantity}
+                                format={(v) => String(v)}
                               />
-                              <span className="font-semibold text-white">{h.symbol}</span>
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <EditableCell
-                              holdingId={h.id}
-                              field="quantity"
-                              value={h.quantity}
-                              format={(v) => String(v)}
-                            />
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <EditableCell
-                              holdingId={h.id}
-                              field="average_cost"
-                              value={h.average_cost}
-                              format={(v) => `$${v.toFixed(2)}`}
-                            />
-                          </td>
-                          <td className="px-4 py-3 text-right tabular-nums text-white/65">
-                            {h.currentPrice != null ? (
-                              `$${h.currentPrice.toFixed(2)}`
-                            ) : (
-                              <span className="animate-pulse text-white/20">·····</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-right tabular-nums text-white/65">
-                            {h.value != null
-                              ? `$${h.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                              : "—"}
-                          </td>
-                          <td
-                            className={cn(
-                              "px-4 py-3 text-right tabular-nums font-medium",
-                              h.pnl == null ? "text-white/20" : h.pnl >= 0 ? "text-green-positive" : "text-red-negative"
-                            )}
-                          >
-                            {h.pnl != null ? (
-                              <>
-                                {h.pnl >= 0 ? "+" : ""}${Math.abs(h.pnl).toFixed(2)}
-                                <span className="ml-1 text-xs opacity-70">
-                                  ({h.pnlPct! >= 0 ? "+" : ""}{h.pnlPct!.toFixed(1)}%)
-                                </span>
-                              </>
-                            ) : "—"}
-                          </td>
-                          <td className="px-3 py-3">
-                            <button
-                              onClick={() => removeHolding(h.id)}
-                              className="flex h-7 w-7 items-center justify-center rounded-lg text-white/20 opacity-0 transition-all hover:bg-white/[0.06] hover:text-red-negative group-hover:opacity-100"
-                              aria-label={`Remove ${h.symbol}`}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <EditableCell
+                                holdingId={h.id}
+                                field="average_cost"
+                                value={h.average_cost}
+                                format={(v) => formatMoney(v, activeBaseCurrency)}
+                              />
+                            </td>
+                            <td className="border-l border-white/[0.06] px-4 py-3 text-right tabular-nums">
+                              {h.currentPrice != null ? (
+                                <div className="space-y-0.5">
+                                  <p className="text-white/70">{formatMoney(h.currentPrice, quoteCurrency)}</p>
+                                  {isConverted && h.convertedPrice != null && (
+                                    <p className="text-[11px] text-white/35">
+                                      {formatMoney(h.convertedPrice, activeBaseCurrency)}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="animate-pulse text-white/20">·····</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums">
+                              {h.value != null ? (
+                                <div className="space-y-1.5">
+                                  <div>
+                                    <p className="text-white/70">{formatMoney(h.value, activeBaseCurrency)}</p>
+                                    {isConverted && h.originalValue != null && (
+                                      <p className="text-[11px] text-white/35">
+                                        {formatMoney(h.originalValue, quoteCurrency)}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <div className="h-1 w-16 overflow-hidden rounded-full bg-white/[0.07]">
+                                      <div
+                                        className="h-full rounded-full transition-[width] duration-300"
+                                        style={{
+                                          width: `${Math.min(rowWeight, 100)}%`,
+                                          backgroundColor: colorForSymbol(h.symbol),
+                                        }}
+                                      />
+                                    </div>
+                                    <span className="w-10 text-right text-[11px] tabular-nums text-white/40">
+                                      {rowWeight.toFixed(1)}%
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : "—"}
+                            </td>
+                            <td
+                              className={cn(
+                                "border-l border-white/[0.06] px-4 py-3 text-right tabular-nums font-medium",
+                                h.pnl == null ? "text-white/20" : h.pnl >= 0 ? "text-green-positive" : "text-red-negative"
+                              )}
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                              {h.pnl != null ? (
+                                <>
+                                  {h.pnl >= 0 ? "+" : ""}
+                                  {formatMoney(Math.abs(h.pnl), activeBaseCurrency)}
+                                  <span className="ml-1 text-xs opacity-70">
+                                    ({h.pnlPct! >= 0 ? "+" : ""}{h.pnlPct!.toFixed(1)}%)
+                                  </span>
+                                </>
+                              ) : "—"}
+                            </td>
+                            <td className="px-3 py-3">
+                              <button
+                                onClick={() => removeHolding(h.id)}
+                                className="flex h-7 w-7 items-center justify-center rounded-lg text-white/20 opacity-0 transition-all hover:bg-white/[0.06] hover:text-red-negative group-hover:opacity-100"
+                                aria-label={`Remove ${h.symbol}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -727,7 +916,7 @@ export default function PortfolioPage() {
                   type="number"
                   min="0"
                   step="any"
-                  placeholder="Avg cost ($)"
+                  placeholder={`Avg cost (${activeBaseCurrency})`}
                   value={addCost}
                   onChange={(e) => setAddCost(e.target.value)}
                   className="h-9 w-36 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-sm text-white placeholder:text-white/25 focus:border-indigo-primary/50 focus:outline-none"
