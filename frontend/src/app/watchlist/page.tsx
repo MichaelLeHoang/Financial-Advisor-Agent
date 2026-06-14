@@ -311,6 +311,11 @@ const COMPARE_COLORS = [
   "#fb7185",
 ];
 
+const MAIN_CHART_ANIMATION = {
+  animationDuration: 450,
+  animationEasing: "ease-in-out" as const,
+};
+
 const CHART_MODE_LABELS: Record<ChartMode, string> = {
   line: "Line chart",
   area: "Area chart",
@@ -1078,6 +1083,7 @@ function QuoteDetailPanel({
   const absoluteChange = quote ? activePrice - (quote.price - estimateAbsoluteChange(quote)) : 0;
   const activePercentChange = quote ? performanceFrom(quote.price - estimateAbsoluteChange(quote), activePrice) : 0;
   const primaryLineColor = compareMode ? COMPARE_COLORS[0] : positive ? "var(--color-green-positive)" : "var(--color-red-negative)";
+  const chartTransitionKey = `${chartMode}:${range}:${activeComparisonSymbols.join("|") || "single"}:${quote?.ticker ?? instrument.symbol}`;
   const isCrypto = instrument.category === "Crypto";
   const displayName = quoteDisplayName(instrument, quote);
   const timestamp = useMemo(
@@ -1108,6 +1114,10 @@ function QuoteDetailPanel({
   const relatedAssets = MARKET_SECTIONS.find((section) => section.title === instrument.category)?.instruments
     .filter((item) => item.symbol !== instrument.symbol)
     .slice(0, 4) ?? [];
+
+  useEffect(() => {
+    setHoverPoint(null);
+  }, [chartTransitionKey]);
 
   return (
     <section className="space-y-6">
@@ -1159,11 +1169,10 @@ function QuoteDetailPanel({
         </div>
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-3">
         <div>
-          <p className="text-sm font-medium text-white/42">{instrument.exchange}</p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-white">{displayName}</h2>
-          <p className="mt-1 text-sm text-white/42">{instrument.category}</p>
+          <p className="text-sm text-white/42">{instrument.exchange} · {instrument.category}</p>
+          <h2 className="mt-1 text-3xl font-semibold tracking-tight text-white">{displayName}</h2>
         </div>
 
         {loading ? (
@@ -1191,11 +1200,17 @@ function QuoteDetailPanel({
         <div className="flex flex-wrap items-center gap-2 border-y border-white/[0.06] py-3">
           <DropdownMenu open={chartMenuOpen} onOpenChange={setChartMenuOpen}>
             <DropdownMenuTrigger
+              aria-expanded={chartMenuOpen}
               className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-[var(--border-card)] bg-[var(--surface-card)] px-3 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)]"
             >
               <ChartModeIcon mode={chartMode} />
               {CHART_MODE_LABELS[chartMode]}
-              <ChevronDown className="h-3.5 w-3.5 text-white/35" />
+              <ChevronDown
+                className={cn(
+                  "h-3.5 w-3.5 text-white/35 transition-transform duration-200",
+                  chartMenuOpen && "rotate-180"
+                )}
+              />
             </DropdownMenuTrigger>
             <DropdownMenuContent side="bottom" align="start" sideOffset={8} className="w-52">
               {(Object.keys(CHART_MODE_LABELS) as ChartMode[]).map((mode) => {
@@ -1227,6 +1242,7 @@ function QuoteDetailPanel({
           </DropdownMenu>
           <DropdownMenu open={compareOpen} onOpenChange={setCompareOpen}>
             <DropdownMenuTrigger
+              aria-expanded={compareOpen}
               className={cn(
                 "inline-flex h-8 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-colors",
                 compareOpen || compareMode
@@ -1236,6 +1252,12 @@ function QuoteDetailPanel({
             >
               <Plus className="h-4 w-4" />
               Compare
+              <ChevronDown
+                className={cn(
+                  "h-3.5 w-3.5 transition-transform duration-200",
+                  compareOpen ? "rotate-180 text-indigo-100/70" : "text-white/35"
+                )}
+              />
             </DropdownMenuTrigger>
             <DropdownMenuContent side="bottom" align="start" sideOffset={8} className="w-80 p-2">
               <div className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 py-2">
@@ -1328,6 +1350,7 @@ function QuoteDetailPanel({
               initialDimension={{ width: 720, height: 360 }}
             >
               <ComposedChart
+                key={chartTransitionKey}
                 data={displayedChartData}
                 margin={{ top: 10, right: 8, bottom: 8, left: 0 }}
                 onMouseMove={(state: unknown) => {
@@ -1382,7 +1405,8 @@ function QuoteDetailPanel({
                     className={positive ? "text-green-positive" : "text-red-negative"}
                     dot={false}
                     activeDot={{ r: 4, fill: "currentColor", stroke: "#fff", strokeWidth: 2 }}
-                    isAnimationActive={false}
+                    isAnimationActive
+                    {...MAIN_CHART_ANIMATION}
                   />
                 ) : chartMode === "bar" && !compareMode ? (
                   <Bar
@@ -1390,12 +1414,19 @@ function QuoteDetailPanel({
                     fill={primaryLineColor}
                     radius={[3, 3, 0, 0]}
                     opacity={0.72}
-                    isAnimationActive={false}
+                    isAnimationActive
+                    {...MAIN_CHART_ANIMATION}
                   />
                 ) : chartMode === "candle" && !compareMode ? (
                   <>
                     <Bar dataKey="candleBase" stackId="candle" fill="transparent" isAnimationActive={false} />
-                    <Bar dataKey="candleBody" stackId="candle" radius={[2, 2, 2, 2]} isAnimationActive={false}>
+                    <Bar
+                      dataKey="candleBody"
+                      stackId="candle"
+                      radius={[2, 2, 2, 2]}
+                      isAnimationActive
+                      {...MAIN_CHART_ANIMATION}
+                    >
                       {displayedChartData.map((point, index) => (
                         <Cell
                           key={`candle-${point.label}-${index}`}
@@ -1411,7 +1442,8 @@ function QuoteDetailPanel({
                       strokeWidth={1}
                       dot={false}
                       activeDot={{ r: 3, fill: primaryLineColor, stroke: "#fff", strokeWidth: 1.5 }}
-                      isAnimationActive={false}
+                      isAnimationActive
+                      {...MAIN_CHART_ANIMATION}
                     />
                   </>
                 ) : (
@@ -1422,7 +1454,8 @@ function QuoteDetailPanel({
                     strokeWidth={2}
                     dot={false}
                     activeDot={{ r: 4, fill: primaryLineColor, stroke: "#fff", strokeWidth: 2 }}
-                    isAnimationActive={false}
+                    isAnimationActive
+                    {...MAIN_CHART_ANIMATION}
                   />
                 )}
                 {compareMode && compareQuotes.map((compareQuote, index) => (
@@ -1434,7 +1467,8 @@ function QuoteDetailPanel({
                     strokeWidth={2}
                     dot={false}
                     activeDot={{ r: 4, fill: COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length], stroke: "#fff", strokeWidth: 2 }}
-                    isAnimationActive={false}
+                    isAnimationActive
+                    {...MAIN_CHART_ANIMATION}
                   />
                 ))}
               </ComposedChart>

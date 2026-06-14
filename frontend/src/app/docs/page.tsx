@@ -531,7 +531,6 @@ export default function DocsPage() {
   const [activeSection, setActiveSection] = useState("overview");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const previousBodyThemeRef = useRef<string | null>(null);
   const [theme, setTheme] = useState<DocsTheme>(() => {
     if (typeof window === "undefined") return "dark";
     const storedTheme = window.localStorage.getItem(DOCS_THEME_STORAGE_KEY);
@@ -540,31 +539,29 @@ export default function DocsPage() {
 
   const visibleSections = NAV_SECTIONS.filter((section) => section.view === activeView);
   const docsThemeStyle = {
-    "--docs-bg": theme === "light" ? "#f7f8fc" : "#0c0d14",
-    "--docs-text": theme === "light" ? "rgba(21, 26, 36, 0.94)" : "#ffffff",
-    "--docs-header": theme === "light" ? "rgba(255, 255, 255, 0.88)" : "rgba(12, 13, 20, 0.92)",
-    "--docs-sidebar": theme === "light" ? "rgba(255, 255, 255, 0.96)" : "#0c0d14",
-    "--docs-border": theme === "light" ? "rgba(21, 26, 36, 0.12)" : "rgba(255, 255, 255, 0.06)",
-    "--docs-control": theme === "light" ? "rgba(255, 255, 255, 0.86)" : "rgba(255, 255, 255, 0.035)",
-    "--docs-control-active": theme === "light" ? "rgba(99, 102, 241, 0.12)" : "rgba(255, 255, 255, 0.1)",
-    "--docs-panel-strong": theme === "light" ? "rgba(255, 255, 255, 0.78)" : "#10111a",
-    "--docs-code-bg": theme === "light" ? "#f0f3f9" : "#090a10",
-    "--docs-modal-bg": theme === "light" ? "#ffffff" : "#0b0c12",
-    "--docs-muted": theme === "light" ? "rgba(21, 26, 36, 0.62)" : "rgba(255, 255, 255, 0.42)",
+    "--docs-bg": theme === "light" ? "oklch(97.5% 0.008 265)" : "oklch(15% 0.018 265)",
+    "--docs-text": theme === "light" ? "oklch(23% 0.028 265)" : "oklch(96% 0.006 265)",
+    "--docs-text-secondary": theme === "light" ? "oklch(35% 0.026 265)" : "oklch(84% 0.01 265)",
+    "--docs-text-muted": theme === "light" ? "oklch(46% 0.022 265)" : "oklch(70% 0.012 265)",
+    "--docs-text-subtle": theme === "light" ? "oklch(56% 0.018 265)" : "oklch(55% 0.012 265)",
+    "--docs-text-faint": theme === "light" ? "oklch(66% 0.015 265)" : "oklch(42% 0.012 265)",
+    "--docs-header": theme === "light" ? "oklch(99% 0.005 265 / 0.94)" : "oklch(15% 0.018 265 / 0.92)",
+    "--docs-sidebar": theme === "light" ? "oklch(98.8% 0.007 265)" : "oklch(15% 0.018 265)",
+    "--docs-border": theme === "light" ? "oklch(78% 0.022 265)" : "oklch(100% 0.006 265 / 0.08)",
+    "--docs-border-soft": theme === "light" ? "oklch(85% 0.016 265)" : "oklch(100% 0.006 265 / 0.06)",
+    "--docs-control": theme === "light" ? "oklch(100% 0.004 265)" : "oklch(100% 0.006 265 / 0.035)",
+    "--docs-control-hover": theme === "light" ? "oklch(94.5% 0.014 265)" : "oklch(100% 0.006 265 / 0.06)",
+    "--docs-control-active": theme === "light" ? "oklch(93% 0.04 268)" : "oklch(100% 0.006 265 / 0.1)",
+    "--docs-control-active-text": theme === "light" ? "oklch(38% 0.14 268)" : "oklch(87% 0.06 268)",
+    "--docs-panel": theme === "light" ? "oklch(99.2% 0.005 265)" : "oklch(100% 0.006 265 / 0.025)",
+    "--docs-panel-strong": theme === "light" ? "oklch(95.5% 0.012 265)" : "oklch(20% 0.02 265)",
+    "--docs-code-bg": theme === "light" ? "oklch(94.5% 0.013 265)" : "oklch(13% 0.018 265)",
+    "--docs-modal-bg": theme === "light" ? "oklch(99.5% 0.004 265)" : "oklch(14% 0.018 265)",
+    "--docs-logo-bg": theme === "light" ? "oklch(32% 0.13 268)" : "oklch(56% 0.18 268)",
+    "--docs-logo-border": theme === "light" ? "oklch(49% 0.13 268)" : "oklch(100% 0.006 265 / 0.16)",
+    "--docs-logo-icon": theme === "light" ? "oklch(98% 0.01 265)" : "oklch(98% 0.006 265)",
+    "--docs-shadow": theme === "light" ? "0 16px 44px oklch(42% 0.04 265 / 0.12)" : "none",
   } as React.CSSProperties;
-
-  useEffect(() => {
-    previousBodyThemeRef.current = document.body.getAttribute("data-theme");
-
-    return () => {
-      const previousTheme = previousBodyThemeRef.current;
-      if (previousTheme) {
-        document.body.setAttribute("data-theme", previousTheme);
-      } else {
-        document.body.removeAttribute("data-theme");
-      }
-    };
-  }, []);
 
   useEffect(() => {
     const hash = window.location.hash.replace("#", "");
@@ -576,16 +573,6 @@ export default function DocsPage() {
 
   useEffect(() => {
     window.localStorage.setItem(DOCS_THEME_STORAGE_KEY, theme);
-    if (theme === "light") {
-      document.body.dataset.theme = "White";
-    } else {
-      const previousTheme = previousBodyThemeRef.current;
-      if (previousTheme) {
-        document.body.setAttribute("data-theme", previousTheme);
-      } else {
-        document.body.removeAttribute("data-theme");
-      }
-    }
   }, [theme]);
 
   useEffect(() => {
@@ -631,14 +618,87 @@ export default function DocsPage() {
   };
 
   return (
-    <div style={docsThemeStyle} className="relative min-h-screen bg-[var(--docs-bg)] text-[var(--docs-text)] selection:bg-indigo-500/30">
+    <div
+      data-docs-theme={theme}
+      style={docsThemeStyle}
+      className="relative min-h-screen bg-[var(--docs-bg)] text-[var(--docs-text)] selection:bg-indigo-500/30"
+    >
+      <style>{`
+        [data-docs-theme="light"] {
+          color-scheme: light;
+        }
+
+        [data-docs-theme="light"] [class~="text-white"],
+        [data-docs-theme="light"] [class~="text-white/95"],
+        [data-docs-theme="light"] [class~="text-white/90"],
+        [data-docs-theme="light"] [class~="text-white/88"],
+        [data-docs-theme="light"] [class~="text-white/86"],
+        [data-docs-theme="light"] [class~="text-white/84"],
+        [data-docs-theme="light"] [class~="text-white/82"],
+        [data-docs-theme="light"] [class~="text-white/80"],
+        [data-docs-theme="light"] [class~="text-white/78"],
+        [data-docs-theme="light"] [class~="text-white/76"],
+        [data-docs-theme="light"] [class~="text-white/75"],
+        [data-docs-theme="light"] [class~="text-white/72"],
+        [data-docs-theme="light"] [class~="text-white/70"] {
+          color: var(--docs-text-secondary) !important;
+        }
+
+        [data-docs-theme="light"] [class~="text-white/68"],
+        [data-docs-theme="light"] [class~="text-white/66"],
+        [data-docs-theme="light"] [class~="text-white/62"],
+        [data-docs-theme="light"] [class~="text-white/60"],
+        [data-docs-theme="light"] [class~="text-white/58"],
+        [data-docs-theme="light"] [class~="text-white/55"],
+        [data-docs-theme="light"] [class~="text-white/50"],
+        [data-docs-theme="light"] [class~="text-white/48"],
+        [data-docs-theme="light"] [class~="text-white/46"],
+        [data-docs-theme="light"] [class~="text-white/45"],
+        [data-docs-theme="light"] [class~="text-white/42"],
+        [data-docs-theme="light"] [class~="text-white/40"] {
+          color: var(--docs-text-muted) !important;
+        }
+
+        [data-docs-theme="light"] [class~="text-white/38"],
+        [data-docs-theme="light"] [class~="text-white/35"],
+        [data-docs-theme="light"] [class~="text-white/34"],
+        [data-docs-theme="light"] [class~="text-white/32"],
+        [data-docs-theme="light"] [class~="text-white/30"],
+        [data-docs-theme="light"] [class~="text-white/28"],
+        [data-docs-theme="light"] [class~="text-white/25"],
+        [data-docs-theme="light"] [class~="text-white/24"],
+        [data-docs-theme="light"] [class~="text-white/22"],
+        [data-docs-theme="light"] [class~="text-white/20"] {
+          color: var(--docs-text-subtle) !important;
+        }
+
+        [data-docs-theme="light"] [class*="border-white"] {
+          border-color: var(--docs-border-soft) !important;
+        }
+
+        [data-docs-theme="light"] [class~="bg-white/[0.025]"],
+        [data-docs-theme="light"] [class~="bg-white/[0.035]"],
+        [data-docs-theme="light"] [class~="bg-white/[0.04]"],
+        [data-docs-theme="light"] [class~="bg-white/[0.045]"] {
+          background-color: var(--docs-panel) !important;
+        }
+
+        [data-docs-theme="light"] [class~="bg-white/[0.1]"],
+        [data-docs-theme="light"] [class~="bg-white/10"] {
+          background-color: var(--docs-control-active) !important;
+        }
+
+        [data-docs-theme="light"] [class~="placeholder:text-white/28"]::placeholder {
+          color: var(--docs-text-faint) !important;
+        }
+      `}</style>
       <header className="fixed left-0 right-0 top-0 z-50 border-b border-[var(--docs-border)] bg-[var(--docs-header)] backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-4 px-4 sm:px-6">
           <Link href="/introduction" className="flex items-center gap-2.5">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400">
-              <Zap className="size-3.5 text-white" />
+            <span className="flex size-7 items-center justify-center rounded-lg border border-[var(--docs-logo-border)] bg-[var(--docs-logo-bg)] shadow-[var(--docs-shadow)]">
+              <Zap className="size-3.5 text-[var(--docs-logo-icon)]" />
             </span>
-            <span className="text-sm font-semibold text-white/84">Documentation</span>
+            <span className="text-sm font-semibold text-[var(--docs-text)]">Documentation</span>
           </Link>
 
           <div className="hidden rounded-full border border-[var(--docs-border)] bg-[var(--docs-control)] p-1 sm:flex">
@@ -653,7 +713,9 @@ export default function DocsPage() {
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  activeView === view ? "bg-[var(--docs-control-active)] text-white" : "text-white/42 hover:text-white/75"
+                  activeView === view
+                    ? "bg-[var(--docs-control-active)] text-[var(--docs-control-active-text)]"
+                    : "text-[var(--docs-text-muted)] hover:bg-[var(--docs-control-hover)] hover:text-[var(--docs-text-secondary)]"
                 }`}
               >
                 {view === "guide" ? "User Guide" : "Technical Reference"}
@@ -666,30 +728,30 @@ export default function DocsPage() {
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="hidden h-9 w-64 items-center gap-2 rounded-full border border-[var(--docs-border)] bg-[var(--docs-control)] px-3 text-left text-sm text-white/35 transition-colors hover:bg-white/[0.06] hover:text-white/55 sm:flex"
+            className="hidden h-9 w-64 items-center gap-2 rounded-full border border-[var(--docs-border)] bg-[var(--docs-control)] px-3 text-left text-sm text-[var(--docs-text-muted)] shadow-[var(--docs-shadow)] transition-colors hover:bg-[var(--docs-control-hover)] hover:text-[var(--docs-text-secondary)] sm:flex"
           >
             <Search className="size-4" />
             <span className="flex-1">Search docs...</span>
-            <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/50">Cmd K</span>
+            <span className="rounded-full bg-[var(--docs-control-active)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--docs-control-active-text)]">Cmd K</span>
           </button>
 
           <button
             type="button"
             onClick={toggleTheme}
-            className="flex size-9 items-center justify-center rounded-full border border-[var(--docs-border)] bg-[var(--docs-control)] text-white/42 transition-colors hover:bg-white/[0.055] hover:text-white/72"
+            className="flex size-9 items-center justify-center rounded-full border border-[var(--docs-border)] bg-[var(--docs-control)] text-[var(--docs-text-muted)] shadow-[var(--docs-shadow)] transition-colors hover:bg-[var(--docs-control-hover)] hover:text-[var(--docs-text-secondary)]"
             aria-label="Toggle light and dark theme"
           >
             {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
 
-          <Link href="/introduction" className="hidden text-sm text-white/42 transition-colors hover:text-white/75 sm:block">
+          <Link href="/introduction" className="hidden text-sm text-[var(--docs-text-muted)] transition-colors hover:text-[var(--docs-text-secondary)] sm:block">
             Back
           </Link>
 
           <button
             type="button"
             onClick={() => setMobileNavOpen((open) => !open)}
-            className="flex size-9 items-center justify-center rounded-lg border border-white/[0.08] text-white/45 sm:hidden"
+            className="flex size-9 items-center justify-center rounded-lg border border-[var(--docs-border)] bg-[var(--docs-control)] text-[var(--docs-text-muted)] sm:hidden"
             aria-label="Toggle documentation navigation"
           >
             {mobileNavOpen ? <X className="size-4" /> : <Menu className="size-4" />}
@@ -703,7 +765,7 @@ export default function DocsPage() {
             mobileNavOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
-          <div className="mb-4 grid grid-cols-2 gap-1 rounded-full border border-[var(--docs-border)] bg-[var(--docs-control)] p-1 sm:hidden">
+          <div className="mb-4 grid grid-cols-2 gap-1 rounded-full border border-[var(--docs-border)] bg-[var(--docs-control)] p-1 shadow-[var(--docs-shadow)] sm:hidden">
             {(["guide", "reference"] as DocsView[]).map((view) => (
               <button
                 key={view}
@@ -713,7 +775,9 @@ export default function DocsPage() {
                   setMobileNavOpen(false);
                 }}
                 className={`rounded-full px-2 py-2 text-xs font-semibold ${
-                  activeView === view ? "bg-white/[0.1] text-white" : "text-white/42"
+                  activeView === view
+                    ? "bg-[var(--docs-control-active)] text-[var(--docs-control-active-text)]"
+                    : "text-[var(--docs-text-muted)]"
                 }`}
               >
                 {view === "guide" ? "Guide" : "Reference"}
@@ -724,7 +788,7 @@ export default function DocsPage() {
           <nav className="space-y-6">
             {visibleSections.map((section) => (
               <div key={section.title}>
-                <h3 className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-widest text-white/28">
+                <h3 className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-widest text-[var(--docs-text-subtle)]">
                   {section.title}
                 </h3>
                 <ul className="space-y-0.5">
@@ -735,8 +799,8 @@ export default function DocsPage() {
                         onClick={() => scrollToSection(item.id, section.view)}
                         className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition-all ${
                           activeSection === item.id
-                            ? "bg-indigo-500/12 font-medium text-indigo-300"
-                            : "text-white/45 hover:bg-white/[0.045] hover:text-white/76"
+                            ? "bg-[var(--docs-control-active)] font-medium text-[var(--docs-control-active-text)]"
+                            : "text-[var(--docs-text-muted)] hover:bg-[var(--docs-control-hover)] hover:text-[var(--docs-text-secondary)]"
                         }`}
                       >
                         {item.icon}
