@@ -557,9 +557,16 @@ export default function DocsPage() {
     "--docs-panel-strong": theme === "light" ? "oklch(95.5% 0.012 265)" : "oklch(20% 0.02 265)",
     "--docs-code-bg": theme === "light" ? "oklch(94.5% 0.013 265)" : "oklch(13% 0.018 265)",
     "--docs-modal-bg": theme === "light" ? "oklch(99.5% 0.004 265)" : "oklch(14% 0.018 265)",
-    "--docs-logo-bg": theme === "light" ? "oklch(32% 0.13 268)" : "oklch(56% 0.18 268)",
-    "--docs-logo-border": theme === "light" ? "oklch(49% 0.13 268)" : "oklch(100% 0.006 265 / 0.16)",
-    "--docs-logo-icon": theme === "light" ? "oklch(98% 0.01 265)" : "oklch(98% 0.006 265)",
+    "--docs-accent": theme === "light" ? "oklch(38% 0.15 268)" : "oklch(78% 0.11 268)",
+    "--docs-accent-soft": theme === "light" ? "oklch(93% 0.04 268)" : "oklch(56% 0.16 268 / 0.14)",
+    "--docs-info": theme === "light" ? "oklch(37% 0.1 225)" : "oklch(80% 0.1 225)",
+    "--docs-info-soft": theme === "light" ? "oklch(93.5% 0.035 225)" : "oklch(58% 0.12 225 / 0.14)",
+    "--docs-success": theme === "light" ? "oklch(38% 0.11 154)" : "oklch(78% 0.13 154)",
+    "--docs-success-soft": theme === "light" ? "oklch(94% 0.04 154)" : "oklch(64% 0.13 154 / 0.14)",
+    "--docs-warning": theme === "light" ? "oklch(42% 0.11 76)" : "oklch(82% 0.13 76)",
+    "--docs-warning-soft": theme === "light" ? "oklch(94.5% 0.045 76)" : "oklch(70% 0.13 76 / 0.14)",
+    "--docs-rose": theme === "light" ? "oklch(42% 0.13 18)" : "oklch(79% 0.12 18)",
+    "--docs-rose-soft": theme === "light" ? "oklch(94% 0.04 18)" : "oklch(65% 0.13 18 / 0.14)",
     "--docs-shadow": theme === "light" ? "0 16px 44px oklch(42% 0.04 265 / 0.12)" : "none",
   } as React.CSSProperties;
 
@@ -628,7 +635,14 @@ export default function DocsPage() {
           color-scheme: light;
         }
 
-        [data-docs-theme="light"] [class~="text-white"],
+        [data-docs-theme="light"] [class~="text-white"] {
+          color: var(--docs-text) !important;
+        }
+
+        [data-docs-theme="light"] .docs-logo-icon {
+          color: oklch(98% 0.01 265) !important;
+        }
+
         [data-docs-theme="light"] [class~="text-white/95"],
         [data-docs-theme="light"] [class~="text-white/90"],
         [data-docs-theme="light"] [class~="text-white/88"],
@@ -691,12 +705,96 @@ export default function DocsPage() {
         [data-docs-theme="light"] [class~="placeholder:text-white/28"]::placeholder {
           color: var(--docs-text-faint) !important;
         }
+
+        [data-docs-theme="light"] [class*="text-indigo-"] {
+          color: var(--docs-accent) !important;
+        }
+
+        [data-docs-theme="light"] [class*="text-cyan-"] {
+          color: var(--docs-info) !important;
+        }
+
+        [data-docs-theme="light"] [class*="text-emerald-"] {
+          color: var(--docs-success) !important;
+        }
+
+        [data-docs-theme="light"] [class*="text-amber-"] {
+          color: var(--docs-warning) !important;
+        }
+
+        [data-docs-theme="light"] [class*="text-rose-"],
+        [data-docs-theme="light"] [class*="text-red-"] {
+          color: var(--docs-rose) !important;
+        }
+
+        [data-docs-theme="light"] [class~="bg-indigo-500/12"],
+        [data-docs-theme="light"] [class~="bg-indigo-500/[0.07]"],
+        [data-docs-theme="light"] [class~="bg-indigo-500/[0.06]"] {
+          background-color: var(--docs-accent-soft) !important;
+        }
+
+        [data-docs-theme="light"] [class~="bg-cyan-500/[0.07]"],
+        [data-docs-theme="light"] [class~="bg-cyan-500/[0.06]"] {
+          background-color: var(--docs-info-soft) !important;
+        }
+
+        [data-docs-theme="light"] [class~="bg-emerald-500/[0.07]"],
+        [data-docs-theme="light"] [class~="bg-emerald-500/[0.06]"] {
+          background-color: var(--docs-success-soft) !important;
+        }
+
+        [data-docs-theme="light"] [class~="bg-amber-500/[0.08]"],
+        [data-docs-theme="light"] [class~="bg-amber-500/[0.07]"],
+        [data-docs-theme="light"] [class~="bg-amber-500/[0.06]"] {
+          background-color: var(--docs-warning-soft) !important;
+        }
+
+        [data-docs-theme="light"] [class~="bg-rose-500/[0.07]"],
+        [data-docs-theme="light"] [class~="bg-red-500/[0.07]"] {
+          background-color: var(--docs-rose-soft) !important;
+        }
+
+        [data-docs-theme="light"] [class~="bg-indigo-400"] {
+          background-color: var(--docs-accent) !important;
+        }
+
+        [data-docs-theme="light"] [class~="bg-cyan-400"] {
+          background-color: var(--docs-info) !important;
+        }
+
+        [data-docs-theme="light"] [class~="bg-emerald-400"] {
+          background-color: var(--docs-success) !important;
+        }
+
+        [data-docs-theme="light"] [class~="bg-amber-400"] {
+          background-color: var(--docs-warning) !important;
+        }
+
+        [data-docs-theme="light"] [class~="bg-rose-400"] {
+          background-color: var(--docs-rose) !important;
+        }
+
+        [data-docs-theme="light"] [class*="border-indigo-"] {
+          border-color: var(--docs-accent) !important;
+        }
+
+        [data-docs-theme="light"] [class*="border-cyan-"] {
+          border-color: var(--docs-info) !important;
+        }
+
+        [data-docs-theme="light"] [class*="border-emerald-"] {
+          border-color: var(--docs-success) !important;
+        }
+
+        [data-docs-theme="light"] [class*="border-amber-"] {
+          border-color: var(--docs-warning) !important;
+        }
       `}</style>
       <header className="fixed left-0 right-0 top-0 z-50 border-b border-[var(--docs-border)] bg-[var(--docs-header)] backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-4 px-4 sm:px-6">
           <Link href="/introduction" className="flex items-center gap-2.5">
-            <span className="flex size-7 items-center justify-center rounded-lg border border-[var(--docs-logo-border)] bg-[var(--docs-logo-bg)] shadow-[var(--docs-shadow)]">
-              <Zap className="size-3.5 text-[var(--docs-logo-icon)]" />
+            <span className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400">
+              <Zap className="docs-logo-icon size-3.5 text-white" />
             </span>
             <span className="text-sm font-semibold text-[var(--docs-text)]">Documentation</span>
           </Link>
