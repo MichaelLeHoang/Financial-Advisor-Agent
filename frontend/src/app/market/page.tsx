@@ -218,7 +218,7 @@ export default function MarketPage() {
     const fetchQuote = async (ticker: string, fallback?: StockInfo, range: ChartRange = "1M") => {
         const [period, interval] = quotePeriod(range);
         const quote = await api.marketQuote(ticker, period, interval);
-        primeQuote(quote); // share with portfolio page cache
+        primeQuote(quote, period, interval); // share range-specific quote data with the cache
         return quoteToStock(quote, fallback);
     };
 

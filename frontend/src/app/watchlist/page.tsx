@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   ArrowDown,
   ArrowUp,
   Bell,
   CalendarPlus,
+  CandlestickChart,
+  ChartNoAxesColumn,
   ChevronDown,
   Clock3,
   ExternalLink,
@@ -20,8 +22,9 @@ import {
   Share2,
   Star,
   Trash2,
+  X,
 } from "lucide-react";
-import { Area, AreaChart, Line, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, XAxis, YAxis } from "recharts";
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { Watchlist, WatchlistAsset, MarketQuote } from "@/lib/api";
@@ -32,7 +35,13 @@ import MarketNewsFeed from "@/components/market/MarketNewsFeed";
 import MarketSummary from "@/components/market/MarketSummary";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -83,6 +92,29 @@ interface EarningsEvent {
   googlePath: string;
 }
 
+interface DetailChartPoint {
+  label: string;
+  price: number;
+  volume: number;
+  primaryPerformance: number;
+  open?: number;
+  high?: number;
+  low?: number;
+  candleBase?: number;
+  candleBody?: number;
+  candlePositive?: boolean;
+  [key: string]: string | number | boolean | null | undefined;
+}
+
+type ChartMode = "line" | "area" | "candle" | "bar";
+
+interface WikipediaProfileData {
+  title: string;
+  extract: string;
+  url: string;
+  fetchedAt: number;
+}
+
 type RightPanelView =
   | { type: "home" }
   | { type: "quote"; instrument: MarketInstrument }
@@ -104,9 +136,10 @@ const MARKET_SECTIONS: { title: MarketInstrument["category"]; instruments: Marke
   {
     title: "Americas",
     instruments: [
-      { symbol: "^DJI", label: "Dow Jones", exchange: "INDEXDJX", category: "Americas", googlePath: "/quote/.DJI:INDEXDJX" },
+      { symbol: "^DJI", label: "Dow Jones Industrial Average", exchange: "INDEXDJX", category: "Americas", googlePath: "/quote/.DJI:INDEXDJX" },
       { symbol: "^GSPC", label: "S&P 500", exchange: "INDEXSP", category: "Americas", googlePath: "/quote/.INX:INDEXSP" },
-      { symbol: "^IXIC", label: "Nasdaq", exchange: "INDEXNASDAQ", category: "Americas", googlePath: "/quote/.IXIC:INDEXNASDAQ" },
+      { symbol: "^IXIC", label: "Nasdaq Composite", exchange: "INDEXNASDAQ", category: "Americas", googlePath: "/quote/.IXIC:INDEXNASDAQ" },
+      { symbol: "^GSPTSE", label: "S&P/TSX Composite Index", exchange: "INDEXTSI", category: "Americas", googlePath: "/quote/OSPTX:INDEXTSI" },
       { symbol: "^RUT", label: "Russell 2000", exchange: "INDEXRUSSELL", category: "Americas", googlePath: "/quote/RUT:INDEXRUSSELL" },
       { symbol: "^VIX", label: "VIX", exchange: "INDEXCBOE", category: "Americas", googlePath: "/quote/VIX:INDEXCBOE" },
     ],
@@ -174,6 +207,14 @@ const UPCOMING_EARNINGS: EarningsEvent[] = [
 
 const SUMMARY_CACHE_KEY = "financial-advisor.watchlist-summary";
 const SUMMARY_TTL_MS = 6 * 60 * 60 * 1000;
+const WIKIPEDIA_PROFILE_CACHE_KEY = "financial-advisor.wikipedia-profile";
+const WIKIPEDIA_PROFILE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const COMPARE_ASSETS: MarketInstrument[] = [
+  { symbol: "LLY", label: "Eli Lilly and Company", exchange: "NYSE", category: "Americas", googlePath: "/quote/LLY:NYSE" },
+  { symbol: "ETH-USD", label: "Ethereum USD", exchange: "Crypto", category: "Crypto", googlePath: "/quote/ETH-USD" },
+  { symbol: "MRU.TO", label: "Metro Inc", exchange: "TSE", category: "Americas", googlePath: "/quote/MRU:TSE" },
+  ...MARKET_SECTIONS.flatMap((section) => section.instruments),
+];
 
 /* Deterministic monogram avatar color from the ticker, à la Google Finance logos. */
 const AVATAR_COLORS = [
@@ -243,6 +284,182 @@ function compactNumber(value: number | null | undefined): string {
 
 function displaySymbol(symbol: string): string {
   return symbol.replace("-", " / ");
+}
+
+function performanceFrom(start: number, current: number): number {
+  if (!start) return 0;
+  return ((current - start) / start) * 100;
+}
+
+function domainWithPadding(values: number[]): [number, number] {
+  if (values.length === 0) return [-1, 1];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const padding = Math.max((max - min) * 0.08, 0.35);
+  return [Number((min - padding).toFixed(2)), Number((max + padding).toFixed(2))];
+}
+
+function compareKey(symbol: string, suffix: "price" | "performance"): string {
+  return `compare_${symbol.replace(/[^a-zA-Z0-9]/g, "_")}_${suffix}`;
+}
+
+const COMPARE_COLORS = [
+  "#1a73e8",
+  "var(--color-cyan-secondary)",
+  "var(--color-amber-warning)",
+  "#a78bfa",
+  "#fb7185",
+];
+
+const CHART_MODE_LABELS: Record<ChartMode, string> = {
+  line: "Line chart",
+  area: "Area chart",
+  candle: "Candle chart",
+  bar: "Bar chart",
+};
+
+const RANGE_OPTIONS = ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "MAX"];
+
+const RANGE_CONFIG: Record<string, { period: string; interval: string; refreshMs: number | null }> = {
+  "1D": { period: "1d", interval: "1m", refreshMs: 60_000 },
+  "5D": { period: "5d", interval: "5m", refreshMs: 5 * 60_000 },
+  "1M": { period: "1mo", interval: "30m", refreshMs: 15 * 60_000 },
+  "6M": { period: "6mo", interval: "1d", refreshMs: 60 * 60_000 },
+  YTD: { period: "ytd", interval: "1d", refreshMs: 60 * 60_000 },
+  "1Y": { period: "1y", interval: "1d", refreshMs: 60 * 60_000 },
+  "5Y": { period: "5y", interval: "1wk", refreshMs: null },
+  MAX: { period: "max", interval: "1mo", refreshMs: null },
+};
+
+function normalizeSymbolList(symbols: string[]): string[] {
+  const seen = new Set<string>();
+  return symbols
+    .map((symbol) => symbol.trim().toUpperCase())
+    .filter((symbol) => {
+      if (!symbol || seen.has(symbol)) return false;
+      seen.add(symbol);
+      return true;
+    });
+}
+
+function quoteRangeConfig(range: string) {
+  return RANGE_CONFIG[range] ?? RANGE_CONFIG["1M"];
+}
+
+function pointToDetail(point: MarketQuote["history"][number], previousPrice?: number): DetailChartPoint {
+  const open = typeof point.open === "number" ? point.open : previousPrice ?? point.price;
+  const high = typeof point.high === "number" ? point.high : Math.max(open, point.price);
+  const low = typeof point.low === "number" ? point.low : Math.min(open, point.price);
+  const candlePositive = point.price >= open;
+  return {
+    ...point,
+    primaryPerformance: 0,
+    open,
+    high,
+    low,
+    candleBase: candlePositive ? open : point.price,
+    candleBody: Math.max(Math.abs(point.price - open), Math.max(point.price * 0.00008, 0.01)),
+    candlePositive,
+  };
+}
+
+function quoteDisplayName(instrument: MarketInstrument, quote?: MarketQuote | null): string {
+  const quoteName = quote?.name?.trim();
+  if (quoteName && quoteName.toUpperCase() !== quote?.ticker?.toUpperCase()) return quoteName;
+  return instrument.label;
+}
+
+function findMarketInstrument(symbol: string): MarketInstrument {
+  const normalized = symbol.toUpperCase();
+  return (
+    COMPARE_ASSETS.find((asset) => asset.symbol.toUpperCase() === normalized)
+    ?? MARKET_SECTIONS.flatMap((section) => section.instruments).find((asset) => asset.symbol.toUpperCase() === normalized)
+    ?? { symbol: normalized, label: normalized, exchange: "Market", category: "Americas", googlePath: `/quote/${normalized}` }
+  );
+}
+
+const WIKIPEDIA_QUERY_OVERRIDES: Record<string, string> = {
+  "^DJI": "Dow Jones Industrial Average",
+  "^GSPC": "S&P 500",
+  "^IXIC": "Nasdaq Composite",
+  "^RUT": "Russell 2000 Index",
+  "^VIX": "VIX",
+  "BTC-CAD": "Bitcoin",
+  "BTC-USD": "Bitcoin",
+  "ETH-CAD": "Ethereum",
+  "ETH-USD": "Ethereum",
+  "LTC-CAD": "Litecoin",
+  "DOGE-CAD": "Dogecoin",
+  "ADA-CAD": "Cardano",
+  "YM=F": "Dow Jones Industrial Average",
+  "ES=F": "S&P 500",
+  "NQ=F": "Nasdaq-100",
+  "GC=F": "Gold",
+  "CL=F": "West Texas Intermediate",
+};
+
+function wikipediaQueryForInstrument(instrument: MarketInstrument, quoteName?: string | null): string {
+  const override = WIKIPEDIA_QUERY_OVERRIDES[instrument.symbol.toUpperCase()];
+  if (override) return override;
+  const cleanedQuoteName = quoteName?.replace(/\s+(Inc\.?|Corporation|Corp\.?|Ltd\.?|Limited|PLC|Class [A-Z])$/i, "").trim();
+  return cleanedQuoteName || instrument.label || instrument.symbol;
+}
+
+function wikipediaCacheKey(query: string): string {
+  return `${WIKIPEDIA_PROFILE_CACHE_KEY}:${query.toLowerCase().replace(/\s+/g, "-")}`;
+}
+
+function readWikipediaProfileCache(query: string): WikipediaProfileData | null {
+  try {
+    const cached = window.localStorage.getItem(wikipediaCacheKey(query));
+    if (!cached) return null;
+    const parsed = JSON.parse(cached) as WikipediaProfileData;
+    if (!parsed.extract || !parsed.url || Date.now() - parsed.fetchedAt > WIKIPEDIA_PROFILE_TTL_MS) {
+      window.localStorage.removeItem(wikipediaCacheKey(query));
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeWikipediaProfileCache(query: string, profile: WikipediaProfileData): void {
+  try {
+    window.localStorage.setItem(wikipediaCacheKey(query), JSON.stringify(profile));
+  } catch {
+    /* storage can be unavailable in private browsing */
+  }
+}
+
+async function fetchWikipediaProfile(query: string, signal: AbortSignal): Promise<WikipediaProfileData | null> {
+  const params = new URLSearchParams({
+    action: "query",
+    generator: "search",
+    gsrsearch: query,
+    gsrlimit: "1",
+    prop: "extracts|info",
+    exintro: "1",
+    explaintext: "1",
+    inprop: "url",
+    format: "json",
+    origin: "*",
+  });
+  const response = await fetch(`https://en.wikipedia.org/w/api.php?${params.toString()}`, { signal });
+  if (!response.ok) return null;
+  const data = await response.json() as {
+    query?: {
+      pages?: Record<string, { title?: string; extract?: string; fullurl?: string }>;
+    };
+  };
+  const page = Object.values(data.query?.pages ?? {})[0];
+  if (!page?.extract || !page.fullurl) return null;
+  return {
+    title: page.title || query,
+    extract: page.extract,
+    url: page.fullurl,
+    fetchedAt: Date.now(),
+  };
 }
 
 function MiniSparkline({ history, positive }: { history: MarketQuote["history"]; positive: boolean }) {
@@ -545,11 +762,147 @@ function UpcomingEarnings({
   );
 }
 
+function WatchlistChartTooltip({
+  active,
+  payload,
+  primaryLabel,
+  primaryColor,
+  compareQuotes,
+  compareMode,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: DetailChartPoint }>;
+  primaryLabel: string;
+  primaryColor: string;
+  compareQuotes: MarketQuote[];
+  compareMode: boolean;
+}) {
+  if (!active || !payload?.length) return null;
+  const point = payload[0].payload;
+  return (
+    <div className="min-w-52 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-popover-strong)] px-3 py-2 text-xs text-white shadow-[var(--shadow-popover)]">
+      <p className="font-semibold text-white/85">{point.label}</p>
+      <div className="mt-2 space-y-1.5">
+        <div className="flex items-center justify-between gap-4">
+          <span className="inline-flex items-center gap-2 text-white/55">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: primaryColor }} />
+            {primaryLabel}
+          </span>
+          <span className="font-semibold tabular-nums text-white">
+            {compareMode
+              ? `${fmt(point.price)} · ${point.primaryPerformance >= 0 ? "+" : ""}${fmt(point.primaryPerformance)}%`
+              : fmt(point.price)}
+          </span>
+        </div>
+        {compareMode && compareQuotes.map((compareQuote, index) => {
+          const price = point[compareKey(compareQuote.ticker, "price")];
+          const performance = point[compareKey(compareQuote.ticker, "performance")];
+          if (typeof price !== "number" || typeof performance !== "number") return null;
+          return (
+            <div key={compareQuote.ticker} className="flex items-center justify-between gap-4">
+              <span className="inline-flex items-center gap-2 text-white/55">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length] }} />
+                {compareQuote.ticker}
+              </span>
+              <span className="font-semibold tabular-nums text-white">
+                {fmt(price)} · {performance >= 0 ? "+" : ""}{fmt(performance)}%
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ChartModeIcon({ mode, className = "h-4 w-4" }: { mode: ChartMode; className?: string }) {
+  if (mode === "candle") return <CandlestickChart className={className} />;
+  if (mode === "bar") return <ChartNoAxesColumn className={className} />;
+  return <LineChart className={className} />;
+}
+
+function WikipediaProfile({
+  instrument,
+  quoteName,
+}: {
+  instrument: MarketInstrument;
+  quoteName?: string | null;
+}) {
+  const query = useMemo(() => wikipediaQueryForInstrument(instrument, quoteName), [instrument, quoteName]);
+  const [profile, setProfile] = useState<WikipediaProfileData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setProfile(null);
+
+    const cached = readWikipediaProfileCache(query);
+    if (cached) {
+      setProfile(cached);
+      setLoading(false);
+      return () => controller.abort();
+    }
+
+    fetchWikipediaProfile(query, controller.signal)
+      .then((next) => {
+        if (!next || controller.signal.aborted) return;
+        writeWikipediaProfileCache(query, next);
+        setProfile(next);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setProfile(null);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [query]);
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-base font-semibold text-white">Profile</h3>
+      {loading ? (
+        <div className="space-y-2">
+          <div className="h-4 w-full animate-pulse rounded bg-white/[0.06]" />
+          <div className="h-4 w-5/6 animate-pulse rounded bg-white/[0.05]" />
+          <div className="h-4 w-2/3 animate-pulse rounded bg-white/[0.04]" />
+        </div>
+      ) : profile ? (
+        <>
+          <p className="text-sm leading-relaxed text-white/52">{profile.extract}</p>
+          <p className="text-xs text-white/32">
+            Source:{" "}
+            <a
+              href={profile.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 font-medium text-indigo-200 transition-colors hover:text-white"
+            >
+              Wikipedia · {profile.title}
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          </p>
+        </>
+      ) : (
+        <p className="text-sm leading-relaxed text-white/42">
+          No Wikipedia profile was found for {instrument.label}. Quote data, chart history, and market statistics remain available above.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function QuoteDetailPanel({
   instrument,
+  comparisonSymbols,
+  onComparisonChange,
   onBack,
 }: {
   instrument: MarketInstrument;
+  comparisonSymbols: string[];
+  onComparisonChange: (symbols: string[]) => void;
   onBack: () => void;
 }) {
   const router = useRouter();
@@ -557,18 +910,25 @@ function QuoteDetailPanel({
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState("1M");
   const [notice, setNotice] = useState<string | null>(null);
-  const [chartMode, setChartMode] = useState<"area" | "compare">("area");
+  const [chartMode, setChartMode] = useState<ChartMode>("area");
+  const [chartMenuOpen, setChartMenuOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [indicatorsOpen, setIndicatorsOpen] = useState(false);
   const [compareSymbol, setCompareSymbol] = useState("");
-  const [compareQuote, setCompareQuote] = useState<MarketQuote | null>(null);
+  const [compareQuotes, setCompareQuotes] = useState<MarketQuote[]>([]);
   const [compareLoading, setCompareLoading] = useState(false);
+  const [hoverPoint, setHoverPoint] = useState<DetailChartPoint | null>(null);
+  const activeComparisonSymbols = useMemo(
+    () => normalizeSymbolList(comparisonSymbols).filter((symbol) => symbol !== instrument.symbol.toUpperCase()),
+    [comparisonSymbols, instrument.symbol]
+  );
+  const rangeConfig = useMemo(() => quoteRangeConfig(range), [range]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setQuote(null);
-    fetchQuote(instrument.symbol)
+    fetchQuote(instrument.symbol, rangeConfig.period, rangeConfig.interval)
       .then((next) => {
         if (!cancelled) setQuote(next);
       })
@@ -581,43 +941,145 @@ function QuoteDetailPanel({
     return () => {
       cancelled = true;
     };
-  }, [instrument.symbol]);
+  }, [instrument.symbol, rangeConfig.interval, rangeConfig.period]);
+
+  useEffect(() => {
+    const refreshMs = rangeConfig.refreshMs;
+    if (!refreshMs || refreshMs <= 0) return;
+    let cancelled = false;
+    const refreshQuotes = () => {
+      invalidate(instrument.symbol);
+      fetchQuote(instrument.symbol, rangeConfig.period, rangeConfig.interval).then((next) => {
+        if (!cancelled) setQuote(next);
+      }).catch(() => {});
+
+      activeComparisonSymbols.forEach((symbol) => {
+        invalidate(symbol);
+      });
+      if (activeComparisonSymbols.length > 0) {
+        Promise.allSettled(activeComparisonSymbols.map((symbol) => fetchQuote(symbol, rangeConfig.period, rangeConfig.interval))).then((results) => {
+          if (cancelled) return;
+          setCompareQuotes(
+            results
+              .filter((result): result is PromiseFulfilledResult<MarketQuote> => result.status === "fulfilled")
+              .map((result) => result.value)
+          );
+        });
+      }
+    };
+    const interval = window.setInterval(refreshQuotes, refreshMs);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [activeComparisonSymbols, instrument.symbol, rangeConfig.interval, rangeConfig.period, rangeConfig.refreshMs]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (activeComparisonSymbols.length === 0) {
+      setCompareQuotes([]);
+      setCompareLoading(false);
+      return;
+    }
+
+    setCompareLoading(true);
+    Promise.allSettled(activeComparisonSymbols.map((symbol) => fetchQuote(symbol, rangeConfig.period, rangeConfig.interval))).then((results) => {
+      if (cancelled) return;
+      setCompareQuotes(
+        results
+          .filter((result): result is PromiseFulfilledResult<MarketQuote> => result.status === "fulfilled")
+          .map((result) => result.value)
+      );
+      setCompareLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeComparisonSymbols, instrument.symbol, rangeConfig.interval, rangeConfig.period]);
 
   const chartData = useMemo(() => {
     if (!quote) return [];
-    const rangeSize: Record<string, number> = { "1D": 1, "5D": 5, "1M": 30, "6M": 60, "YTD": 90, "1Y": 90, "5Y": 90, MAX: 90 };
-    return quote.history.slice(-(rangeSize[range] ?? 30));
-  }, [quote, range]);
+    return quote.history.map((point, index, history) => pointToDetail(point, history[index - 1]?.price));
+  }, [quote]);
   const displayedChartData = useMemo(() => {
-    if (!compareQuote || chartMode !== "compare") return chartData;
-    const compareHistory = compareQuote.history.slice(-chartData.length);
-    return chartData.map((point, index) => ({
-      ...point,
-      comparePrice: compareHistory[index]?.price ?? null,
-    }));
-  }, [chartData, chartMode, compareQuote]);
+    if (chartData.length === 0) return [];
+    const primaryStart = chartData[0]?.price ?? 1;
+    return chartData.map((point, index) => {
+      const next: DetailChartPoint = {
+        ...point,
+        primaryPerformance: performanceFrom(primaryStart, point.price),
+      };
+      compareQuotes.forEach((compareQuote) => {
+        const compareHistory = compareQuote.history.slice(-chartData.length);
+        const compareStart = compareHistory[0]?.price ?? 1;
+        const compareIndex = index - Math.max(chartData.length - compareHistory.length, 0);
+        const comparePoint = compareIndex >= 0 ? compareHistory[compareIndex] : undefined;
+        next[compareKey(compareQuote.ticker, "price")] = comparePoint?.price ?? null;
+        next[compareKey(compareQuote.ticker, "performance")] = comparePoint?.price
+          ? performanceFrom(compareStart, comparePoint.price)
+          : null;
+      });
+      return next;
+    });
+  }, [chartData, compareQuotes]);
 
-  const addCompareSymbol = async (symbol: string) => {
+  const addCompareSymbol = (symbol: string) => {
     const normalized = symbol.trim().toUpperCase();
     if (!normalized) return;
-    setCompareSymbol(normalized);
-    setCompareLoading(true);
-    setChartMode("compare");
-    try {
-      const next = await fetchQuote(normalized);
-      setCompareQuote(next);
-      setNotice(`Comparing ${instrument.symbol} with ${next.ticker}.`);
-    } catch {
-      setCompareQuote(null);
-      setNotice(`Unable to load ${normalized} for comparison.`);
-    } finally {
-      setCompareLoading(false);
+    setCompareSymbol("");
+    setChartMode("line");
+    setCompareOpen(false);
+    if (!activeComparisonSymbols.includes(normalized) && normalized !== instrument.symbol.toUpperCase()) {
+      onComparisonChange([...activeComparisonSymbols, normalized]);
     }
   };
 
+  const removeCompareSymbol = (symbol: string) => {
+    onComparisonChange(activeComparisonSymbols.filter((item) => item !== symbol.toUpperCase()));
+    setHoverPoint(null);
+  };
+
+  const filteredCompareAssets = useMemo(() => {
+    const query = compareSymbol.trim().toLowerCase();
+    const excluded = new Set([instrument.symbol.toUpperCase(), ...activeComparisonSymbols]);
+    return COMPARE_ASSETS.filter((asset) => {
+      if (excluded.has(asset.symbol.toUpperCase())) return false;
+      if (!query) return true;
+      return [asset.symbol, asset.label, asset.exchange].some((value) => value.toLowerCase().includes(query));
+    }).slice(0, 8);
+  }, [activeComparisonSymbols, compareSymbol, instrument.symbol]);
+
+  const compareMode = activeComparisonSymbols.length > 0;
+  useEffect(() => {
+    if (compareMode && chartMode !== "line") setChartMode("line");
+  }, [chartMode, compareMode]);
+
+  const chartValues = compareMode
+    ? displayedChartData.flatMap((point) => [
+        point.primaryPerformance,
+        ...compareQuotes.flatMap((compareQuote) => {
+          const value = point[compareKey(compareQuote.ticker, "performance")];
+          return typeof value === "number" ? [value] : [];
+        }),
+      ])
+    : displayedChartData.map((point) => point.price);
+  const singleAssetValues = chartMode === "candle"
+    ? displayedChartData.flatMap((point) => [
+        typeof point.high === "number" ? point.high : point.price,
+        typeof point.low === "number" ? point.low : point.price,
+      ])
+    : displayedChartData.map((point) => point.price);
+  const finalChartValues = compareMode ? chartValues : singleAssetValues;
+  const yDomain = domainWithPadding(finalChartValues);
+  const activePoint = hoverPoint ?? displayedChartData[displayedChartData.length - 1] ?? null;
   const positive = quote ? quote.change >= 0 : true;
-  const absoluteChange = quote ? estimateAbsoluteChange(quote) : 0;
+  const activePrice = activePoint?.price ?? quote?.price ?? 0;
+  const absoluteChange = quote ? activePrice - (quote.price - estimateAbsoluteChange(quote)) : 0;
+  const activePercentChange = quote ? performanceFrom(quote.price - estimateAbsoluteChange(quote), activePrice) : 0;
+  const primaryLineColor = compareMode ? COMPARE_COLORS[0] : positive ? "var(--color-green-positive)" : "var(--color-red-negative)";
   const isCrypto = instrument.category === "Crypto";
+  const displayName = quoteDisplayName(instrument, quote);
   const timestamp = useMemo(
     () => new Intl.DateTimeFormat("en-US", {
       month: "short",
@@ -699,9 +1161,9 @@ function QuoteDetailPanel({
 
       <div className="space-y-5">
         <div>
-          <p className="text-sm font-medium text-white/42">{displaySymbol(instrument.symbol)} Research</p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-white">{displaySymbol(instrument.symbol)}</h2>
-          <p className="mt-1 text-sm text-white/42">{quote?.name || instrument.label}</p>
+          <p className="text-sm font-medium text-white/42">{instrument.exchange}</p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-white">{displayName}</h2>
+          <p className="mt-1 text-sm text-white/42">{instrument.category}</p>
         </div>
 
         {loading ? (
@@ -709,10 +1171,12 @@ function QuoteDetailPanel({
         ) : quote ? (
           <div>
             <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
-              <p className="text-4xl font-semibold tabular-nums tracking-tight text-white">{priceLabel(quote)}</p>
-              <span className={cn("mb-1 inline-flex items-center gap-1 text-sm font-semibold tabular-nums", positive ? "text-green-positive" : "text-red-negative")}>
-                {positive ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-                {positive ? "+" : "-"}{fmt(Math.abs(quote.change))}%
+              <p className="text-4xl font-semibold tabular-nums tracking-tight text-white">
+                {quote.currency && quote.currency !== "USD" ? `${quote.currency} ` : quote.ticker.includes("^") ? "" : "$"}{fmt(activePrice)}
+              </p>
+              <span className={cn("mb-1 inline-flex items-center gap-1 text-sm font-semibold tabular-nums", activePercentChange >= 0 ? "text-green-positive" : "text-red-negative")}>
+                {activePercentChange >= 0 ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                {activePercentChange >= 0 ? "+" : "-"}{fmt(Math.abs(activePercentChange))}%
               </span>
               <span className="mb-1 text-sm tabular-nums text-white/45">
                 ({absoluteChange >= 0 ? "+" : "-"}{fmt(Math.abs(absoluteChange))}) {range}
@@ -725,32 +1189,87 @@ function QuoteDetailPanel({
         )}
 
         <div className="flex flex-wrap items-center gap-2 border-y border-white/[0.06] py-3">
-          <Button
-            type="button"
-            variant={chartMode === "area" ? "secondary" : "ghost"}
-            size="sm"
-            onClick={() => {
-              setChartMode("area");
-              setCompareOpen(false);
-            }}
-            className="rounded-xl"
-          >
-            <LineChart className="h-4 w-4" />
-            Area
-          </Button>
-          <Button
-            type="button"
-            variant={chartMode === "compare" ? "secondary" : "ghost"}
-            size="sm"
-            onClick={() => {
-              setChartMode("compare");
-              setCompareOpen((open) => !open);
-            }}
-            className="rounded-xl"
-          >
-            <Search className="h-4 w-4" />
-            Compare
-          </Button>
+          <DropdownMenu open={chartMenuOpen} onOpenChange={setChartMenuOpen}>
+            <DropdownMenuTrigger
+              className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-[var(--border-card)] bg-[var(--surface-card)] px-3 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)]"
+            >
+              <ChartModeIcon mode={chartMode} />
+              {CHART_MODE_LABELS[chartMode]}
+              <ChevronDown className="h-3.5 w-3.5 text-white/35" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="bottom" align="start" sideOffset={8} className="w-52">
+              {(Object.keys(CHART_MODE_LABELS) as ChartMode[]).map((mode) => {
+                const disabled = compareMode && mode !== "line";
+                return (
+                  <DropdownMenuItem
+                    key={mode}
+                    disabled={disabled}
+                    onClick={() => {
+                      if (disabled) return;
+                      setChartMode(mode);
+                      setChartMenuOpen(false);
+                    }}
+                    className={cn(
+                      "cursor-pointer justify-between",
+                      chartMode === mode && "bg-indigo-primary/12 text-indigo-100",
+                      disabled && "pointer-events-none opacity-40"
+                    )}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <ChartModeIcon mode={mode} />
+                      {CHART_MODE_LABELS[mode]}
+                    </span>
+                    {chartMode === mode && <span className="h-2 w-2 rounded-full bg-indigo-primary" />}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu open={compareOpen} onOpenChange={setCompareOpen}>
+            <DropdownMenuTrigger
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-colors",
+                compareOpen || compareMode
+                  ? "border-indigo-primary/30 bg-indigo-primary/12 text-indigo-100"
+                  : "border-[var(--border-card)] bg-[var(--surface-card)] text-[var(--text-secondary)] hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)]"
+              )}
+            >
+              <Plus className="h-4 w-4" />
+              Compare
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="bottom" align="start" sideOffset={8} className="w-80 p-2">
+              <div className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 py-2">
+                <Search className="h-4 w-4 shrink-0 text-white/35" />
+                <input
+                  value={compareSymbol}
+                  onChange={(event) => setCompareSymbol(event.target.value)}
+                  placeholder="Search for stocks, indices, etc."
+                  className="h-6 min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/30"
+                />
+              </div>
+              <div className="mt-2 space-y-1">
+                {filteredCompareAssets.length > 0 ? (
+                  filteredCompareAssets.map((asset) => (
+                    <DropdownMenuItem
+                      key={`${asset.symbol}-${asset.exchange}`}
+                      onClick={() => addCompareSymbol(asset.symbol)}
+                      className="h-auto cursor-pointer py-2.5"
+                    >
+                      <TickerAvatar symbol={asset.symbol} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-white/86">{asset.label}</span>
+                        <span className="block truncate text-xs text-white/38">
+                          {asset.symbol} · {asset.exchange}
+                        </span>
+                      </span>
+                    </DropdownMenuItem>
+                  ))
+                ) : (
+                  <p className="px-3 py-4 text-sm text-white/38">No matching assets.</p>
+                )}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             type="button"
             variant={indicatorsOpen ? "secondary" : "ghost"}
@@ -761,34 +1280,34 @@ function QuoteDetailPanel({
             <LineChart className="h-4 w-4" />
             Indicators
           </Button>
+          {compareLoading && <Loader2 className="h-4 w-4 animate-spin text-white/35" />}
         </div>
 
-        {compareOpen && (
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3">
-            <TickerSuggestionInput
-              value={compareSymbol}
-              onValueChange={setCompareSymbol}
-              onSelect={addCompareSymbol}
-              existingTickers={[instrument.symbol]}
-              placeholder="All symbols"
-              className="min-w-[14rem] flex-1"
-              inputClassName="h-9 rounded-xl text-sm"
-            />
-            {compareLoading && <Loader2 className="h-4 w-4 animate-spin text-white/35" />}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => {
-                setCompareOpen(false);
-                setCompareQuote(null);
-                setCompareSymbol("");
-                setChartMode("area");
-              }}
-              aria-label="Close compare"
-            >
-              <ChevronDown className="h-4 w-4 rotate-180" />
-            </Button>
+        {compareMode && (
+          <div className="flex flex-wrap items-center gap-2">
+            {activeComparisonSymbols.map((symbol, index) => {
+              const asset = findMarketInstrument(symbol);
+              const color = COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length];
+              return (
+                <span
+                  key={symbol}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-sm font-medium text-white/78"
+                  title={asset.label}
+                >
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+                  {symbol}
+                  <button
+                    type="button"
+                    onClick={() => removeCompareSymbol(symbol)}
+                    className="rounded-full p-0.5 text-white/45 transition-colors hover:bg-white/[0.08] hover:text-white"
+                    aria-label={`Remove ${symbol} comparison`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              );
+            })}
+            <span className="text-xs text-white/35">Comparison chart uses normalized percent performance.</span>
           </div>
         )}
 
@@ -802,13 +1321,21 @@ function QuoteDetailPanel({
           {quote && chartData.length > 1 ? (
             <ChartContainer
               config={{
-                price: { label: instrument.symbol, color: positive ? "var(--color-green-positive)" : "var(--color-red-negative)" },
-                comparePrice: { label: compareQuote?.ticker ?? "Compare", color: "var(--color-indigo-primary)" },
+                price: { label: instrument.symbol, color: primaryLineColor },
+                primaryPerformance: { label: instrument.symbol, color: primaryLineColor },
               }}
               className="aspect-auto h-full w-full"
               initialDimension={{ width: 720, height: 360 }}
             >
-              <AreaChart data={displayedChartData} margin={{ top: 10, right: 8, bottom: 8, left: 0 }}>
+              <ComposedChart
+                data={displayedChartData}
+                margin={{ top: 10, right: 8, bottom: 8, left: 0 }}
+                onMouseMove={(state: unknown) => {
+                  const payload = (state as { activePayload?: Array<{ payload?: DetailChartPoint }> })?.activePayload?.[0]?.payload;
+                  if (payload) setHoverPoint(payload);
+                }}
+                onMouseLeave={() => setHoverPoint(null)}
+              >
                 <defs>
                   <linearGradient id="watch-detail-chart" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="currentColor" stopOpacity={0.18} />
@@ -816,29 +1343,101 @@ function QuoteDetailPanel({
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "rgba(255,255,255,0.36)", fontSize: 11 }} minTickGap={28} />
-                <YAxis orientation="right" domain={["dataMin", "dataMax"]} tickLine={false} axisLine={false} tick={{ fill: "rgba(255,255,255,0.36)", fontSize: 11 }} width={58} />
-                <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
-                <Area
-                  type="monotone"
-                  dataKey="price"
-                  stroke="currentColor"
-                  strokeWidth={2.4}
-                  fill="url(#watch-detail-chart)"
-                  className={positive ? "text-green-positive" : "text-red-negative"}
-                  dot={false}
-                  isAnimationActive={false}
+                <YAxis
+                  orientation="right"
+                  domain={yDomain}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fill: "rgba(255,255,255,0.36)", fontSize: 11 }}
+                  width={58}
+                  tickFormatter={(value) => compareMode ? `${Number(value).toFixed(1)}%` : fmt(Number(value), 0)}
                 />
-                {chartMode === "compare" && compareQuote && (
+                <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
+                <ChartTooltip
+                  content={
+                    <WatchlistChartTooltip
+                      compareQuotes={compareQuotes}
+                      compareMode={compareMode}
+                      primaryLabel={instrument.symbol}
+                      primaryColor={primaryLineColor}
+                    />
+                  }
+                  cursor={{ stroke: "rgba(255,255,255,0.35)", strokeWidth: 1 }}
+                />
+                {compareMode && <ReferenceLine y={0} stroke="rgba(255,255,255,0.32)" strokeDasharray="4 4" />}
+                {hoverPoint && (
+                  <ReferenceLine
+                    y={compareMode ? hoverPoint.primaryPerformance : hoverPoint.price}
+                    stroke="rgba(255,255,255,0.28)"
+                    strokeWidth={1}
+                  />
+                )}
+                {chartMode === "area" && !compareMode ? (
+                  <Area
+                    type="monotone"
+                    dataKey="price"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    fill="url(#watch-detail-chart)"
+                    className={positive ? "text-green-positive" : "text-red-negative"}
+                    dot={false}
+                    activeDot={{ r: 4, fill: "currentColor", stroke: "#fff", strokeWidth: 2 }}
+                    isAnimationActive={false}
+                  />
+                ) : chartMode === "bar" && !compareMode ? (
+                  <Bar
+                    dataKey="price"
+                    fill={primaryLineColor}
+                    radius={[3, 3, 0, 0]}
+                    opacity={0.72}
+                    isAnimationActive={false}
+                  />
+                ) : chartMode === "candle" && !compareMode ? (
+                  <>
+                    <Bar dataKey="candleBase" stackId="candle" fill="transparent" isAnimationActive={false} />
+                    <Bar dataKey="candleBody" stackId="candle" radius={[2, 2, 2, 2]} isAnimationActive={false}>
+                      {displayedChartData.map((point, index) => (
+                        <Cell
+                          key={`candle-${point.label}-${index}`}
+                          fill={point.candlePositive ? "var(--color-green-positive)" : "var(--color-red-negative)"}
+                          opacity={0.78}
+                        />
+                      ))}
+                    </Bar>
+                    <Line
+                      type="linear"
+                      dataKey="price"
+                      stroke="rgba(255,255,255,0.24)"
+                      strokeWidth={1}
+                      dot={false}
+                      activeDot={{ r: 3, fill: primaryLineColor, stroke: "#fff", strokeWidth: 1.5 }}
+                      isAnimationActive={false}
+                    />
+                  </>
+                ) : (
                   <Line
                     type="monotone"
-                    dataKey="comparePrice"
-                    stroke="var(--color-indigo-primary)"
+                    dataKey={compareMode ? "primaryPerformance" : "price"}
+                    stroke={primaryLineColor}
                     strokeWidth={2}
                     dot={false}
+                    activeDot={{ r: 4, fill: primaryLineColor, stroke: "#fff", strokeWidth: 2 }}
                     isAnimationActive={false}
                   />
                 )}
-              </AreaChart>
+                {compareMode && compareQuotes.map((compareQuote, index) => (
+                  <Line
+                    key={compareQuote.ticker}
+                    type="monotone"
+                    dataKey={compareKey(compareQuote.ticker, "performance")}
+                    stroke={COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length]}
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4, fill: COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length], stroke: "#fff", strokeWidth: 2 }}
+                    isAnimationActive={false}
+                  />
+                ))}
+              </ComposedChart>
             </ChartContainer>
           ) : (
             <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-white/[0.08] text-sm text-white/32">
@@ -848,9 +1447,13 @@ function QuoteDetailPanel({
         </div>
 
         <Tabs value={range} onValueChange={(value) => setRange(String(value))}>
-          <TabsList variant="line" className="h-9 w-full justify-start gap-4 rounded-none border-t border-white/[0.06] p-0 pt-3">
-            {["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "MAX"].map((item) => (
-              <TabsTrigger key={item} value={item} className="h-8 px-1 text-xs text-white/45 data-active:text-white">
+          <TabsList className="h-auto w-full flex-wrap justify-start gap-2 rounded-none border-t border-white/[0.06] bg-transparent p-0 pt-3">
+            {RANGE_OPTIONS.map((item) => (
+              <TabsTrigger
+                key={item}
+                value={item}
+                className="h-8 rounded-full border border-white/[0.06] bg-white/[0.025] px-3 text-xs font-semibold text-white/48 transition-colors data-active:border-indigo-primary/35 data-active:bg-indigo-primary/16 data-active:text-indigo-100"
+              >
                 {item}
               </TabsTrigger>
             ))}
@@ -871,6 +1474,8 @@ function QuoteDetailPanel({
         ))}
         </div>
       </section>
+
+      <WikipediaProfile instrument={instrument} quoteName={quote?.name} />
 
       {relatedAssets.length > 0 && (
         <section className="space-y-3">
@@ -1237,6 +1842,9 @@ function WatchlistSection({
 /* ------------------------------------------------------------------ */
 
 export default function WatchlistPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
   const [listsLoading, setListsLoading] = useState(true);
   const [newName, setNewName] = useState("");
@@ -1245,6 +1853,74 @@ export default function WatchlistPage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
   const [rightPanel, setRightPanel] = useState<RightPanelView>({ type: "home" });
+  const comparisonSymbols = useMemo(
+    () => normalizeSymbolList((searchParams.get("comparison") ?? "").split(",")),
+    [searchParams]
+  );
+  const primaryQuoteSymbol = useMemo(() => {
+    const querySymbol = searchParams.get("quote") ?? searchParams.get("ticker");
+    if (querySymbol?.trim()) return querySymbol.trim();
+    const quotePathMatch = pathname.match(/\/quote\/([^/?#]+)/);
+    return quotePathMatch?.[1] ? decodeURIComponent(quotePathMatch[1]) : null;
+  }, [pathname, searchParams]);
+  const activeRightPanelSymbol = rightPanel.type === "quote" ? rightPanel.instrument.symbol.toUpperCase() : null;
+
+  const updateQuoteUrl = useCallback(
+    (symbol: string | null, nextComparisons: string[] = comparisonSymbols) => {
+      const params = new URLSearchParams(searchParams.toString());
+      const normalizedSymbol = symbol?.trim().toUpperCase() ?? null;
+      const normalizedComparisons = normalizeSymbolList(nextComparisons).filter(
+        (item) => !normalizedSymbol || item !== normalizedSymbol
+      );
+
+      if (normalizedSymbol) params.set("quote", normalizedSymbol);
+      else params.delete("quote");
+      params.delete("ticker");
+
+      if (normalizedComparisons.length > 0) params.set("comparison", normalizedComparisons.join(","));
+      else params.delete("comparison");
+
+      const queryString = params.toString();
+      router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false });
+    },
+    [comparisonSymbols, pathname, router, searchParams]
+  );
+
+  useEffect(() => {
+    if (!primaryQuoteSymbol) return;
+    const normalized = primaryQuoteSymbol.toUpperCase();
+    if (activeRightPanelSymbol === normalized) return;
+    setRightPanel({ type: "quote", instrument: findMarketInstrument(normalized) });
+  }, [activeRightPanelSymbol, primaryQuoteSymbol]);
+
+  const openQuotePanel = useCallback(
+    (instrument: MarketInstrument) => {
+      setRightPanel({ type: "quote", instrument });
+      updateQuoteUrl(instrument.symbol, comparisonSymbols);
+    },
+    [comparisonSymbols, updateQuoteUrl]
+  );
+
+  const openEarningsPanel = useCallback(
+    (event: EarningsEvent) => {
+      setRightPanel({ type: "earnings", event });
+      updateQuoteUrl(null, []);
+    },
+    [updateQuoteUrl]
+  );
+
+  const closeDetailPanel = useCallback(() => {
+    setRightPanel({ type: "home" });
+    router.replace(pathname, { scroll: false });
+  }, [pathname, router]);
+
+  const updateComparisonSymbols = useCallback(
+    (symbols: string[]) => {
+      const currentSymbol = rightPanel.type === "quote" ? rightPanel.instrument.symbol : primaryQuoteSymbol;
+      updateQuoteUrl(currentSymbol ?? null, symbols);
+    },
+    [primaryQuoteSymbol, rightPanel, updateQuoteUrl]
+  );
 
   useEffect(() => {
     api.watchlists()
@@ -1386,12 +2062,17 @@ export default function WatchlistPage() {
           {/* ---------------- Main: right panel ---------------- */}
           <main className="min-w-0 flex-1 space-y-8 lg:overflow-y-auto lg:pr-1.5">
             {rightPanel.type === "quote" ? (
-              <QuoteDetailPanel instrument={rightPanel.instrument} onBack={() => setRightPanel({ type: "home" })} />
+              <QuoteDetailPanel
+                instrument={rightPanel.instrument}
+                comparisonSymbols={comparisonSymbols}
+                onComparisonChange={updateComparisonSymbols}
+                onBack={closeDetailPanel}
+              />
             ) : rightPanel.type === "earnings" ? (
-              <EarningsDetailPanel event={rightPanel.event} onBack={() => setRightPanel({ type: "home" })} />
+              <EarningsDetailPanel event={rightPanel.event} onBack={closeDetailPanel} />
             ) : (
               <>
-                <MarketSections onOpen={(instrument) => setRightPanel({ type: "quote", instrument })} />
+                <MarketSections onOpen={openQuotePanel} />
 
                 <section>
                   <h2 className="pb-3 text-sm font-semibold uppercase tracking-wide text-white/45">US market summary</h2>
@@ -1399,7 +2080,7 @@ export default function WatchlistPage() {
                   <MarketSummary />
                 </section>
 
-                <UpcomingEarnings onOpen={(event) => setRightPanel({ type: "earnings", event })} />
+                <UpcomingEarnings onOpen={openEarningsPanel} />
 
                 <section>
                   <h2 className="pb-3 text-sm font-semibold uppercase tracking-wide text-white/45">Market trends</h2>

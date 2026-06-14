@@ -157,6 +157,9 @@ export interface MarketQuotePoint {
   label: string;
   price: number;
   volume: number;
+  open?: number | null;
+  high?: number | null;
+  low?: number | null;
 }
 
 export interface EarningsPoint {

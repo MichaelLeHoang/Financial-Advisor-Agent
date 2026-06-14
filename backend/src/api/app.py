@@ -141,6 +141,9 @@ class MarketQuotePoint(BaseModel):
     label: str
     price: float
     volume: int
+    open: float | None = None
+    high: float | None = None
+    low: float | None = None
 
 class MarketSymbolSearchResult(BaseModel):
     ticker: str
@@ -294,14 +297,17 @@ async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
         change = ((latest_price - previous_close) / previous_close * 100) if previous_close else 0.0
         volume_series = history["Volume"] if "Volume" in history else None
 
-        point_rows = history.tail(90)
+        point_rows = history.tail(500)
         points = []
         for index, row in point_rows.iterrows():
             if row.get("Close") is None:
                 continue
 
             if hasattr(index, "strftime"):
-                label = index.strftime("%H:%M") if period == "1d" else index.strftime("%b %d")
+                if interval.endswith("m") or interval.endswith("h"):
+                    label = index.strftime("%H:%M") if period == "1d" else index.strftime("%b %d %H:%M")
+                else:
+                    label = index.strftime("%b %d")
             else:
                 label = str(index)
 
@@ -310,6 +316,9 @@ async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
                     label=label,
                     price=round(float(row["Close"]), 2),
                     volume=int(row.get("Volume", 0) or 0),
+                    open=_round_optional(row.get("Open")),
+                    high=_round_optional(row.get("High")),
+                    low=_round_optional(row.get("Low")),
                 )
             )
 
