@@ -24,12 +24,13 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { Area, AreaChart, Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, CartesianGrid, ComposedChart, Customized, Line, ReferenceLine, XAxis, YAxis } from "recharts";
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { Watchlist, WatchlistAsset, MarketQuote } from "@/lib/api";
 import { fetchQuote, invalidate } from "@/lib/quote-cache";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
+import FinanceOhlcLayer from "@/components/market/FinanceOhlcLayer";
 import MarketMovers from "@/components/market/MarketMovers";
 import MarketNewsFeed from "@/components/market/MarketNewsFeed";
 import MarketSummary from "@/components/market/MarketSummary";
@@ -1069,7 +1070,7 @@ function QuoteDetailPanel({
         }),
       ])
     : displayedChartData.map((point) => point.price);
-  const singleAssetValues = chartMode === "candle"
+  const singleAssetValues = chartMode === "candle" || chartMode === "bar"
     ? displayedChartData.flatMap((point) => [
         typeof point.high === "number" ? point.high : point.price,
         typeof point.low === "number" ? point.low : point.price,
@@ -1161,10 +1162,13 @@ function QuoteDetailPanel({
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => router.push(`/?session=${encodeURIComponent(`quote-${instrument.symbol}`)}`)}
+            onClick={() => {
+              const prompt = `Dive deeper on ${displayName} (${instrument.symbol}). Use live market data, recent trend, relative performance, important risks, and the next catalysts to watch.`;
+              router.push(`/?session=${encodeURIComponent(`quote-${instrument.symbol}`)}&prompt=${encodeURIComponent(prompt)}`);
+            }}
             className="rounded-xl"
           >
-            Ask AI
+            Dive deeper with AI
           </Button>
         </div>
       </div>
@@ -1409,43 +1413,29 @@ function QuoteDetailPanel({
                     {...MAIN_CHART_ANIMATION}
                   />
                 ) : chartMode === "bar" && !compareMode ? (
-                  <Bar
-                    dataKey="price"
-                    fill={primaryLineColor}
-                    radius={[3, 3, 0, 0]}
-                    opacity={0.72}
-                    isAnimationActive
-                    {...MAIN_CHART_ANIMATION}
+                  <Customized
+                    component={(props: any) => (
+                      <FinanceOhlcLayer
+                        data={displayedChartData}
+                        mode="bar"
+                        xAxisMap={props.xAxisMap}
+                        yAxisMap={props.yAxisMap}
+                        offset={props.offset}
+                      />
+                    )}
                   />
                 ) : chartMode === "candle" && !compareMode ? (
-                  <>
-                    <Bar dataKey="candleBase" stackId="candle" fill="transparent" isAnimationActive={false} />
-                    <Bar
-                      dataKey="candleBody"
-                      stackId="candle"
-                      radius={[2, 2, 2, 2]}
-                      isAnimationActive
-                      {...MAIN_CHART_ANIMATION}
-                    >
-                      {displayedChartData.map((point, index) => (
-                        <Cell
-                          key={`candle-${point.label}-${index}`}
-                          fill={point.candlePositive ? "var(--color-green-positive)" : "var(--color-red-negative)"}
-                          opacity={0.78}
-                        />
-                      ))}
-                    </Bar>
-                    <Line
-                      type="linear"
-                      dataKey="price"
-                      stroke="rgba(255,255,255,0.24)"
-                      strokeWidth={1}
-                      dot={false}
-                      activeDot={{ r: 3, fill: primaryLineColor, stroke: "#fff", strokeWidth: 1.5 }}
-                      isAnimationActive
-                      {...MAIN_CHART_ANIMATION}
-                    />
-                  </>
+                  <Customized
+                    component={(props: any) => (
+                      <FinanceOhlcLayer
+                        data={displayedChartData}
+                        mode="candle"
+                        xAxisMap={props.xAxisMap}
+                        yAxisMap={props.yAxisMap}
+                        offset={props.offset}
+                      />
+                    )}
+                  />
                 ) : (
                   <Line
                     type="monotone"

@@ -28,8 +28,8 @@ import {
     AreaChart,
     Bar,
     CartesianGrid,
-    Cell,
     ComposedChart,
+    Customized,
     Line,
     ReferenceLine,
     ResponsiveContainer,
@@ -52,6 +52,7 @@ import {
     type MarketSymbol,
 } from "@/lib/market-data";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
+import FinanceOhlcLayer from "@/components/market/FinanceOhlcLayer";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -687,7 +688,9 @@ function MarketSearch({
                                 </span>
                                 <span className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
-                                        <span className="text-sm font-semibold text-white">{match.ticker}</span>
+                                        <span className="rounded-md px-1 py-0.5 text-sm font-semibold text-white transition-colors group-hover/search-item:bg-indigo-primary/18 group-hover/search-item:text-indigo-100">
+                                            {match.ticker}
+                                        </span>
                                         <Badge variant="outline" className="h-5 rounded-md text-[10px]">{match.exchange}</Badge>
                                     </div>
                                     <div className="truncate text-xs text-white/42">{match.name}</div>
@@ -705,7 +708,14 @@ function MarketSearch({
                                     >
                                         <Maximize2 className="size-4" />
                                     </button>
-                                    <Plus className="size-4 text-white/38" />
+                                    <button
+                                        type="button"
+                                        onClick={() => onSelect(match.ticker)}
+                                        className="flex size-8 items-center justify-center rounded-lg text-white/38 transition-colors hover:bg-white/[0.1] hover:text-white"
+                                        aria-label={`Add ${match.ticker}`}
+                                    >
+                                        <Plus className="size-4" />
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -1066,7 +1076,7 @@ function MarketChartDialog({
                 return typeof value === "number" ? [value] : [];
             }),
         ])
-        : chartStyle === "candle"
+        : chartStyle === "candle" || chartStyle === "bar"
             ? displayedChartData.flatMap((point) => [
                 typeof point.high === "number" ? point.high : point.price,
                 typeof point.low === "number" ? point.low : point.price,
@@ -1258,18 +1268,36 @@ function MarketChartDialog({
                                                             <Area yAxisId="price" type="monotone" dataKey="price" stroke={color} strokeWidth={2.4} fill={`url(#dialog-grad-${detailStock.ticker})`} dot={false} />
                                                         )}
                                                         {chartStyle === "bar" && !compareMode && (
-                                                            <Bar yAxisId="price" dataKey="price" fill={color} radius={[4, 4, 0, 0]} opacity={0.72} />
+                                                            <Customized
+                                                                component={(props: any) => (
+                                                                    <FinanceOhlcLayer
+                                                                        data={displayedChartData}
+                                                                        mode="bar"
+                                                                        xAxisMap={props.xAxisMap}
+                                                                        yAxisMap={props.yAxisMap}
+                                                                        yAxisId="price"
+                                                                        offset={props.offset}
+                                                                        positiveColor="#34d399"
+                                                                        negativeColor="#f87171"
+                                                                    />
+                                                                )}
+                                                            />
                                                         )}
                                                         {chartStyle === "candle" && !compareMode && (
-                                                            <>
-                                                                <Bar yAxisId="price" dataKey="candleBase" stackId="candle" fill="transparent" isAnimationActive={false} />
-                                                                <Bar yAxisId="price" dataKey="candleBody" stackId="candle" radius={[2, 2, 2, 2]}>
-                                                                    {displayedChartData.map((point, index) => (
-                                                                        <Cell key={`${point.label}-${index}`} fill={point.candlePositive ? "#34d399" : "#f87171"} opacity={0.78} />
-                                                                    ))}
-                                                                </Bar>
-                                                                <Line yAxisId="price" type="linear" dataKey="price" stroke="rgba(255,255,255,0.26)" strokeWidth={1} dot={false} />
-                                                            </>
+                                                            <Customized
+                                                                component={(props: any) => (
+                                                                    <FinanceOhlcLayer
+                                                                        data={displayedChartData}
+                                                                        mode="candle"
+                                                                        xAxisMap={props.xAxisMap}
+                                                                        yAxisMap={props.yAxisMap}
+                                                                        yAxisId="price"
+                                                                        offset={props.offset}
+                                                                        positiveColor="#34d399"
+                                                                        negativeColor="#f87171"
+                                                                    />
+                                                                )}
+                                                            />
                                                         )}
                                                         {(chartStyle === "line" || compareMode) && (
                                                             <Line yAxisId="price" type="monotone" dataKey={compareMode ? "primaryPerformance" : "price"} stroke={color} strokeWidth={2.4} dot={false} />

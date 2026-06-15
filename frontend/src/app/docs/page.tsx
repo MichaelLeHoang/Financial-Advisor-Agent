@@ -830,7 +830,7 @@ export default function DocsPage() {
           >
             <Search className="size-4" />
             <span className="flex-1">Search docs...</span>
-            <span className="rounded-full bg-[var(--docs-control-active)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--docs-control-active-text)]">Cmd K</span>
+            <span className="rounded-full bg-[var(--docs-control-active)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--docs-control-active-text)]">Cmd + K</span>
           </button>
 
           <button

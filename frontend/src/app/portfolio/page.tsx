@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Loader2, Pencil, Trash2, X } from "lucide-react";
+import { Check, Eye, EyeOff, Loader2, Pencil, Trash2, X } from "lucide-react";
 import { PieChart, Pie, Cell } from "recharts";
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
@@ -11,6 +11,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
+import { ThinSlider } from "@/components/ui/thin-slider";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,6 +62,7 @@ interface EditState {
   holdingId: string;
   field: "quantity" | "average_cost";
   draft: string;
+  currency: string;
   saving: boolean;
 }
 
@@ -85,19 +87,36 @@ function formatMoney(value: number, currency: string | null | undefined, digits 
   }
 }
 
+function formatPrivateMoney(value: number, currency: string | null | undefined, hidden: boolean, digits = 2) {
+  return hidden ? "••••••" : formatMoney(value, currency, digits);
+}
+
+async function convertAmount(amount: number, sourceCurrency: string, targetCurrency: string) {
+  const rate = await fetchCurrencyRate(sourceCurrency, targetCurrency);
+  return amount * rate;
+}
+
 async function fetchCurrencyRate(sourceCurrency: string, targetCurrency: string): Promise<number> {
   const source = normalizeCurrency(sourceCurrency);
   const target = normalizeCurrency(targetCurrency);
   if (source === target) return 1;
 
   if (source === "USD" && target === "CAD") {
-    const quote = await fetchQuote("CAD=X", "1d", "1d");
-    return quote.price || 1;
+    try {
+      const quote = await fetchQuote("CAD=X", "1d", "1d");
+      return quote.price || 1;
+    } catch {
+      return 1;
+    }
   }
 
   if (source === "CAD" && target === "USD") {
-    const quote = await fetchQuote("CAD=X", "1d", "1d");
-    return quote.price ? 1 / quote.price : 1;
+    try {
+      const quote = await fetchQuote("CAD=X", "1d", "1d");
+      return quote.price ? 1 / quote.price : 1;
+    } catch {
+      return 1;
+    }
   }
 
   try {
@@ -176,6 +195,8 @@ export default function PortfolioPage() {
   const [addSymbol, setAddSymbol] = useState("");
   const [addQty, setAddQty] = useState("");
   const [addCost, setAddCost] = useState("");
+  const [addCostCurrency, setAddCostCurrency] = useState<(typeof SUPPORTED_BASE_CURRENCIES)[number]>("USD");
+  const [hideAmounts, setHideAmounts] = useState(false);
   const [mode, setMode] = useState<"classical" | "quantum">("classical");
   const [risk, setRisk] = useState(1.0);
   const [result, setResult] = useState<OptimizeResult | null>(null);
@@ -190,6 +211,26 @@ export default function PortfolioPage() {
 
   const activePortfolio = portfolios.find((p) => p.id === activeId) ?? null;
   const activeBaseCurrency = normalizeCurrency(activePortfolio?.base_currency);
+
+  useEffect(() => {
+    setAddCostCurrency(activeBaseCurrency as (typeof SUPPORTED_BASE_CURRENCIES)[number]);
+  }, [activeBaseCurrency]);
+
+  useEffect(() => {
+    try {
+      setHideAmounts(localStorage.getItem("portfolio.hideAmounts") === "true");
+    } catch {
+      setHideAmounts(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("portfolio.hideAmounts", String(hideAmounts));
+    } catch {
+      // Privacy preference persistence is best effort.
+    }
+  }, [hideAmounts]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -303,13 +344,15 @@ export default function PortfolioPage() {
     setSaving(true);
     setError(null);
     try {
-      const holding = await api.addHolding(activeId, addSymbol.toUpperCase(), qty, cost);
+      const costInBase = await convertAmount(cost, addCostCurrency, activeBaseCurrency);
+      const holding = await api.addHolding(activeId, addSymbol.toUpperCase(), qty, costInBase);
       const row: HoldingRow = { ...holding, ...emptyMetrics(activeBaseCurrency) };
       setHoldings((prev) => [...prev, row]);
       setTickerInput("");
       setAddSymbol("");
       setAddQty("");
       setAddCost("");
+      setAddCostCurrency(activeBaseCurrency as (typeof SUPPORTED_BASE_CURRENCIES)[number]);
 
       fetchQuote(holding.symbol)
         .then(async (quote) => {
@@ -346,7 +389,7 @@ export default function PortfolioPage() {
 
   // ── Inline editing ────────────────────────────────────────
   const startEdit = (holdingId: string, field: "quantity" | "average_cost", current: number) => {
-    setEdit({ holdingId, field, draft: String(current), saving: false });
+    setEdit({ holdingId, field, draft: String(current), currency: activeBaseCurrency, saving: false });
     // focus happens after render via useEffect below
   };
 
@@ -362,8 +405,12 @@ export default function PortfolioPage() {
     const h = holdings.find((r) => r.id === edit.holdingId);
     if (!h) { cancelEdit(); return; }
 
+    const savedValue = edit.field === "average_cost"
+      ? await convertAmount(val, edit.currency, activeBaseCurrency)
+      : val;
+
     // Optimistically update UI immediately
-    const patch = { [edit.field]: val } as { quantity?: number; average_cost?: number };
+    const patch = { [edit.field]: savedValue } as { quantity?: number; average_cost?: number };
     setHoldings((prev) =>
       prev.map((r) => {
         if (r.id !== edit.holdingId) return r;
@@ -425,6 +472,8 @@ export default function PortfolioPage() {
   const totalCost = holdings.reduce((s, h) => s + h.quantity * h.average_cost, 0);
   const totalPnl = totalValue > 0 ? totalValue - totalCost : null;
   const totalPnlPct = totalCost > 0 && totalPnl != null ? (totalPnl / totalCost) * 100 : null;
+  const pricedHoldingCount = holdings.filter((h) => h.value != null).length;
+  const canShowAccountSummary = holdings.length > 0;
 
   const uniqueSymbols = [...new Set(holdings.map((h) => h.symbol))];
 
@@ -495,7 +544,7 @@ export default function PortfolioPage() {
 
     if (isEditing) {
       return (
-        <span className="flex items-center justify-end gap-1">
+        <span className="flex flex-wrap items-center justify-end gap-1">
           <input
             ref={editRef}
             type="number"
@@ -504,9 +553,30 @@ export default function PortfolioPage() {
             value={edit.draft}
             onChange={(e) => setEdit((prev) => prev ? { ...prev, draft: e.target.value } : null)}
             onKeyDown={handleEditKey}
-            onBlur={commitEdit}
+            onBlur={(event) => {
+              const nextTarget = event.relatedTarget as Node | null;
+              if (nextTarget && event.currentTarget.parentElement?.contains(nextTarget)) return;
+              commitEdit();
+            }}
             className="w-20 rounded-lg border border-indigo-primary/50 bg-white/[0.06] px-2 py-0.5 text-right text-xs text-white tabular-nums focus:outline-none"
           />
+          {field === "average_cost" && (
+            <select
+              value={edit.currency}
+              onChange={(event) => setEdit((prev) => prev ? { ...prev, currency: event.target.value } : null)}
+              onBlur={(event) => {
+                const nextTarget = event.relatedTarget as Node | null;
+                if (nextTarget && event.currentTarget.parentElement?.contains(nextTarget)) return;
+                commitEdit();
+              }}
+              className="h-6 rounded-lg border border-white/[0.08] bg-slate-950 px-1.5 text-[11px] font-semibold text-white focus:border-indigo-primary/50 focus:outline-none"
+              aria-label="Average cost currency"
+            >
+              {SUPPORTED_BASE_CURRENCIES.map((currency) => (
+                <option key={currency} value={currency}>{currency}</option>
+              ))}
+            </select>
+          )}
           {edit.saving && <Loader2 className="h-3 w-3 animate-spin text-white/30" />}
         </span>
       );
@@ -648,7 +718,7 @@ export default function PortfolioPage() {
         ) : activePortfolio ? (
           <section className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.025]">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
+            <div className="flex flex-col gap-4 border-b border-white/[0.06] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-semibold text-white">{activePortfolio.name}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -662,19 +732,77 @@ export default function PortfolioPage() {
                   ))}
                 </div>
               </div>
-              {totalValue > 0 && totalPnl != null && (
-                <div className="text-right">
-                  <p className="text-base font-bold text-white">
-                    {formatMoney(totalValue, activeBaseCurrency)}
-                  </p>
-                  <p className={cn("text-xs font-medium", totalPnl >= 0 ? "text-green-positive" : "text-red-negative")}>
-                    {totalPnl >= 0 ? "+" : ""}
-                    {formatMoney(Math.abs(totalPnl), activeBaseCurrency)}
-                    {" "}({totalPnlPct! >= 0 ? "+" : ""}{totalPnlPct!.toFixed(2)}%)
-                  </p>
-                </div>
-              )}
+              <div className="flex items-center justify-between gap-3 sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setHideAmounts((value) => !value)}
+                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 text-xs font-semibold text-white/60 transition-colors hover:border-white/16 hover:bg-white/[0.06] hover:text-white"
+                  aria-pressed={hideAmounts}
+                  aria-label={hideAmounts ? "Show money amounts" : "Hide money amounts"}
+                >
+                  {hideAmounts ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  {hideAmounts ? "Hidden" : "Hide"}
+                </button>
+                {totalValue > 0 && totalPnl != null && (
+                  <div className="text-right">
+                    <p className="text-base font-bold text-white">
+                      {formatPrivateMoney(totalValue, activeBaseCurrency, hideAmounts)}
+                    </p>
+                    <p className={cn("text-xs font-medium", totalPnl >= 0 ? "text-green-positive" : "text-red-negative")}>
+                      {totalPnl >= 0 ? "+" : ""}
+                      {formatMoney(Math.abs(totalPnl), activeBaseCurrency)}
+                      {" "}({totalPnlPct! >= 0 ? "+" : ""}{totalPnlPct!.toFixed(2)}%)
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
+
+            {canShowAccountSummary && (
+              <div className="grid gap-px border-b border-white/[0.06] bg-white/[0.04] sm:grid-cols-4">
+                <div className="bg-[#090b12] px-5 py-4">
+                  <p className="text-[11px] font-medium uppercase tracking-widest text-white/32">Overall holdings</p>
+                  <p className="mt-1 text-lg font-semibold text-white">{holdings.length}</p>
+                  <p className="text-xs text-white/35">{pricedHoldingCount}/{holdings.length} priced live</p>
+                </div>
+                <div className="bg-[#090b12] px-5 py-4">
+                  <p className="text-[11px] font-medium uppercase tracking-widest text-white/32">Market value</p>
+                  <p className="mt-1 text-lg font-semibold text-white">
+                    {formatPrivateMoney(totalValue, activeBaseCurrency, hideAmounts)}
+                  </p>
+                  <p className="text-xs text-white/35">Converted to {activeBaseCurrency}</p>
+                </div>
+                <div className="bg-[#090b12] px-5 py-4">
+                  <p className="text-[11px] font-medium uppercase tracking-widest text-white/32">Cost basis</p>
+                  <p className="mt-1 text-lg font-semibold text-white">
+                    {formatPrivateMoney(totalCost, activeBaseCurrency, hideAmounts)}
+                  </p>
+                  <p className="text-xs text-white/35">Average cost is stored in base currency</p>
+                </div>
+                <div className="bg-[#090b12] px-5 py-4">
+                  <p className="text-[11px] font-medium uppercase tracking-widest text-white/32">Unrealized P&amp;L</p>
+                  {totalPnl != null ? (
+                    <>
+                      <p className={cn("mt-1 text-lg font-semibold", totalPnl >= 0 ? "text-green-positive" : "text-red-negative")}>
+                        {totalPnl >= 0 ? "+" : ""}
+                        {formatMoney(Math.abs(totalPnl), activeBaseCurrency)}
+                      </p>
+                      <p className={cn("text-xs font-medium", totalPnl >= 0 ? "text-green-positive/80" : "text-red-negative/80")}>
+                        {totalPnlPct! >= 0 ? "+" : ""}{totalPnlPct!.toFixed(2)}%
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-lg font-semibold text-white/25">—</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {crossCurrencyCount > 0 && (
+              <div className="border-b border-white/[0.06] bg-cyan-secondary/[0.06] px-5 py-3 text-xs leading-relaxed text-white/55">
+                P&amp;L compares live market value converted into {activeBaseCurrency} against average cost stored in {activeBaseCurrency}. For holdings such as CAD-listed tickers, enter or edit average cost with the matching currency selector so the stored cost basis aligns with your account statement.
+              </div>
+            )}
 
             {holdingsLoading ? (
               <div className="flex items-center justify-center gap-2 py-12 text-sm text-white/30">
@@ -736,16 +864,17 @@ export default function PortfolioPage() {
                                 holdingId={h.id}
                                 field="average_cost"
                                 value={h.average_cost}
-                                format={(v) => formatMoney(v, activeBaseCurrency)}
+                                format={(v) => formatPrivateMoney(v, activeBaseCurrency, hideAmounts)}
                               />
+                              <p className="mt-1 text-[10px] text-white/25">stored {activeBaseCurrency}</p>
                             </td>
                             <td className="border-l border-white/[0.06] px-4 py-3 text-right tabular-nums">
                               {h.currentPrice != null ? (
                                 <div className="space-y-0.5">
-                                  <p className="text-white/70">{formatMoney(h.currentPrice, quoteCurrency)}</p>
+                                  <p className="text-white/70">{formatPrivateMoney(h.currentPrice, quoteCurrency, hideAmounts)}</p>
                                   {isConverted && h.convertedPrice != null && (
                                     <p className="text-[11px] text-white/35">
-                                      {formatMoney(h.convertedPrice, activeBaseCurrency)}
+                                      {formatPrivateMoney(h.convertedPrice, activeBaseCurrency, hideAmounts)}
                                     </p>
                                   )}
                                 </div>
@@ -757,10 +886,10 @@ export default function PortfolioPage() {
                               {h.value != null ? (
                                 <div className="space-y-1.5">
                                   <div>
-                                    <p className="text-white/70">{formatMoney(h.value, activeBaseCurrency)}</p>
+                                    <p className="text-white/70">{formatPrivateMoney(h.value, activeBaseCurrency, hideAmounts)}</p>
                                     {isConverted && h.originalValue != null && (
                                       <p className="text-[11px] text-white/35">
-                                        {formatMoney(h.originalValue, quoteCurrency)}
+                                        {formatPrivateMoney(h.originalValue, quoteCurrency, hideAmounts)}
                                       </p>
                                     )}
                                   </div>
@@ -916,11 +1045,23 @@ export default function PortfolioPage() {
                   type="number"
                   min="0"
                   step="any"
-                  placeholder={`Avg cost (${activeBaseCurrency})`}
+                  placeholder={`Avg cost (${addCostCurrency})`}
                   value={addCost}
                   onChange={(e) => setAddCost(e.target.value)}
-                  className="h-9 w-36 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-sm text-white placeholder:text-white/25 focus:border-indigo-primary/50 focus:outline-none"
+                  className="h-9 w-32 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-sm text-white placeholder:text-white/25 focus:border-indigo-primary/50 focus:outline-none"
                 />
+                <select
+                  value={addCostCurrency}
+                  onChange={(e) => setAddCostCurrency(e.target.value as (typeof SUPPORTED_BASE_CURRENCIES)[number])}
+                  className="h-9 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-sm font-semibold text-white focus:border-indigo-primary/50 focus:outline-none"
+                  aria-label="Average cost currency"
+                >
+                  {SUPPORTED_BASE_CURRENCIES.map((currency) => (
+                    <option key={currency} value={currency} className="bg-slate-950 text-white">
+                      {currency}
+                    </option>
+                  ))}
+                </select>
                 <Button
                   onClick={addHolding}
                   disabled={saving || !addSymbol || !addQty || !addCost}
@@ -930,6 +1071,9 @@ export default function PortfolioPage() {
                   {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Add holding"}
                 </Button>
               </div>
+              <p className="mt-2 text-xs text-white/35">
+                Average cost is saved in {activeBaseCurrency}. If you choose another currency, it is converted before P&amp;L is calculated.
+              </p>
             </div>
           </section>
         ) : portfolios.length === 0 ? (
@@ -975,14 +1119,14 @@ export default function PortfolioPage() {
                 </label>
                 <div className="flex items-center gap-3 py-1">
                   <span className="text-xs text-white/25">Low</span>
-                  <input
-                    type="range"
-                    min="0.1"
-                    max="3"
-                    step="0.1"
+                  <ThinSlider
+                    min={0.1}
+                    max={3}
+                    step={0.1}
                     value={risk}
-                    onChange={(e) => { setRisk(parseFloat(e.target.value)); setResult(null); }}
-                    className="flex-1 accent-indigo-primary"
+                    onValueChange={(value) => { setRisk(value); setResult(null); }}
+                    aria-label="Risk tolerance"
+                    className="flex-1"
                   />
                   <span className="text-xs text-white/25">High</span>
                 </div>

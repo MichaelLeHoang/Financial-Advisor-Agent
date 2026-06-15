@@ -43,6 +43,7 @@ export default function TickerSuggestionInput({
 }) {
     const localRef = useRef<HTMLInputElement>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
     const ref = inputRef ?? localRef;
 
     const [open, setOpen] = useState(false);
@@ -121,7 +122,14 @@ export default function TickerSuggestionInput({
     useEffect(() => {
         if (!open) return;
         const handler = (e: MouseEvent) => {
-            if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+            const target = e.target as Node;
+            if (
+                wrapperRef.current?.contains(target) ||
+                dropdownRef.current?.contains(target)
+            ) {
+                return;
+            }
+            if (wrapperRef.current) {
                 setOpen(false);
             }
         };
@@ -152,6 +160,7 @@ export default function TickerSuggestionInput({
     const dropdown = showDropdown && dropdownRect && mounted
         ? createPortal(
             <div
+                ref={dropdownRef}
                 style={{
                     position: "fixed",
                     top: dropdownRect.top,
@@ -164,24 +173,40 @@ export default function TickerSuggestionInput({
                 <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
                     <div className="flex max-h-72 flex-col gap-1 overflow-y-auto px-2 py-0">
                         {matches.map((match) => (
-                            <button
+                            <div
                                 key={match.ticker}
-                                type="button"
-                                onClick={() => selectTicker(match.ticker)}
                                 className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-white/[0.11] hover:shadow-[var(--shadow-row-hover)]"
                             >
-                                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-primary/16 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/24 transition-colors group-hover:bg-indigo-primary/24 group-hover:text-white">
+                                <button
+                                    type="button"
+                                    onClick={() => selectTicker(match.ticker)}
+                                    className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-primary/16 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/24 transition-colors group-hover:bg-indigo-primary/24 group-hover:text-white"
+                                    aria-label={`Choose ${match.ticker}`}
+                                >
                                     {match.ticker.slice(0, 2)}
-                                </span>
-                                <span className="min-w-0 flex-1">
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => selectTicker(match.ticker)}
+                                    className="min-w-0 flex-1 text-left"
+                                >
                                     <span className="flex items-center gap-2">
-                                        <span className="text-sm font-semibold text-white">{match.ticker}</span>
+                                        <span className="rounded-md px-1 py-0.5 text-sm font-semibold text-white transition-colors group-hover:bg-indigo-primary/18 group-hover:text-indigo-100">
+                                            {match.ticker}
+                                        </span>
                                         <Badge variant="outline" className="h-5 rounded-md text-[10px]">{match.exchange}</Badge>
                                     </span>
                                     <span className="block truncate text-xs text-white/42">{match.name}</span>
-                                </span>
-                                <Plus className="size-4 text-white/38" />
-                            </button>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => selectTicker(match.ticker)}
+                                    className="flex size-8 shrink-0 items-center justify-center rounded-lg text-white/38 transition-colors hover:bg-white/[0.1] hover:text-white"
+                                    aria-label={`Add ${match.ticker}`}
+                                >
+                                    <Plus className="size-4" />
+                                </button>
+                            </div>
                         ))}
 
                         {canAddCustom && (
