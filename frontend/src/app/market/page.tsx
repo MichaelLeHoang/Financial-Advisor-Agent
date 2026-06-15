@@ -29,7 +29,6 @@ import {
     Bar,
     CartesianGrid,
     ComposedChart,
-    Customized,
     Line,
     ReferenceLine,
     ResponsiveContainer,
@@ -1268,35 +1267,21 @@ function MarketChartDialog({
                                                             <Area yAxisId="price" type="monotone" dataKey="price" stroke={color} strokeWidth={2.4} fill={`url(#dialog-grad-${detailStock.ticker})`} dot={false} />
                                                         )}
                                                         {chartStyle === "bar" && !compareMode && (
-                                                            <Customized
-                                                                component={(props: any) => (
-                                                                    <FinanceOhlcLayer
-                                                                        data={displayedChartData}
-                                                                        mode="bar"
-                                                                        xAxisMap={props.xAxisMap}
-                                                                        yAxisMap={props.yAxisMap}
-                                                                        yAxisId="price"
-                                                                        offset={props.offset}
-                                                                        positiveColor="#34d399"
-                                                                        negativeColor="#f87171"
-                                                                    />
-                                                                )}
+                                                            <FinanceOhlcLayer
+                                                                data={displayedChartData}
+                                                                mode="bar"
+                                                                yAxisId="price"
+                                                                positiveColor="#34d399"
+                                                                negativeColor="#f87171"
                                                             />
                                                         )}
                                                         {chartStyle === "candle" && !compareMode && (
-                                                            <Customized
-                                                                component={(props: any) => (
-                                                                    <FinanceOhlcLayer
-                                                                        data={displayedChartData}
-                                                                        mode="candle"
-                                                                        xAxisMap={props.xAxisMap}
-                                                                        yAxisMap={props.yAxisMap}
-                                                                        yAxisId="price"
-                                                                        offset={props.offset}
-                                                                        positiveColor="#34d399"
-                                                                        negativeColor="#f87171"
-                                                                    />
-                                                                )}
+                                                            <FinanceOhlcLayer
+                                                                data={displayedChartData}
+                                                                mode="candle"
+                                                                yAxisId="price"
+                                                                positiveColor="#34d399"
+                                                                negativeColor="#f87171"
                                                             />
                                                         )}
                                                         {(chartStyle === "line" || compareMode) && (

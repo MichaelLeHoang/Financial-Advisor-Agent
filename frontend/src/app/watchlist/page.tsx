@@ -24,7 +24,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { Area, AreaChart, Bar, CartesianGrid, ComposedChart, Customized, Line, ReferenceLine, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, ComposedChart, Line, ReferenceLine, XAxis, YAxis } from "recharts";
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { Watchlist, WatchlistAsset, MarketQuote } from "@/lib/api";
@@ -1413,29 +1413,9 @@ function QuoteDetailPanel({
                     {...MAIN_CHART_ANIMATION}
                   />
                 ) : chartMode === "bar" && !compareMode ? (
-                  <Customized
-                    component={(props: any) => (
-                      <FinanceOhlcLayer
-                        data={displayedChartData}
-                        mode="bar"
-                        xAxisMap={props.xAxisMap}
-                        yAxisMap={props.yAxisMap}
-                        offset={props.offset}
-                      />
-                    )}
-                  />
+                  <FinanceOhlcLayer data={displayedChartData} mode="bar" />
                 ) : chartMode === "candle" && !compareMode ? (
-                  <Customized
-                    component={(props: any) => (
-                      <FinanceOhlcLayer
-                        data={displayedChartData}
-                        mode="candle"
-                        xAxisMap={props.xAxisMap}
-                        yAxisMap={props.yAxisMap}
-                        offset={props.offset}
-                      />
-                    )}
-                  />
+                  <FinanceOhlcLayer data={displayedChartData} mode="candle" />
                 ) : (
                   <Line
                     type="monotone"
