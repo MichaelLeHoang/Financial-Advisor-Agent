@@ -9,6 +9,22 @@ export interface ChatResponse {
   mode?: "single" | "consensus" | "auto";
 }
 
+export type ChatJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+export interface ChatJobCreateResponse {
+  job_id: string;
+  status: ChatJobStatus;
+  queue_position?: number | null;
+}
+
+export interface ChatJobStatusResponse extends ChatJobCreateResponse {
+  result?: ChatResponse | null;
+  error?: { type?: string; message?: string } | null;
+  created_at?: number | null;
+  started_at?: number | null;
+  finished_at?: number | null;
+}
+
 export interface ConsensusOpinion {
   agent: string;
   verdict: string;
@@ -804,6 +820,30 @@ export const api = {
   /** Chat with the LangGraph agent — mode controls QuanAd version */
   chat: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single") =>
     post<ChatResponse>("/api/v1/agent/chat", { message, session_id: sessionId, remember, mode }),
+
+  /** Queue AI chat work and poll the job status/result */
+  chatJob: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single") =>
+    post<ChatJobCreateResponse>("/api/v1/agent/chat/jobs", { message, session_id: sessionId, remember, mode }),
+
+  chatJobStatus: (jobId: string) =>
+    get<ChatJobStatusResponse>(`/api/v1/agent/chat/jobs/${encodeURIComponent(jobId)}`),
+
+  waitForChatJob: async (jobId: string, onUpdate?: (job: ChatJobStatusResponse) => void, intervalMs = 1500) => {
+    while (true) {
+      const job = await api.chatJobStatus(jobId);
+      onUpdate?.(job);
+
+      if (job.status === "succeeded") {
+        return job.result ?? { response: "", session_id: "default" };
+      }
+
+      if (job.status === "failed" || job.status === "cancelled") {
+        throw new Error(job.error?.message ?? `Chat job ${job.status}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+  },
 
   /** Full QuanAd 2.0 multi-agent consensus with metadata */
   consensus: (message: string, sessionId = "default", remember = true) =>

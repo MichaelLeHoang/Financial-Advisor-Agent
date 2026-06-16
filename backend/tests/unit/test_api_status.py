@@ -41,3 +41,44 @@ def test_agent_reset_uses_default_session(monkeypatch):
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "session_id": "default"}
     assert cleared_sessions == [("default", "00000000-0000-0000-0000-000000000001")]
+
+
+def test_agent_chat_job_endpoints_use_queue(monkeypatch):
+    from src.api import app as api_app
+    import src.agent.llm_queue as queue_module
+
+    class FakeQueue:
+        def __init__(self):
+            self.record = None
+
+        def enqueue(self, payload, kind):
+            self.record = {
+                "job_id": "job-1",
+                "kind": kind,
+                "status": "queued",
+                "payload": payload,
+                "created_at": 1.0,
+            }
+            return self.record
+
+        def queue_position(self, job_id, kind):
+            return 1
+
+        def get(self, job_id):
+            return self.record
+
+    fake_queue = FakeQueue()
+    monkeypatch.setattr(queue_module, "get_llm_job_queue", lambda: fake_queue)
+
+    client = TestClient(api_app.app)
+    create = client.post(
+        "/api/v1/agent/chat/jobs",
+        json={"message": "What is AAPL?", "session_id": "s1", "mode": "single"},
+    )
+
+    assert create.status_code == 200
+    assert create.json() == {"job_id": "job-1", "status": "queued", "queue_position": 1}
+
+    status = client.get("/api/v1/agent/chat/jobs/job-1")
+    assert status.status_code == 200
+    assert status.json()["status"] == "queued"

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Brain, ClipboardList, Image, Loader2, Paperclip, PieChart, Send, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { api, isUpgradeRequiredError, wsUrl } from "@/lib/api";
+import { api, isUpgradeRequiredError } from "@/lib/api";
 import { getDemoChatConversation } from "@/lib/demo-chat-history";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -275,113 +275,55 @@ export default function ChatPage() {
     setCompletedTools([]);
 
     const assistantMsgId = getUniqueId();
-    let fullContent = "";
 
     try {
-      const ws = new WebSocket(wsUrl(targetSessionId, api.getToken()));
+      const mode = apiModeFromVersion(version);
+      const queued = await api.chatJob(text, targetSessionId, true, mode);
 
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ message: text, remember: true }));
-      };
-
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-
-        if (data.type === "token") {
-          fullContent += data.content;
-          setMessages((prev) => {
-            // Remove fetching placeholder, upsert streaming message
-            const withoutFetching = prev.filter((m) => m.status !== "fetching");
-            const existing = withoutFetching.find((m) => m.id === assistantMsgId);
-            if (existing) {
-              return withoutFetching.map((m) =>
-                m.id === assistantMsgId ? { ...m, content: fullContent } : m
-              );
-            }
-            return [...withoutFetching, { id: assistantMsgId, role: "assistant" as const, content: fullContent }];
-          });
-        } else if (data.type === "tool_start") {
-          setActiveTool(data.tool);
-        } else if (data.type === "tool_end") {
-          setActiveTool(null);
-          setCompletedTools((prev) =>
-            prev.includes(data.tool) ? prev : [...prev, data.tool]
-          );
-        } else if (data.type === "done") {
-          ws.close();
-          setIsLoading(false);
-          isStreamingRef.current = false;
-          setActiveTool(null);
-          window.dispatchEvent(new Event("chat-sessions:changed"));
-
-          // If no tokens were received, show fallback
-          if (!fullContent.trim()) {
-            setMessages((prev) =>
-              prev.filter((m) => m.status !== "fetching").concat({
-                id: assistantMsgId,
-                role: "assistant",
-                content: "I'm sorry, I couldn't process that request.",
-              })
-            );
-          }
-        } else if (data.type === "error") {
-          ws.close();
-          setIsLoading(false);
-          isStreamingRef.current = false;
-          setActiveTool(null);
+      const res = await api.waitForChatJob(queued.job_id, (job) => {
+        if (job.status === "queued") {
+          const positionText = job.queue_position ? ` Position ${job.queue_position}.` : "";
           setMessages((prev) =>
-            prev.filter((m) => m.status !== "fetching").concat({
-              id: assistantMsgId,
-              role: "assistant",
-              content: `Error: ${data.message}`,
-            })
+            prev.map((m) =>
+              m.status === "fetching"
+                ? { ...m, content: `Queued for analysis.${positionText}` }
+                : m
+            )
+          );
+        } else if (job.status === "running") {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.status === "fetching"
+                ? { ...m, content: fetchingLabel }
+                : m
+            )
           );
         }
-      };
+      });
 
-      ws.onerror = () => {
-        // Fallback to REST API on WebSocket error
-        ws.close();
-        (async () => {
-          try {
-            const mode = apiModeFromVersion(version);
-            const res = await api.chat(text, activeSessionId, true, mode);
-            setMessages((prev) =>
-              prev.filter((m) => m.status !== "fetching").concat({
-                id: assistantMsgId,
-                role: "assistant",
-                content: res.response || "I'm sorry, I couldn't process that request.",
-              })
-            );
-            window.dispatchEvent(new Event("chat-sessions:changed"));
-          } catch (err: any) {
-            if (isUpgradeRequiredError(err)) {
-              setUpgradeMessage(err.detail.message);
-            }
-            setMessages((prev) =>
-              prev.filter((m) => m.status !== "fetching").concat({
-                id: assistantMsgId,
-                role: "assistant",
-                content: isUpgradeRequiredError(err) ? err.detail.message : `Error: ${err.message}`,
-              })
-            );
-          } finally {
-            setIsLoading(false);
-            isStreamingRef.current = false;
-            setActiveTool(null);
-          }
-        })();
-      };
-    } catch (err: any) {
       setMessages((prev) =>
         prev.filter((m) => m.status !== "fetching").concat({
           id: assistantMsgId,
           role: "assistant",
-          content: `Error: ${err.message}`,
+          content: res.response || "I'm sorry, I couldn't process that request.",
         })
       );
+      window.dispatchEvent(new Event("chat-sessions:changed"));
+    } catch (err: any) {
+      if (isUpgradeRequiredError(err)) {
+        setUpgradeMessage(err.detail.message);
+      }
+      setMessages((prev) =>
+        prev.filter((m) => m.status !== "fetching").concat({
+          id: assistantMsgId,
+          role: "assistant",
+          content: isUpgradeRequiredError(err) ? err.detail.message : `Error: ${err.message}`,
+        })
+      );
+    } finally {
       setIsLoading(false);
       isStreamingRef.current = false;
+      setActiveTool(null);
     }
   };
 

@@ -22,4 +22,5 @@ class GoogleProvider(ChatProvider):
             model=spec.model,
             google_api_key=api_key,
             temperature=0.3,
+            retries=settings.llm_retry_attempts,
         )

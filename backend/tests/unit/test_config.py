@@ -28,3 +28,12 @@ def test_news_collection_defaults_to_qdrant_collection():
     settings = Settings(_env_file=None, news_collection=None, qdrant_collection_news="cloud_news")
 
     assert settings.resolved_news_collection == "cloud_news"
+
+
+def test_llm_queue_settings_have_safe_defaults():
+    settings = Settings(_env_file=None)
+
+    assert settings.llm_single_concurrency == 30
+    assert settings.llm_consensus_concurrency == 4
+    assert settings.llm_per_user_concurrency == 2
+    assert settings.llm_retry_attempts == 3

@@ -23,4 +23,5 @@ class OpenRouterProvider(ChatProvider):
             api_key=api_key,
             base_url="https://openrouter.ai/api/v1",
             temperature=0.3,
+            max_retries=settings.llm_retry_attempts,
         )

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import { wsUrl } from "@/lib/api";
+import { useState, useCallback } from "react";
+import { api } from "@/lib/api";
 
 export type MessageRole = "user" | "assistant";
 
@@ -23,7 +23,6 @@ export interface Message {
 export function useAgentChat(sessionId = "default") {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
 
   const sendMessage = useCallback((text: string) => {
     if (!text.trim() || isStreaming) return;
@@ -46,72 +45,49 @@ export function useAgentChat(sessionId = "default") {
     setMessages((prev) => [...prev, userMsg, agentMsg]);
     setIsStreaming(true);
 
-    const ws = new WebSocket(wsUrl(sessionId));
-    wsRef.current = ws;
-
-    ws.onopen = () => ws.send(JSON.stringify({ message: text, remember: true }));
-
-    ws.onmessage = (evt) => {
-      const data = JSON.parse(evt.data);
-
-      if (data.type === "token") {
+    (async () => {
+      try {
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === agentMsgId ? { ...m, content: m.content + data.content } : m
+            m.id === agentMsgId ? { ...m, content: "Queued for analysis..." } : m
           )
         );
-      } else if (data.type === "tool_start") {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === agentMsgId
-              ? {
-                  ...m,
-                  toolCalls: [...(m.toolCalls ?? []), {
-                    tool: data.tool,
-                    input: data.input,
-                    status: "running",
-                  }],
-                }
-              : m
-          )
-        );
-      } else if (data.type === "tool_end") {
-        setMessages((prev) =>
-          prev.map((m) => {
-            if (m.id !== agentMsgId) return m;
-            return {
-              ...m,
-              toolCalls: m.toolCalls?.map((tc) =>
-                tc.tool === data.tool && tc.status === "running"
-                  ? { ...tc, result: data.result, status: "done" }
-                  : tc
-              ),
-            };
-          })
-        );
-      } else if (data.type === "done") {
-        setMessages((prev) =>
-          prev.map((m) => m.id === agentMsgId ? { ...m, streaming: false } : m)
-        );
-        setIsStreaming(false);
-        ws.close();
-      } else if (data.type === "error") {
+        const queued = await api.chatJob(text, sessionId, true, "single");
+        const res = await api.waitForChatJob(queued.job_id, (job) => {
+          if (job.status === "queued") {
+            const positionText = job.queue_position ? ` Position ${job.queue_position}.` : "";
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === agentMsgId ? { ...m, content: `Queued for analysis.${positionText}` } : m
+              )
+            );
+          } else if (job.status === "running") {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === agentMsgId ? { ...m, content: "Analyzing market context..." } : m
+              )
+            );
+          }
+        });
         setMessages((prev) =>
           prev.map((m) =>
             m.id === agentMsgId
-              ? { ...m, content: `⚠️ Error: ${data.message}`, streaming: false }
+              ? { ...m, content: res.response || "I'm sorry, I couldn't process that request.", streaming: false }
               : m
           )
         );
+      } catch (err: any) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === agentMsgId
+              ? { ...m, content: `Error: ${err.message}`, streaming: false }
+              : m
+          )
+        );
+      } finally {
         setIsStreaming(false);
-        ws.close();
       }
-    };
-
-    ws.onerror = () => {
-      setIsStreaming(false);
-      ws.close();
-    };
+    })();
   }, [isStreaming, sessionId]);
 
   const clearHistory = useCallback(() => {

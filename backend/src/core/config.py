@@ -85,6 +85,16 @@ class Settings(BaseSettings):
     posthog_key: SecretStr | None = None
     upstash_redis_rest_url: str | None = None
     upstash_redis_rest_token: SecretStr | None = None
+    redis_url: SecretStr | None = None
+
+    # LLM queue, retry, cache, and concurrency controls
+    llm_single_concurrency: int = 30
+    llm_consensus_concurrency: int = 4
+    llm_per_user_concurrency: int = 2
+    llm_job_ttl_seconds: int = 3600
+    llm_cache_ttl_seconds: int = 300
+    llm_retry_attempts: int = 3
+    llm_worker_poll_timeout_seconds: int = 5
 
     model_config = SettingsConfigDict(
         env_file=".env",

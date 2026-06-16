@@ -64,9 +64,9 @@ class LLMGateway:
         attempts: list[str] = []
         errors: list[str] = []
         
-        valid_chat_models = []
+        valid_models: list[tuple[ModelSpec, Any]] = []
 
-        for index, model in enumerate(candidates):
+        for model in candidates:
             attempts.append(model.key)
             provider = self.providers.get(model.provider)
             if provider is None:
@@ -74,26 +74,27 @@ class LLMGateway:
                 continue
             try:
                 chat_model = provider.create_chat_model(model)
-                valid_chat_models.append(chat_model)
+                valid_models.append((model, chat_model))
             except ProviderUnavailable as exc:
                 errors.append(f"{model.key}: {exc}")
 
-        if not valid_chat_models:
+        if not valid_models:
             raise ProviderUnavailable("No LLM provider is available. " + " | ".join(errors))
-            
-        primary_model = valid_chat_models[0]
-        if len(valid_chat_models) > 1:
-            primary_model = primary_model.with_fallbacks(valid_chat_models[1:])
-            print(f"  🤖 Model: {decision.selected.model} (with {len(valid_chat_models)-1} fallbacks)")
+
+        selected_model, primary_chat_model = valid_models[0]
+        fallback_chat_models = [chat_model for _, chat_model in valid_models[1:]]
+        if fallback_chat_models and hasattr(primary_chat_model, "with_fallbacks"):
+            primary_chat_model = primary_chat_model.with_fallbacks(fallback_chat_models)
+            print(f"  🤖 Model: {selected_model.model} (with {len(fallback_chat_models)} fallbacks)")
         else:
-            print(f"  🤖 Model: {decision.selected.model}")
+            print(f"  🤖 Model: {selected_model.model}")
 
         return RoutedChatModel(
-            chat_model=primary_model,
-            model=decision.selected,
+            chat_model=primary_chat_model,
+            model=selected_model,
             requested_mode=decision.requested_mode,
             resolved_mode=decision.resolved_mode,
-            fallback_used=False, # We don't know at init time if fallback will be used
+            fallback_used=selected_model != decision.selected,
             attempts=tuple(attempts),
         )
 
