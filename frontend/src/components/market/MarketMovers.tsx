@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fetchQuote } from "@/lib/quote-cache";
+import { fetchQuotes } from "@/lib/quote-cache";
 import type { MarketQuote } from "@/lib/api";
 
 /* A broad, liquid universe so gainers / losers / most-active stay meaningful. */
@@ -71,14 +71,12 @@ export default function MarketMovers() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.allSettled(UNIVERSE.map((ticker) => fetchQuote(ticker))).then((results) => {
+    fetchQuotes(UNIVERSE).then((quotes) => {
       if (cancelled) return;
       const next: Row[] = [];
-      results.forEach((result, index) => {
-        if (result.status === "fulfilled") {
-          const q: MarketQuote = result.value;
-          next.push({ ticker: UNIVERSE[index], name: q.name, price: q.price, changePct: q.change, volume: q.volume ?? null });
-        }
+      UNIVERSE.forEach((ticker) => {
+        const q: MarketQuote | undefined = quotes.get(ticker.toUpperCase());
+        if (q) next.push({ ticker, name: q.name, price: q.price, changePct: q.change, volume: q.volume ?? null });
       });
       setRows(next);
     });

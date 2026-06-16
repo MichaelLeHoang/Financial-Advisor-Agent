@@ -38,7 +38,7 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { api, type EarningsPoint, type MarketQuote, type QuarterlyFinancial } from "@/lib/api";
-import { fetchQuote as fetchCachedQuote, invalidate as invalidateQuote } from "@/lib/quote-cache";
+import { fetchQuote as fetchCachedQuote, fetchQuotes as fetchCachedQuotes, invalidate as invalidateQuote } from "@/lib/quote-cache";
 import {
     CHART_RANGES,
     DEFAULT_MARKET_TICKERS,
@@ -483,15 +483,12 @@ export default function MarketPage() {
         setLoading(true);
         setUpgradeMessage(null);
         setStocks((current) => current.map((stock) => ({ ...stock, loading: true })));
-        const updated = await Promise.all(
-            stocks.map(async (stock) => {
-                try {
-                    return await fetchQuote(stock.ticker, stock);
-                } catch {
-                    return { ...stock, loading: false };
-                }
-            })
-        );
+        const [period, interval] = quotePeriod("1M");
+        const quoteMap = await fetchCachedQuotes(stocks.map((stock) => stock.ticker), period, interval);
+        const updated = stocks.map((stock) => {
+            const quote = quoteMap.get(stock.ticker.toUpperCase());
+            return quote ? quoteToStock(quote, stock) : { ...stock, loading: false };
+        });
         setStocks(updated);
         setLoading(false);
     };
@@ -1015,12 +1012,13 @@ function MarketChartDialog({
 
         let cancelled = false;
         setCompareLoading(true);
-        Promise.allSettled(activeComparisonSymbols.map((symbol) => fetchCachedQuote(symbol, period, interval))).then((results) => {
+        fetchCachedQuotes(activeComparisonSymbols, period, interval).then((quotes) => {
             if (cancelled) return;
             setCompareQuotes(
-                results
-                    .filter((result): result is PromiseFulfilledResult<MarketQuote> => result.status === "fulfilled")
-                    .map((result) => quoteToStock(result.value, createStock(result.value.ticker)))
+                activeComparisonSymbols
+                    .map((symbol) => quotes.get(symbol.toUpperCase()))
+                    .filter((quote): quote is MarketQuote => Boolean(quote))
+                    .map((quote) => quoteToStock(quote, createStock(quote.ticker)))
             );
             setCompareLoading(false);
         });

@@ -103,6 +103,18 @@ export async function fetchQuote(ticker: string, period = "1mo", interval = "1d"
   return promise;
 }
 
+export async function fetchQuotes(tickers: string[], period = "1mo", interval = "1d"): Promise<Map<string, MarketQuote>> {
+  const uniqueTickers = Array.from(new Set(tickers.map((ticker) => ticker.trim()).filter(Boolean)));
+  const results = await Promise.allSettled(uniqueTickers.map((ticker) => fetchQuote(ticker, period, interval)));
+  const quotes = new Map<string, MarketQuote>();
+
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") quotes.set(uniqueTickers[index].toUpperCase(), result.value);
+  });
+
+  return quotes;
+}
+
 /** Prime the cache with data already fetched elsewhere (e.g. the Market page). */
 export function primeQuote(data: MarketQuote, period = "1mo", interval = "1d"): void {
   cache.set(cacheKey(data.ticker, period, interval), { data, fetchedAt: Date.now() });
