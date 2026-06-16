@@ -24,7 +24,7 @@ from src.quant.models import (
 def compare_strategies(req: StrategyComparisonRequest, adapter: MarketDataAdapter) -> StrategyComparisonResponse:
     rows: list[StrategyComparisonRow] = []
     for strategy in req.strategies:
-        metrics, _, _ = run_backtest(
+        metrics, _, _, _ = run_backtest(
             BacktestRequest(
                 strategy_name=strategy.name,
                 strategy_type=strategy.strategy_type,
@@ -46,7 +46,7 @@ def compare_strategies(req: StrategyComparisonRequest, adapter: MarketDataAdapte
 
 
 def validate_strategy(req: AdvancedValidationRequest, adapter: MarketDataAdapter) -> tuple[dict, list[dict]]:
-    metrics, equity_curve, _ = run_backtest(
+    metrics, equity_curve, _, _ = run_backtest(
         BacktestRequest(
             strategy_name=req.strategy_name,
             strategy_type=req.strategy_type,

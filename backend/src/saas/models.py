@@ -1,8 +1,9 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import Enum
+from typing import Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Plan(str, Enum):
@@ -51,6 +52,11 @@ class HoldingCreate(BaseModel):
     asset_type: str = Field(default="equity", min_length=1, max_length=40)
     quantity: float = Field(ge=0)
     average_cost: float = Field(ge=0)
+
+
+class HoldingUpdate(BaseModel):
+    quantity: float | None = Field(default=None, ge=0)
+    average_cost: float | None = Field(default=None, ge=0)
 
 
 class HoldingRead(BaseModel):
@@ -167,6 +173,63 @@ class BacktestRunRead(BaseModel):
     equity_curve: list[dict] = Field(default_factory=list)
     trades: list[BacktestTradeRead] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ReplaySessionCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    symbol: str = Field(min_length=1, max_length=12)
+    start_date: date
+    end_date: date
+    initial_balance: float = Field(default=10_000, gt=0, le=10_000_000)
+
+    @field_validator("symbol")
+    @classmethod
+    def normalize_symbol(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if not normalized:
+            raise ValueError("symbol is required")
+        return normalized
+
+    @field_validator("end_date")
+    @classmethod
+    def validate_range(cls, value: date, info):
+        start_date = info.data.get("start_date")
+        if start_date and value <= start_date:
+            raise ValueError("end_date must be after start_date")
+        return value
+
+
+class ReplaySessionUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    status: Literal["active", "completed"] | None = None
+    current_index: int | None = Field(default=None, ge=0)
+    cash: float | None = None
+    position_qty: float | None = Field(default=None, ge=0)
+    position_avg_price: float | None = Field(default=None, ge=0)
+    trades: list[dict] | None = None
+    equity_curve: list[dict] | None = None
+    metrics: dict | None = None
+
+
+class ReplaySessionRead(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    user_id: UUID
+    name: str
+    symbol: str
+    start_date: date
+    end_date: date
+    initial_balance: float
+    status: str = "active"
+    current_index: int = 0
+    total_bars: int = 0
+    cash: float = 0
+    position_qty: float = 0
+    position_avg_price: float = 0
+    trades: list[dict] = Field(default_factory=list)
+    equity_curve: list[dict] = Field(default_factory=list)
+    metrics: dict = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class NotificationChannelCreate(BaseModel):

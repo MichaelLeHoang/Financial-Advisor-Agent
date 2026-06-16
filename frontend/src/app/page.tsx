@@ -115,6 +115,7 @@ export default function ChatPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeSessionId = searchParams.get("session") || "default";
+  const promptParam = searchParams.get("prompt");
   const [messages, setMessages] = useState<Message[]>(() =>
     activeSessionId === "default" ? [GREETING] : []
   );
@@ -125,6 +126,7 @@ export default function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const appliedPromptRef = useRef<string | null>(null);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [showPlaceholder, setShowPlaceholder] = useState(true);
   const [isActive, setIsActive] = useState(false);
@@ -222,6 +224,19 @@ export default function ChatPage() {
       cancelled = true;
     };
   }, [activeSessionId]);
+
+  useEffect(() => {
+    const prompt = promptParam?.trim();
+    if (!prompt) return;
+
+    const key = `${activeSessionId}:${prompt}`;
+    if (appliedPromptRef.current === key) return;
+    appliedPromptRef.current = key;
+
+    setInput(prompt);
+    setIsActive(true);
+    window.requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [activeSessionId, promptParam]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });

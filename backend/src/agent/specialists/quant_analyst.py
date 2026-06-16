@@ -71,7 +71,7 @@ def run_strategy_backtest(
             parameters={"short_window": short_window, "long_window": long_window},
         )
         adapter = MarketDataAdapter()
-        metrics, _, _ = run_backtest(req, adapter)
+        metrics, _, _, _ = run_backtest(req, adapter)
 
         return (
             f"Strategy: {strategy_type}\n"

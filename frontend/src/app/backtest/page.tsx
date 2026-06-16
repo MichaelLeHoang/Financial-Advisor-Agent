@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Line,
   LineChart as ReLineChart,
@@ -10,13 +12,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { AlertTriangle, FlaskConical, Save, TrendingUp } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, FlaskConical, History, Save, TrendingUp } from "lucide-react";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { BacktestResult, BacktestRun, Strategy, StrategyOption } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { LockedFeature } from "@/components/LockedFeature";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
+import { Field, Metric, PLAN_RANK, formatCurrency, formatPercent, formatStrategyType } from "@/components/backtest/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -43,10 +46,10 @@ const STRATEGIES: StrategyOption[] = [
   },
 ];
 
-const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, trader: 2, quant: 3, execution_addon: 4 };
-
 export default function BacktestPage() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const rerunId = searchParams.get("rerun");
   const [strategy, setStrategy] = useState<StrategyOption["type"]>("moving_average_crossover");
   const [strategyName, setStrategyName] = useState("MA crossover test");
   const [symbols, setSymbols] = useState(["AAPL", "MSFT"]);
@@ -78,6 +81,33 @@ export default function BacktestPage() {
     if (!canUseBacktesting) return;
     void refreshHistory();
   }, [canUseBacktesting]);
+
+  useEffect(() => {
+    if (!canUseBacktesting || !rerunId) return;
+    let cancelled = false;
+    void api
+      .backtestRun(rerunId)
+      .then((run) => {
+        if (cancelled) return;
+        setStrategy(run.strategy_type as StrategyOption["type"]);
+        setStrategyName(run.strategy_name);
+        setSymbols(run.symbols);
+        setParameters(run.parameters as Record<string, number>);
+        const assumptions = run.assumptions as Record<string, unknown>;
+        if (typeof assumptions.start_date === "string") setStartDate(assumptions.start_date);
+        if (typeof assumptions.end_date === "string") setEndDate(assumptions.end_date);
+        if (typeof assumptions.initial_capital === "number") setInitialCapital(assumptions.initial_capital);
+        if (typeof assumptions.fees_bps === "number") setFeesBps(assumptions.fees_bps);
+        if (typeof assumptions.slippage_bps === "number") setSlippageBps(assumptions.slippage_bps);
+        if (typeof assumptions.position_size === "number") setPositionSize(assumptions.position_size);
+      })
+      .catch(() => {
+        /* stale rerun links should not break the lab */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canUseBacktesting, rerunId]);
 
   if (!canUseBacktesting) {
     return (
@@ -157,9 +187,15 @@ export default function BacktestPage() {
               Historical simulations for strategy research. Results are not financial advice and do not guarantee future performance.
             </p>
           </div>
-          <div className="inline-flex w-fit items-center gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)]">
-            <FlaskConical className="h-4 w-4 text-indigo-primary" />
-            Trader workflow
+          <div className="flex items-center gap-2">
+            <Button render={<Link href="/backtest/sessions" />} nativeButton={false} variant="outline" className="h-10 rounded-xl text-sm">
+              <History className="mr-2 h-4 w-4" />
+              Sessions & history
+            </Button>
+            <div className="inline-flex w-fit items-center gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)]">
+              <FlaskConical className="h-4 w-4 text-indigo-primary" />
+              Trader workflow
+            </div>
           </div>
         </div>
 
@@ -317,7 +353,11 @@ export default function BacktestPage() {
                       <div className="text-sm font-semibold">Recent runs</div>
                       <div className="mt-3 space-y-2">
                         {recentRuns.slice(0, 3).map((run) => (
-                          <div key={run.id} className="rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card-hover)] px-3 py-2 text-sm">
+                          <Link
+                            key={run.id}
+                            href={`/backtest/runs/${run.id}`}
+                            className="block rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card-hover)] px-3 py-2 text-sm transition-colors hover:bg-[var(--surface-control-hover)]"
+                          >
                             <div className="flex items-center justify-between gap-3">
                               <span className="truncate font-medium">{run.strategy_name}</span>
                               <span className={cn("shrink-0 text-xs font-semibold", run.metrics.total_return >= 0 ? "text-green-positive" : "text-red-negative")}>
@@ -325,7 +365,7 @@ export default function BacktestPage() {
                               </span>
                             </div>
                             <div className="mt-1 text-xs text-[var(--text-muted)]">{run.symbols.join(", ")}</div>
-                          </div>
+                          </Link>
                         ))}
                       </div>
                     </div>
@@ -336,6 +376,13 @@ export default function BacktestPage() {
 
             {result ? (
               <>
+                <Link
+                  href={`/backtest/runs/${result.run.id}`}
+                  className="inline-flex items-center gap-2 rounded-xl border border-indigo-primary/30 bg-indigo-primary/10 px-4 py-3 text-sm font-semibold text-indigo-primary transition-colors hover:bg-indigo-primary/15"
+                >
+                  View full results with price chart
+                  <ArrowUpRight className="h-4 w-4" />
+                </Link>
                 <div className="grid grid-cols-2 gap-3">
                   <Metric label="Total return" value={formatPercent(result.metrics.total_return)} tone="positive" />
                   <Metric label="Max drawdown" value={formatPercent(result.metrics.max_drawdown)} tone="negative" />
@@ -400,45 +447,10 @@ export default function BacktestPage() {
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block space-y-2">
-      <span className="text-xs font-semibold uppercase tracking-widest text-[var(--text-muted)]">{label}</span>
-      {children}
-    </label>
-  );
-}
-
 function NumberParam({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
   return (
     <Field label={label}>
       <Input type="number" value={value} onChange={(event) => onChange(Number(event.target.value))} className="h-11 rounded-xl" />
     </Field>
   );
-}
-
-function Metric({ label, value, tone }: { label: string; value: string; tone?: "positive" | "negative" }) {
-  return (
-    <Card className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] py-0 text-[var(--text-primary)] shadow-[var(--shadow-card)]">
-      <CardContent className="p-4">
-        <div className="text-xs text-[var(--text-muted)]">{label}</div>
-        <div className={cn("mt-2 text-2xl font-semibold", tone === "positive" && "text-green-positive", tone === "negative" && "text-red-negative")}>{value}</div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function formatPercent(value: number) {
-  return `${(value * 100).toFixed(1)}%`;
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value);
-}
-
-function formatStrategyType(value: string) {
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 }
