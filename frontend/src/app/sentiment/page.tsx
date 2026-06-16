@@ -12,6 +12,7 @@ import {
   FileText,
   Gauge,
   Loader2,
+  PencilLine,
   Send,
   TableProperties,
   UploadCloud,
@@ -280,6 +281,20 @@ export default function SentimentPage() {
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
 
+  const editQueuedHeadline = (headline: HeadlineItem) => {
+    setInput(headline.text);
+    setSource(headline.source);
+    setHeadlines((prev) => prev.filter((item) => item.id !== headline.id));
+    setResult(null);
+    window.requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      }
+    });
+  };
+
   const importTexts = (texts: string[], selectedSource = source) => {
     if (texts.length === 0) return;
     setHeadlines((prev) => {
@@ -442,7 +457,7 @@ export default function SentimentPage() {
               <a href={FINBERT_DOC_URL} target="_blank" rel="noreferrer" className="font-semibold text-indigo-primary hover:text-indigo-200">
                 FinBERT
               </a>
-              . Batch headlines, earnings-call excerpts, filings, and social tape into one weighted signal.
+              
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -462,26 +477,24 @@ export default function SentimentPage() {
         {message && <div className="rounded-2xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 text-sm text-white/55">{message}</div>}
 
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_22rem]">
-          <Card className="rounded-3xl border-white/[0.07] bg-white/[0.035] py-0">
-            <CardContent className="p-0">
-              <motion.div
-                layout
-                ref={wrapperRef}
-                onClick={() => setIsActive(true)}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-                className="overflow-hidden rounded-3xl border p-2 text-white transition-colors"
-                animate={{
-                  borderColor: isDragging ? "rgba(99,102,241,0.75)" : isActive || input ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)",
-                  backgroundColor: isDragging ? "rgba(99,102,241,0.10)" : isActive || input ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.02)",
-                  boxShadow: isActive || input || isDragging ? "0 8px 32px rgba(0,0,0,0.25)" : "var(--shadow-accent-composer)",
-                }}
-                transition={{ type: "spring", stiffness: 120, damping: 18 }}
-              >
+          <motion.div
+            layout
+            ref={wrapperRef}
+            onClick={() => setIsActive(true)}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            className="overflow-hidden rounded-3xl border p-2 text-white transition-colors"
+            animate={{
+              borderColor: isDragging ? "rgba(99,102,241,0.75)" : isActive || input ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)",
+              backgroundColor: isDragging ? "rgba(99,102,241,0.10)" : isActive || input ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.035)",
+              boxShadow: isActive || input || isDragging ? "0 8px 32px rgba(0,0,0,0.25)" : "var(--shadow-accent-composer)",
+            }}
+            transition={{ type: "spring", stiffness: 120, damping: 18 }}
+          >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
                   <div className="relative min-h-28 flex-1">
                     <Textarea
@@ -559,18 +572,23 @@ export default function SentimentPage() {
                             currentGuess.label === "bullish" && "border-green-positive/25 bg-green-positive/10 text-green-positive",
                             currentGuess.label === "bearish" && "border-red-negative/25 bg-red-negative/10 text-red-negative",
                             currentGuess.label === "neutral" && "border-white/[0.08] bg-white/[0.035] text-white/45"
-                          )}>
+                          )}
+                            role="status"
+                            aria-live="polite"
+                            title="Fast keyword-based preview only. Final classification comes from FinBERT after analysis."
+                          >
                             <span className="h-2 w-2 rounded-full bg-current shadow-[0_0_12px_currentColor]" />
-                            Live read: {currentGuess.label} {currentGuess.score > 0 ? "+" : ""}{currentGuess.score.toFixed(2)}
+                            Draft read: {currentGuess.label} {currentGuess.score > 0 ? "+" : ""}{currentGuess.score.toFixed(2)}
                           </div>
                         </div>
-                        <div className={cn(
-                          "flex min-h-16 items-center justify-center rounded-2xl border border-dashed px-3 text-center text-xs transition-colors",
+                        <label className={cn(
+                          "flex min-h-16 cursor-pointer items-center justify-center rounded-2xl border border-dashed px-3 text-center text-xs transition-colors hover:border-indigo-primary/45 hover:bg-indigo-primary/10 hover:text-indigo-100",
                           isDragging ? "border-indigo-primary/60 bg-indigo-primary/10 text-indigo-100" : "border-white/[0.09] bg-white/[0.025] text-white/35"
                         )}>
                           <UploadCloud className="mr-2 h-4 w-4" />
-                          Drag CSV or transcript excerpts here
-                        </div>
+                          Drag CSV or transcript excerpts here, or click to upload
+                          <input type="file" accept=".csv,.txt,.md" className="sr-only" onChange={uploadHeadlines} />
+                        </label>
                       </div>
 
                       {currentEntities.length > 0 && (
@@ -586,19 +604,18 @@ export default function SentimentPage() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </motion.div>
-            </CardContent>
-          </Card>
+          </motion.div>
 
           <Card className="rounded-3xl border-white/[0.07] bg-white/[0.035]">
             <CardContent className="space-y-4 p-5">
               <div className="flex items-center gap-3">
                 <Brain className="h-5 w-5 text-indigo-primary" />
                 <div>
-                  <p className="font-semibold text-white">FinBERT model path</p>
-                  <p className="text-xs text-white/38">Financial sentiment classification: positive, negative, neutral.</p>
+                  <p className="font-semibold text-white">FinBERT model</p>
+                  <p className="text-xs text-white/38"></p>
                 </div>
               </div>
+              
               <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3 text-xs leading-5 text-white/45">
                 Source weighting adjusts the dashboard signal only; the backend model still receives the original text unchanged.
               </div>
@@ -611,7 +628,12 @@ export default function SentimentPage() {
 
         <section className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-white/45">Analysis queue</h2>
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-white/45">Analysis queue</h2>
+              <p className="mt-1 text-xs text-white/30">
+                Pending inputs for the next FinBERT run. Edit, remove, clear, or analyze the batch.
+              </p>
+            </div>
             <div className="flex gap-2">
               <Button type="button" variant="outline" size="sm" onClick={() => { setHeadlines([]); setResult(null); }} disabled={headlines.length === 0} className="rounded-xl">
                 Clear
@@ -626,28 +648,43 @@ export default function SentimentPage() {
             </div>
           </div>
           {headlines.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-white/[0.08] bg-white/[0.02] p-8 text-center text-sm text-white/35">
-              Add headlines or drag in a CSV to begin.
-            </div>
+            <label className="flex cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-white/[0.08] bg-white/[0.02] p-8 text-center text-sm text-white/35 transition-colors hover:border-indigo-primary/35 hover:bg-indigo-primary/10 hover:text-indigo-100">
+              <UploadCloud className="mb-2 h-5 w-5" />
+              Add headlines above, or click here to upload a CSV/transcript into the queue.
+              <input type="file" accept=".csv,.txt,.md" className="sr-only" onChange={uploadHeadlines} />
+            </label>
           ) : (
             <div className="grid gap-2 md:grid-cols-2">
               {headlines.map((headline) => (
                 <div key={headline.id} className="rounded-2xl border border-white/[0.06] bg-white/[0.035] p-3">
                   <div className="flex items-start justify-between gap-3">
                     <p className="min-w-0 text-sm leading-5 text-white/78">{headline.text}</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHeadlines((prev) => prev.filter((item) => item.id !== headline.id));
-                        setResult(null);
-                      }}
-                      className="text-white/30 hover:text-red-negative"
-                      aria-label="Remove headline"
-                    >
-                      <img src="/close-svgrepo-com.svg" alt="" aria-hidden="true" className="h-4 w-4 opacity-70" />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => editQueuedHeadline(headline)}
+                        className="rounded-lg p-1 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-indigo-primary"
+                        aria-label="Edit queued headline"
+                        title="Edit queued headline"
+                      >
+                        <PencilLine className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHeadlines((prev) => prev.filter((item) => item.id !== headline.id));
+                          setResult(null);
+                        }}
+                        className="rounded-lg p-1 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-red-negative"
+                        aria-label="Remove headline"
+                        title="Remove headline"
+                      >
+                        <img src="/close-svgrepo-com.svg" alt="" aria-hidden="true" className="h-4 w-4 opacity-70" />
+                      </button>
+                    </div>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="rounded-full border-white/[0.06] bg-white/[0.035] text-white/35">Pending</Badge>
                     <Badge variant="outline" className="rounded-full border-white/[0.06] bg-white/[0.035] text-white/45">{sourceFor(headline.source).label}</Badge>
                     {extractEntities(headline.text).slice(0, 3).map((entity) => (
                       <Badge key={entity.ticker} variant="outline" className="rounded-full border-indigo-primary/20 bg-indigo-primary/10 text-indigo-100">{entity.ticker}</Badge>
