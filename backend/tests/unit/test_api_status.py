@@ -12,6 +12,7 @@ def test_status_endpoint_redacts_secrets_and_reports_services(monkeypatch):
             return FakeCollections()
 
     monkeypatch.setattr(api_app, "get_qdrant_client", lambda: FakeQdrantClient())
+    monkeypatch.setattr(api_app, "_check_redis", lambda: {"status": "ok", "configured": True})
 
     response = TestClient(api_app.app).get("/api/v1/status")
 
@@ -22,6 +23,31 @@ def test_status_endpoint_redacts_secrets_and_reports_services(monkeypatch):
     assert data["services"]["qdrant"]["collections"] == 2
     assert "GEMINI_API_KEY" not in str(data)
     assert "sk_" not in str(data)
+
+
+def test_status_endpoint_separates_optional_degradation(monkeypatch):
+    from src.api import app as api_app
+
+    monkeypatch.setattr(
+        api_app,
+        "_check_qdrant",
+        lambda: {"status": "error", "configured": True, "detail": "connection refused"},
+    )
+    monkeypatch.setattr(
+        api_app,
+        "_check_redis",
+        lambda: {"status": "error", "configured": True, "detail": "connection refused"},
+    )
+
+    response = TestClient(api_app.app).get("/api/v1/status")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "degraded"
+    assert data["core_status"] == "ok"
+    assert data["optional_status"] == "degraded"
+    assert data["core_error_services"] == []
+    assert data["degraded_optional_services"] == ["qdrant", "redis"]
 
 
 def test_agent_reset_uses_default_session(monkeypatch):

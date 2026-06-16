@@ -17,6 +17,7 @@ import {
   UserRoundCog,
 } from "lucide-react";
 import { IntroductionFooter, IntroductionNav } from "../components";
+import { FaqPro, type FaqProItem } from "@/components/ui/faq-pro";
 
 const SUPPORT_SERVICES = [
   {
@@ -70,60 +71,42 @@ const SELF_SERVICE = [
   { icon: LockKeyhole, title: "Access control", text: "Some tools depend on your plan. Upgrade prompts mean the feature is working, but your current plan has a limit." },
 ];
 
-const FAQS = [
+const FAQS: FaqProItem[] = [
   {
+    id: "ai-financial-advice",
     question: "Is the AI advisor giving financial advice?",
-    answer: (
-      <>
-        <span className="block font-medium text-white/80">No. QuanAd 1.0 and 2.0 provide institutional-grade research assistance, quantitative modeling, and risk context, not professional financial advice.</span>
-        <span className="mt-2 block">Retail investors often confuse confident LLM outputs with fiduciary advice. According to our internal telemetry, 97% of traders using standard LLMs fail to cross-reference outputs with risk models. Quantum Advisor solves this by strictly separating insights (what the data says) from decisions (what you should do). You must verify all outputs and own your execution.</span>
-      </>
-    ),
+    answer:
+      "No. QuanAd 1.0 and 2.0 provide institutional-grade research assistance, quantitative modeling, and risk context, not professional financial advice. Retail investors often confuse confident LLM outputs with fiduciary advice. Quantum Advisor separates insights from decisions, so you must verify all outputs and own your execution.",
   },
   {
+    id: "multi-agent-consensus",
     question: "How does the Multi-Agent Consensus actually work?",
-    answer: (
-      <>
-        <span className="block font-medium text-white/80">QuanAd 2.0 dispatches your query simultaneously to 5 specialized sub-agents (Quant Researcher, Risk Analyst, Data Scientist, etc.) before aggregating their verdicts.</span>
-        <span className="mt-2 block">Single LLMs suffer from perspective collapse—they blend conflicting data into a single bland average. Our multi-agent system preserves analytical tension. For example, if the Sentiment Agent is bullish but the Risk Agent flags a 35% max drawdown scenario, the orchestrator highlights this disagreement rather than burying it, giving you transparent risk visibility.</span>
-      </>
-    ),
+    answer:
+      "QuanAd 2.0 dispatches your query to specialized sub-agents such as Quant Researcher, Risk Analyst, and Data Scientist before aggregating their verdicts. The system preserves disagreements instead of blending conflicting data into a single average, so risk flags and bullish signals can both remain visible.",
   },
   {
+    id: "locked-features",
     question: "Why are some features like Quantum Optimization locked?",
-    answer: (
-      <>
-        <span className="block font-medium text-white/80">Advanced modules like Multi-Agent Consensus and Quantum Portfolio Optimization require significant specialized compute resources and are reserved for premium plans.</span>
-        <span className="mt-2 block">Running a 5-agent consensus debate for a single ticker consumes roughly 14x the API tokens of a standard query. Similarly, our PennyLane-based QAOA quantum optimizer runs on intensive cloud simulator backends. Free-tier users retain full access to the baseline QuanAd 1.0 model for essential market research and sentiment analysis.</span>
-      </>
-    ),
+    answer:
+      "Advanced modules like Multi-Agent Consensus and Quantum Portfolio Optimization require significant specialized compute resources and are reserved for premium plans. Free-tier users retain access to the baseline QuanAd 1.0 model for essential market research and sentiment analysis.",
   },
   {
+    id: "recover-deleted-conversations",
     question: "Can I recover deleted research conversations?",
-    answer: (
-      <>
-        <span className="block font-medium text-white/80">No, deleted conversations are permanently purged from your workspace database to maintain strict data privacy.</span>
-        <span className="mt-2 block">Unlike consumer chatbots that soft-delete your data to train future models, Quantum Advisor hard-deletes your session logs immediately upon request. We believe your financial research is proprietary. If you accidentally delete a thread, our support team cannot recover it because we do not retain shadow copies.</span>
-      </>
-    ),
+    answer:
+      "No, deleted conversations are permanently purged from your workspace database to maintain strict data privacy. If you accidentally delete a thread, support cannot recover it because the system does not retain shadow copies.",
   },
   {
+    id: "incorrect-market-data",
     question: "How do I report incorrect market data?",
-    answer: (
-      <>
-        <span className="block font-medium text-white/80">Send the ticker, timestamp, page URL, and a short description through the Bug reports email so our engineering team can trace the data ingestion issue.</span>
-        <span className="mt-2 block">We aggregate data from multiple providers (including Yahoo Finance and internal APIs). If an anomaly occurs—such as an incorrect split adjustment or delayed price feed—providing the exact timestamp helps us identify which upstream provider failed, allowing us to patch the integration faster.</span>
-      </>
-    ),
+    answer:
+      "Send the ticker, timestamp, page URL, and a short description through the Bug reports email so engineering can trace the data ingestion issue. Exact timestamps help identify whether the issue came from a delayed feed, split adjustment, or upstream provider anomaly.",
   },
   {
+    id: "avatar-sidebar-update",
     question: "Why did my avatar not update in the sidebar?",
-    answer: (
-      <>
-        <span className="block font-medium text-white/80">The sidebar pulls your avatar directly from Supabase user metadata, which can occasionally experience a brief local caching delay in your browser.</span>
-        <span className="mt-2 block">When you upload an image, it is stored in the Supabase <code>avatars</code> bucket and the public URL is attached to your session. If you don't see the change immediately, it's usually a stale local state. Try logging out and back in, or ensure your image size doesn't exceed the 2MB limit.</span>
-      </>
-    ),
+    answer:
+      "The sidebar pulls your avatar from Supabase user metadata, which can experience a brief local caching delay. If you do not see the change immediately, try logging out and back in, and confirm your image size does not exceed the 2MB limit.",
   },
 ];
 
@@ -207,17 +190,12 @@ export default function HelpPage() {
           <p className="text-xs font-semibold uppercase tracking-widest text-white/35">FAQ</p>
           <h2 className="mt-2 text-2xl font-semibold text-white">Frequently asked questions</h2>
         </div>
-        <div className="divide-y divide-white/[0.07] rounded-2xl border border-white/[0.07] bg-white/[0.03]">
-          {FAQS.map((faq) => (
-            <details key={faq.question} className="group p-5 open:bg-white/[0.025]">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-white/86">
-                {faq.question}
-                <span className="text-xl leading-none text-white/35 transition-transform group-open:rotate-45">+</span>
-              </summary>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-white/50">{faq.answer}</p>
-            </details>
-          ))}
-        </div>
+        <FaqPro
+          className="mx-0 max-w-3xl"
+          defaultOpenFirst
+          items={FAQS}
+          searchPlaceholder="Search help topics..."
+        />
       </section>
 
       <section className="mx-auto max-w-6xl px-6 pb-20">

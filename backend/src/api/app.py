@@ -254,6 +254,32 @@ def _llm_key_status() -> dict:
         "providers": providers,
     }
 
+
+CORE_STATUS_SERVICES = {"database", "supabase", "llm"}
+OPTIONAL_STATUS_SERVICES = {"qdrant", "redis", "jobs", "billing", "notifications"}
+
+
+def _status_rollup(services: dict[str, dict]) -> dict:
+    core_errors = [
+        name
+        for name, service in services.items()
+        if name in CORE_STATUS_SERVICES and service["status"] == "error"
+    ]
+    optional_errors = [
+        name
+        for name, service in services.items()
+        if name in OPTIONAL_STATUS_SERVICES and service["status"] == "error"
+    ]
+    status = "error" if core_errors else "degraded" if optional_errors else "ok"
+
+    return {
+        "status": status,
+        "core_status": "error" if core_errors else "ok",
+        "optional_status": "degraded" if optional_errors else "ok",
+        "core_error_services": core_errors,
+        "degraded_optional_services": optional_errors,
+    }
+
 # basic api endpoints 
 
 @app.get("/health")
@@ -293,10 +319,10 @@ async def service_status():
             or settings.is_configured("notification_secret_key")
         ),
     }
-    degraded = any(service["status"] == "error" for service in services.values())
+    rollup = _status_rollup(services)
 
     return {
-        "status": "degraded" if degraded else "ok",
+        **rollup,
         "environment": settings.app_env,
         "version": settings.app_version,
         "services": services,

@@ -117,6 +117,22 @@ export interface AuthUser {
   is_guest?: boolean;
 }
 
+export interface ServiceStatus {
+  status: "ok" | "degraded" | "error";
+  core_status?: "ok" | "error";
+  optional_status?: "ok" | "degraded";
+  core_error_services?: string[];
+  degraded_optional_services?: string[];
+  environment: string;
+  version: string;
+  services: Record<string, {
+    status: string;
+    configured: boolean;
+    detail?: string;
+    [key: string]: unknown;
+  }>;
+}
+
 export class ApiError extends Error {
   status: number;
   detail: unknown;
@@ -659,7 +675,7 @@ async function request(input: RequestInfo | URL, init?: RequestInit): Promise<Re
   } catch (error) {
     if (error instanceof TypeError) {
       throw new Error(
-        `Cannot reach the backend API at ${BASE}. Start FastAPI on port 8000 or update NEXT_PUBLIC_API_URL.`
+        `Cannot reach the backend API at ${BASE}. This means the request did not receive an API response, usually because the backend URL is wrong, FastAPI is not reachable from this browser, or the browser blocked the request. If /health loads but /api/v1/status is degraded, optional service failures such as Qdrant or Redis are separate from this reachability error.`
       );
     }
     throw error;
@@ -893,6 +909,7 @@ export const api = {
 
   /** Health check */
   health: () => get<{ status: string }>("/health"),
+  status: () => get<ServiceStatus>("/api/v1/status"),
 };
 
 // ─── News Types ────────────────────
