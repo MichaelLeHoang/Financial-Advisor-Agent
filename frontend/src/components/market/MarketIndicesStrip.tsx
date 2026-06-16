@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
-import { fetchQuote } from "@/lib/quote-cache";
+import { fetchQuotes } from "@/lib/quote-cache";
 import type { MarketQuote } from "@/lib/api";
 
 /* Google-Finance-style market summary strip: a row of index cards with
@@ -62,16 +62,15 @@ export default function MarketIndicesStrip() {
 
   useEffect(() => {
     let cancelled = false;
-    INDICES.forEach((index) => {
-      fetchQuote(index.ticker)
-        .then((quote) => {
-          if (cancelled) return;
-          setIndices((prev) => prev.map((row) => (row.ticker === index.ticker ? { ...row, quote, loading: false } : row)));
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setIndices((prev) => prev.map((row) => (row.ticker === index.ticker ? { ...row, loading: false } : row)));
-        });
+    fetchQuotes(INDICES.map((index) => index.ticker)).then((quotes) => {
+      if (cancelled) return;
+      setIndices(
+        INDICES.map((index) => ({
+          ...index,
+          quote: quotes.get(index.ticker.toUpperCase()) ?? null,
+          loading: false,
+        }))
+      );
     });
     return () => {
       cancelled = true;

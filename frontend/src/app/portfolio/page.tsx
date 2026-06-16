@@ -211,6 +211,7 @@ export default function PortfolioPage() {
 
   const activePortfolio = portfolios.find((p) => p.id === activeId) ?? null;
   const activeBaseCurrency = normalizeCurrency(activePortfolio?.base_currency);
+  const canLoadPortfolioData = !authLoading || Boolean(token);
 
   useEffect(() => {
     setAddCostCurrency(activeBaseCurrency as (typeof SUPPORTED_BASE_CURRENCIES)[number]);
@@ -233,7 +234,7 @@ export default function PortfolioPage() {
   }, [hideAmounts]);
 
   useEffect(() => {
-    if (authLoading) return;
+    if (!canLoadPortfolioData) return;
     let cancelled = false;
     setPortfoliosLoading(true);
     setError(null);
@@ -252,29 +253,38 @@ export default function PortfolioPage() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, token]);
+  }, [canLoadPortfolioData, token]);
 
   // Fetch live prices using the shared cache
   const fetchPricesForHoldings = useCallback((list: Holding[], baseCurrency: string) => {
     const normalizedBase = normalizeCurrency(baseCurrency);
     const symbols = [...new Set(list.map((h) => h.symbol))];
-    symbols.forEach((sym) => {
-      fetchQuote(sym)
-        .then(async (quote) => {
-          const quoteCurrency = normalizeCurrency(quote.currency, normalizedBase);
-          const fxRate = await fetchCurrencyRate(quoteCurrency, normalizedBase);
-          setHoldings((prev) =>
-            prev.map((h) => {
-              if (h.symbol !== sym) return h;
-              if (normalizeCurrency(h.baseCurrency, normalizedBase) !== normalizedBase) return h;
-              return {
-                ...h,
-                ...computeMetrics(h, quote.price, quoteCurrency, normalizedBase, fxRate),
-              };
-            })
-          );
+
+    void Promise.allSettled(
+      symbols.map(async (sym) => {
+        const quote = await fetchQuote(sym);
+        const quoteCurrency = normalizeCurrency(quote.currency, normalizedBase);
+        const fxRate = await fetchCurrencyRate(quoteCurrency, normalizedBase);
+        return { sym, price: quote.price, quoteCurrency, fxRate };
+      })
+    ).then((results) => {
+      const quotes = new Map<string, { price: number; quoteCurrency: string; fxRate: number }>();
+      results.forEach((result) => {
+        if (result.status === "fulfilled") quotes.set(result.value.sym, result.value);
+      });
+      if (quotes.size === 0) return;
+
+      setHoldings((prev) =>
+        prev.map((h) => {
+          const quote = quotes.get(h.symbol);
+          if (!quote) return h;
+          if (normalizeCurrency(h.baseCurrency, normalizedBase) !== normalizedBase) return h;
+          return {
+            ...h,
+            ...computeMetrics(h, quote.price, quote.quoteCurrency, normalizedBase, quote.fxRate),
+          };
         })
-        .catch(() => {});
+      );
     });
   }, []);
 

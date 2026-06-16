@@ -28,7 +28,7 @@ import { Area, AreaChart, CartesianGrid, ComposedChart, Line, ReferenceLine, XAx
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { Watchlist, WatchlistAsset, MarketQuote } from "@/lib/api";
-import { fetchQuote, invalidate } from "@/lib/quote-cache";
+import { fetchQuote, fetchQuotes, invalidate } from "@/lib/quote-cache";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 import FinanceOhlcLayer from "@/components/market/FinanceOhlcLayer";
 import MarketMovers from "@/components/market/MarketMovers";
@@ -502,20 +502,15 @@ function useQuoteRows(instruments: MarketInstrument[]) {
   useEffect(() => {
     let cancelled = false;
     setRows(instruments.map((instrument) => ({ ...instrument, quote: null, loading: true })));
-    instruments.forEach((instrument) => {
-      fetchQuote(instrument.symbol)
-        .then((quote) => {
-          if (cancelled) return;
-          setRows((prev) =>
-            prev.map((row) => (row.symbol === instrument.symbol ? { ...row, quote, loading: false } : row))
-          );
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setRows((prev) =>
-            prev.map((row) => (row.symbol === instrument.symbol ? { ...row, loading: false } : row))
-          );
-        });
+    fetchQuotes(instruments.map((instrument) => instrument.symbol)).then((quotes) => {
+      if (cancelled) return;
+      setRows(
+        instruments.map((instrument) => ({
+          ...instrument,
+          quote: quotes.get(instrument.symbol.toUpperCase()) ?? null,
+          loading: false,
+        }))
+      );
     });
     return () => {
       cancelled = true;
@@ -668,11 +663,9 @@ function useDynamicSummary() {
       }
     }
 
-    Promise.allSettled([fetchQuote("^DJI"), fetchQuote("^GSPC"), fetchQuote("^IXIC"), fetchQuote("^VIX")]).then((results) => {
+    fetchQuotes(["^DJI", "^GSPC", "^IXIC", "^VIX"]).then((quoteMap) => {
       if (cancelled) return;
-      const quotes = results
-        .filter((result): result is PromiseFulfilledResult<MarketQuote> => result.status === "fulfilled")
-        .map((result) => result.value);
+      const quotes = Array.from(quoteMap.values());
       if (quotes.length === 0) return;
 
       const equityQuotes = quotes.filter((q) => q.ticker !== "^VIX");
@@ -963,13 +956,9 @@ function QuoteDetailPanel({
         invalidate(symbol);
       });
       if (activeComparisonSymbols.length > 0) {
-        Promise.allSettled(activeComparisonSymbols.map((symbol) => fetchQuote(symbol, rangeConfig.period, rangeConfig.interval))).then((results) => {
+        fetchQuotes(activeComparisonSymbols, rangeConfig.period, rangeConfig.interval).then((quotes) => {
           if (cancelled) return;
-          setCompareQuotes(
-            results
-              .filter((result): result is PromiseFulfilledResult<MarketQuote> => result.status === "fulfilled")
-              .map((result) => result.value)
-          );
+          setCompareQuotes(activeComparisonSymbols.map((symbol) => quotes.get(symbol.toUpperCase())).filter((quote): quote is MarketQuote => Boolean(quote)));
         });
       }
     };
@@ -989,13 +978,9 @@ function QuoteDetailPanel({
     }
 
     setCompareLoading(true);
-    Promise.allSettled(activeComparisonSymbols.map((symbol) => fetchQuote(symbol, rangeConfig.period, rangeConfig.interval))).then((results) => {
+    fetchQuotes(activeComparisonSymbols, rangeConfig.period, rangeConfig.interval).then((quotes) => {
       if (cancelled) return;
-      setCompareQuotes(
-        results
-          .filter((result): result is PromiseFulfilledResult<MarketQuote> => result.status === "fulfilled")
-          .map((result) => result.value)
-      );
+      setCompareQuotes(activeComparisonSymbols.map((symbol) => quotes.get(symbol.toUpperCase())).filter((quote): quote is MarketQuote => Boolean(quote)));
       setCompareLoading(false);
     });
 
@@ -1600,46 +1585,59 @@ function EarningsDetailPanel({
 
 function WatchlistSection({
   watchlist,
+  defaultExpanded,
   onDelete,
   onUpgrade,
 }: {
   watchlist: Watchlist;
+  defaultExpanded: boolean;
   onDelete: () => void;
   onUpgrade: (message: string) => void;
 }) {
   const [assets, setAssets] = useState<AssetRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(!defaultExpanded);
+  const [hasLoadedAssets, setHasLoadedAssets] = useState(false);
   const [tickerInput, setTickerInput] = useState("");
   const [adding, setAdding] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const shouldLoadAssets = defaultExpanded || !collapsed || hasLoadedAssets;
 
-  const fetchQuotes = useCallback((rows: AssetRow[]) => {
-    rows.forEach((a) => {
-      fetchQuote(a.symbol)
-        .then((quote) => {
-          setAssets((prev) => prev.map((r) => (r.id === a.id ? { ...r, quote, loading: false } : r)));
+  const hydrateAssetQuotes = useCallback((rows: AssetRow[]) => {
+    fetchQuotes(rows.map((row) => row.symbol)).then((quotes) => {
+      setAssets((prev) =>
+        prev.map((row) => {
+          if (!rows.some((candidate) => candidate.id === row.id)) return row;
+          return {
+            ...row,
+            quote: quotes.get(row.symbol.toUpperCase()) ?? row.quote,
+            loading: false,
+          };
         })
-        .catch(() => {
-          setAssets((prev) => prev.map((r) => (r.id === a.id ? { ...r, loading: false } : r)));
-        });
+      );
     });
   }, []);
 
   useEffect(() => {
+    if (!shouldLoadAssets) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
+    setLoading(true);
     api.watchlistAssets(watchlist.id)
       .then((list) => {
         if (cancelled) return;
         const rows: AssetRow[] = list.map((a) => ({ ...a, quote: null, loading: true }));
         setAssets(rows);
+        setHasLoadedAssets(true);
         setLoading(false);
-        fetchQuotes(rows);
+        hydrateAssetQuotes(rows);
       })
       .catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [watchlist.id, fetchQuotes]);
+  }, [watchlist.id, hydrateAssetQuotes, shouldLoadAssets]);
 
   const addAsset = async (symbol: string) => {
     setAdding(true);
@@ -1649,7 +1647,7 @@ function WatchlistSection({
       const row: AssetRow = { ...asset, quote: null, loading: true };
       setAssets((prev) => [...prev, row]);
       setTickerInput("");
-      fetchQuotes([row]);
+      hydrateAssetQuotes([row]);
     } catch (e: any) {
       if (isUpgradeRequiredError(e)) onUpgrade(e.detail.message);
       else setError(e.message);
@@ -1673,16 +1671,13 @@ function WatchlistSection({
     assets.forEach((a) => invalidate(a.symbol));
     const rows = assets.map((a) => ({ ...a, loading: true }));
     setAssets(rows);
-    await Promise.allSettled(
-      rows.map((a) =>
-        fetchQuote(a.symbol)
-          .then((quote) => {
-            setAssets((prev) => prev.map((r) => (r.id === a.id ? { ...r, quote, loading: false } : r)));
-          })
-          .catch(() => {
-            setAssets((prev) => prev.map((r) => (r.id === a.id ? { ...r, loading: false } : r)));
-          })
-      )
+    const quotes = await fetchQuotes(rows.map((row) => row.symbol));
+    setAssets((prev) =>
+      prev.map((row) => ({
+        ...row,
+        quote: quotes.get(row.symbol.toUpperCase()) ?? row.quote,
+        loading: false,
+      }))
     );
     setRefreshing(false);
   };
@@ -1708,14 +1703,14 @@ function WatchlistSection({
           />
           <span className="truncate text-sm font-semibold text-white">{watchlist.name}</span>
           <span className="shrink-0 text-xs tabular-nums text-white/30">
-            {loading ? "" : assets.length}
+            {loading || !hasLoadedAssets ? "" : assets.length}
           </span>
         </button>
 
         <button
           type="button"
           onClick={refresh}
-          disabled={refreshing || assets.length === 0}
+          disabled={refreshing || !hasLoadedAssets || assets.length === 0}
           className="flex h-7 w-7 items-center justify-center rounded-lg text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/70 disabled:pointer-events-none disabled:opacity-40"
           aria-label={`Refresh quotes for ${watchlist.name}`}
         >
@@ -2051,10 +2046,11 @@ export default function WatchlistPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {watchlists.map((w) => (
+                {watchlists.map((w, index) => (
                   <WatchlistSection
                     key={w.id}
                     watchlist={w}
+                    defaultExpanded={index === 0}
                     onDelete={() => deleteWatchlist(w.id)}
                     onUpgrade={setUpgradeMessage}
                   />
