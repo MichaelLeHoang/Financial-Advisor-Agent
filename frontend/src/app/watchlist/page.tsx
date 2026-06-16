@@ -1585,20 +1585,24 @@ function EarningsDetailPanel({
 
 function WatchlistSection({
   watchlist,
+  defaultExpanded,
   onDelete,
   onUpgrade,
 }: {
   watchlist: Watchlist;
+  defaultExpanded: boolean;
   onDelete: () => void;
   onUpgrade: (message: string) => void;
 }) {
   const [assets, setAssets] = useState<AssetRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(!defaultExpanded);
+  const [hasLoadedAssets, setHasLoadedAssets] = useState(false);
   const [tickerInput, setTickerInput] = useState("");
   const [adding, setAdding] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const shouldLoadAssets = defaultExpanded || !collapsed || hasLoadedAssets;
 
   const hydrateAssetQuotes = useCallback((rows: AssetRow[]) => {
     fetchQuotes(rows.map((row) => row.symbol)).then((quotes) => {
@@ -1616,18 +1620,24 @@ function WatchlistSection({
   }, []);
 
   useEffect(() => {
+    if (!shouldLoadAssets) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
+    setLoading(true);
     api.watchlistAssets(watchlist.id)
       .then((list) => {
         if (cancelled) return;
         const rows: AssetRow[] = list.map((a) => ({ ...a, quote: null, loading: true }));
         setAssets(rows);
+        setHasLoadedAssets(true);
         setLoading(false);
         hydrateAssetQuotes(rows);
       })
       .catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [watchlist.id, hydrateAssetQuotes]);
+  }, [watchlist.id, hydrateAssetQuotes, shouldLoadAssets]);
 
   const addAsset = async (symbol: string) => {
     setAdding(true);
@@ -1693,14 +1703,14 @@ function WatchlistSection({
           />
           <span className="truncate text-sm font-semibold text-white">{watchlist.name}</span>
           <span className="shrink-0 text-xs tabular-nums text-white/30">
-            {loading ? "" : assets.length}
+            {loading || !hasLoadedAssets ? "" : assets.length}
           </span>
         </button>
 
         <button
           type="button"
           onClick={refresh}
-          disabled={refreshing || assets.length === 0}
+          disabled={refreshing || !hasLoadedAssets || assets.length === 0}
           className="flex h-7 w-7 items-center justify-center rounded-lg text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/70 disabled:pointer-events-none disabled:opacity-40"
           aria-label={`Refresh quotes for ${watchlist.name}`}
         >
@@ -2036,10 +2046,11 @@ export default function WatchlistPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {watchlists.map((w) => (
+                {watchlists.map((w, index) => (
                   <WatchlistSection
                     key={w.id}
                     watchlist={w}
+                    defaultExpanded={index === 0}
                     onDelete={() => deleteWatchlist(w.id)}
                     onUpgrade={setUpgradeMessage}
                   />
