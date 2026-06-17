@@ -18,4 +18,9 @@ class AnthropicProvider(ChatProvider):
         except ImportError as exc:
             raise ProviderUnavailable("langchain-anthropic is not installed") from exc
 
-        return ChatAnthropic(model=spec.model, api_key=api_key, temperature=0.3)
+        return ChatAnthropic(
+            model_name=spec.model,
+            api_key=api_key,
+            temperature=0.3,
+            max_retries=settings.llm_retry_attempts,
+        )

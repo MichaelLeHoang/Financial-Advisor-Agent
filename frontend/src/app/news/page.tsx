@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import {
   BarChart3,
@@ -21,7 +22,8 @@ import {
   Zap,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import type { NewsArticle } from "@/lib/api";
+import type { NewsArticle, NewsResponse } from "@/lib/api";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { IntroductionNav, IntroductionFooter } from "@/app/introduction/components";
 
 const PREFS_KEY = "financial-advisor.news-categories";
@@ -62,14 +64,24 @@ function timeAgo(iso: string | null): string {
 }
 
 export default function NewsPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+  const isSignedIn = !authLoading && !user?.is_guest;
   const [selected, setSelected] = useState<string[]>([]);
   const [hasSetPrefs, setHasSetPrefs] = useState(false);
   const [articles, setArticles] = useState<NewsArticle[]>([]);
+  const [lastFetch, setLastFetch] = useState<NewsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Load saved preferences on mount
   useEffect(() => {
+    if (authLoading) return;
+    if (!isSignedIn) router.replace("/login?next=/news");
+  }, [authLoading, isSignedIn, router]);
+
+  useEffect(() => {
+    if (!isSignedIn) return;
     const saved = window.localStorage.getItem(PREFS_KEY);
     if (saved) {
       try {
@@ -82,28 +94,30 @@ export default function NewsPage() {
         /* ignore */
       }
     }
-  }, []);
+  }, [isSignedIn]);
 
   // Fetch news whenever selected categories change
   const fetchNews = useCallback(async () => {
+    if (!isSignedIn) return;
     if (selected.length === 0) return;
     setLoading(true);
     setError(null);
     try {
       const res = await api.news(selected, 30);
       setArticles(res.articles);
+      setLastFetch(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch news");
     } finally {
       setLoading(false);
     }
-  }, [selected]);
+  }, [isSignedIn, selected]);
 
   useEffect(() => {
-    if (hasSetPrefs) {
+    if (isSignedIn && hasSetPrefs) {
       fetchNews();
     }
-  }, [hasSetPrefs, fetchNews]);
+  }, [isSignedIn, hasSetPrefs, fetchNews]);
 
   const toggleCategory = (key: string) => {
     setSelected((prev) => {
@@ -124,17 +138,30 @@ export default function NewsPage() {
     setHasSetPrefs(false);
     setSelected([]);
     setArticles([]);
+    setLastFetch(null);
   };
 
   const featured = articles[0];
   const rest = articles.slice(1);
+  const allSourcesFailed = Boolean(
+    lastFetch
+    && lastFetch.sources_attempted
+    && (lastFetch.sources_succeeded ?? 0) === 0
+  );
 
   return (
     <main className="min-h-screen bg-[#050507] text-white">
       <IntroductionNav />
 
+      {(authLoading || !isSignedIn) && (
+        <section className="mx-auto flex min-h-[calc(100dvh-6rem)] max-w-3xl flex-col items-center justify-center px-6 pb-16 pt-32">
+          <Loader2 className="size-8 animate-spin text-indigo-400" />
+          <p className="mt-4 text-sm text-white/40">Checking news access...</p>
+        </section>
+      )}
+
       {/* Category Picker (Onboarding) */}
-      {!hasSetPrefs && (
+      {isSignedIn && !hasSetPrefs && (
         <section className="mx-auto flex min-h-[calc(100dvh-6rem)] max-w-3xl flex-col items-center justify-center px-6 pb-16 pt-32">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
@@ -209,7 +236,7 @@ export default function NewsPage() {
       )}
 
       {/* News Feed */}
-      {hasSetPrefs && (
+      {isSignedIn && hasSetPrefs && (
         <section className="mx-auto max-w-6xl px-6 pb-20 pt-28 sm:pt-32">
           {/* Header */}
           <motion.div
@@ -279,7 +306,11 @@ export default function NewsPage() {
           {!loading && articles.length === 0 && !error && (
             <div className="flex flex-col items-center gap-4 py-20">
               <Newspaper className="size-10 text-white/20" />
-              <p className="text-sm text-white/40">No articles found. Try different categories.</p>
+              <p className="max-w-md text-center text-sm text-white/40">
+                {allSourcesFailed
+                  ? "News providers did not respond in time. Refresh again or try a different category."
+                  : "No articles found. Try different categories."}
+              </p>
             </div>
           )}
 
@@ -416,7 +447,7 @@ export default function NewsPage() {
         </section>
       )}
 
-      <IntroductionFooter />
+      {isSignedIn && <IntroductionFooter />}
     </main>
   );
 }

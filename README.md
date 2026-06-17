@@ -1,30 +1,52 @@
-# QuanAd — Quantum-Inspired Financial Advisor AI Agent
+# QuanAd — AI Financial Research Workspace
 
-An intelligent, end-to-end AI-powered financial advisor that combines **Machine Learning**, **Quantum-inspired optimization**, **Retrieval-Augmented Generation (RAG)**, **multi-agent consensus architecture**, and modern software engineering practices — all wrapped in a trader-grade Next.js dashboard.
+QuanAd is an end-to-end financial research platform that combines **live market data**, **AI advisor workflows**, **FinBERT sentiment**, **portfolio and risk analytics**, **backtesting**, **RAG over financial news**, **multi-agent consensus**, and **quantitative tooling** in a Next.js 16 workspace backed by FastAPI.
 
 > **Disclaimer**: This project is for educational and demonstration purposes only. It is **not** real financial advice. Always consult a licensed financial advisor before making investment decisions.
 
 ---
 
-## Two Modes — Toggle in the UI
+## Current App Surface
 
-| Version | Architecture | Best For |
+The implemented frontend includes:
+
+- **Dashboard** — account and workflow overview.
+- **AI Advisor** — chat-based research with session history, single-agent mode, consensus mode, and queued Redis-backed jobs.
+- **Market** — ticker search, quote cards, chart detail, and market data inspection.
+- **Watchlist** — saved lists, market sections, earnings, comparison charts, and right-panel quote detail.
+- **Portfolio** — holdings, base currency handling, converted values, P&L, weights, and optimization entry points.
+- **Sentiment** — FinBERT-based headline analysis with batch input, upload workflow, source context, and result dashboards.
+- **News** — authenticated market/news reading surface.
+- **Risk** — portfolio risk snapshot, allocation, concentration, drawdown, and correlation views.
+- **Backtest Lab** — strategy runs, saved runs, market-data candles, and replay sessions.
+- **Journal** — trade thesis, review, and analytics.
+- **Quant tools** — quantum optimization, strategy comparison, validation, signal ranking, and export center.
+- **Research reports** — equity research runs, streaming events, analyst reports, and shareable public reports.
+- **Billing and access** — Supabase auth, Stripe billing, and Free/Pro/Trader/Quant/Execution feature gates.
+
+---
+
+## Advisor Modes
+
+| Mode | Architecture | Best For |
 |---------|-------------|----------|
-| **QuanAd 1.0** | Single LangGraph ReAct agent with 4 tools | Fast lookups: price checks, quick sentiment, single predictions |
-| **QuanAd 2.0** | 5 specialist agents → weighted consensus engine | Deep investment analysis: "Should I invest in NVDA?" |
+| **Single Agent** | LangGraph ReAct agent with market, sentiment, prediction, and optimization tools | Fast lookups, focused explanations, simple research questions |
+| **Consensus** | 5 specialist agents → weighted consensus engine | Deeper investment reviews, risk-heavy questions, and disagreement detection |
+| **QuanAd 2.1 Equity Research Desk** | Ticker-triggered research run → shared snapshot → analyst sequence → final PM verdict | Durable ticker reports, evidence trails, and shareable research output |
+| **Queued Chat Jobs** | Redis queue + LLM worker | Long-running advisor work without blocking the UI |
 
-Switch between versions using the **model selector** in the AI advisor page header.
+Switch between modes using the **model selector** in the AI advisor page header.
 
 ---
 
 ## Architecture
 
-### QuanAd 1.0 — Single Agent
+### Single-Agent Path
 
 ```
 ┌────────────────────────────────────────────────────────────┐
 │                    LangGraph ReAct Agent                   │
-│                  (Gemini 2.0 Flash LLM)                    │
+│               (configured LLM provider)                    │
 └───────────┬───────────┬───────────┬───────────┬────────────┘
             │           │           │           │
     ┌───────▼──┐ ┌──────▼──┐ ┌─────▼──┐ ┌──────▼───────────┐
@@ -40,16 +62,15 @@ Switch between versions using the **model selector** in the AI advisor page head
                       │
             ┌─────────▼─────────┐
             │  News Ingestion   │
-            │(yfinance + Inngest│
-            │ scheduled jobs)   │
+            │(yfinance + jobs)  │
             └───────────────────┘
 ```
 
-### QuanAd 2.0 — Multi-Agent Consensus
+### Consensus Path
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                    QuanAd 2.0 Orchestrator                       │
+│                    Consensus Orchestrator                         │
 │             (Dispatches query → Collects opinions)               │
 └──────┬──────────┬──────────┬──────────┬──────────┬───────────────┘
        │          │          │          │          │
@@ -77,7 +98,57 @@ Switch between versions using the **model selector** in the AI advisor page head
                     └────────────────────┘
 ```
 
-### QuanAd 2.0 Specialist Agents
+### QuanAd 2.1 — Equity Research Desk
+
+QuanAd 2.1 is a ticker-based research workflow rather than a normal chat reply. It can be started from the AI Advisor model selector, `/research`, or market surfaces that pass a ticker into the research desk.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    QuanAd 2.1 Research Request                  │
+│      ticker + source surface + depth + selected analysts         │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                    ┌──────────▼──────────┐
+                    │ Entitlement Shaping │
+                    │ depth, analysts,    │
+                    │ guest limitations   │
+                    └──────────┬──────────┘
+                               │
+                    ┌──────────▼──────────┐
+                    │ Shared Data Snapshot│
+                    │ quote, fundamentals,│
+                    │ technicals, news,   │
+                    │ sentiment, risk     │
+                    └──────────┬──────────┘
+                               │
+     ┌─────────────────────────▼─────────────────────────┐
+     │ Ordered Research Desk Agents                       │
+     │ Market → Social → News → Fundamentals → Bull/Bear  │
+     │ → Evaluator → Trader → Risk views → Portfolio Mgr  │
+     └─────────────────────────┬─────────────────────────┘
+                               │
+                    ┌──────────▼──────────┐
+                    │ Reports + Events    │
+                    │ markdown sections,  │
+                    │ confidence, risks,  │
+                    │ streaming timeline  │
+                    └──────────┬──────────┘
+                               │
+                    ┌──────────▼──────────┐
+                    │ Final Verdict       │
+                    │ buy/hold/sell/      │
+                    │ insufficient data   │
+                    └──────────┬──────────┘
+                               │
+                    ┌──────────▼──────────┐
+                    │ Shareable Report    │
+                    │ /r/{shareSlug}      │
+                    └─────────────────────┘
+```
+
+The current backend stores runs, snapshots, reports, events, and share slugs in the in-process `EquityResearchStore`. It is suitable for the current development workflow; production persistence should move this store to Supabase/Postgres before relying on reports across process restarts.
+
+### Specialist Agents
 
 | Agent | Domain | Tools | Output |
 |-------|--------|-------|--------|
@@ -100,21 +171,25 @@ Each specialist returns a structured `AgentOpinion` with verdict, confidence, re
 
 | Feature | Description |
 |---------|-------------|
-| **AI Agent (v1.0)** | LangGraph ReAct agent with tool-use; multi-turn conversation memory |
-| **Multi-Agent Consensus (v2.0)** | 5 specialist agents analyze independently → consensus engine aggregates |
-| **RAG Pipeline** | Index financial news → Qdrant → retrieve context → Gemini generates answer |
+| **AI Advisor** | LangGraph ReAct chat, consensus mode, session history, WebSocket streaming, and Redis-backed queued jobs |
+| **Multi-Agent Consensus** | 5 specialist agents analyze independently → consensus engine aggregates |
+| **Equity Research Reports** | Start research runs, stream progress events, persist analyst reports, and share public report links |
+| **RAG Pipeline** | Index financial news → Qdrant → retrieve context → LLM generates answer |
+| **Market and Watchlist** | Live quote lookup, symbol search, chart detail, comparison charts, market sections, and earnings context |
+| **Portfolio Workspace** | Supabase-backed portfolios and holdings with base currency, converted values, P&L, weights, and optimization |
 | **Sentiment Analysis** | FinBERT (ProsusAI) fine-tuned on financial text |
 | **ML Prediction** | Random Forest + LSTM trained on 2 years of OHLCV + technical indicators |
 | **Statistical Profiling** | Returns distribution, skewness, kurtosis, autocorrelation |
 | **Risk Assessment** | VaR, CVaR, max drawdown, downside deviation, concentration analysis |
 | **Classical Optimization** | Markowitz Mean-Variance (scipy SLSQP) |
 | **Quantum Optimization** | QAOA via PennyLane — selects optimal stock subset |
-| **Strategy Backtesting** | Walk-forward, Monte Carlo, bootstrap confidence intervals |
-| **Signal Ranking** | Momentum + volatility composite scoring across tickers |
-| **Next.js Dashboard** | Full-featured trading workspace with Supabase auth |
+| **Backtesting and Replay** | Strategy runs, saved results, candle data, replay sessions, walk-forward, Monte Carlo, and bootstrap validation |
+| **Signal Ranking and Export** | Momentum/volatility scoring, strategy export, and quant validation workflows |
+| **Alerts and Notifications** | Alert CRUD, notification channels, event history, and evaluation endpoints |
+| **Next.js Workspace** | Full-featured dashboard with Supabase auth, plan gates, docs, pricing, billing, blog, and help pages |
 | **REST API** | FastAPI with interactive Swagger docs at `/docs` |
-| **SaaS Platform** | Supabase auth, Stripe billing, tiered plans (Free/Pro/Quant) |
-| **Scheduled Jobs** | Inngest cron job for news ingestion and alert evaluation |
+| **SaaS Platform** | Supabase auth, Stripe billing, tiered plans (Free/Pro/Trader/Quant/Execution) |
+| **Local Dev Orchestration** | `make dev` starts Redis, Qdrant, backend, LLM worker, frontend, and ngrok |
 
 ---
 
@@ -129,9 +204,10 @@ Each specialist returns a structured `AgentOpinion` with verdict, confidence, re
 | **ML Models** | Random Forest, LSTM (PyTorch), FinBERT (HuggingFace) |
 | **Quantum Computing** | PennyLane (QAOA for portfolio optimization) |
 | **Vector Database** | Qdrant (news RAG pipeline) |
+| **Queue / Cache** | Redis for queued LLM jobs and optional platform cache paths |
 | **Embeddings** | sentence-transformers / Gemini embeddings |
 | **Backend API** | FastAPI + Pydantic + Uvicorn |
-| **Frontend** | Next.js 15 + Tailwind CSS + shadcn/ui |
+| **Frontend** | Next.js 16 + React 19 + Tailwind CSS 4 + Base UI / shadcn-style components |
 | **Database** | Supabase (PostgreSQL + Auth + RLS) |
 | **Billing** | Stripe (subscriptions + checkout) |
 | **Data** | yfinance (market data), pandas, NumPy |
@@ -146,10 +222,11 @@ Each specialist returns a structured `AgentOpinion` with verdict, confidence, re
 
 - Python 3.13+
 - [uv](https://docs.astral.sh/uv/) package manager
-- Node.js 18+ (for Next.js frontend)
-- Qdrant running locally (or cloud URL)
-- Google Gemini API key
+- Node.js 20+ recommended for Next.js 16
+- Docker Desktop for local Redis and Qdrant
+- Google Gemini API key, or another configured LLM provider
 - Supabase project (for auth + data persistence)
+- ngrok if you want `make dev` to expose the backend tunnel
 
 ### 2. Set up environment
 
@@ -186,8 +263,14 @@ QDRANT_URL=http://localhost:6333
 QDRANT_API_KEY=
 QDRANT_COLLECTION_NEWS=financial_news
 
+# Optional: Redis queue/cache
+REDIS_URL=redis://localhost:6379/0
+
 # Optional: embedding provider (local is free, gemini requires API)
 EMBEDDING_PROVIDER=local
+
+# Frontend
+NEXT_PUBLIC_API_URL=http://localhost:8000
 
 # Supabase
 SUPABASE_URL=
@@ -203,13 +286,31 @@ STRIPE_WEBHOOK_SECRET=
 
 The app loads configuration through `src/core/config.py`. `src/config.py` is kept as a compatibility import path for existing modules.
 
-### 4. Start Qdrant (Docker)
+### 4. Run the full local platform
 
 ```bash
-docker run -p 6333:6333 qdrant/qdrant
+make dev
 ```
 
-### 5. Run the interactive CLI agent
+`make dev` starts Docker-backed Redis and Qdrant, waits for both dependencies, then runs the FastAPI backend, Redis-backed LLM worker, Next.js frontend, and an ngrok tunnel for the backend.
+
+### 5. Run services individually
+
+```bash
+# Dependencies only
+make deps
+
+# Backend only
+make backend
+
+# Worker only
+make worker
+
+# Frontend only
+make frontend
+```
+
+### 6. Run the interactive CLI agent
 
 ```bash
 cd backend
@@ -219,31 +320,15 @@ uv run python main.py
 uv run python main.py --provider openai
 ```
 
-### 6. Start the REST API
-
-```bash
-cd backend
-uv run uvicorn src.api.app:app --reload --port 8000
-# → Swagger UI: http://localhost:8000/docs
-```
-
-### 7. Start the frontend
-
-```bash
-cd frontend
-npm run dev
-# → http://localhost:3000
-```
-
-### 8. Check service readiness
+### 7. Check service readiness
 
 ```bash
 curl http://localhost:8000/api/v1/status
 ```
 
-The status endpoint reports whether database, Supabase, Qdrant, LLM provider keys, Inngest jobs, billing, and notification services are configured. It checks Qdrant reachability and never returns secret values.
+The status endpoint reports core and optional service health. Backend reachability is separate from optional degradation: Qdrant and Redis can report degraded when unavailable, while core API health can still be reachable. Secret values are never returned.
 
-### 9. SaaS implementation instructions
+### 8. SaaS implementation instructions
 
 The SaaS implementation plan, sprint checklists, service setup notes, and security audit prompt live outside this project README in [`doc/README.md`](doc/README.md).
 
@@ -259,17 +344,33 @@ The SaaS implementation plan, sprint checklists, service setup notes, and securi
 | `GET` | `/api/v1/status` | SaaS service readiness status |
 | `GET` | `/api/v1/me` | Current user context |
 
-### Agent (QuanAd 1.0 + 2.0)
+### Agent
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/v1/agent/chat` | Chat — `mode: "single"` (v1.0) or `"consensus"` (v2.0) |
+| `POST` | `/api/v1/agent/chat` | Chat with `mode: "single"`, `"consensus"`, or `"auto"` |
+| `POST` | `/api/v1/agent/chat/jobs` | Enqueue a Redis-backed chat job |
+| `GET` | `/api/v1/agent/chat/jobs/{job_id}` | Poll queued chat job status/result |
 | `POST` | `/api/v1/agent/consensus` | Full multi-agent consensus with metadata |
 | `POST` | `/api/v1/agent/reset` | Clear conversation history |
 | `GET` | `/api/v1/agent/sessions` | List all conversation sessions |
 | `GET` | `/api/v1/agent/sessions/{id}/messages` | Load session messages |
 | `PATCH` | `/api/v1/agent/sessions/{id}` | Rename session |
 | `DELETE` | `/api/v1/agent/sessions/{id}` | Delete session |
+| `WS` | `/ws/agent/chat/{session_id}` | WebSocket chat stream |
+
+### Equity Research
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/equity-research/runs` | Start an equity research run |
+| `GET` | `/api/v1/equity-research/runs/{run_id}` | Load run detail, snapshot, reports, and latest events |
+| `GET` | `/api/v1/equity-research/runs/{run_id}/reports` | Load analyst reports |
+| `GET` | `/api/v1/equity-research/runs/{run_id}/events/list` | Load event list with cursor support |
+| `GET` | `/api/v1/equity-research/runs/{run_id}/events` | Stream research events |
+| `PATCH` | `/api/v1/equity-research/runs/{run_id}/share` | Enable or update public sharing |
+| `DELETE` | `/api/v1/equity-research/runs/{run_id}` | Delete a research run |
+| `GET` | `/api/v1/equity-research/shared/{share_slug}` | Public shared report |
 
 ### Analysis & ML
 
@@ -287,25 +388,57 @@ The SaaS implementation plan, sprint checklists, service setup notes, and securi
 |--------|----------|-------------|
 | `GET` | `/api/v1/market/quote/{ticker}` | Real-time quote + chart data |
 | `GET` | `/api/v1/market/search` | Symbol search |
+| `GET` | `/api/v1/news/categories` | News category metadata |
+| `GET` | `/api/v1/news` | News feed with category/ticker filtering |
 
 ### Quant Toolkit
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/v1/quant/compare` | Strategy comparison |
-| `POST` | `/api/v1/quant/validate` | Advanced validation (walk-forward, Monte Carlo, bootstrap) |
-| `POST` | `/api/v1/quant/signals` | Signal ranking |
+| `POST` | `/api/v1/quant/strategy-compare` | Strategy comparison |
+| `POST` | `/api/v1/quant/validation` | Advanced validation (walk-forward, Monte Carlo, bootstrap) |
+| `POST` | `/api/v1/quant/signals/rank` | Signal ranking |
 | `POST` | `/api/v1/quant/export` | Strategy export (JSON/Python/Pine) |
 
-### Risk & Portfolio
+### Portfolio, Watchlist, Risk, and Journal
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/v1/portfolios` | List portfolios |
 | `POST` | `/api/v1/portfolios` | Create portfolio |
-| `GET` | `/api/v1/risk/{portfolio_id}` | Portfolio risk snapshot |
+| `DELETE` | `/api/v1/portfolios/{portfolio_id}` | Delete portfolio |
+| `GET` | `/api/v1/portfolios/{portfolio_id}/holdings` | List holdings |
+| `POST` | `/api/v1/portfolios/{portfolio_id}/holdings` | Add holding |
+| `PATCH` | `/api/v1/portfolios/{portfolio_id}/holdings/{holding_id}` | Update holding |
+| `DELETE` | `/api/v1/portfolios/{portfolio_id}/holdings/{holding_id}` | Delete holding |
 | `GET` | `/api/v1/watchlists` | List watchlists |
 | `POST` | `/api/v1/watchlists` | Create watchlist |
+| `DELETE` | `/api/v1/watchlists/{watchlist_id}` | Delete watchlist |
+| `GET` | `/api/v1/watchlists/{watchlist_id}/assets` | List watchlist assets |
+| `POST` | `/api/v1/watchlists/{watchlist_id}/assets` | Add watchlist asset |
+| `DELETE` | `/api/v1/watchlists/{watchlist_id}/assets/{asset_id}` | Delete watchlist asset |
+| `GET` | `/api/v1/risk/portfolios/{portfolio_id}` | Portfolio risk snapshot |
+| `GET` | `/api/v1/risk/portfolios/{portfolio_id}/snapshots` | Saved risk snapshots |
+| `GET` | `/api/v1/journal/entries` | List journal entries |
+| `POST` | `/api/v1/journal/entries` | Create journal entry |
+| `GET` | `/api/v1/journal/analytics` | Journal analytics |
+
+### Backtesting
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/backtests/strategies/options` | Available strategy options |
+| `GET` | `/api/v1/backtests/strategies` | Saved strategies |
+| `POST` | `/api/v1/backtests/run` | Run a backtest |
+| `GET` | `/api/v1/backtests/runs` | List saved runs |
+| `GET` | `/api/v1/backtests/runs/{run_id}` | Load a saved run |
+| `DELETE` | `/api/v1/backtests/runs/{run_id}` | Delete a run |
+| `GET` | `/api/v1/backtests/market-data/candles` | Candle data for replay/charting |
+| `POST` | `/api/v1/backtests/replay-sessions` | Create replay session |
+| `GET` | `/api/v1/backtests/replay-sessions` | List replay sessions |
+| `GET` | `/api/v1/backtests/replay-sessions/{session_id}` | Load replay session |
+| `PATCH` | `/api/v1/backtests/replay-sessions/{session_id}` | Update replay session |
+| `DELETE` | `/api/v1/backtests/replay-sessions/{session_id}` | Delete replay session |
 
 ### Platform
 
@@ -313,9 +446,16 @@ The SaaS implementation plan, sprint checklists, service setup notes, and securi
 |--------|----------|-------------|
 | `GET` | `/api/v1/billing/subscription` | Current subscription |
 | `POST` | `/api/v1/billing/create-checkout-session` | Stripe Checkout session |
+| `POST` | `/api/v1/billing/create-customer-portal-session` | Stripe customer portal session |
 | `POST` | `/api/v1/billing/webhook` | Stripe webhook receiver |
+| `GET` | `/api/v1/notification-channels` | List notification channels |
+| `POST` | `/api/v1/notification-channels` | Create notification channel |
+| `GET` | `/api/v1/alerts` | List alerts |
+| `POST` | `/api/v1/alerts` | Create alert |
+| `GET` | `/api/v1/alerts/events` | List alert events |
+| `POST` | `/api/v1/alerts/evaluate` | Evaluate alerts |
 
-### Example: QuanAd 2.0 consensus analysis
+### Example: consensus analysis
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/agent/consensus \
@@ -323,7 +463,7 @@ curl -X POST http://localhost:8000/api/v1/agent/consensus \
   -d '{"message": "Should I invest in NVDA right now?"}'
 ```
 
-### Example: QuanAd 1.0 single-agent chat
+### Example: single-agent chat
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/agent/chat \
@@ -365,8 +505,8 @@ Financial-Advisor-Agent/       ← project root
 ├── backend/                   ← all Python backend
 │   ├── src/
 │   │   ├── agent/
-│   │   │   ├── agent.py            # QuanAd 1.0 + 2.0 selector
-│   │   │   ├── orchestrator.py     # QuanAd 2.0 orchestrator
+│   │   │   ├── agent.py            # Single-agent and consensus selector
+│   │   │   ├── orchestrator.py     # Consensus orchestrator
 │   │   │   ├── consensus.py        # Consensus engine
 │   │   │   ├── specialists/        # 5 specialist agents
 │   │   │   ├── tools.py
@@ -377,7 +517,7 @@ Financial-Advisor-Agent/       ← project root
 │   │   ├── billing/
 │   │   ├── core/                   # App configuration
 │   │   ├── data/                   # yfinance + Qdrant helpers
-│   │   ├── jobs/                   # Inngest scheduled jobs
+│   │   ├── jobs/                   # LLM worker and scheduled job integrations
 │   │   ├── journal/
 │   │   ├── llm/                    # Multi-provider LLM gateway
 │   │   ├── ml/                     # FinBERT, RF, LSTM
@@ -393,17 +533,18 @@ Financial-Advisor-Agent/       ← project root
 │   │   ├── unit/
 │   │   └── integration/
 │   ├── data/                       # conversations.db
-│   ├── qdrant_storage/             # local Qdrant data
 │   ├── main.py                     # CLI entry point
 │   ├── pyproject.toml
 │   └── uv.lock
 ├── frontend/                  ← Next.js dashboard
 │   ├── src/app/                    # App routes
-│   ├── src/components/             # UI components
+│   ├── src/components/             # Auth, chat, market, research, backtest, and UI components
 │   └── src/lib/                    # API client, Supabase client
 ├── quantum-finance-ai/        ← Vite prototype
 ├── supabase/
-│   └── migrations/                 # 8 SQL migration files
+│   └── migrations/                 # Supabase schema and feature migrations
+├── docker-compose.yml              # Backend, worker, Redis, and Qdrant services
+├── Makefile                        # Local dev orchestration
 ├── .env                       ← shared secrets (gitignored)
 ├── .env.example
 ├── .gitignore
@@ -413,7 +554,7 @@ Financial-Advisor-Agent/       ← project root
 
 ---
 
-## Agent Tools (QuanAd 1.0)
+## Single-Agent Tools
 
 The LangGraph agent has access to four tools:
 

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Brain, ClipboardList, Image, Loader2, Paperclip, PieChart, Send, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { api, isUpgradeRequiredError, wsUrl } from "@/lib/api";
+import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
 import { getDemoChatConversation } from "@/lib/demo-chat-history";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -23,6 +23,8 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   status?: "fetching" | "done";
+  researchTicker?: string;
+  researchRunId?: string;
 }
 
 const GREETING: Message = {
@@ -51,6 +53,37 @@ const SUGGESTIONS = [
     icon: PieChart,
   },
 ];
+
+function extractResearchCommand(message: string) {
+  const match = message.trim().match(/^\/(?:research|analyze)\s+([A-Za-z][A-Za-z0-9.-]{0,14})(?:\s+(deep|medium|shallow))?/i);
+  if (!match) return null;
+  return {
+    ticker: match[1].toUpperCase(),
+    depth: (match[2]?.toLowerCase() || "shallow") as "shallow" | "medium" | "deep",
+  };
+}
+
+function extractInvestmentTicker(message: string) {
+  const lower = message.toLowerCase();
+  const hasIntent = lower.includes("should i buy")
+    || lower.includes("should i invest")
+    || lower.includes("analyze ")
+    || lower.includes("research ")
+    || lower.includes("investment thesis")
+    || lower.includes("invest in");
+  if (!hasIntent) return null;
+  const match = message.match(/\b[A-Z]{1,5}(?:\.[A-Z]{1,3})?\b/);
+  return match?.[0] ?? null;
+}
+
+function extractTickerForResearch(message: string) {
+  const command = extractResearchCommand(message);
+  if (command) return command.ticker;
+  const intentTicker = extractInvestmentTicker(message);
+  if (intentTicker) return intentTicker.toUpperCase();
+  const match = message.match(/\b[A-Z]{1,5}(?:\.[A-Z]{1,3})?\b/);
+  return match?.[0]?.toUpperCase() ?? null;
+}
 
 const WORKFLOW_STEPS = [
   {
@@ -263,6 +296,52 @@ export default function ChatPage() {
     const getUniqueId = () => typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `msg-${Date.now()}-${Math.random()}`;
 
     const userMsg: Message = { id: getUniqueId(), role: "user", content: text };
+    const researchCommand = extractResearchCommand(text);
+    const investmentTicker = researchCommand?.ticker ?? extractInvestmentTicker(text);
+
+    if (researchCommand || version === "2.1") {
+      const ticker = researchCommand?.ticker ?? extractTickerForResearch(text);
+      if (!ticker) {
+        setMessages((prev) => [...prev, userMsg, {
+          id: getUniqueId(),
+          role: "assistant",
+          content: "QuanAd 2.1 needs a ticker to start a full Equity Research Desk run. Try `AAPL`, `NVDA`, or `/analyze MSFT deep`.",
+        }]);
+        isStreamingRef.current = false;
+        return;
+      }
+      setMessages((prev) => [...prev, userMsg, { id: getUniqueId(), role: "assistant", content: "Creating QuanAd 2.1 research run...", status: "fetching" }]);
+      setIsLoading(true);
+      try {
+        const run = await api.createEquityResearchRun({
+          ticker,
+          research_depth: researchCommand?.depth ?? "shallow",
+          source_surface: "ai_advisor",
+        });
+        setMessages((prev) =>
+          prev.filter((m) => m.status !== "fetching").concat({
+            id: getUniqueId(),
+            role: "assistant",
+            content: `QuanAd 2.1 research run created for ${run.ticker}. Open the full workspace: /research/${run.run_id}`,
+            researchTicker: run.ticker,
+            researchRunId: run.run_id,
+          })
+        );
+      } catch (err: any) {
+        setMessages((prev) =>
+          prev.filter((m) => m.status !== "fetching").concat({
+            id: getUniqueId(),
+            role: "assistant",
+            content: `Error: ${err.message}`,
+          })
+        );
+      } finally {
+        setIsLoading(false);
+        isStreamingRef.current = false;
+      }
+      return;
+    }
+
     const fetchingLabel = version === "2.0"
       ? "Running multi-agent consensus analysis..."
       : "Analyzing market context...";
@@ -275,113 +354,73 @@ export default function ChatPage() {
     setCompletedTools([]);
 
     const assistantMsgId = getUniqueId();
-    let fullContent = "";
 
     try {
-      const ws = new WebSocket(wsUrl(targetSessionId, api.getToken()));
+      const mode = apiModeFromVersion(version);
+      let res;
+      try {
+        const queued = await api.chatJob(text, targetSessionId, true, mode);
 
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ message: text, remember: true }));
-      };
-
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-
-        if (data.type === "token") {
-          fullContent += data.content;
-          setMessages((prev) => {
-            // Remove fetching placeholder, upsert streaming message
-            const withoutFetching = prev.filter((m) => m.status !== "fetching");
-            const existing = withoutFetching.find((m) => m.id === assistantMsgId);
-            if (existing) {
-              return withoutFetching.map((m) =>
-                m.id === assistantMsgId ? { ...m, content: fullContent } : m
-              );
-            }
-            return [...withoutFetching, { id: assistantMsgId, role: "assistant" as const, content: fullContent }];
-          });
-        } else if (data.type === "tool_start") {
-          setActiveTool(data.tool);
-        } else if (data.type === "tool_end") {
-          setActiveTool(null);
-          setCompletedTools((prev) =>
-            prev.includes(data.tool) ? prev : [...prev, data.tool]
-          );
-        } else if (data.type === "done") {
-          ws.close();
-          setIsLoading(false);
-          isStreamingRef.current = false;
-          setActiveTool(null);
-          window.dispatchEvent(new Event("chat-sessions:changed"));
-
-          // If no tokens were received, show fallback
-          if (!fullContent.trim()) {
+        res = await api.waitForChatJob(queued.job_id, (job) => {
+          if (job.status === "queued") {
+            const positionText = job.queue_position ? ` Position ${job.queue_position}.` : "";
             setMessages((prev) =>
-              prev.filter((m) => m.status !== "fetching").concat({
-                id: assistantMsgId,
-                role: "assistant",
-                content: "I'm sorry, I couldn't process that request.",
-              })
+              prev.map((m) =>
+                m.status === "fetching"
+                  ? { ...m, content: `Queued for analysis.${positionText}` }
+                  : m
+              )
+            );
+          } else if (job.status === "running") {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.status === "fetching"
+                  ? { ...m, content: fetchingLabel }
+                  : m
+              )
             );
           }
-        } else if (data.type === "error") {
-          ws.close();
-          setIsLoading(false);
-          isStreamingRef.current = false;
-          setActiveTool(null);
-          setMessages((prev) =>
-            prev.filter((m) => m.status !== "fetching").concat({
-              id: assistantMsgId,
-              role: "assistant",
-              content: `Error: ${data.message}`,
-            })
-          );
-        }
-      };
+        });
+      } catch (queueError) {
+        if (!isRedisUnavailableError(queueError)) throw queueError;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.status === "fetching"
+              ? { ...m, content: fetchingLabel }
+              : m
+          )
+        );
+        res = await api.chat(text, targetSessionId, true, mode);
+      }
 
-      ws.onerror = () => {
-        // Fallback to REST API on WebSocket error
-        ws.close();
-        (async () => {
-          try {
-            const mode = apiModeFromVersion(version);
-            const res = await api.chat(text, activeSessionId, true, mode);
-            setMessages((prev) =>
-              prev.filter((m) => m.status !== "fetching").concat({
-                id: assistantMsgId,
-                role: "assistant",
-                content: res.response || "I'm sorry, I couldn't process that request.",
-              })
-            );
-            window.dispatchEvent(new Event("chat-sessions:changed"));
-          } catch (err: any) {
-            if (isUpgradeRequiredError(err)) {
-              setUpgradeMessage(err.detail.message);
-            }
-            setMessages((prev) =>
-              prev.filter((m) => m.status !== "fetching").concat({
-                id: assistantMsgId,
-                role: "assistant",
-                content: isUpgradeRequiredError(err) ? err.detail.message : `Error: ${err.message}`,
-              })
-            );
-          } finally {
-            setIsLoading(false);
-            isStreamingRef.current = false;
-            setActiveTool(null);
-          }
-        })();
-      };
-    } catch (err: any) {
       setMessages((prev) =>
         prev.filter((m) => m.status !== "fetching").concat({
           id: assistantMsgId,
           role: "assistant",
-          content: `Error: ${err.message}`,
+          content: res.response || "I'm sorry, I couldn't process that request.",
+        }).concat(investmentTicker ? [{
+          id: getUniqueId(),
+          role: "assistant",
+          content: `Generate a full QuanAd 2.1 Research Report for ${investmentTicker}?`,
+          researchTicker: investmentTicker,
+        }] : [])
+      );
+      window.dispatchEvent(new Event("chat-sessions:changed"));
+    } catch (err: any) {
+      if (isUpgradeRequiredError(err)) {
+        setUpgradeMessage(err.detail.message);
+      }
+      setMessages((prev) =>
+        prev.filter((m) => m.status !== "fetching").concat({
+          id: assistantMsgId,
+          role: "assistant",
+          content: isUpgradeRequiredError(err) ? err.detail.message : `Error: ${err.message}`,
         })
       );
+    } finally {
       setIsLoading(false);
       isStreamingRef.current = false;
+      setActiveTool(null);
     }
   };
 
@@ -468,7 +507,7 @@ export default function ChatPage() {
               {msg.status === "fetching" ? (
                 <div className="w-full max-w-[92%] sm:max-w-[75%]">
                   <Plan
-                    mode={version === "2.0" ? "consensus" : "single"}
+                    mode={version === "2.1" ? "research" : version === "2.0" ? "consensus" : "single"}
                     isActive={true}
                     activeTool={activeTool}
                     completedTools={completedTools}
@@ -484,7 +523,40 @@ export default function ChatPage() {
                   )}
                 >
                   {msg.role === "assistant" ? (
-                    <Markdown content={msg.content} />
+                    msg.researchTicker ? (
+                      <div className="space-y-3">
+                        <Markdown content={msg.content} />
+                        <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
+                          <p className="text-sm font-semibold text-white">
+                            {msg.researchRunId ? "QuanAd 2.1 Research Report" : "Generate a full QuanAd 2.1 Research Report?"}
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-white/55">
+                            {msg.researchRunId
+                              ? `The Equity Research Desk run for ${msg.researchTicker} is ready to open.`
+                              : `Run market, news, sentiment, fundamentals, trading, and risk-management agents for ${msg.researchTicker}.`}
+                          </p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Link
+                              href={msg.researchRunId ? `/research/${msg.researchRunId}?from=ai_advisor` : `/research?ticker=${encodeURIComponent(msg.researchTicker)}&source=ai_advisor`}
+                              className="inline-flex h-9 items-center rounded-lg bg-indigo-primary px-3 text-xs font-semibold text-white hover:bg-indigo-primary/90"
+                            >
+                              {msg.researchRunId ? "Open Full Report" : "Generate Full Report"}
+                            </Link>
+                            {!msg.researchRunId && (
+                              <button
+                                type="button"
+                                onClick={() => setInput(`Give me a quick answer on ${msg.researchTicker}.`)}
+                                className="inline-flex h-9 items-center rounded-lg border border-white/[0.10] px-3 text-xs font-semibold text-white/60 hover:text-white"
+                              >
+                                Quick Answer
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <Markdown content={msg.content} />
+                    )
                   ) : (
                     msg.content
                   )}

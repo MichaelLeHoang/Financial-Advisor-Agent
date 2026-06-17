@@ -109,3 +109,26 @@ def test_gateway_records_estimated_usage():
     assert event.output_tokens > 0
     assert totals["requests"] == 1
     assert totals["estimated_cost_usd"] >= 0
+
+
+def test_google_provider_configures_retry_attempts(monkeypatch):
+    from pydantic import SecretStr
+    from src.llm.providers.google import GoogleProvider
+    import src.llm.providers.google as google_module
+
+    monkeypatch.setattr(google_module.settings, "llm_retry_attempts", 2)
+    monkeypatch.setattr(google_module.settings, "gemini_api_key", SecretStr("test-key"))
+    spec = ModelSpec(
+        key="google.test",
+        provider="google",
+        model="gemini-2.0-flash",
+        mode="fast",
+        min_plan=Plan.FREE,
+        input_cost_per_million=0,
+        output_cost_per_million=0,
+    )
+
+    chat_model = GoogleProvider().create_chat_model(spec)
+
+    assert chat_model.max_retries == 2
+    assert hasattr(chat_model, "bind_tools")

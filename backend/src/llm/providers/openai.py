@@ -18,4 +18,9 @@ class OpenAIProvider(ChatProvider):
         except ImportError as exc:
             raise ProviderUnavailable("langchain-openai is not installed") from exc
 
-        return ChatOpenAI(model=spec.model, api_key=api_key, temperature=0.3)
+        return ChatOpenAI(
+            model=spec.model,
+            api_key=api_key,
+            temperature=0.3,
+            max_retries=settings.llm_retry_attempts,
+        )

@@ -4,11 +4,14 @@ from src.ml.sentiment import SentimentAnalyzer
 from src.ml.preprocessing import prepare_training_data
 from src.ml.models import RandomForestPredictor, evaluate_model
 from src.quantum.portfolio import optimize_portfolio, quantum_optimize_portfolio
+from src.core.cache import cached_value
 
 @tool 
 def get_stock_info(ticker: str) -> str: 
     """Get current stock price, daily change, volume, and basic info for a stock ticker"""
-    try: 
+    ticker = ticker.upper().strip()
+
+    def compute() -> str:
         data = fetch_stock_history([ticker], period="5d")
         if data.empty: 
             return f"No data found for ticker {ticker}"
@@ -26,6 +29,9 @@ def get_stock_info(ticker: str) -> str:
             f"High: ${latest['High']:.2f} | Low: ${latest['Low']:.2f}"
         )
 
+    try:
+        return cached_value("stock_info", {"ticker": ticker}, 60, compute)
+
     except Exception as e:
         return f"Error fetching {ticker}: {str(e)}"
 
@@ -34,9 +40,11 @@ def analyze_sentiment(texts: list[str]) -> str:
     """Analyze the financial sentiment of news headlines or articles. Returns
     positve, negative, or neural scores and overall market mood
     """
-    try: 
+    clean_texts = [str(text) for text in texts]
+
+    def compute() -> str:
         analyzer = SentimentAnalyzer()
-        mood = analyzer.get_market_mood(texts)
+        mood = analyzer.get_market_mood(clean_texts)
         output = (
             f"Market Mood: {mood['mood'].upper()}\n"
             f"Signal: {mood['signal']}\n"
@@ -45,11 +53,14 @@ def analyze_sentiment(texts: list[str]) -> str:
             f"{mood['breakdown']['negative']} negative, "
             f"{mood['breakdown']['neutral']} neutral\n"
         )
-        results = analyzer.analyze_batch(texts)
-        for text, result in zip(texts, results):
+        results = analyzer.analyze_batch(clean_texts)
+        for text, result in zip(clean_texts, results):
             emoji = {"positive": "+", "negative": "-", "neutral": "|"}[result["label"]]
             output += f"\n{emoji} {result['label']} ({result['score']:.2f}): {text[:80]}"
         return output
+
+    try:
+        return cached_value("sentiment", clean_texts, 1800, compute)
 
     except Exception as e:
         return f"Error analyzing sentiment: {str(e)}"
@@ -105,10 +116,11 @@ def predict_stock_price(ticker: str) -> str:
 @tool
 def search_financial_news(ticker: str) -> str:
     """Search for recent financial news headlines for a stock ticker. Returns titles, publishers, links, and dates. Use this before analyze_sentiment to get real headlines."""
-    import yfinance as yf
+    ticker = ticker.upper().strip()
 
-    try:
-        ticker = ticker.upper().strip()
+    def compute() -> str:
+        import yfinance as yf
+
         if not ticker:
             return "Error: Please provide a valid stock ticker symbol."
 
@@ -160,6 +172,9 @@ def search_financial_news(ticker: str) -> str:
 
         return output
 
+    try:
+        return cached_value("financial_news", {"ticker": ticker}, 600, compute)
+
     except Exception as e:
         return f"Error fetching news for {ticker}: {str(e)}"
 
@@ -167,7 +182,7 @@ def search_financial_news(ticker: str) -> str:
 @tool
 def research_market() -> str:
     """Get a broad market overview by scanning major indices and ETFs. Use this for 'market pulse', 'market overview', 'how is the market today', or any broad-market question. Returns prices and changes for SPY, QQQ, DIA, IWM, and VIX."""
-    try:
+    def compute() -> str:
         indices = [
             ("SPY", "S&P 500"),
             ("QQQ", "Nasdaq 100"),
@@ -222,6 +237,9 @@ def research_market() -> str:
             output += "\nUnable to fetch market headlines.\n"
 
         return output
+
+    try:
+        return cached_value("market_research", {"scope": "major_indices"}, 60, compute)
 
     except Exception as e:
         return f"Error scanning market: {str(e)}"

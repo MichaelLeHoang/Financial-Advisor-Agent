@@ -3,6 +3,7 @@
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, Plus, Search } from "lucide-react";
+import { motion } from "motion/react";
 
 import { api } from "@/lib/api";
 import { normalizeTicker, searchMarketSymbols } from "@/lib/market-data";
@@ -52,7 +53,6 @@ export default function TickerSuggestionInput({
     const [dropdownRect, setDropdownRect] = useState<DropdownRect | null>(null);
     const [mounted, setMounted] = useState(false);
 
-    // Portal requires browser environment
     useEffect(() => { setMounted(true); }, []);
 
     const normalized = normalizeTicker(value);
@@ -66,7 +66,6 @@ export default function TickerSuggestionInput({
         [existing, value]
     );
 
-    // Debounced live search via backend
     useEffect(() => {
         const q = value.trim();
         if (!q) {
@@ -99,7 +98,6 @@ export default function TickerSuggestionInput({
         return () => { cancelled = true; clearTimeout(timer); };
     }, [value, existing]);
 
-    // Compute fixed dropdown position from the wrapper element
     const updateRect = () => {
         if (!wrapperRef.current) return;
         const r = wrapperRef.current.getBoundingClientRect();
@@ -118,7 +116,6 @@ export default function TickerSuggestionInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
-    // Close when clicking outside
     useEffect(() => {
         if (!open) return;
         const handler = (e: MouseEvent) => {
@@ -159,8 +156,11 @@ export default function TickerSuggestionInput({
 
     const dropdown = showDropdown && dropdownRect && mounted
         ? createPortal(
-            <div
+            <motion.div
                 ref={dropdownRef}
+                initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                 style={{
                     position: "fixed",
                     top: dropdownRect.top,
@@ -172,9 +172,12 @@ export default function TickerSuggestionInput({
             >
                 <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
                     <div className="flex max-h-72 flex-col gap-1 overflow-y-auto px-2 py-0">
-                        {matches.map((match) => (
-                            <div
+                        {matches.map((match, index) => (
+                            <motion.div
                                 key={match.ticker}
+                                initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
+                                animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                                transition={{ duration: 0.24, delay: Math.min(index * 0.035, 0.18), ease: [0.16, 1, 0.3, 1] }}
                                 className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-white/[0.11] hover:shadow-[var(--shadow-row-hover)]"
                             >
                                 <button
@@ -206,12 +209,15 @@ export default function TickerSuggestionInput({
                                 >
                                     <Plus className="size-4" />
                                 </button>
-                            </div>
+                            </motion.div>
                         ))}
 
                         {canAddCustom && (
-                            <button
+                            <motion.button
                                 type="button"
+                                initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
+                                animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                                transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
                                 onClick={() => selectTicker(value)}
                                 className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-white/[0.11]"
                             >
@@ -222,11 +228,11 @@ export default function TickerSuggestionInput({
                                     <span className="block text-sm font-semibold text-white">Add {normalized}</span>
                                     <span className="block text-xs text-white/42">Use as custom ticker</span>
                                 </span>
-                            </button>
+                            </motion.button>
                         )}
                     </div>
                 </div>
-            </div>,
+            </motion.div>,
             document.body
         )
         : null;
@@ -252,7 +258,6 @@ export default function TickerSuggestionInput({
                 placeholder={placeholder}
                 className={cn("h-10 rounded-xl pl-9 pr-9 text-sm", inputClassName)}
             />
-            {/* Right-side indicator */}
             <div className="absolute right-2 top-1/2 z-10 -translate-y-1/2">
                 {searching ? (
                     <Loader2 className="size-4 animate-spin text-white/25" />

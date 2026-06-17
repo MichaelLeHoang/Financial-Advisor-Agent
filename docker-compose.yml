@@ -31,6 +31,7 @@ services:
     environment:
       # Override localhost URLs with Docker service names
       QDRANT_URL: http://qdrant:6333
+      REDIS_URL: redis://redis:6379/0
       FRONTEND_URL: http://localhost:3000
       CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
     volumes:
@@ -41,12 +42,52 @@ services:
     depends_on:
       qdrant:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
+
+  # ── LLM worker ─────────────────────────────────────────────────────────────
+  llm-worker:
+    image: quanad-backend:latest
+    container_name: quanad-llm-worker
+    restart: unless-stopped
+    command: ["python", "-m", "src.jobs.llm_worker"]
+    env_file:
+      - .env
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      REDIS_URL: redis://redis:6379/0
+      FRONTEND_URL: http://localhost:3000
+    volumes:
+      - backend-data:/app/data
+      - huggingface-cache:/home/quanad/.cache/huggingface
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+
+  # ── Redis queue/cache ──────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: quanad-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ── Qdrant vector database ──────────────────────────────────────────────────
   qdrant:
@@ -75,4 +116,6 @@ volumes:
   backend-data:
     driver: local
   huggingface-cache:
+    driver: local
+  redis-data:
     driver: local

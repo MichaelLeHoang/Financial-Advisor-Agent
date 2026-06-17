@@ -3,6 +3,37 @@ import pandas as pd
 from scipy.optimize import minimize
 from src.data.fetch import fetch_stock_history
 
+def _close_series(data: pd.DataFrame, ticker: str) -> pd.Series | None:
+    """Extract one ticker's close series from yfinance's single or multi-index shapes."""
+    if data.empty:
+        return None
+
+    close = None
+    if isinstance(data.columns, pd.MultiIndex):
+        if ("Close", ticker) in data.columns:
+            close = data[("Close", ticker)]
+        elif (ticker, "Close") in data.columns:
+            close = data[(ticker, "Close")]
+        elif "Close" in data.columns.get_level_values(-1):
+            close_frame = data.xs("Close", axis=1, level=-1)
+            close = close_frame[ticker] if ticker in close_frame else close_frame.iloc[:, 0]
+        elif "Close" in data.columns.get_level_values(0):
+            close_frame = data.xs("Close", axis=1, level=0)
+            close = close_frame[ticker] if ticker in close_frame else close_frame.iloc[:, 0]
+    elif "Close" in data:
+        close = data["Close"]
+
+    if close is None:
+        return None
+    if isinstance(close, pd.DataFrame):
+        if ticker in close:
+            close = close[ticker]
+        elif len(close.columns) == 1:
+            close = close.iloc[:, 0]
+        else:
+            return None
+    return pd.to_numeric(close, errors="coerce").dropna()
+
 def get_portfolio_volatility(tickers: list[str], period: str = "1y"):
     """
     Fetch and compute portfolio statistics for a set of tickers.
@@ -15,8 +46,9 @@ def get_portfolio_volatility(tickers: list[str], period: str = "1y"):
     prices = pd.DataFrame()
     for ticker in tickers:
         data = fetch_stock_history([ticker], period=period)
-        if not data.empty: 
-            prices[ticker] = data["Close"]
+        close = _close_series(data, ticker)
+        if close is not None and not close.empty:
+            prices[ticker] = close
 
     if prices.empty: 
         raise ValueError("No price data retrieved")

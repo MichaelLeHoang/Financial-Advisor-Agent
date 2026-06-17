@@ -108,31 +108,105 @@ function getConsensusTasks(): Task[] {
   ];
 }
 
+function getResearchDeskTasks(): Task[] {
+  return [
+    {
+      id: "1",
+      title: "Snapshot",
+      status: "pending",
+      subtasks: [
+        { id: "1.1", title: "Resolving ticker identity", status: "pending", tools: ["resolve_ticker"] },
+        { id: "1.2", title: "Collecting price, fundamentals, and news", status: "pending", tools: ["equity_snapshot"] },
+      ],
+    },
+    {
+      id: "2",
+      title: "Analyst Team",
+      status: "pending",
+      subtasks: [
+        { id: "2.1", title: "Market Analyst", status: "pending", tools: ["market_report"] },
+        { id: "2.2", title: "News and Sentiment Analysts", status: "pending", tools: ["news_report", "sentiment_report"] },
+        { id: "2.3", title: "Fundamentals Analyst", status: "pending", tools: ["fundamentals_report"] },
+      ],
+    },
+    {
+      id: "3",
+      title: "Research Debate",
+      status: "pending",
+      subtasks: [
+        { id: "3.1", title: "Bull and bear cases", status: "pending", tools: ["bull_case", "bear_case"] },
+        { id: "3.2", title: "Research evaluation", status: "pending", tools: ["research_evaluation"] },
+      ],
+    },
+    {
+      id: "4",
+      title: "Trade and Risk Review",
+      status: "pending",
+      subtasks: [
+        { id: "4.1", title: "Trader plan", status: "pending", tools: ["trader_plan"] },
+        { id: "4.2", title: "Risk management review", status: "pending", tools: ["risk_review"] },
+        { id: "4.3", title: "Portfolio manager verdict", status: "pending", tools: ["final_trade_decision"] },
+      ],
+    },
+  ];
+}
+
+function tasksForMode(mode: PlanMode) {
+  if (mode === "consensus") return getConsensusTasks();
+  if (mode === "research") return getResearchDeskTasks();
+  return getSingleAgentTasks();
+}
+
 // ─── Live progress engine ───────────────────────────────────────────
 
 function useLiveProgress(
-  mode: string,
+  mode: PlanMode,
   isActive: boolean,
   activeTool: string | null,
   completedTools: string[],
 ): Task[] {
-  const [tasks, setTasks] = useState<Task[]>(() =>
-    mode === "consensus" ? getConsensusTasks() : getSingleAgentTasks()
-  );
+  const [tasks, setTasks] = useState<Task[]>(() => tasksForMode(mode));
+  const [syntheticStep, setSyntheticStep] = useState(0);
   const modeRef = useRef(mode);
+  const totalSubtasks = useMemo(
+    () => tasksForMode(mode).reduce((sum, task) => sum + task.subtasks.length, 0),
+    [mode]
+  );
+  const useSyntheticProgress = isActive && !activeTool && completedTools.length === 0;
 
   // Reset only when mode actually changes
   useEffect(() => {
     if (modeRef.current !== mode) {
       modeRef.current = mode;
-      setTasks(mode === "consensus" ? getConsensusTasks() : getSingleAgentTasks());
+      setTasks(tasksForMode(mode));
+      setSyntheticStep(0);
     }
   }, [mode]);
 
   useEffect(() => {
+    if (!isActive) return;
+    setSyntheticStep(0);
+  }, [isActive, mode]);
+
+  useEffect(() => {
+    if (!useSyntheticProgress) return;
+    const interval = setInterval(() => {
+      setSyntheticStep((current) => Math.min(current + 1, Math.max(totalSubtasks - 1, 0)));
+    }, mode === "consensus" || mode === "research" ? 2200 : 1800);
+    return () => clearInterval(interval);
+  }, [mode, totalSubtasks, useSyntheticProgress]);
+
+  useEffect(() => {
+    let subtaskIndex = 0;
     setTasks((prev) =>
       prev.map((task) => {
         const subtasks = task.subtasks.map((sub) => {
+          const currentIndex = subtaskIndex++;
+          if (useSyntheticProgress) {
+            if (currentIndex < syntheticStep) return { ...sub, status: "completed" as const };
+            if (currentIndex === syntheticStep) return { ...sub, status: "in-progress" as const };
+            return { ...sub, status: "pending" as const };
+          }
           // When agent finishes, mark everything completed
           if (!isActive && completedTools.length > 0) {
             return { ...sub, status: "completed" as const };
@@ -158,7 +232,7 @@ function useLiveProgress(
         return { ...task, status: taskStatus, subtasks };
       })
     );
-  }, [isActive, activeTool, completedTools]);
+  }, [isActive, activeTool, completedTools, syntheticStep, useSyntheticProgress]);
 
   return tasks;
 }
@@ -190,8 +264,10 @@ function StatusIcon({ status, size = "sm" }: { status: string; size?: "sm" | "md
 
 // ─── Main Plan component ────────────────────────────────────────────
 
+type PlanMode = "single" | "consensus" | "research";
+
 interface PlanProps {
-  mode?: "single" | "consensus";
+  mode?: PlanMode;
   isActive?: boolean;
   activeTool?: string | null;
   completedTools?: string[];
@@ -257,7 +333,7 @@ export default function Plan({ mode = "single", isActive = true, activeTool = nu
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
           )}
           <span className="text-xs font-semibold text-white/70">
-            {mode === "consensus" ? "QuanAd 2.0 — Consensus Analysis" : "Agent Execution"}
+            {mode === "consensus" ? "QuanAd 2.0 — Consensus Analysis" : mode === "research" ? "QuanAd 2.1 — Equity Research Desk" : "QuanAd 1.0 — Agent Execution"}
           </span>
         </div>
         <div className="flex items-center gap-2">

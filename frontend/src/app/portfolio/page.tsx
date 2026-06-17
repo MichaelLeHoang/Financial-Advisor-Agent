@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Eye, EyeOff, Loader2, Pencil, Trash2, X } from "lucide-react";
+import { Check, Eye, EyeOff, Info, Loader2, Pencil, Trash2, X } from "lucide-react";
 import { PieChart, Pie, Cell } from "recharts";
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
@@ -808,12 +808,6 @@ export default function PortfolioPage() {
               </div>
             )}
 
-            {crossCurrencyCount > 0 && (
-              <div className="border-b border-white/[0.06] bg-cyan-secondary/[0.06] px-5 py-3 text-xs leading-relaxed text-white/55">
-                P&amp;L compares live market value converted into {activeBaseCurrency} against average cost stored in {activeBaseCurrency}. For holdings such as CAD-listed tickers, enter or edit average cost with the matching currency selector so the stored cost basis aligns with your account statement.
-              </div>
-            )}
-
             {holdingsLoading ? (
               <div className="flex items-center justify-center gap-2 py-12 text-sm text-white/30">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading holdings…
@@ -840,7 +834,26 @@ export default function PortfolioPage() {
                         </th>
                         <th className="border-l border-white/[0.06] px-4 py-3 text-right font-medium">Price</th>
                         <th className="px-4 py-3 text-right font-medium">Value</th>
-                        <th className="border-l border-white/[0.06] px-4 py-3 text-right font-medium">P&amp;L</th>
+                        <th className="border-l border-white/[0.06] px-4 py-3 text-right font-medium">
+                          <span className="flex items-center justify-end gap-1.5">
+                            P&amp;L
+                            <span className="group relative inline-flex">
+                              <button
+                                type="button"
+                                className="flex size-4 items-center justify-center rounded-full border border-white/[0.14] text-white/42 transition-colors hover:border-cyan-secondary/40 hover:text-cyan-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-secondary/30"
+                                aria-label="How portfolio P&L is calculated"
+                              >
+                                <Info className="size-3" />
+                              </button>
+                              <span
+                                role="tooltip"
+                                className="pointer-events-none absolute right-0 top-6 z-30 hidden w-72 rounded-xl border border-white/[0.10] bg-[#0b0e16] p-3 text-left text-xs font-normal leading-5 text-white/62 shadow-[0_18px_60px_rgba(0,0,0,0.45)] group-hover:block group-focus-within:block"
+                              >
+                                P&amp;L compares live market value converted into {activeBaseCurrency} against average cost stored in {activeBaseCurrency}. For CAD-listed or other foreign-currency tickers, use the average-cost currency selector so cost basis aligns with your account statement.
+                              </span>
+                            </span>
+                          </span>
+                        </th>
                         <th className="w-10 px-3 py-3" />
                       </tr>
                     </thead>
@@ -876,7 +889,6 @@ export default function PortfolioPage() {
                                 value={h.average_cost}
                                 format={(v) => formatPrivateMoney(v, activeBaseCurrency, hideAmounts)}
                               />
-                              <p className="mt-1 text-[10px] text-white/25">stored {activeBaseCurrency}</p>
                             </td>
                             <td className="border-l border-white/[0.06] px-4 py-3 text-right tabular-nums">
                               {h.currentPrice != null ? (

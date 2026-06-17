@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { PLANS, COMPARISON_TABLE, type PlanId, type CheckState } from "@/config/plans";
 import { IntroductionFooter, IntroductionNav } from "./components";
+import { EquityResearchIntroDemo } from "@/components/equity-research/ResearchComponents";
 
 /* ───── data ───── */
 
@@ -120,6 +121,7 @@ export default function IntroductionPage() {
       </section>
 
       <ProductShowcase />
+      <EquityResearchIntroDemo />
       <SamplesSection />
       <FeaturesSection />
       <PricingSection />

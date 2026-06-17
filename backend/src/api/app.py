@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials
@@ -32,11 +34,16 @@ from src.risk.routes import router as risk_router
 from src.journal.routes import router as journal_router
 from src.quant.routes import router as quant_router
 from src.api.news_routes import router as news_router
+from src.api.equity_research import router as equity_research_router
 from src.llm.routing_policy import LLMMode
+from src.core.redis_client import RedisUnavailable
 
 from pydantic import BaseModel
 import yfinance as yf
 import math
+
+MARKET_QUOTE_TIMEOUT_SECONDS = 12
+MARKET_SEARCH_TIMEOUT_SECONDS = 6
 
 app = FastAPI(
     title=settings.app_name,
@@ -62,6 +69,7 @@ app.include_router(risk_router)
 app.include_router(journal_router)
 app.include_router(quant_router)
 app.include_router(news_router)
+app.include_router(equity_research_router)
 
 # Register Inngest with FastAPI
 inngest.fast_api.serve(
@@ -116,6 +124,21 @@ class AgentChatRequest(BaseModel):
 
 class AgentSessionRenameRequest(BaseModel):
     title: str
+
+class AgentJobCreateResponse(BaseModel):
+    job_id: str
+    status: str
+    queue_position: int | None = None
+
+class AgentJobStatusResponse(BaseModel):
+    job_id: str
+    status: str
+    queue_position: int | None = None
+    result: dict | None = None
+    error: dict | None = None
+    created_at: float | None = None
+    started_at: float | None = None
+    finished_at: float | None = None
 
 class EarningsPoint(BaseModel):
     date: str
@@ -209,6 +232,19 @@ def _check_qdrant() -> dict:
         }
 
 
+def _check_redis() -> dict:
+    try:
+        from src.core.redis_client import get_redis_client
+
+        client = get_redis_client()
+        client.ping()
+        return _service_state(True, ok=True)
+    except RedisUnavailable as exc:
+        return _service_state(False, detail=str(exc))
+    except Exception as exc:
+        return _service_state(True, ok=False, detail=str(exc))
+
+
 def _llm_key_status() -> dict:
     providers = {
         "google": settings.is_configured("gemini_api_key"),
@@ -223,6 +259,32 @@ def _llm_key_status() -> dict:
         "default_provider": settings.default_llm_provider,
         "default_mode": settings.default_llm_mode,
         "providers": providers,
+    }
+
+
+CORE_STATUS_SERVICES = {"database", "supabase", "llm"}
+OPTIONAL_STATUS_SERVICES = {"qdrant", "redis", "jobs", "billing", "notifications"}
+
+
+def _status_rollup(services: dict[str, dict]) -> dict:
+    core_errors = [
+        name
+        for name, service in services.items()
+        if name in CORE_STATUS_SERVICES and service["status"] == "error"
+    ]
+    optional_errors = [
+        name
+        for name, service in services.items()
+        if name in OPTIONAL_STATUS_SERVICES and service["status"] == "error"
+    ]
+    status = "error" if core_errors else "degraded" if optional_errors else "ok"
+
+    return {
+        "status": status,
+        "core_status": "error" if core_errors else "ok",
+        "optional_status": "degraded" if optional_errors else "ok",
+        "core_error_services": core_errors,
+        "degraded_optional_services": optional_errors,
     }
 
 # basic api endpoints 
@@ -249,6 +311,7 @@ async def service_status():
             bool(settings.supabase_url and settings.is_configured("supabase_service_role_key"))
         ),
         "qdrant": _check_qdrant(),
+        "redis": _check_redis(),
         "llm": _llm_key_status(),
         "jobs": _service_state(
             bool(settings.inngest_app_id and settings.news_ingestion_cron),
@@ -263,24 +326,16 @@ async def service_status():
             or settings.is_configured("notification_secret_key")
         ),
     }
-    degraded = any(service["status"] == "error" for service in services.values())
+    rollup = _status_rollup(services)
 
     return {
-        "status": "degraded" if degraded else "ok",
+        **rollup,
         "environment": settings.app_env,
         "version": settings.app_version,
         "services": services,
     }
 
-@app.get("/api/v1/market/quote/{ticker}", response_model=MarketQuoteResponse)
-async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
-    """
-    Fetch current quote and recent chart data for a market symbol.
-    """
-    normalized = ticker.strip().upper()
-    if not normalized:
-        raise HTTPException(status_code=400, detail="Ticker is required")
-
+def _fetch_market_quote_response(normalized: str, period: str, interval: str) -> MarketQuoteResponse:
     try:
         stock = yf.Ticker(normalized)
         info = stock.info or {}
@@ -464,17 +519,28 @@ async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
         raise HTTPException(status_code=502, detail=f"Unable to fetch market data for {normalized}: {exc}")
 
 
-@app.get("/api/v1/market/search", response_model=list[MarketSymbolSearchResult])
-async def market_search(q: str, limit: int = 12):
+@app.get("/api/v1/market/quote/{ticker}", response_model=MarketQuoteResponse)
+async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
     """
-    Search market symbols using Yahoo Finance search via yfinance.
+    Fetch current quote and recent chart data for a market symbol.
     """
-    query = q.strip()
-    if len(query) < 1:
-        return []
+    normalized = ticker.strip().upper()
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Ticker is required")
 
-    safe_limit = max(1, min(limit, 25))
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_fetch_market_quote_response, normalized, period, interval),
+            timeout=MARKET_QUOTE_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail=f"Market data provider timed out for {normalized}. Try again shortly.",
+        ) from exc
 
+
+def _search_market_symbols(query: str, safe_limit: int) -> list[MarketSymbolSearchResult]:
     try:
         search = yf.Search(
             query,
@@ -508,6 +574,29 @@ async def market_search(q: str, limit: int = 12):
         return results
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Unable to search market symbols: {exc}")
+
+
+@app.get("/api/v1/market/search", response_model=list[MarketSymbolSearchResult])
+async def market_search(q: str, limit: int = 12):
+    """
+    Search market symbols using Yahoo Finance search via yfinance.
+    """
+    query = q.strip()
+    if len(query) < 1:
+        return []
+
+    safe_limit = max(1, min(limit, 25))
+
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_search_market_symbols, query, safe_limit),
+            timeout=MARKET_SEARCH_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail=f"Market search provider timed out for {query}. Try again shortly.",
+        ) from exc
 
 def _round_optional(value: float | int | None, digits: int = 4) -> float | None:
     if value is None:
@@ -668,6 +757,70 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
         return {"response": response, "session_id": req.session_id, "mode": req.mode}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _public_agent_job(record: dict, queue_position: int | None = None) -> dict:
+    return {
+        "job_id": record["job_id"],
+        "status": record["status"],
+        "queue_position": queue_position,
+        "result": record.get("result"),
+        "error": record.get("error"),
+        "created_at": record.get("created_at"),
+        "started_at": record.get("started_at"),
+        "finished_at": record.get("finished_at"),
+    }
+
+
+@app.post("/api/v1/agent/chat/jobs", response_model=AgentJobCreateResponse)
+async def create_agent_chat_job(req: AgentChatRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
+    """
+    Enqueue an AI chat job and return immediately with a job id.
+    Use GET /api/v1/agent/chat/jobs/{job_id} to poll status/result.
+    """
+    from src.agent.agent import _is_consensus_query
+    from src.agent.llm_queue import get_llm_job_queue
+
+    enforce_feature(user, FeatureKey.AI_RESEARCH)
+    usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
+
+    kind = "consensus" if req.mode == "consensus" or (req.mode == "auto" and _is_consensus_query(req.message)) else "single"
+    payload = {
+        "user_id": str(user.id),
+        "plan": user.plan.value if hasattr(user.plan, "value") else str(user.plan),
+        "session_id": req.session_id,
+        "message": req.message,
+        "remember": req.remember,
+        "mode": req.mode,
+        "preferred_mode": req.preferred_mode,
+    }
+
+    try:
+        queue = get_llm_job_queue()
+        record = queue.enqueue(payload, kind)
+        position = queue.queue_position(record["job_id"], kind)
+        return {"job_id": record["job_id"], "status": record["status"], "queue_position": position}
+    except RedisUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/agent/chat/jobs/{job_id}", response_model=AgentJobStatusResponse)
+async def get_agent_chat_job(job_id: str, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
+    """Return queued AI chat job status and result when complete."""
+    from src.agent.llm_queue import get_llm_job_queue
+
+    try:
+        queue = get_llm_job_queue()
+        record = queue.get(job_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="Chat job not found")
+        payload = record.get("payload", {})
+        if str(payload.get("user_id")) != str(user.id):
+            raise HTTPException(status_code=404, detail="Chat job not found")
+        position = queue.queue_position(job_id, record["kind"]) if record.get("status") == "queued" else None
+        return _public_agent_job(record, position)
+    except RedisUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/api/v1/agent/consensus")

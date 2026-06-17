@@ -6,23 +6,23 @@ import type { Components } from "react-markdown";
 
 const components: Components = {
   h1: ({ children }) => (
-    <h1 className="mb-3 mt-5 text-xl font-bold text-white first:mt-0">{children}</h1>
+    <h1 className="mb-3 mt-5 text-xl font-bold text-indigo-primary first:mt-0">{children}</h1>
   ),
   h2: ({ children }) => (
-    <h2 className="mb-2 mt-4 text-lg font-semibold text-white first:mt-0">{children}</h2>
+    <h2 className="mb-2 mt-4 text-lg font-semibold text-indigo-primary first:mt-0">{children}</h2>
   ),
   h3: ({ children }) => (
-    <h3 className="mb-2 mt-3 text-base font-semibold text-white/90 first:mt-0">{children}</h3>
+    <h3 className="mb-2 mt-3 text-base font-semibold text-indigo-primary first:mt-0">{children}</h3>
   ),
   p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
   strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
   em: ({ children }) => <em className="text-white/70">{children}</em>,
-  ul: ({ children }) => <ul className="mb-3 ml-1 list-none space-y-1.5 last:mb-0">{children}</ul>,
+  ul: ({ children }) => <ul className="mb-3 ml-5 list-none space-y-1.5 last:mb-0 [&_ul]:mb-0 [&_ul]:mt-1.5 [&_ul]:ml-5">{children}</ul>,
   ol: ({ children }) => (
     <ol className="mb-3 ml-5 list-decimal space-y-1.5 last:mb-0">{children}</ol>
   ),
   li: ({ children }) => (
-    <li className="relative pl-4 before:absolute before:left-0 before:top-[0.6em] before:h-1.5 before:w-1.5 before:rounded-full before:bg-indigo-primary/60">
+    <li className="relative pl-5 before:absolute before:left-0 before:top-[0.6em] before:h-1.5 before:w-1.5 before:rounded-full before:bg-indigo-primary/60">
       {children}
     </li>
   ),

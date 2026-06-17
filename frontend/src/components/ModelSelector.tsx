@@ -3,14 +3,14 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, ChevronDown, Cpu, Network, Zap } from "lucide-react";
+import { Check, ChevronDown, Cpu, FileSearch, Network, Zap } from "lucide-react";
 
 // ─── Model types ───────────────────────────
 
-export type QuanAdVersion = "1.0" | "2.0";
+export type QuanAdVersion = "1.0" | "2.0" | "2.1";
 
 /** Translates the frontend version pick into the API mode field. */
-export function apiModeFromVersion(version: QuanAdVersion): "single" | "consensus" {
+export function apiModeFromVersion(version: Exclude<QuanAdVersion, "2.1">): "single" | "consensus" {
   return version === "2.0" ? "consensus" : "single";
 }
 
@@ -62,6 +62,13 @@ const MODELS: {
     icon: Network,
     accentClass: "text-emerald-400 bg-emerald-400/18 ring-emerald-400/25",
   },
+  {
+    version: "2.1",
+    label: "QuanAd 2.1",
+    tagline: "Equity Research Desk for ticker-based reports and risk review.",
+    icon: FileSearch,
+    accentClass: "text-cyan-300 bg-cyan-300/16 ring-cyan-300/25",
+  },
 ];
 
 // ─── Selector component ────────────────────
@@ -90,7 +97,7 @@ export default function ModelSelector() {
         onClick={() => setOpen((current) => !current)}
         className="flex h-10 items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--surface-control)] px-4 text-sm font-semibold text-[var(--text-primary)] shadow-[var(--shadow-control)] transition-colors hover:bg-[var(--surface-control-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
       >
-        <ActiveIcon className={`size-4 ${version === "2.0" ? "text-emerald-400" : "text-indigo-primary"}`} />
+        <ActiveIcon className={`size-4 ${version === "2.0" ? "text-emerald-400" : version === "2.1" ? "text-cyan-300" : "text-indigo-primary"}`} />
         {active.label}
         <ChevronDown className="size-4 text-[var(--text-subtle)]" />
       </button>
@@ -109,6 +116,9 @@ export default function ModelSelector() {
             {MODELS.map((model) => {
               const Icon = model.icon;
               const isActive = model.version === version;
+              const badgeClass = model.version === "2.1"
+                ? "bg-cyan-300/12 text-cyan-200 ring-cyan-300/20"
+                : "bg-emerald-400/12 text-emerald-400 ring-emerald-400/20";
               return (
                 <button
                   key={model.version}
@@ -130,9 +140,9 @@ export default function ModelSelector() {
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-[var(--text-primary)]">
                       {model.label}
-                      {model.version === "2.0" && (
-                        <span className="ml-1.5 inline-flex items-center rounded-md bg-emerald-400/12 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-400 ring-1 ring-emerald-400/20">
-                          New
+                      {model.version !== "1.0" && (
+                        <span className={`ml-1.5 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${badgeClass}`}>
+                          {model.version === "2.1" ? "Research" : "New"}
                         </span>
                       )}
                     </div>
@@ -149,7 +159,9 @@ export default function ModelSelector() {
                 <strong className="text-[var(--text-subtle)]">v1.0</strong> — Fast single-agent ReAct advisor.{" "}
                 <strong className="text-[var(--text-subtle)]">v2.0</strong> — 5 specialists (Quant Researcher,
                 Analyst, Data Scientist, Risk Analyst, Portfolio Analytics) analyze
-                independently and form a weighted consensus.
+                independently and form a weighted consensus.{" "}
+                <strong className="text-[var(--text-subtle)]">v2.1</strong> — ticker-based equity research desk
+                that creates structured reports.
               </p>
             </div>
           </motion.div>

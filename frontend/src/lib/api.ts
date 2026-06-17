@@ -9,6 +9,22 @@ export interface ChatResponse {
   mode?: "single" | "consensus" | "auto";
 }
 
+export type ChatJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+export interface ChatJobCreateResponse {
+  job_id: string;
+  status: ChatJobStatus;
+  queue_position?: number | null;
+}
+
+export interface ChatJobStatusResponse extends ChatJobCreateResponse {
+  result?: ChatResponse | null;
+  error?: { type?: string; message?: string } | null;
+  created_at?: number | null;
+  started_at?: number | null;
+  finished_at?: number | null;
+}
+
 export interface ConsensusOpinion {
   agent: string;
   verdict: string;
@@ -31,6 +47,124 @@ export interface ConsensusMetadata {
 
 export interface ConsensusResponse extends ChatResponse {
   consensus: ConsensusMetadata;
+}
+
+export type ResearchDepth = "shallow" | "medium" | "deep";
+export type ResearchRunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+export type ResearchAgentStatus = "pending" | "running" | "completed" | "failed" | "skipped";
+export type ResearchRecommendation = "buy" | "hold" | "sell" | "insufficient_data";
+export type ResearchSourceSurface = "introduction" | "research" | "market" | "ai_advisor" | "shared";
+export type ResearchEventType = "reasoning" | "tool" | "report" | "status" | "final" | "error";
+
+export interface EquityResearchRunCreate {
+  ticker: string;
+  analysis_date?: string;
+  selected_analysts?: Array<"market" | "social" | "news" | "fundamentals">;
+  research_depth?: ResearchDepth;
+  quick_model?: string;
+  deep_model?: string;
+  source_surface?: ResearchSourceSurface;
+}
+
+export interface EquityResearchRun {
+  run_id: string;
+  user_id?: string | null;
+  ticker: string;
+  company_name?: string | null;
+  exchange?: string | null;
+  analysis_date: string;
+  status: ResearchRunStatus;
+  recommendation: ResearchRecommendation;
+  confidence: number;
+  research_depth: ResearchDepth;
+  selected_analysts: string[];
+  quick_model: string;
+  deep_model: string;
+  source_surface: ResearchSourceSurface;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string | null;
+  share_slug?: string | null;
+  error_message?: string | null;
+  disclaimer: string;
+  data_snapshot_id?: string | null;
+  final_summary?: string | null;
+  main_upside?: string | null;
+  main_risk?: string | null;
+}
+
+export interface EquityResearchSnapshot {
+  snapshot_id: string;
+  run_id: string;
+  ticker: string;
+  company_name?: string | null;
+  exchange?: string | null;
+  analysis_date: string;
+  latest_price?: number | null;
+  previous_close?: number | null;
+  daily_change?: number | null;
+  volume?: number | null;
+  market_cap?: number | null;
+  fundamentals: Record<string, unknown>;
+  technical_indicators: Record<string, unknown>;
+  news_items: Array<Record<string, unknown>>;
+  rag_context: Array<Record<string, unknown>>;
+  sentiment_summary: Record<string, unknown>;
+  risk_metrics: Record<string, unknown>;
+  data_sources: string[];
+  created_at: string;
+}
+
+export interface EquityResearchReport {
+  report_id: string;
+  run_id: string;
+  agent_key: string;
+  agent_name: string;
+  team: string;
+  status: ResearchAgentStatus;
+  title: string;
+  markdown: string;
+  summary_points: string[];
+  evidence: Array<{ label: string; source: string; detail?: string | null; url?: string | null }>;
+  confidence: number;
+  risk_flags: string[];
+  started_at?: string | null;
+  completed_at?: string | null;
+  token_input?: number | null;
+  token_output?: number | null;
+}
+
+export interface EquityResearchEvent {
+  event_id: string;
+  run_id: string;
+  timestamp: string;
+  agent_key?: string | null;
+  agent_name?: string | null;
+  event_type: ResearchEventType;
+  label: string;
+  content: string;
+  tool_name?: string | null;
+  tool_args?: Record<string, unknown> | null;
+  token_input?: number | null;
+  token_output?: number | null;
+}
+
+export interface EquityResearchRunDetail {
+  run: EquityResearchRun;
+  snapshot?: EquityResearchSnapshot | null;
+  reports: EquityResearchReport[];
+  latest_events: EquityResearchEvent[];
+}
+
+export interface EquityResearchEventsList {
+  cursor: number;
+  events: EquityResearchEvent[];
+}
+
+export interface PublicEquityResearchReport {
+  run: EquityResearchRun;
+  snapshot?: EquityResearchSnapshot | null;
+  reports: EquityResearchReport[];
 }
 
 export interface ChatMessage {
@@ -101,6 +235,22 @@ export interface AuthUser {
   is_guest?: boolean;
 }
 
+export interface ServiceStatus {
+  status: "ok" | "degraded" | "error";
+  core_status?: "ok" | "error";
+  optional_status?: "ok" | "degraded";
+  core_error_services?: string[];
+  degraded_optional_services?: string[];
+  environment: string;
+  version: string;
+  services: Record<string, {
+    status: string;
+    configured: boolean;
+    detail?: string;
+    [key: string]: unknown;
+  }>;
+}
+
 export class ApiError extends Error {
   status: number;
   detail: unknown;
@@ -111,6 +261,12 @@ export class ApiError extends Error {
     this.status = status;
     this.detail = detail;
   }
+}
+
+export function isRedisUnavailableError(error: unknown): error is ApiError {
+  if (!(error instanceof ApiError)) return false;
+  const message = typeof error.detail === "string" ? error.detail : error.message;
+  return error.status === 503 && message.toLowerCase().includes("redis is unavailable");
 }
 
 export function isUpgradeRequiredError(error: unknown): error is ApiError & { detail: UpgradeRequiredDetail } {
@@ -643,7 +799,7 @@ async function request(input: RequestInfo | URL, init?: RequestInit): Promise<Re
   } catch (error) {
     if (error instanceof TypeError) {
       throw new Error(
-        `Cannot reach the backend API at ${BASE}. Start FastAPI on port 8000 or update NEXT_PUBLIC_API_URL.`
+        `Cannot reach the backend API at ${BASE}. This means the request did not receive an API response, usually because the backend URL is wrong, FastAPI is not reachable from this browser, or the browser blocked the request. If /health loads but /api/v1/status is degraded, optional service failures such as Qdrant or Redis are separate from this reachability error.`
       );
     }
     throw error;
@@ -805,9 +961,55 @@ export const api = {
   chat: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single") =>
     post<ChatResponse>("/api/v1/agent/chat", { message, session_id: sessionId, remember, mode }),
 
+  /** Queue AI chat work and poll the job status/result */
+  chatJob: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single") =>
+    post<ChatJobCreateResponse>("/api/v1/agent/chat/jobs", { message, session_id: sessionId, remember, mode }),
+
+  chatJobStatus: (jobId: string) =>
+    get<ChatJobStatusResponse>(`/api/v1/agent/chat/jobs/${encodeURIComponent(jobId)}`),
+
+  waitForChatJob: async (jobId: string, onUpdate?: (job: ChatJobStatusResponse) => void, intervalMs = 1500) => {
+    while (true) {
+      const job = await api.chatJobStatus(jobId);
+      onUpdate?.(job);
+
+      if (job.status === "succeeded") {
+        return job.result ?? { response: "", session_id: "default" };
+      }
+
+      if (job.status === "failed" || job.status === "cancelled") {
+        throw new Error(job.error?.message ?? `Chat job ${job.status}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+  },
+
   /** Full QuanAd 2.0 multi-agent consensus with metadata */
   consensus: (message: string, sessionId = "default", remember = true) =>
     post<ConsensusResponse>("/api/v1/agent/consensus", { message, session_id: sessionId, remember }),
+
+  /** QuanAd 2.1 Equity Research Desk */
+  createEquityResearchRun: (payload: EquityResearchRunCreate) =>
+    post<EquityResearchRun>("/api/v1/equity-research/runs", payload),
+
+  equityResearchRun: (runId: string) =>
+    get<EquityResearchRunDetail>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}`),
+
+  equityResearchReports: (runId: string) =>
+    get<EquityResearchReport[]>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/reports`),
+
+  equityResearchEvents: (runId: string, after = 0) =>
+    get<EquityResearchEventsList>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/events/list?after=${after}`),
+
+  shareEquityResearchRun: (runId: string, shared = true) =>
+    patch<EquityResearchRun>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/share`, { shared }),
+
+  deleteEquityResearchRun: (runId: string) =>
+    del<void>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}`),
+
+  publicEquityResearchReport: (shareSlug: string) =>
+    get<PublicEquityResearchReport>(`/api/v1/equity-research/shared/${encodeURIComponent(shareSlug)}`),
 
   /** Conversation sessions */
   chatSessions: () => get<ChatSession[]>("/api/v1/agent/sessions"),
@@ -853,6 +1055,7 @@ export const api = {
 
   /** Health check */
   health: () => get<{ status: string }>("/health"),
+  status: () => get<ServiceStatus>("/api/v1/status"),
 };
 
 // ─── News Types ────────────────────
@@ -873,6 +1076,9 @@ export interface NewsResponse {
   articles: NewsArticle[];
   categories_fetched: string[];
   total: number;
+  sources_attempted?: number;
+  sources_succeeded?: number;
+  sources_failed?: number;
 }
 
 export interface CategoryInfo {

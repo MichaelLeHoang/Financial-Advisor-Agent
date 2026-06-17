@@ -1,6 +1,7 @@
 "use client";
 
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
     ArrowDown,
     ArrowDownRight,
@@ -16,6 +17,7 @@ import {
     Loader2,
     Maximize2,
     Plus,
+    Radio,
     RefreshCw,
     Search,
     Trash2,
@@ -37,7 +39,7 @@ import {
     YAxis,
 } from "recharts";
 import { cn } from "@/lib/utils";
-import { api, type EarningsPoint, type MarketQuote, type QuarterlyFinancial } from "@/lib/api";
+import { api, type EarningsPoint, type EquityResearchRunDetail, type MarketQuote, type QuarterlyFinancial, type ResearchDepth } from "@/lib/api";
 import { fetchQuote as fetchCachedQuote, fetchQuotes as fetchCachedQuotes, invalidate as invalidateQuote } from "@/lib/quote-cache";
 import {
     CHART_RANGES,
@@ -71,6 +73,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+    AgentProgressSidebar,
+    ResearchDepthSelector,
+    ResearchRunCompactResult,
+} from "@/components/equity-research/ResearchComponents";
 
 interface StockInfo extends MarketSymbol {
     data: MarketPoint[];
@@ -318,6 +325,11 @@ export default function MarketPage() {
     const [pendingRemoval, setPendingRemoval] = useState<StockInfo | null>(null);
     const [skipRemoveConfirm, setSkipRemoveConfirm] = useState(false);
     const [skipRemoveConfirmDraft, setSkipRemoveConfirmDraft] = useState(false);
+    const [researchStock, setResearchStock] = useState<StockInfo | null>(null);
+    const [researchDepth, setResearchDepth] = useState<ResearchDepth>("shallow");
+    const [researchDetail, setResearchDetail] = useState<EquityResearchRunDetail | null>(null);
+    const [researchStarting, setResearchStarting] = useState(false);
+    const [researchError, setResearchError] = useState<string | null>(null);
 
     const localMatches = useMemo(() => searchMarketSymbols(query), [query]);
     const matches = symbolMatches.length > 0 ? symbolMatches : localMatches;
@@ -478,6 +490,41 @@ export default function MarketPage() {
         setStocks((current) => current.map((stock) => stock.ticker === fresh.ticker ? fresh : stock));
     }, []);
 
+    const openResearchDrawer = (stock: StockInfo) => {
+        setResearchStock(stock);
+        setResearchError(null);
+        setResearchDetail(null);
+    };
+
+    const startResearchRun = async () => {
+        if (!researchStock) return;
+        setResearchStarting(true);
+        setResearchError(null);
+        try {
+            const run = await api.createEquityResearchRun({
+                ticker: researchStock.ticker,
+                source_surface: "market",
+                research_depth: researchDepth,
+            });
+            const detail = await api.equityResearchRun(run.run_id);
+            setResearchDetail(detail);
+        } catch (err: any) {
+            setResearchError(err.message ?? "Could not start research run.");
+        } finally {
+            setResearchStarting(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!researchDetail || researchDetail.run.status === "completed" || researchDetail.run.status === "failed" || researchDetail.run.status === "cancelled") return;
+        const timer = window.setInterval(() => {
+            api.equityResearchRun(researchDetail.run.run_id)
+                .then(setResearchDetail)
+                .catch(() => undefined);
+        }, 1500);
+        return () => window.clearInterval(timer);
+    }, [researchDetail]);
+
     const refresh = async () => {
         if (stocks.length === 0) return;
         setLoading(true);
@@ -547,6 +594,13 @@ export default function MarketPage() {
                             <Trash2 data-icon="inline-start" />
                             Clear all
                         </Button>
+                        <Link
+                            href="/research?source=market"
+                            className="inline-flex h-8 items-center gap-1 rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 px-3 text-sm font-medium text-indigo-100 transition-colors hover:bg-indigo-primary/18 hover:text-white"
+                        >
+                            <Radio className="size-3.5" />
+                            Research Desk
+                        </Link>
                         <span className="text-xs text-white/32">{stocks.length} symbols</span>
                     </div>
                 </div>
@@ -567,6 +621,7 @@ export default function MarketPage() {
                             stock={stock}
                             mounted={mounted}
                             onOpen={() => openChartForTicker(stock.ticker)}
+                            onResearch={() => openResearchDrawer(stock)}
                             onRemove={() => removeTicker(stock.ticker)}
                             onRequestRemove={() => requestRemoveTicker(stock)}
                         />
@@ -595,6 +650,16 @@ export default function MarketPage() {
                 onSkipCheckedChange={setSkipRemoveConfirmDraft}
                 onCancel={() => setPendingRemoval(null)}
                 onConfirm={confirmRemoveTicker}
+            />
+            <MarketResearchDrawer
+                stock={researchStock}
+                depth={researchDepth}
+                onDepthChange={setResearchDepth}
+                detail={researchDetail}
+                starting={researchStarting}
+                error={researchError}
+                onStart={startResearchRun}
+                onClose={() => setResearchStock(null)}
             />
         </div>
     );
@@ -643,7 +708,7 @@ function MarketSearch({
                     if (event.key === "Escape") onOpenChange(false);
                 }}
                 placeholder="Search market or add ticker..."
-                className="h-11 rounded-xl border-white/[0.06] bg-white/[0.045] pl-11 pr-11 text-sm"
+                className="h-11 rounded-full border-white/[0.06] bg-white/[0.045] pl-11 pr-11 text-sm"
             />
             {query && (
                 <button
@@ -653,7 +718,7 @@ function MarketSearch({
                         onOpenChange(false);
                         inputRef.current?.focus();
                     }}
-                    className="group absolute right-3 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                    className="group absolute right-3 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     aria-label="Clear search"
                 >
                     <img
@@ -666,82 +731,95 @@ function MarketSearch({
             )}
 
             {open && query && (
-                <Card className="absolute left-0 right-0 top-13 z-30 rounded-2xl border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
-                    <CardContent className="flex max-h-80 flex-col gap-1 overflow-y-auto px-2 py-0">
-                        {matches.map((match) => (
-                            <div
-                                key={match.ticker}
-                                onMouseDown={(event) => event.preventDefault()}
-                                className="group/search-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-white/[0.11] hover:shadow-[var(--shadow-row-hover)]"
-                            >
-                                <button
-                                    type="button"
-                                    onClick={() => onSelect(match.ticker)}
-                                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
+                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                    className="absolute left-0 right-0 top-13 z-30"
+                >
+                    <Card className="rounded-2xl border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
+                        <CardContent className="flex max-h-80 flex-col gap-1 overflow-y-auto px-2 py-0">
+                            {matches.map((match, index) => (
+                                <motion.div
+                                    key={match.ticker}
+                                    initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
+                                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                                    transition={{ duration: 0.24, delay: Math.min(index * 0.035, 0.18), ease: [0.16, 1, 0.3, 1] }}
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    className="group/search-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-white/[0.11] hover:shadow-[var(--shadow-row-hover)]"
                                 >
-                                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-primary/16 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/24 transition-colors group-hover/search-item:bg-indigo-primary/24 group-hover/search-item:text-white">
-                                    {match.ticker.slice(0, 2)}
-                                </span>
-                                <span className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
-                                        <span className="rounded-md px-1 py-0.5 text-sm font-semibold text-white transition-colors group-hover/search-item:bg-indigo-primary/18 group-hover/search-item:text-indigo-100">
-                                            {match.ticker}
-                                        </span>
-                                        <Badge variant="outline" className="h-5 rounded-md text-[10px]">{match.exchange}</Badge>
-                                    </div>
-                                    <div className="truncate text-xs text-white/42">{match.name}</div>
-                                </span>
-                                </button>
-                                <div className="flex shrink-0 items-center gap-1">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            onPreview(match.ticker);
-                                            onOpenChange(false);
-                                        }}
-                                        className="flex size-8 items-center justify-center rounded-lg text-white/38 transition-colors hover:bg-white/[0.1] hover:text-white"
-                                        aria-label={`Open full chart for ${match.ticker}`}
-                                    >
-                                        <Maximize2 className="size-4" />
-                                    </button>
                                     <button
                                         type="button"
                                         onClick={() => onSelect(match.ticker)}
-                                        className="flex size-8 items-center justify-center rounded-lg text-white/38 transition-colors hover:bg-white/[0.1] hover:text-white"
-                                        aria-label={`Add ${match.ticker}`}
+                                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
                                     >
-                                        <Plus className="size-4" />
+                                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-primary/16 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/24 transition-colors group-hover/search-item:bg-indigo-primary/24 group-hover/search-item:text-white">
+                                        {match.ticker.slice(0, 2)}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="rounded-md px-1 py-0.5 text-sm font-semibold text-white transition-colors group-hover/search-item:bg-indigo-primary/18 group-hover/search-item:text-indigo-100">
+                                                {match.ticker}
+                                            </span>
+                                            <Badge variant="outline" className="h-5 rounded-md text-[10px]">{match.exchange}</Badge>
+                                        </div>
+                                        <div className="truncate text-xs text-white/42">{match.name}</div>
+                                    </span>
                                     </button>
-                                </div>
-                            </div>
-                        ))}
+                                    <div className="flex shrink-0 items-center gap-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                onPreview(match.ticker);
+                                                onOpenChange(false);
+                                            }}
+                                            className="flex size-8 items-center justify-center rounded-lg text-white/38 transition-colors hover:bg-white/[0.1] hover:text-white"
+                                            aria-label={`Open full chart for ${match.ticker}`}
+                                        >
+                                            <Maximize2 className="size-4" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => onSelect(match.ticker)}
+                                            className="flex size-8 items-center justify-center rounded-lg text-white/38 transition-colors hover:bg-white/[0.1] hover:text-white"
+                                            aria-label={`Add ${match.ticker}`}
+                                        >
+                                            <Plus className="size-4" />
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            ))}
 
-                        {searching && matches.length === 0 && (
-                            <div className="px-3 py-3 text-sm text-white/42">Searching symbols...</div>
-                        )}
+                            {searching && matches.length === 0 && (
+                                <div className="px-3 py-3 text-sm text-white/42">Searching symbols...</div>
+                            )}
 
-                        {!searching && matches.length === 0 && !canAddCustom && (
-                            <div className="px-3 py-3 text-sm text-white/42">No symbols found.</div>
-                        )}
+                            {!searching && matches.length === 0 && !canAddCustom && (
+                                <div className="px-3 py-3 text-sm text-white/42">No symbols found.</div>
+                            )}
 
-                        {canAddCustom && !searching && (
-                            <button
-                                type="button"
-                                onMouseDown={(event) => event.preventDefault()}
-                                onClick={() => onSelect(query)}
-                                className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-white/[0.06]"
-                            >
-                                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-cyan-secondary/14 text-cyan-secondary ring-1 ring-cyan-secondary/24">
-                                    <Plus className="size-4" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <div className="text-sm font-semibold text-white">Add {normalizeTicker(query)}</div>
-                                    <div className="text-xs text-white/42">Create a custom market tile</div>
-                                </div>
-                            </button>
-                        )}
-                    </CardContent>
-                </Card>
+                            {canAddCustom && !searching && (
+                                <motion.button
+                                    type="button"
+                                    initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
+                                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                                    transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => onSelect(query)}
+                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-white/[0.06]"
+                                >
+                                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-cyan-secondary/14 text-cyan-secondary ring-1 ring-cyan-secondary/24">
+                                        <Plus className="size-4" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="text-sm font-semibold text-white">Add {normalizeTicker(query)}</div>
+                                        <div className="text-xs text-white/42">Create a custom market tile</div>
+                                    </div>
+                                </motion.button>
+                            )}
+                        </CardContent>
+                    </Card>
+                </motion.div>
             )}
         </div>
     );
@@ -751,11 +829,13 @@ function MarketCard({
     stock,
     mounted,
     onOpen,
+    onResearch,
     onRequestRemove,
 }: {
     stock: StockInfo;
     mounted: boolean;
     onOpen: () => void;
+    onResearch: () => void;
     onRemove: () => void;
     onRequestRemove: () => void;
 }) {
@@ -820,9 +900,121 @@ function MarketCard({
                     <div className="h-24 min-h-24 w-full min-w-0">
                         {mounted ? <MiniChart stock={stock} /> : <div className="h-full w-full rounded-xl bg-white/[0.035]" />}
                     </div>
+                    <button
+                        type="button"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onResearch();
+                        }}
+                        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 px-3 py-2 text-xs font-semibold text-indigo-100 transition-colors hover:bg-indigo-primary/18"
+                    >
+                        <Radio className="size-3.5" />
+                        Run Equity Research Desk
+                    </button>
                 </CardContent>
             </Card>
         </motion.div>
+    );
+}
+
+function MarketResearchDrawer({
+    stock,
+    depth,
+    onDepthChange,
+    detail,
+    starting,
+    error,
+    onStart,
+    onClose,
+}: {
+    stock: StockInfo | null;
+    depth: ResearchDepth;
+    onDepthChange: (depth: ResearchDepth) => void;
+    detail: EquityResearchRunDetail | null;
+    starting: boolean;
+    error: string | null;
+    onStart: () => void;
+    onClose: () => void;
+}) {
+    if (!stock) return null;
+    const isComplete = detail?.run.status === "completed";
+    return (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm" onClick={onClose}>
+            <aside
+                className="mt-auto h-[88vh] w-full overflow-y-auto rounded-t-3xl border border-white/[0.10] bg-[#080b12] p-5 shadow-[-24px_0_80px_rgba(0,0,0,0.45)] md:mt-0 md:h-full md:max-w-md md:rounded-l-3xl md:rounded-tr-none"
+                onClick={(event) => event.stopPropagation()}
+            >
+                <div className="mb-5 flex items-start justify-between gap-3">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-widest text-indigo-200">QuanAd 2.1</p>
+                        <h2 className="mt-1 text-xl font-semibold text-white">Equity Research Desk</h2>
+                        <p className="mt-1 text-sm text-white/48">{stock.ticker} · {stock.name}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="flex size-9 items-center justify-center rounded-full border border-white/[0.08] text-white/50 hover:text-white"
+                        aria-label="Close research drawer"
+                    >
+                        <X className="size-4" />
+                    </button>
+                </div>
+
+                {!detail ? (
+                    <div className="space-y-4">
+                        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
+                            <p className="text-xs font-semibold uppercase tracking-widest text-white/35">Analysis Date</p>
+                            <p className="mt-1 text-sm font-semibold text-white">{new Date().toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-white/35">Research Depth</p>
+                            <ResearchDepthSelector value={depth} onChange={onDepthChange} />
+                        </div>
+                        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
+                            <p className="text-sm font-semibold text-white">Analyst team</p>
+                            <p className="mt-2 text-sm leading-6 text-white/55">
+                                Market, sentiment, news, fundamentals, bull/bear debate, trader, risk analysts, and portfolio manager.
+                            </p>
+                        </div>
+                        {error && <p className="text-sm text-red-negative">{error}</p>}
+                        <Button onClick={onStart} disabled={starting} className="on-accent accent-gradient-surface w-full rounded-xl">
+                            {starting ? <Loader2 className="size-4 animate-spin" /> : "Start Research Run"}
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <Link
+                            href={`/research/${detail.run.run_id}?from=market`}
+                            className="inline-flex h-9 w-full items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.035] px-3 text-sm font-semibold text-white hover:bg-white/[0.06]"
+                        >
+                            Open Full Report
+                        </Link>
+                        {isComplete ? (
+                            <ResearchRunCompactResult run={detail.run} from="market" showOpenLink={false} />
+                        ) : (
+                            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
+                                <div className="mb-3 flex items-center justify-between">
+                                    <p className="text-sm font-semibold text-white">Live progress</p>
+                                    <span className="text-xs capitalize text-white/42">{detail.run.status}</span>
+                                </div>
+                                <AgentProgressSidebar reports={detail.reports} status={detail.run.status} compact />
+                            </div>
+                        )}
+                        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
+                            <p className="text-sm font-semibold text-white">Recent activity</p>
+                            <div className="mt-3 space-y-2">
+                                {detail.latest_events.slice(-4).reverse().map((event) => (
+                                    <div key={event.event_id} className="rounded-xl bg-black/20 p-3">
+                                        <p className="text-xs font-semibold text-white/68">{event.label}</p>
+                                        <p className="mt-1 text-xs text-white/42">{event.content}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </aside>
+        </div>
     );
 }
 
@@ -1126,28 +1318,54 @@ function MarketChartDialog({
                             </div>
                         </DialogHeader>
 
-                        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-y border-white/[0.06] px-4 py-3 sm:px-6">
-                            <div className="flex flex-wrap items-center gap-2">
-                                {(Object.keys(CHART_STYLE_LABELS) as DetailChartStyle[]).map((style) => {
-                                    const disabled = compareMode && style !== "line";
-                                    return (
-                                        <Button
-                                            key={style}
-                                            type="button"
-                                            size="sm"
-                                            variant={chartStyle === style ? "secondary" : "outline"}
-                                            disabled={disabled}
-                                            className="h-8 rounded-lg px-3 text-xs"
-                                            onClick={() => onStyleChange(style)}
-                                        >
-                                            <ChartModeIcon mode={style} />
-                                            {CHART_STYLE_LABELS[style]}
-                                        </Button>
-                                    );
-                                })}
-                                {compareLoading && <Loader2 className="size-4 animate-spin text-white/40" />}
+                        <div className="flex shrink-0 flex-col gap-3 border-y border-white/[0.06] px-4 py-3 sm:px-6">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {(Object.keys(CHART_STYLE_LABELS) as DetailChartStyle[]).map((style) => {
+                                        const disabled = compareMode && style !== "line";
+                                        const active = chartStyle === style;
+                                        return (
+                                            <Button
+                                                key={style}
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                disabled={disabled}
+                                                className={cn(
+                                                    "h-8 rounded-lg border border-transparent bg-transparent px-3 text-xs text-white/48 hover:bg-white/[0.055] hover:text-white",
+                                                    active && "border-white/[0.10] bg-white/[0.12] text-white hover:bg-white/[0.14]"
+                                                )}
+                                                onClick={() => onStyleChange(style)}
+                                            >
+                                                <ChartModeIcon mode={style} />
+                                                {CHART_STYLE_LABELS[style]}
+                                            </Button>
+                                        );
+                                    })}
+                                    {compareLoading && <Loader2 className="size-4 animate-spin text-white/40" />}
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 rounded-full border border-white/[0.06] p-1">
+                                    {CHART_DETAIL_RANGES.map((value) => {
+                                        const active = range === value;
+                                        return (
+                                            <Button
+                                                key={value}
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                className={cn(
+                                                    "h-7 rounded-full bg-transparent px-2.5 text-[11px] text-white/45 hover:bg-white/[0.055] hover:text-white",
+                                                    active && "bg-white/[0.12] text-white hover:bg-white/[0.14]"
+                                                )}
+                                                onClick={() => onRangeChange(value)}
+                                            >
+                                                {value}
+                                            </Button>
+                                        );
+                                    })}
+                                </div>
                             </div>
-                            <div className="relative w-full sm:w-72">
+                            <div className="relative w-full sm:w-80">
                                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/35" />
                                 <Input
                                     value={compareQuery}
@@ -1338,21 +1556,7 @@ function MarketChartDialog({
                                     )}
                                 </div>
                             </div>
-                            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-3">
-                                <div className="flex flex-wrap gap-2">
-                                    {CHART_DETAIL_RANGES.map((value) => (
-                                        <Button
-                                            key={value}
-                                            type="button"
-                                            size="sm"
-                                            variant={range === value ? "secondary" : "outline"}
-                                            className="h-8 rounded-full px-3 text-xs"
-                                            onClick={() => onRangeChange(value)}
-                                        >
-                                            {value}
-                                        </Button>
-                                    ))}
-                                </div>
+                            <div className="mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-white/[0.06] pt-3">
                                 <Button
                                     type="button"
                                     size="sm"
