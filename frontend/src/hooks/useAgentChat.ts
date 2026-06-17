@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { api } from "@/lib/api";
+import { api, isRedisUnavailableError } from "@/lib/api";
 
 export type MessageRole = "user" | "assistant";
 
@@ -52,23 +52,34 @@ export function useAgentChat(sessionId = "default") {
             m.id === agentMsgId ? { ...m, content: "Queued for analysis..." } : m
           )
         );
-        const queued = await api.chatJob(text, sessionId, true, "single");
-        const res = await api.waitForChatJob(queued.job_id, (job) => {
-          if (job.status === "queued") {
-            const positionText = job.queue_position ? ` Position ${job.queue_position}.` : "";
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === agentMsgId ? { ...m, content: `Queued for analysis.${positionText}` } : m
-              )
-            );
-          } else if (job.status === "running") {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === agentMsgId ? { ...m, content: "Analyzing market context..." } : m
-              )
-            );
-          }
-        });
+        let res;
+        try {
+          const queued = await api.chatJob(text, sessionId, true, "single");
+          res = await api.waitForChatJob(queued.job_id, (job) => {
+            if (job.status === "queued") {
+              const positionText = job.queue_position ? ` Position ${job.queue_position}.` : "";
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === agentMsgId ? { ...m, content: `Queued for analysis.${positionText}` } : m
+                )
+              );
+            } else if (job.status === "running") {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === agentMsgId ? { ...m, content: "Analyzing market context..." } : m
+                )
+              );
+            }
+          });
+        } catch (queueError) {
+          if (!isRedisUnavailableError(queueError)) throw queueError;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === agentMsgId ? { ...m, content: "Analyzing market context..." } : m
+            )
+          );
+          res = await api.chat(text, sessionId, true, "single");
+        }
         setMessages((prev) =>
           prev.map((m) =>
             m.id === agentMsgId

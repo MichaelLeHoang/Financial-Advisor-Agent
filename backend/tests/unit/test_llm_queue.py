@@ -96,3 +96,21 @@ def test_llm_worker_requeues_when_concurrency_slots_unavailable(monkeypatch):
     assert processed is False
     assert queue.get(record["job_id"])["status"] == "queued"
     assert queue.queue_position(record["job_id"], "consensus") == 1
+
+
+def test_llm_queue_wraps_redis_timeouts():
+    from src.agent.llm_queue import LLMJobQueue
+    from src.core.redis_client import RedisUnavailable
+
+    class TimeoutRedis(FakeRedis):
+        def get(self, key):
+            raise TimeoutError("Timeout reading from socket")
+
+    queue = LLMJobQueue(client=TimeoutRedis())
+
+    try:
+        queue.get("job-1")
+    except RedisUnavailable as exc:
+        assert "Timeout reading from socket" in str(exc)
+    else:
+        raise AssertionError("Redis timeout should be normalized")

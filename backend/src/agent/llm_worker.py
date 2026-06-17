@@ -9,6 +9,7 @@ from src.agent.history import append_message, load_history
 from src.agent.llm_queue import LLMJobQueue, QueuedJob
 from src.config import settings
 from src.core.cache import cached_value
+from src.core.redis_client import RedisUnavailable
 from src.saas.models import Plan
 
 
@@ -66,30 +67,41 @@ class LLMWorker:
             self.process_once()
 
     def process_once(self) -> bool:
-        job = self.queue.dequeue()
-        if job is None:
-            return False
+        slot_acquired = False
+        try:
+            job = self.queue.dequeue()
+            if job is None:
+                return False
 
-        if not self.queue.try_acquire_slots(job):
-            self.queue.requeue(job)
+            if not self.queue.try_acquire_slots(job):
+                self.queue.requeue(job)
+                time.sleep(self.idle_sleep_seconds)
+                return False
+            slot_acquired = True
+
+            self.queue.update(job.job_id, status="running", started_at=time.time())
+            try:
+                result = execute_llm_job(job)
+                self.queue.update(job.job_id, status="succeeded", result=result)
+                return True
+            except Exception as exc:
+                self.queue.update(
+                    job.job_id,
+                    status="failed",
+                    error={
+                        "type": type(exc).__name__,
+                        "message": str(exc),
+                        "trace": traceback.format_exc()[-2000:],
+                    },
+                )
+                return False
+        except RedisUnavailable as exc:
+            print(f"Redis unavailable for LLM worker; retrying: {exc}")
             time.sleep(self.idle_sleep_seconds)
             return False
-
-        self.queue.update(job.job_id, status="running", started_at=time.time())
-        try:
-            result = execute_llm_job(job)
-            self.queue.update(job.job_id, status="succeeded", result=result)
-            return True
-        except Exception as exc:
-            self.queue.update(
-                job.job_id,
-                status="failed",
-                error={
-                    "type": type(exc).__name__,
-                    "message": str(exc),
-                    "trace": traceback.format_exc()[-2000:],
-                },
-            )
-            return False
         finally:
-            self.queue.release_slots(job)
+            if slot_acquired:
+                try:
+                    self.queue.release_slots(job)
+                except RedisUnavailable as exc:
+                    print(f"Redis unavailable while releasing LLM worker slots: {exc}")

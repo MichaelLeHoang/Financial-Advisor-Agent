@@ -7,7 +7,9 @@ follow market segments they care about (up to 3 at a time).
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import time
 from datetime import datetime
 
 import yfinance as yf
@@ -15,6 +17,10 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/v1", tags=["news"])
+NEWS_CACHE_TTL_SECONDS = 5 * 60
+NEWS_SOURCE_TIMEOUT_SECONDS = 4
+NEWS_TOTAL_TIMEOUT_SECONDS = 9
+_NEWS_CACHE: dict[str, tuple[float, "NewsResponse"]] = {}
 
 # ── Category → ticker/query mapping ────────────────────────────────────
 
@@ -80,6 +86,9 @@ class NewsResponse(BaseModel):
     articles: list[NewsArticle]
     categories_fetched: list[str]
     total: int
+    sources_attempted: int = 0
+    sources_succeeded: int = 0
+    sources_failed: int = 0
 
 
 class CategoryInfo(BaseModel):
@@ -198,6 +207,26 @@ def _parse_ticker_news(items: list[dict], category: str, ticker_symbol: str) -> 
     return articles
 
 
+async def _fetch_ticker_articles(category: str, ticker_symbol: str) -> list[NewsArticle]:
+    def fetch() -> list[NewsArticle]:
+        ticker = yf.Ticker(ticker_symbol)
+        return _parse_ticker_news(ticker.news or [], category, ticker_symbol)
+
+    return await asyncio.wait_for(asyncio.to_thread(fetch), timeout=NEWS_SOURCE_TIMEOUT_SECONDS)
+
+
+async def _fetch_search_articles(category: str, query: str) -> list[NewsArticle]:
+    def fetch() -> list[NewsArticle]:
+        search = yf.Search(query, news_count=8)
+        return _parse_search_news(search.news or [], category)
+
+    return await asyncio.wait_for(asyncio.to_thread(fetch), timeout=NEWS_SOURCE_TIMEOUT_SECONDS)
+
+
+def _news_cache_key(categories: list[str], limit: int) -> str:
+    return f"{','.join(categories)}:{limit}"
+
+
 # ── Routes ───────────────────────────────────────────────────────────────
 
 @router.get("/news/categories", response_model=list[CategoryInfo])
@@ -229,37 +258,41 @@ async def get_news(
     if not valid:
         raise HTTPException(status_code=400, detail=f"No valid categories. Choose from: {list(CATEGORY_MAP.keys())}")
 
+    cache_key = _news_cache_key(valid, limit)
+    cached = _NEWS_CACHE.get(cache_key)
+    if cached and time.time() - cached[0] <= NEWS_CACHE_TTL_SECONDS:
+        return cached[1]
+
     all_articles: list[NewsArticle] = []
     seen_ids: set[str] = set()
+    tasks: list[asyncio.Task[list[NewsArticle]]] = []
 
     for cat_key in valid:
         cat = CATEGORY_MAP[cat_key]
 
-        # Strategy 1: fetch news from the first 2 tickers in the category
+        # Strategy 1: fetch news from the first 2 tickers in the category.
         for ticker_symbol in cat["tickers"][:2]:
-            try:
-                ticker = yf.Ticker(ticker_symbol)
-                raw_news = ticker.news or []
-                parsed = _parse_ticker_news(raw_news, cat_key, ticker_symbol)
-                for article in parsed:
-                    if article.id not in seen_ids:
-                        seen_ids.add(article.id)
-                        all_articles.append(article)
-            except Exception:
-                continue
+            tasks.append(asyncio.create_task(_fetch_ticker_articles(cat_key, ticker_symbol)))
 
-        # Strategy 2: search-based news for broader coverage
+        # Strategy 2: search-based news for broader coverage.
         for query in cat.get("queries", [])[:1]:
-            try:
-                search = yf.Search(query, news_count=8)
-                raw_news = search.news or []
-                parsed = _parse_search_news(raw_news, cat_key)
-                for article in parsed:
-                    if article.id not in seen_ids:
-                        seen_ids.add(article.id)
-                        all_articles.append(article)
-            except Exception:
-                continue
+            tasks.append(asyncio.create_task(_fetch_search_articles(cat_key, query)))
+
+    done, pending = await asyncio.wait(tasks, timeout=NEWS_TOTAL_TIMEOUT_SECONDS)
+    for task in pending:
+        task.cancel()
+
+    sources_succeeded = 0
+    for task in done:
+        if task.cancelled() or task.exception():
+            continue
+
+        parsed = task.result()
+        sources_succeeded += 1
+        for article in parsed:
+            if article.id not in seen_ids:
+                seen_ids.add(article.id)
+                all_articles.append(article)
 
     # Sort by published_at descending (newest first), nulls last
     all_articles.sort(
@@ -269,8 +302,15 @@ async def get_news(
 
     trimmed = all_articles[:limit]
 
-    return NewsResponse(
+    response = NewsResponse(
         articles=trimmed,
         categories_fetched=valid,
         total=len(trimmed),
+        sources_attempted=len(tasks),
+        sources_succeeded=sources_succeeded,
+        sources_failed=len(tasks) - sources_succeeded,
     )
+    if response.articles:
+        _NEWS_CACHE[cache_key] = (time.time(), response)
+
+    return response

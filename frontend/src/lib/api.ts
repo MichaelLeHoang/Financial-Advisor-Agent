@@ -145,6 +145,12 @@ export class ApiError extends Error {
   }
 }
 
+export function isRedisUnavailableError(error: unknown): error is ApiError {
+  if (!(error instanceof ApiError)) return false;
+  const message = typeof error.detail === "string" ? error.detail : error.message;
+  return error.status === 503 && message.toLowerCase().includes("redis is unavailable");
+}
+
 export function isUpgradeRequiredError(error: unknown): error is ApiError & { detail: UpgradeRequiredDetail } {
   return error instanceof ApiError
     && typeof error.detail === "object"
@@ -930,6 +936,9 @@ export interface NewsResponse {
   articles: NewsArticle[];
   categories_fetched: string[];
   total: number;
+  sources_attempted?: number;
+  sources_succeeded?: number;
+  sources_failed?: number;
 }
 
 export interface CategoryInfo {

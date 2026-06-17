@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials
@@ -38,6 +40,9 @@ from src.core.redis_client import RedisUnavailable
 from pydantic import BaseModel
 import yfinance as yf
 import math
+
+MARKET_QUOTE_TIMEOUT_SECONDS = 12
+MARKET_SEARCH_TIMEOUT_SECONDS = 6
 
 app = FastAPI(
     title=settings.app_name,
@@ -328,15 +333,7 @@ async def service_status():
         "services": services,
     }
 
-@app.get("/api/v1/market/quote/{ticker}", response_model=MarketQuoteResponse)
-async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
-    """
-    Fetch current quote and recent chart data for a market symbol.
-    """
-    normalized = ticker.strip().upper()
-    if not normalized:
-        raise HTTPException(status_code=400, detail="Ticker is required")
-
+def _fetch_market_quote_response(normalized: str, period: str, interval: str) -> MarketQuoteResponse:
     try:
         stock = yf.Ticker(normalized)
         info = stock.info or {}
@@ -520,17 +517,28 @@ async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
         raise HTTPException(status_code=502, detail=f"Unable to fetch market data for {normalized}: {exc}")
 
 
-@app.get("/api/v1/market/search", response_model=list[MarketSymbolSearchResult])
-async def market_search(q: str, limit: int = 12):
+@app.get("/api/v1/market/quote/{ticker}", response_model=MarketQuoteResponse)
+async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
     """
-    Search market symbols using Yahoo Finance search via yfinance.
+    Fetch current quote and recent chart data for a market symbol.
     """
-    query = q.strip()
-    if len(query) < 1:
-        return []
+    normalized = ticker.strip().upper()
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Ticker is required")
 
-    safe_limit = max(1, min(limit, 25))
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_fetch_market_quote_response, normalized, period, interval),
+            timeout=MARKET_QUOTE_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail=f"Market data provider timed out for {normalized}. Try again shortly.",
+        ) from exc
 
+
+def _search_market_symbols(query: str, safe_limit: int) -> list[MarketSymbolSearchResult]:
     try:
         search = yf.Search(
             query,
@@ -564,6 +572,29 @@ async def market_search(q: str, limit: int = 12):
         return results
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Unable to search market symbols: {exc}")
+
+
+@app.get("/api/v1/market/search", response_model=list[MarketSymbolSearchResult])
+async def market_search(q: str, limit: int = 12):
+    """
+    Search market symbols using Yahoo Finance search via yfinance.
+    """
+    query = q.strip()
+    if len(query) < 1:
+        return []
+
+    safe_limit = max(1, min(limit, 25))
+
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_search_market_symbols, query, safe_limit),
+            timeout=MARKET_SEARCH_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail=f"Market search provider timed out for {query}. Try again shortly.",
+        ) from exc
 
 def _round_optional(value: float | int | None, digits: int = 4) -> float | None:
     if value is None:

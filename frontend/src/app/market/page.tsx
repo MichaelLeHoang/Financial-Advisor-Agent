@@ -643,7 +643,7 @@ function MarketSearch({
                     if (event.key === "Escape") onOpenChange(false);
                 }}
                 placeholder="Search market or add ticker..."
-                className="h-11 rounded-xl border-white/[0.06] bg-white/[0.045] pl-11 pr-11 text-sm"
+                className="h-11 rounded-full border-white/[0.06] bg-white/[0.045] pl-11 pr-11 text-sm"
             />
             {query && (
                 <button
@@ -653,7 +653,7 @@ function MarketSearch({
                         onOpenChange(false);
                         inputRef.current?.focus();
                     }}
-                    className="group absolute right-3 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                    className="group absolute right-3 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     aria-label="Clear search"
                 >
                     <img
@@ -666,82 +666,95 @@ function MarketSearch({
             )}
 
             {open && query && (
-                <Card className="absolute left-0 right-0 top-13 z-30 rounded-2xl border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
-                    <CardContent className="flex max-h-80 flex-col gap-1 overflow-y-auto px-2 py-0">
-                        {matches.map((match) => (
-                            <div
-                                key={match.ticker}
-                                onMouseDown={(event) => event.preventDefault()}
-                                className="group/search-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-white/[0.11] hover:shadow-[var(--shadow-row-hover)]"
-                            >
-                                <button
-                                    type="button"
-                                    onClick={() => onSelect(match.ticker)}
-                                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
+                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                    className="absolute left-0 right-0 top-13 z-30"
+                >
+                    <Card className="rounded-2xl border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
+                        <CardContent className="flex max-h-80 flex-col gap-1 overflow-y-auto px-2 py-0">
+                            {matches.map((match, index) => (
+                                <motion.div
+                                    key={match.ticker}
+                                    initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
+                                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                                    transition={{ duration: 0.24, delay: Math.min(index * 0.035, 0.18), ease: [0.16, 1, 0.3, 1] }}
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    className="group/search-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-white/[0.11] hover:shadow-[var(--shadow-row-hover)]"
                                 >
-                                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-primary/16 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/24 transition-colors group-hover/search-item:bg-indigo-primary/24 group-hover/search-item:text-white">
-                                    {match.ticker.slice(0, 2)}
-                                </span>
-                                <span className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
-                                        <span className="rounded-md px-1 py-0.5 text-sm font-semibold text-white transition-colors group-hover/search-item:bg-indigo-primary/18 group-hover/search-item:text-indigo-100">
-                                            {match.ticker}
-                                        </span>
-                                        <Badge variant="outline" className="h-5 rounded-md text-[10px]">{match.exchange}</Badge>
-                                    </div>
-                                    <div className="truncate text-xs text-white/42">{match.name}</div>
-                                </span>
-                                </button>
-                                <div className="flex shrink-0 items-center gap-1">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            onPreview(match.ticker);
-                                            onOpenChange(false);
-                                        }}
-                                        className="flex size-8 items-center justify-center rounded-lg text-white/38 transition-colors hover:bg-white/[0.1] hover:text-white"
-                                        aria-label={`Open full chart for ${match.ticker}`}
-                                    >
-                                        <Maximize2 className="size-4" />
-                                    </button>
                                     <button
                                         type="button"
                                         onClick={() => onSelect(match.ticker)}
-                                        className="flex size-8 items-center justify-center rounded-lg text-white/38 transition-colors hover:bg-white/[0.1] hover:text-white"
-                                        aria-label={`Add ${match.ticker}`}
+                                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
                                     >
-                                        <Plus className="size-4" />
+                                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-primary/16 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/24 transition-colors group-hover/search-item:bg-indigo-primary/24 group-hover/search-item:text-white">
+                                        {match.ticker.slice(0, 2)}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="rounded-md px-1 py-0.5 text-sm font-semibold text-white transition-colors group-hover/search-item:bg-indigo-primary/18 group-hover/search-item:text-indigo-100">
+                                                {match.ticker}
+                                            </span>
+                                            <Badge variant="outline" className="h-5 rounded-md text-[10px]">{match.exchange}</Badge>
+                                        </div>
+                                        <div className="truncate text-xs text-white/42">{match.name}</div>
+                                    </span>
                                     </button>
-                                </div>
-                            </div>
-                        ))}
+                                    <div className="flex shrink-0 items-center gap-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                onPreview(match.ticker);
+                                                onOpenChange(false);
+                                            }}
+                                            className="flex size-8 items-center justify-center rounded-lg text-white/38 transition-colors hover:bg-white/[0.1] hover:text-white"
+                                            aria-label={`Open full chart for ${match.ticker}`}
+                                        >
+                                            <Maximize2 className="size-4" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => onSelect(match.ticker)}
+                                            className="flex size-8 items-center justify-center rounded-lg text-white/38 transition-colors hover:bg-white/[0.1] hover:text-white"
+                                            aria-label={`Add ${match.ticker}`}
+                                        >
+                                            <Plus className="size-4" />
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            ))}
 
-                        {searching && matches.length === 0 && (
-                            <div className="px-3 py-3 text-sm text-white/42">Searching symbols...</div>
-                        )}
+                            {searching && matches.length === 0 && (
+                                <div className="px-3 py-3 text-sm text-white/42">Searching symbols...</div>
+                            )}
 
-                        {!searching && matches.length === 0 && !canAddCustom && (
-                            <div className="px-3 py-3 text-sm text-white/42">No symbols found.</div>
-                        )}
+                            {!searching && matches.length === 0 && !canAddCustom && (
+                                <div className="px-3 py-3 text-sm text-white/42">No symbols found.</div>
+                            )}
 
-                        {canAddCustom && !searching && (
-                            <button
-                                type="button"
-                                onMouseDown={(event) => event.preventDefault()}
-                                onClick={() => onSelect(query)}
-                                className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-white/[0.06]"
-                            >
-                                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-cyan-secondary/14 text-cyan-secondary ring-1 ring-cyan-secondary/24">
-                                    <Plus className="size-4" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <div className="text-sm font-semibold text-white">Add {normalizeTicker(query)}</div>
-                                    <div className="text-xs text-white/42">Create a custom market tile</div>
-                                </div>
-                            </button>
-                        )}
-                    </CardContent>
-                </Card>
+                            {canAddCustom && !searching && (
+                                <motion.button
+                                    type="button"
+                                    initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
+                                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                                    transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => onSelect(query)}
+                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-white/[0.06]"
+                                >
+                                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-cyan-secondary/14 text-cyan-secondary ring-1 ring-cyan-secondary/24">
+                                        <Plus className="size-4" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="text-sm font-semibold text-white">Add {normalizeTicker(query)}</div>
+                                        <div className="text-xs text-white/42">Create a custom market tile</div>
+                                    </div>
+                                </motion.button>
+                            )}
+                        </CardContent>
+                    </Card>
+                </motion.div>
             )}
         </div>
     );

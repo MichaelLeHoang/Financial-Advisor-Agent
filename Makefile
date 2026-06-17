@@ -8,8 +8,10 @@ FRONTEND_DIR := frontend
 BACKEND_PORT := 8000
 FRONTEND_PORT := 3000
 REDIS_PORT := 6379
+QDRANT_PORT := 6333
+QDRANT_GRPC_PORT := 6334
 
-.PHONY: help dev dev-legacy dev-queue backend frontend worker redis install install-backend install-frontend \
+.PHONY: help dev dev-legacy dev-queue backend frontend worker redis qdrant deps install install-backend install-frontend \
         test test-unit test-integration cli stop clean ngrok ngrok-static \
         docker-up docker-up-d docker-down docker-build docker-logs docker-shell docker-ps
 
@@ -25,18 +27,24 @@ help: ## Show available commands
 
 # ─── Dev (both together) ─────────────────────────────────────────────────────
 
-dev: ## Start Redis + backend + LLM worker + frontend + ngrok (Ctrl+C stops all)
+dev: ## Start Qdrant + Redis + backend + LLM worker + frontend + ngrok (Ctrl+C stops all)
 	@echo ""
 	@echo "  Starting QuanAd..."
 	@echo "  Backend  → http://localhost:$(BACKEND_PORT)/docs"
 	@echo "  Frontend → http://localhost:$(FRONTEND_PORT)"
 	@echo "  Redis    → localhost:$(REDIS_PORT)"
+	@echo "  Qdrant   → http://localhost:$(QDRANT_PORT)"
 	@echo "  Worker   → Redis-backed LLM queue"
 	@echo "  Ngrok    → Tunneling backend port $(BACKEND_PORT)"
 	@echo "  Press Ctrl+C to stop all."
 	@echo ""
 	@trap 'kill 0' SIGINT SIGTERM; \
-		( docker run --rm --name quanad-redis-dev -p $(REDIS_PORT):6379 redis:7-alpine ) & \
+		docker info >/dev/null 2>&1 || { echo "  Docker is required for Redis and Qdrant. Start Docker Desktop and retry."; exit 1; }; \
+		( docker compose up redis qdrant ) & \
+		echo "  Waiting for Redis..."; \
+		until docker compose exec -T redis redis-cli ping >/dev/null 2>&1; do sleep 1; done; \
+		echo "  Waiting for Qdrant..."; \
+		until curl -fsS http://localhost:$(QDRANT_PORT)/readyz >/dev/null 2>&1 || curl -fsS http://localhost:$(QDRANT_PORT)/ >/dev/null 2>&1; do sleep 1; done; \
 		( cd $(BACKEND_DIR) && uv run uvicorn src.api.app:app --reload --port $(BACKEND_PORT) ) & \
 		( cd $(BACKEND_DIR) && uv run python -m src.jobs.llm_worker ) & \
 		( cd $(FRONTEND_DIR) && npm run dev -- --port $(FRONTEND_PORT) ) & \
@@ -86,7 +94,13 @@ worker: ## Start only the Redis-backed LLM worker
 	cd $(BACKEND_DIR) && uv run python -m src.jobs.llm_worker
 
 redis: ## Start local Redis via Docker on port 6379
-	docker run --rm --name quanad-redis-dev -p $(REDIS_PORT):6379 redis:7-alpine
+	docker compose up redis
+
+qdrant: ## Start local Qdrant via Docker on port 6333/6334
+	docker compose up qdrant
+
+deps: ## Start local Redis + Qdrant dependencies
+	docker compose up redis qdrant
 
 cli: ## Run the interactive CLI agent (QuanAd 1.0)
 	cd $(BACKEND_DIR) && uv run python main.py
@@ -114,11 +128,14 @@ test-integration: ## Run integration tests (downloads embedding model)
 
 # ─── Utilities ───────────────────────────────────────────────────────────────
 
-stop: ## Kill processes on backend, frontend, and Redis ports
-	@echo "  Stopping services on ports $(BACKEND_PORT), $(FRONTEND_PORT), and $(REDIS_PORT)..."
+stop: ## Kill processes on backend, frontend, Redis, and Qdrant ports
+	@echo "  Stopping services on ports $(BACKEND_PORT), $(FRONTEND_PORT), $(REDIS_PORT), $(QDRANT_PORT), and $(QDRANT_GRPC_PORT)..."
+	@docker compose stop redis qdrant >/dev/null 2>&1 || true
 	@lsof -ti :$(BACKEND_PORT) | xargs kill -9 2>/dev/null || true
 	@lsof -ti :$(FRONTEND_PORT) | xargs kill -9 2>/dev/null || true
 	@lsof -ti :$(REDIS_PORT) | xargs kill -9 2>/dev/null || true
+	@lsof -ti :$(QDRANT_PORT) | xargs kill -9 2>/dev/null || true
+	@lsof -ti :$(QDRANT_GRPC_PORT) | xargs kill -9 2>/dev/null || true
 	@echo "  Done."
 
 clean: ## Remove Python cache, build artifacts, and Next.js cache

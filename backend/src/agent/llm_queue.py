@@ -7,7 +7,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from src.config import settings
-from src.core.redis_client import RedisUnavailable, get_redis_client
+from src.core.redis_client import RedisUnavailable, get_redis_client, normalize_redis_error
 
 
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
@@ -39,11 +39,11 @@ class LLMJobQueue:
             "updated_at": now,
         }
         self._write_job(job_id, record)
-        self.client.lpush(self._queue_key(kind), job_id)
+        self._call(self.client.lpush, self._queue_key(kind), job_id)
         return self.get(job_id) or record
 
     def get(self, job_id: str) -> dict[str, Any] | None:
-        raw = self.client.get(self._job_key(job_id))
+        raw = self._call(self.client.get, self._job_key(job_id))
         if raw is None:
             return None
         return json.loads(raw)
@@ -60,7 +60,7 @@ class LLMJobQueue:
         return record
 
     def queue_position(self, job_id: str, kind: JobKind) -> int | None:
-        items = self.client.lrange(self._queue_key(kind), 0, -1)
+        items = self._call(self.client.lrange, self._queue_key(kind), 0, -1)
         try:
             # lpush + brpop means the next job is at the right end.
             return list(reversed(items)).index(job_id) + 1
@@ -69,7 +69,7 @@ class LLMJobQueue:
 
     def dequeue(self, timeout_seconds: int | None = None) -> QueuedJob | None:
         timeout = settings.llm_worker_poll_timeout_seconds if timeout_seconds is None else timeout_seconds
-        result = self.client.brpop([self._queue_key("consensus"), self._queue_key("single")], timeout=timeout)
+        result = self._call(self.client.brpop, [self._queue_key("consensus"), self._queue_key("single")], timeout=timeout)
         if result is None:
             return None
         _, job_id = result
@@ -79,7 +79,7 @@ class LLMJobQueue:
         return QueuedJob(job_id=job_id, kind=record["kind"], payload=record["payload"])
 
     def requeue(self, job: QueuedJob) -> None:
-        self.client.rpush(self._queue_key(job.kind), job.job_id)
+        self._call(self.client.rpush, self._queue_key(job.kind), job.job_id)
 
     def try_acquire_slots(self, job: QueuedJob) -> bool:
         user_id = str(job.payload.get("user_id", "guest"))
@@ -111,7 +111,7 @@ class LLMJobQueue:
         return 1
         """
         ttl = max(60, settings.llm_job_ttl_seconds)
-        return bool(self.client.eval(script, 1, key, limit, ttl))
+        return bool(self._call(self.client.eval, script, 1, key, limit, ttl))
 
     def _release(self, key: str) -> None:
         script = """
@@ -122,10 +122,17 @@ class LLMJobQueue:
         end
         return redis.call('decr', KEYS[1])
         """
-        self.client.eval(script, 1, key)
+        self._call(self.client.eval, script, 1, key)
 
     def _write_job(self, job_id: str, record: dict[str, Any]) -> None:
-        self.client.setex(self._job_key(job_id), settings.llm_job_ttl_seconds, json.dumps(record, default=str))
+        self._call(self.client.setex, self._job_key(job_id), settings.llm_job_ttl_seconds, json.dumps(record, default=str))
+
+    @staticmethod
+    def _call(func: Any, *args: Any, **kwargs: Any) -> Any:
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:
+            raise normalize_redis_error(exc) from exc
 
     @staticmethod
     def _job_key(job_id: str) -> str:

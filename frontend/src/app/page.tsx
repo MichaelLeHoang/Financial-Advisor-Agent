@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Brain, ClipboardList, Image, Loader2, Paperclip, PieChart, Send, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { api, isUpgradeRequiredError } from "@/lib/api";
+import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
 import { getDemoChatConversation } from "@/lib/demo-chat-history";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -278,28 +278,41 @@ export default function ChatPage() {
 
     try {
       const mode = apiModeFromVersion(version);
-      const queued = await api.chatJob(text, targetSessionId, true, mode);
+      let res;
+      try {
+        const queued = await api.chatJob(text, targetSessionId, true, mode);
 
-      const res = await api.waitForChatJob(queued.job_id, (job) => {
-        if (job.status === "queued") {
-          const positionText = job.queue_position ? ` Position ${job.queue_position}.` : "";
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.status === "fetching"
-                ? { ...m, content: `Queued for analysis.${positionText}` }
-                : m
-            )
-          );
-        } else if (job.status === "running") {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.status === "fetching"
-                ? { ...m, content: fetchingLabel }
-                : m
-            )
-          );
-        }
-      });
+        res = await api.waitForChatJob(queued.job_id, (job) => {
+          if (job.status === "queued") {
+            const positionText = job.queue_position ? ` Position ${job.queue_position}.` : "";
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.status === "fetching"
+                  ? { ...m, content: `Queued for analysis.${positionText}` }
+                  : m
+              )
+            );
+          } else if (job.status === "running") {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.status === "fetching"
+                  ? { ...m, content: fetchingLabel }
+                  : m
+              )
+            );
+          }
+        });
+      } catch (queueError) {
+        if (!isRedisUnavailableError(queueError)) throw queueError;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.status === "fetching"
+              ? { ...m, content: fetchingLabel }
+              : m
+          )
+        );
+        res = await api.chat(text, targetSessionId, true, mode);
+      }
 
       setMessages((prev) =>
         prev.filter((m) => m.status !== "fetching").concat({

@@ -90,6 +90,34 @@ class TestClassicalOptimize:
         assert abs(total - 1.0) < 0.01
 
 
+class TestPortfolioDataPreparation:
+    """Tests for yfinance return-shape normalization before optimization."""
+
+    def test_get_portfolio_volatility_accepts_multi_column_close_frames(self, monkeypatch):
+        from src.quantum import portfolio
+
+        dates = pd.date_range("2025-01-01", periods=5, freq="D")
+
+        def fake_fetch_stock_history(tickers, period="1y"):
+            ticker = tickers[0]
+            return pd.DataFrame(
+                {
+                    ("Close", ticker): [100, 101, 103, 104, 106],
+                    ("Open", ticker): [99, 100, 102, 103, 105],
+                },
+                index=dates,
+            )
+
+        monkeypatch.setattr(portfolio, "fetch_stock_history", fake_fetch_stock_history)
+
+        result = portfolio.get_portfolio_volatility(["AAPL", "GOOGL"])
+
+        assert result["tickers"] == ["AAPL", "GOOGL"]
+        assert list(result["returns"].columns) == ["AAPL", "GOOGL"]
+        assert list(result["mean_returns"].index) == ["AAPL", "GOOGL"]
+        assert list(result["cov_matrix"].columns) == ["AAPL", "GOOGL"]
+
+
 # ---------------------------------------------------------------------------
 # QUBO matrix builder
 # ---------------------------------------------------------------------------

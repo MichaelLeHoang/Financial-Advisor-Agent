@@ -119,20 +119,48 @@ function useLiveProgress(
   const [tasks, setTasks] = useState<Task[]>(() =>
     mode === "consensus" ? getConsensusTasks() : getSingleAgentTasks()
   );
+  const [syntheticStep, setSyntheticStep] = useState(0);
   const modeRef = useRef(mode);
+  const totalSubtasks = useMemo(
+    () => (mode === "consensus" ? getConsensusTasks() : getSingleAgentTasks())
+      .reduce((sum, task) => sum + task.subtasks.length, 0),
+    [mode]
+  );
+  const useSyntheticProgress = isActive && !activeTool && completedTools.length === 0;
 
   // Reset only when mode actually changes
   useEffect(() => {
     if (modeRef.current !== mode) {
       modeRef.current = mode;
       setTasks(mode === "consensus" ? getConsensusTasks() : getSingleAgentTasks());
+      setSyntheticStep(0);
     }
   }, [mode]);
 
   useEffect(() => {
+    if (!isActive) return;
+    setSyntheticStep(0);
+  }, [isActive, mode]);
+
+  useEffect(() => {
+    if (!useSyntheticProgress) return;
+    const interval = setInterval(() => {
+      setSyntheticStep((current) => Math.min(current + 1, Math.max(totalSubtasks - 1, 0)));
+    }, mode === "consensus" ? 2200 : 1800);
+    return () => clearInterval(interval);
+  }, [mode, totalSubtasks, useSyntheticProgress]);
+
+  useEffect(() => {
+    let subtaskIndex = 0;
     setTasks((prev) =>
       prev.map((task) => {
         const subtasks = task.subtasks.map((sub) => {
+          const currentIndex = subtaskIndex++;
+          if (useSyntheticProgress) {
+            if (currentIndex < syntheticStep) return { ...sub, status: "completed" as const };
+            if (currentIndex === syntheticStep) return { ...sub, status: "in-progress" as const };
+            return { ...sub, status: "pending" as const };
+          }
           // When agent finishes, mark everything completed
           if (!isActive && completedTools.length > 0) {
             return { ...sub, status: "completed" as const };
@@ -158,7 +186,7 @@ function useLiveProgress(
         return { ...task, status: taskStatus, subtasks };
       })
     );
-  }, [isActive, activeTool, completedTools]);
+  }, [isActive, activeTool, completedTools, syntheticStep, useSyntheticProgress]);
 
   return tasks;
 }
