@@ -1,6 +1,7 @@
 "use client";
 
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
     ArrowDown,
     ArrowDownRight,
@@ -16,6 +17,7 @@ import {
     Loader2,
     Maximize2,
     Plus,
+    Radio,
     RefreshCw,
     Search,
     Trash2,
@@ -37,7 +39,7 @@ import {
     YAxis,
 } from "recharts";
 import { cn } from "@/lib/utils";
-import { api, type EarningsPoint, type MarketQuote, type QuarterlyFinancial } from "@/lib/api";
+import { api, type EarningsPoint, type EquityResearchRunDetail, type MarketQuote, type QuarterlyFinancial, type ResearchDepth } from "@/lib/api";
 import { fetchQuote as fetchCachedQuote, fetchQuotes as fetchCachedQuotes, invalidate as invalidateQuote } from "@/lib/quote-cache";
 import {
     CHART_RANGES,
@@ -71,6 +73,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+    AgentProgressSidebar,
+    ResearchDepthSelector,
+    ResearchRunCompactResult,
+} from "@/components/equity-research/ResearchComponents";
 
 interface StockInfo extends MarketSymbol {
     data: MarketPoint[];
@@ -318,6 +325,11 @@ export default function MarketPage() {
     const [pendingRemoval, setPendingRemoval] = useState<StockInfo | null>(null);
     const [skipRemoveConfirm, setSkipRemoveConfirm] = useState(false);
     const [skipRemoveConfirmDraft, setSkipRemoveConfirmDraft] = useState(false);
+    const [researchStock, setResearchStock] = useState<StockInfo | null>(null);
+    const [researchDepth, setResearchDepth] = useState<ResearchDepth>("shallow");
+    const [researchDetail, setResearchDetail] = useState<EquityResearchRunDetail | null>(null);
+    const [researchStarting, setResearchStarting] = useState(false);
+    const [researchError, setResearchError] = useState<string | null>(null);
 
     const localMatches = useMemo(() => searchMarketSymbols(query), [query]);
     const matches = symbolMatches.length > 0 ? symbolMatches : localMatches;
@@ -478,6 +490,41 @@ export default function MarketPage() {
         setStocks((current) => current.map((stock) => stock.ticker === fresh.ticker ? fresh : stock));
     }, []);
 
+    const openResearchDrawer = (stock: StockInfo) => {
+        setResearchStock(stock);
+        setResearchError(null);
+        setResearchDetail(null);
+    };
+
+    const startResearchRun = async () => {
+        if (!researchStock) return;
+        setResearchStarting(true);
+        setResearchError(null);
+        try {
+            const run = await api.createEquityResearchRun({
+                ticker: researchStock.ticker,
+                source_surface: "market",
+                research_depth: researchDepth,
+            });
+            const detail = await api.equityResearchRun(run.run_id);
+            setResearchDetail(detail);
+        } catch (err: any) {
+            setResearchError(err.message ?? "Could not start research run.");
+        } finally {
+            setResearchStarting(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!researchDetail || researchDetail.run.status === "completed" || researchDetail.run.status === "failed" || researchDetail.run.status === "cancelled") return;
+        const timer = window.setInterval(() => {
+            api.equityResearchRun(researchDetail.run.run_id)
+                .then(setResearchDetail)
+                .catch(() => undefined);
+        }, 1500);
+        return () => window.clearInterval(timer);
+    }, [researchDetail]);
+
     const refresh = async () => {
         if (stocks.length === 0) return;
         setLoading(true);
@@ -567,6 +614,7 @@ export default function MarketPage() {
                             stock={stock}
                             mounted={mounted}
                             onOpen={() => openChartForTicker(stock.ticker)}
+                            onResearch={() => openResearchDrawer(stock)}
                             onRemove={() => removeTicker(stock.ticker)}
                             onRequestRemove={() => requestRemoveTicker(stock)}
                         />
@@ -595,6 +643,16 @@ export default function MarketPage() {
                 onSkipCheckedChange={setSkipRemoveConfirmDraft}
                 onCancel={() => setPendingRemoval(null)}
                 onConfirm={confirmRemoveTicker}
+            />
+            <MarketResearchDrawer
+                stock={researchStock}
+                depth={researchDepth}
+                onDepthChange={setResearchDepth}
+                detail={researchDetail}
+                starting={researchStarting}
+                error={researchError}
+                onStart={startResearchRun}
+                onClose={() => setResearchStock(null)}
             />
         </div>
     );
@@ -764,11 +822,13 @@ function MarketCard({
     stock,
     mounted,
     onOpen,
+    onResearch,
     onRequestRemove,
 }: {
     stock: StockInfo;
     mounted: boolean;
     onOpen: () => void;
+    onResearch: () => void;
     onRemove: () => void;
     onRequestRemove: () => void;
 }) {
@@ -833,9 +893,121 @@ function MarketCard({
                     <div className="h-24 min-h-24 w-full min-w-0">
                         {mounted ? <MiniChart stock={stock} /> : <div className="h-full w-full rounded-xl bg-white/[0.035]" />}
                     </div>
+                    <button
+                        type="button"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onResearch();
+                        }}
+                        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 px-3 py-2 text-xs font-semibold text-indigo-100 transition-colors hover:bg-indigo-primary/18"
+                    >
+                        <Radio className="size-3.5" />
+                        Run Equity Research Desk
+                    </button>
                 </CardContent>
             </Card>
         </motion.div>
+    );
+}
+
+function MarketResearchDrawer({
+    stock,
+    depth,
+    onDepthChange,
+    detail,
+    starting,
+    error,
+    onStart,
+    onClose,
+}: {
+    stock: StockInfo | null;
+    depth: ResearchDepth;
+    onDepthChange: (depth: ResearchDepth) => void;
+    detail: EquityResearchRunDetail | null;
+    starting: boolean;
+    error: string | null;
+    onStart: () => void;
+    onClose: () => void;
+}) {
+    if (!stock) return null;
+    const isComplete = detail?.run.status === "completed";
+    return (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm" onClick={onClose}>
+            <aside
+                className="mt-auto h-[88vh] w-full overflow-y-auto rounded-t-3xl border border-white/[0.10] bg-[#080b12] p-5 shadow-[-24px_0_80px_rgba(0,0,0,0.45)] md:mt-0 md:h-full md:max-w-md md:rounded-l-3xl md:rounded-tr-none"
+                onClick={(event) => event.stopPropagation()}
+            >
+                <div className="mb-5 flex items-start justify-between gap-3">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-widest text-indigo-200">QuanAd 2.1</p>
+                        <h2 className="mt-1 text-xl font-semibold text-white">Equity Research Desk</h2>
+                        <p className="mt-1 text-sm text-white/48">{stock.ticker} · {stock.name}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="flex size-9 items-center justify-center rounded-full border border-white/[0.08] text-white/50 hover:text-white"
+                        aria-label="Close research drawer"
+                    >
+                        <X className="size-4" />
+                    </button>
+                </div>
+
+                {!detail ? (
+                    <div className="space-y-4">
+                        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
+                            <p className="text-xs font-semibold uppercase tracking-widest text-white/35">Analysis Date</p>
+                            <p className="mt-1 text-sm font-semibold text-white">{new Date().toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-white/35">Research Depth</p>
+                            <ResearchDepthSelector value={depth} onChange={onDepthChange} />
+                        </div>
+                        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
+                            <p className="text-sm font-semibold text-white">Analyst team</p>
+                            <p className="mt-2 text-sm leading-6 text-white/55">
+                                Market, sentiment, news, fundamentals, bull/bear debate, trader, risk analysts, and portfolio manager.
+                            </p>
+                        </div>
+                        {error && <p className="text-sm text-red-negative">{error}</p>}
+                        <Button onClick={onStart} disabled={starting} className="on-accent accent-gradient-surface w-full rounded-xl">
+                            {starting ? <Loader2 className="size-4 animate-spin" /> : "Start Research Run"}
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <Link
+                            href={`/research/${detail.run.run_id}`}
+                            className="inline-flex h-9 w-full items-center justify-center rounded-xl border border-white/[0.10] bg-white/[0.035] px-3 text-sm font-semibold text-white hover:bg-white/[0.06]"
+                        >
+                            Open Full Report
+                        </Link>
+                        {isComplete ? (
+                            <ResearchRunCompactResult run={detail.run} />
+                        ) : (
+                            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
+                                <div className="mb-3 flex items-center justify-between">
+                                    <p className="text-sm font-semibold text-white">Live progress</p>
+                                    <span className="text-xs capitalize text-white/42">{detail.run.status}</span>
+                                </div>
+                                <AgentProgressSidebar reports={detail.reports} status={detail.run.status} compact />
+                            </div>
+                        )}
+                        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
+                            <p className="text-sm font-semibold text-white">Recent activity</p>
+                            <div className="mt-3 space-y-2">
+                                {detail.latest_events.slice(-4).reverse().map((event) => (
+                                    <div key={event.event_id} className="rounded-xl bg-black/20 p-3">
+                                        <p className="text-xs font-semibold text-white/68">{event.label}</p>
+                                        <p className="mt-1 text-xs text-white/42">{event.content}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </aside>
+        </div>
     );
 }
 

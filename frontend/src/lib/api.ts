@@ -49,6 +49,124 @@ export interface ConsensusResponse extends ChatResponse {
   consensus: ConsensusMetadata;
 }
 
+export type ResearchDepth = "shallow" | "medium" | "deep";
+export type ResearchRunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+export type ResearchAgentStatus = "pending" | "running" | "completed" | "failed" | "skipped";
+export type ResearchRecommendation = "buy" | "hold" | "sell" | "insufficient_data";
+export type ResearchSourceSurface = "introduction" | "research" | "market" | "ai_advisor" | "shared";
+export type ResearchEventType = "reasoning" | "tool" | "report" | "status" | "final" | "error";
+
+export interface EquityResearchRunCreate {
+  ticker: string;
+  analysis_date?: string;
+  selected_analysts?: Array<"market" | "social" | "news" | "fundamentals">;
+  research_depth?: ResearchDepth;
+  quick_model?: string;
+  deep_model?: string;
+  source_surface?: ResearchSourceSurface;
+}
+
+export interface EquityResearchRun {
+  run_id: string;
+  user_id?: string | null;
+  ticker: string;
+  company_name?: string | null;
+  exchange?: string | null;
+  analysis_date: string;
+  status: ResearchRunStatus;
+  recommendation: ResearchRecommendation;
+  confidence: number;
+  research_depth: ResearchDepth;
+  selected_analysts: string[];
+  quick_model: string;
+  deep_model: string;
+  source_surface: ResearchSourceSurface;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string | null;
+  share_slug?: string | null;
+  error_message?: string | null;
+  disclaimer: string;
+  data_snapshot_id?: string | null;
+  final_summary?: string | null;
+  main_upside?: string | null;
+  main_risk?: string | null;
+}
+
+export interface EquityResearchSnapshot {
+  snapshot_id: string;
+  run_id: string;
+  ticker: string;
+  company_name?: string | null;
+  exchange?: string | null;
+  analysis_date: string;
+  latest_price?: number | null;
+  previous_close?: number | null;
+  daily_change?: number | null;
+  volume?: number | null;
+  market_cap?: number | null;
+  fundamentals: Record<string, unknown>;
+  technical_indicators: Record<string, unknown>;
+  news_items: Array<Record<string, unknown>>;
+  rag_context: Array<Record<string, unknown>>;
+  sentiment_summary: Record<string, unknown>;
+  risk_metrics: Record<string, unknown>;
+  data_sources: string[];
+  created_at: string;
+}
+
+export interface EquityResearchReport {
+  report_id: string;
+  run_id: string;
+  agent_key: string;
+  agent_name: string;
+  team: string;
+  status: ResearchAgentStatus;
+  title: string;
+  markdown: string;
+  summary_points: string[];
+  evidence: Array<{ label: string; source: string; detail?: string | null; url?: string | null }>;
+  confidence: number;
+  risk_flags: string[];
+  started_at?: string | null;
+  completed_at?: string | null;
+  token_input?: number | null;
+  token_output?: number | null;
+}
+
+export interface EquityResearchEvent {
+  event_id: string;
+  run_id: string;
+  timestamp: string;
+  agent_key?: string | null;
+  agent_name?: string | null;
+  event_type: ResearchEventType;
+  label: string;
+  content: string;
+  tool_name?: string | null;
+  tool_args?: Record<string, unknown> | null;
+  token_input?: number | null;
+  token_output?: number | null;
+}
+
+export interface EquityResearchRunDetail {
+  run: EquityResearchRun;
+  snapshot?: EquityResearchSnapshot | null;
+  reports: EquityResearchReport[];
+  latest_events: EquityResearchEvent[];
+}
+
+export interface EquityResearchEventsList {
+  cursor: number;
+  events: EquityResearchEvent[];
+}
+
+export interface PublicEquityResearchReport {
+  run: EquityResearchRun;
+  snapshot?: EquityResearchSnapshot | null;
+  reports: EquityResearchReport[];
+}
+
 export interface ChatMessage {
   id: number | string;
   role: "user" | "assistant";
@@ -870,6 +988,28 @@ export const api = {
   /** Full QuanAd 2.0 multi-agent consensus with metadata */
   consensus: (message: string, sessionId = "default", remember = true) =>
     post<ConsensusResponse>("/api/v1/agent/consensus", { message, session_id: sessionId, remember }),
+
+  /** QuanAd 2.1 Equity Research Desk */
+  createEquityResearchRun: (payload: EquityResearchRunCreate) =>
+    post<EquityResearchRun>("/api/v1/equity-research/runs", payload),
+
+  equityResearchRun: (runId: string) =>
+    get<EquityResearchRunDetail>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}`),
+
+  equityResearchReports: (runId: string) =>
+    get<EquityResearchReport[]>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/reports`),
+
+  equityResearchEvents: (runId: string, after = 0) =>
+    get<EquityResearchEventsList>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/events/list?after=${after}`),
+
+  shareEquityResearchRun: (runId: string, shared = true) =>
+    patch<EquityResearchRun>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/share`, { shared }),
+
+  deleteEquityResearchRun: (runId: string) =>
+    del<void>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}`),
+
+  publicEquityResearchReport: (shareSlug: string) =>
+    get<PublicEquityResearchReport>(`/api/v1/equity-research/shared/${encodeURIComponent(shareSlug)}`),
 
   /** Conversation sessions */
   chatSessions: () => get<ChatSession[]>("/api/v1/agent/sessions"),

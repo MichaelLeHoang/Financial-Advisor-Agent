@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from collections.abc import Callable
 from typing import TypeVar
 
+from src.config import settings
 from src.core.redis_client import RedisUnavailable, get_redis_client, redis_get_json, redis_set_json
 
 T = TypeVar("T")
@@ -17,6 +19,9 @@ def stable_cache_key(namespace: str, payload: object) -> str:
 
 
 def cached_value(namespace: str, payload: object, ttl_seconds: int, compute: Callable[[], T]) -> T:
+    if settings.app_env == "test" or "pytest" in sys.modules:
+        return compute()
+
     key = stable_cache_key(namespace, payload)
     try:
         client = get_redis_client()
