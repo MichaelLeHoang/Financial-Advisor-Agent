@@ -34,7 +34,7 @@ export default function ResearchRunPage({ params }: { params: Promise<{ runId: s
           }}
           className="inline-flex items-center gap-2 text-sm text-white/45 hover:text-white"
         >
-          <ArrowLeft className="size-4" /> {backTarget.label}
+          <ArrowLeft className="size-4" /> Back
         </button>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {user.is_guest ? (

@@ -87,6 +87,7 @@ const NAV_SECTIONS: NavSection[] = [
       { id: "quantum-guide", label: "Quantum", icon: <Atom className="size-4" /> },
       { id: "validation-guide", label: "Validation", icon: <BarChart3 className="size-4" /> },
       { id: "signals-guide", label: "Signals", icon: <Signal className="size-4" /> },
+      { id: "research-guide", label: "Research Reports", icon: <BookMarked className="size-4" /> },
       { id: "export-guide", label: "Export", icon: <Download className="size-4" /> },
       { id: "plans-guide", label: "Plans & Access", icon: <Wallet className="size-4" /> },
     ],
@@ -99,6 +100,7 @@ const NAV_SECTIONS: NavSection[] = [
       { id: "agent-modes", label: "Agent Modes", icon: <Brain className="size-4" /> },
       { id: "consensus", label: "Consensus Engine", icon: <Sparkles className="size-4" /> },
       { id: "api-chat", label: "Chat Endpoint", icon: <Code2 className="size-4" /> },
+      { id: "api-research", label: "Equity Research", icon: <BookMarked className="size-4" /> },
       { id: "api-market", label: "Market Data", icon: <TrendingUp className="size-4" /> },
       { id: "api-portfolio", label: "Portfolio APIs", icon: <PieChart className="size-4" /> },
       { id: "api-backtest", label: "Backtesting API", icon: <FlaskConical className="size-4" /> },
@@ -115,7 +117,7 @@ const WORKSPACE_GROUPS = [
   {
     title: "Research",
     tone: "indigo",
-    items: ["Market", "Sentiment", "AI Advisor", "News context"],
+    items: ["Market", "Sentiment", "AI Advisor", "Research reports"],
   },
   {
     title: "Decision",
@@ -142,18 +144,23 @@ const WORKSPACE_GROUPS = [
 const FLOW_GROUPS = [
   {
     title: "Research a ticker",
-    description: "Use this when you want to understand a symbol before adding it to a list or asking the advisor for a deeper read.",
+    description: "Start here when a symbol looks interesting and you need enough evidence to decide whether it deserves more work.",
     steps: ["Market", "Sentiment", "AI Advisor", "Watchlist"],
   },
   {
     title: "Review a portfolio",
-    description: "Use this when you already have holdings and need allocation, volatility, and decision support.",
+    description: "Use this path when positions already exist and the real question is allocation, exposure, downside, or follow-through.",
     steps: ["Portfolio", "Risk", "AI Advisor", "Journal"],
   },
   {
     title: "Test a strategy",
-    description: "Use this before treating a trading rule as repeatable. Backtest first, then compare and validate.",
+    description: "Use this before treating a rule as repeatable. Simulate it, compare it, and validate the assumptions before monitoring signals.",
     steps: ["Backtest Lab", "Strategy Compare", "Validation", "Signals"],
+  },
+  {
+    title: "Create a research report",
+    description: "Use this when a ticker needs a durable analyst-style writeup with evidence, events, and a shareable report.",
+    steps: ["Research", "Analyst reports", "Share link", "Journal"],
   },
 ];
 
@@ -943,15 +950,16 @@ function UserGuide() {
     <>
       <section id="overview" data-doc-section className="scroll-mt-24">
         <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-indigo-300">Start Here</div>
-        <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">How to use Quantum Advisor</h1>
+        <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">Make each research decision traceable</h1>
         <p className="mt-5 text-lg leading-8 text-white/62">
-          Quantum Advisor is a trading research workspace. It combines conversational AI, live market data, sentiment
-          analysis, portfolio tooling, risk review, backtesting, and advanced quant modules into one decision trail.
+          Quantum Advisor is a financial research workspace for turning market data, sentiment, portfolio context, and
+          advisor conversations into one reviewable decision trail.
         </p>
         <p className="mt-4 text-[15px] leading-7 text-white/58">
-          The fastest way to use the app is to move from market context to a focused question, then into portfolio or
-          watchlist actions. Start with the Dashboard when you need orientation, use Market and Sentiment for evidence,
-          ask the AI Advisor for synthesis, and save important ideas into Watchlists, Portfolios, or Journal entries.
+          The practical flow is simple: get current market context, ask a focused question, check the risk, then save the
+          result where it can be revisited. Use Dashboard for orientation, Market and Sentiment for evidence, AI Advisor
+          for synthesis, Research Reports for durable analyst-style work, and Watchlist, Portfolio, Backtest Lab, or
+          Journal for follow-through.
         </p>
 
         <Callout type="warn" title="Financial safety">
@@ -962,18 +970,18 @@ function UserGuide() {
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
             <Sparkles className="mb-4 size-5 text-indigo-300" />
-            <h3 className="text-sm font-semibold text-white/84">Start with context</h3>
-            <p className="mt-2 text-sm leading-6 text-white/50">Use Dashboard, Market, and Sentiment to understand what changed before asking for advice.</p>
+            <h3 className="text-sm font-semibold text-white/84">Establish context</h3>
+            <p className="mt-2 text-sm leading-6 text-white/50">Use Dashboard, Market, and Sentiment to see what changed before requesting analysis.</p>
           </div>
           <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
             <MessageSquare className="mb-4 size-5 text-cyan-300" />
-            <h3 className="text-sm font-semibold text-white/84">Ask specific questions</h3>
-            <p className="mt-2 text-sm leading-6 text-white/50">Prompts with ticker, timeframe, holdings, and risk concern produce better advisor responses.</p>
+            <h3 className="text-sm font-semibold text-white/84">Ask decision-grade questions</h3>
+            <p className="mt-2 text-sm leading-6 text-white/50">Include ticker, timeframe, holdings, objective, and the risk you want the advisor to test.</p>
           </div>
           <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
             <ShieldCheck className="mb-4 size-5 text-emerald-300" />
-            <h3 className="text-sm font-semibold text-white/84">Close the loop</h3>
-            <p className="mt-2 text-sm leading-6 text-white/50">Move strong ideas into watchlists, portfolios, backtests, alerts, or journal notes.</p>
+            <h3 className="text-sm font-semibold text-white/84">Preserve the rationale</h3>
+            <p className="mt-2 text-sm leading-6 text-white/50">Move useful conclusions into watchlists, portfolios, backtests, alerts, or journal notes.</p>
           </div>
         </div>
       </section>
@@ -981,9 +989,9 @@ function UserGuide() {
       <section id="workspace-map" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader eyebrow="Navigation" title="Workspace map">
           <p>
-            The left sidebar is organized around the way research usually flows: discover an idea, evaluate the evidence,
-            measure risk, and then track or test the decision. Some advanced modules are plan-gated, so your sidebar may
-            show fewer items on lower plans.
+            The left sidebar follows the shape of a research process: discover an idea, evaluate the evidence, measure
+            risk, then track, test, or document the decision. Some advanced modules are plan-gated, so the visible
+            workspace may vary by account.
           </p>
         </SectionHeader>
         <WorkspaceMap />
@@ -992,8 +1000,8 @@ function UserGuide() {
       <section id="core-workflows" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader eyebrow="Recommended Flow" title="Core workflows">
           <p>
-            You can use each page independently, but the product is strongest when screens are used as a workflow. The
-            diagrams below show the paths that map to common trading research jobs.
+            Each screen can stand alone, but the product is strongest when the screens are chained together. Use these
+            paths as starting points for the most common research jobs.
           </p>
         </SectionHeader>
         <div className="grid gap-4">
@@ -1006,8 +1014,8 @@ function UserGuide() {
       <section id="dashboard-guide" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader eyebrow="Workspace Screens" title="Dashboard">
           <p>
-            The Dashboard is the home base for the trading workspace. It shows account-level context, portfolio and
-            watchlist counts, and a set of workflow cards that point you toward the next action.
+            Dashboard is the workspace starting point. It shows account scope, key workspace counts, and action cards that
+            help you resume the next useful task without hunting through every page.
           </p>
         </SectionHeader>
         <ScreenAnatomy
@@ -1016,8 +1024,8 @@ function UserGuide() {
           regions={[
             { label: "Account scope", detail: "Shows your current plan and top-level workspace state.", icon: <Wallet className="size-4" /> },
             { label: "Metrics", detail: "Summarizes portfolio count, watchlist count, and protected account scope.", icon: <BarChart3 className="size-4" /> },
-            { label: "Workflow cards", detail: "Jump into market research, risk review, narrative checks, or watchlist staging.", icon: <Activity className="size-4" /> },
-            { label: "Next-step prompt", detail: "Highlights missing or incomplete workflow steps such as alerts and journal follow-through.", icon: <Bell className="size-4" /> },
+            { label: "Workflow cards", detail: "Jump into market research, portfolio review, narrative checks, or watchlist staging.", icon: <Activity className="size-4" /> },
+            { label: "Next-step prompt", detail: "Highlights missing follow-through such as alerts, journal notes, or risk review.", icon: <Bell className="size-4" /> },
           ]}
         />
         <StepList
@@ -1033,8 +1041,9 @@ function UserGuide() {
       <section id="advisor-guide" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader title="AI Advisor">
           <p>
-            The AI Advisor is the conversational research surface. It can answer market questions, explain tradeoffs,
-            run tool-backed analysis, and preserve sessions so you can continue a research thread later.
+            AI Advisor is the synthesis layer. Use it after collecting market, sentiment, portfolio, or risk context so
+            the answer can explain tradeoffs instead of guessing from an isolated prompt. Longer requests can be routed
+            through the Redis-backed job queue so the UI remains responsive while the worker completes the analysis.
           </p>
         </SectionHeader>
         <ScreenAnatomy
@@ -1043,7 +1052,7 @@ function UserGuide() {
           regions={[
             { label: "Prompt composer", detail: "Ask a focused question. Include tickers, timeframe, current holdings, and the decision you are considering.", icon: <MessageSquare className="size-4" /> },
             { label: "Model selector", detail: "Switch between faster research and deeper consensus-style analysis where available.", icon: <Brain className="size-4" /> },
-            { label: "Suggestion cards", detail: "Start common workflows such as market pulse, sentiment brief, or portfolio check.", icon: <Sparkles className="size-4" /> },
+            { label: "Suggestion cards", detail: "Start common workflows such as market pulse, sentiment brief, or portfolio review.", icon: <Sparkles className="size-4" /> },
             { label: "Session history", detail: "Return to prior research threads from the sidebar instead of restarting context.", icon: <BookOpen className="size-4" /> },
           ]}
         />
@@ -1065,8 +1074,8 @@ function UserGuide() {
       <section id="market-guide" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader title="Market">
           <p>
-            The Market page is for live ticker lookup, chart inspection, quote cards, and market search. Use it before
-            asking the advisor for interpretation so the conversation starts from current context.
+            Market is the live price and instrument research surface. Use it to confirm the symbol, inspect movement, and
+            collect quote context before asking for interpretation.
           </p>
         </SectionHeader>
         <ScreenAnatomy
@@ -1092,8 +1101,8 @@ function UserGuide() {
       <section id="sentiment-guide" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader title="Sentiment">
           <p>
-            Sentiment Analysis uses financial-language classification to score headlines. It is best for checking whether
-            the current narrative supports, weakens, or contradicts a market thesis.
+            Sentiment Analysis scores financial language so you can see whether current headlines support, weaken, or
+            contradict a thesis. It is most useful when paired with price action and portfolio exposure.
           </p>
         </SectionHeader>
         <DocTable
@@ -1114,8 +1123,8 @@ function UserGuide() {
       <section id="watchlist-guide" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader title="Watchlist">
           <p>
-            Watchlist is the staging area for symbols you want to track without turning them into holdings. The current
-            page also includes market sections, upcoming earnings, comparison tools, and focused chart details.
+            Watchlist is the staging area for symbols that deserve attention but are not yet holdings. Use it to monitor
+            market sections, upcoming earnings, chart comparisons, and deeper quote detail from one page.
           </p>
         </SectionHeader>
         <ScreenAnatomy
@@ -1133,8 +1142,8 @@ function UserGuide() {
       <section id="portfolio-guide" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader title="Portfolio">
           <p>
-            The Portfolio page is for actual holdings and allocation analysis. Create portfolios, add holdings with
-            quantity and average cost, then run optimization when you have at least two unique symbols.
+            Portfolio is for positions you own or want to model as real allocations. Add holdings with quantity and
+            average cost, review currency-aware value and P&L, then run optimization once there are at least two symbols.
           </p>
         </SectionHeader>
         <ScreenAnatomy
@@ -1142,7 +1151,7 @@ function UserGuide() {
           description="Use this page when a research idea becomes an allocation question."
           regions={[
             { label: "Portfolio list", detail: "Create, switch, and delete portfolios.", icon: <Wallet className="size-4" /> },
-            { label: "Holdings table", detail: "Manage symbols, quantity, average cost, market value, and position-level actions.", icon: <PieChart className="size-4" /> },
+            { label: "Holdings table", detail: "Manage symbols, quantity, average cost, converted value, weight, P&L, and position-level actions.", icon: <PieChart className="size-4" /> },
             { label: "Add holding", detail: "Search for a symbol, enter quantity and average cost, then add it to the selected portfolio.", icon: <Search className="size-4" /> },
             { label: "Optimizer", detail: "Run classical or quantum optimization and review weights, return, volatility, and Sharpe ratio.", icon: <Atom className="size-4" /> },
           ]}
@@ -1159,8 +1168,8 @@ function UserGuide() {
       <section id="risk-guide" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader title="Risk">
           <p>
-            Risk is available on Pro and higher plans. It reads an existing portfolio and turns holdings into downside,
-            allocation, asset-class, and correlation views.
+            Risk is available on Pro and higher plans. It turns an existing portfolio into downside, allocation,
+            asset-class, and correlation views so concentration is visible before it becomes a surprise.
           </p>
         </SectionHeader>
         <DocTable
@@ -1183,7 +1192,7 @@ function UserGuide() {
         <SectionHeader eyebrow="Advanced Tools" title="Backtest Lab">
           <p>
             Backtest Lab is available on Trader and higher plans. It tests strategy rules against historical data with
-            configurable dates, symbols, capital, fees, slippage, and position sizing.
+            configurable symbols, dates, capital, fees, slippage, and sizing assumptions.
           </p>
         </SectionHeader>
         <StepList
@@ -1202,8 +1211,8 @@ function UserGuide() {
       <section id="journal-guide" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader title="Journal">
           <p>
-            Journal is the discipline layer for Trader plans. Use it to record the thesis, setup, entry, exit, outcome,
-            and lessons from a trade so that research decisions remain reviewable.
+            Journal is the discipline layer for Trader plans. Record the thesis, setup, entry, exit, outcome, and lesson
+            while the reasoning is still fresh so future reviews are based on evidence, not memory.
           </p>
         </SectionHeader>
         <DocTable
@@ -1221,8 +1230,8 @@ function UserGuide() {
         <SectionHeader title="Quantum">
           <p>
             Quantum optimization is available on Quant plans. It uses QAOA-style simulated quantum optimization to select
-            a target number of assets from a candidate universe. Use it as an exploratory complement to classical
-            optimization.
+            a target number of assets from a candidate universe. Treat it as an exploratory complement to classical
+            allocation rather than a standalone recommendation.
           </p>
         </SectionHeader>
         <StepList
@@ -1263,6 +1272,31 @@ function UserGuide() {
         </Callout>
       </section>
 
+      <section id="research-guide" data-doc-section className="mt-16 scroll-mt-24">
+        <SectionHeader eyebrow="Advanced Tools" title="Research Reports">
+          <p>
+            QuanAd 2.1 Research Reports turn a ticker into a durable analyst-style run. The workflow captures a shared
+            market snapshot, streams agent events, stores individual analyst reports, and can publish a shareable report
+            link when you need to hand off the work.
+          </p>
+        </SectionHeader>
+        <ScreenAnatomy
+          title="QuanAd 2.1 research report anatomy"
+          description="Use this page when the output needs to survive beyond a chat answer."
+          regions={[
+            { label: "Run setup", detail: "Choose ticker, analysis date, depth, analyst coverage, and model preferences.", icon: <Search className="size-4" /> },
+            { label: "Live events", detail: "Follow reasoning, tool use, status updates, and final report events as the run progresses.", icon: <Activity className="size-4" /> },
+            { label: "Analyst reports", detail: "Review market, social, news, and fundamentals sections with evidence and confidence.", icon: <BookMarked className="size-4" /> },
+            { label: "Share controls", detail: "Create a public report link when a completed run should be shared outside the workspace.", icon: <Network className="size-4" /> },
+          ]}
+        />
+        <WorkflowDiagram
+          title="QuanAd 2.1 workflow"
+          description="A 2.1 run is a ticker-based research workflow, not a normal chat response. It starts from AI Advisor, Market, or the Research page and ends with a saved report."
+          steps={["Ticker + depth", "Shared snapshot", "Research agents", "PM verdict", "Share report"]}
+        />
+      </section>
+
       <section id="export-guide" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader title="Export">
           <p>
@@ -1284,8 +1318,8 @@ function UserGuide() {
         <SectionHeader title="Plans and feature access">
           <p>
             Feature access is plan-based. Free covers the basic research loop; Pro adds deeper portfolio and risk work;
-            Trader adds strategy workflows; Quant adds advanced optimization, validation, export, and premium model
-            routing; Execution is an invite-only add-on for broker-connected workflows.
+            Trader adds strategy workflows; Quant adds optimization, validation, export, and premium model routing;
+            Execution is an invite-only add-on for broker-connected workflows.
           </p>
         </SectionHeader>
         <PlanAccessMatrix />
@@ -1301,34 +1335,67 @@ function TechnicalReference() {
         <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-indigo-300">Technical Reference</div>
         <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">API and system reference</h1>
         <p className="mt-5 text-lg leading-8 text-white/62">
-          This section keeps the developer-facing material available without making it the default reading path. Use it
-          when integrating with the backend, debugging agent behavior, or reviewing how recommendations are produced.
+          This section is for implementation work: backend integration, agent debugging, API behavior, and review of how
+          recommendations are routed and produced.
         </p>
         <CodeBlock
           title="System shape"
           language="text"
           code={`Next.js frontend
   -> FastAPI backend
-  -> LangGraph agent orchestration
-  -> market, sentiment, prediction, optimization, backtesting, and storage services
-  -> Supabase, Qdrant, yfinance, LLM providers, and plan-based feature gates`}
+  -> LangGraph agent orchestration + Redis-backed LLM worker
+  -> market, sentiment, prediction, research reports, optimization, backtesting, risk, and storage services
+  -> Supabase, Stripe, Redis, Qdrant, yfinance, LLM providers, and plan-based feature gates`}
         />
       </section>
 
       <section id="agent-modes" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader title="Agent modes">
           <p>
-            Advisor requests can be handled by a faster single-agent path or by deeper consensus analysis. The UI exposes
-            these choices through the model selector, while API callers can pass an explicit mode.
+            QuanAd currently has three user-facing architectures. These are the choices exposed in AI Advisor's model
+            selector: a fast single-agent advisor, a multi-agent consensus system, and the Equity Research Desk for
+            ticker-based reports.
           </p>
         </SectionHeader>
         <DocTable
-          headers={["Mode", "Behavior", "Best for"]}
+          headers={["Architecture", "Behavior", "Best for"]}
           rows={[
-            ["single", "One tool-using advisor agent responds quickly.", "Quotes, simple research questions, quick explanations."],
-            ["consensus", "Multiple specialist agents produce opinions before synthesis.", "High-consequence investment reviews and risk-heavy questions."],
-            ["auto", "The backend chooses routing from the query.", "General integrations where the caller does not want to pick a path."],
+            ["QuanAd 1.0", "A lightweight single advisor agent uses tools and conversation context to answer quickly.", "Quotes, simple research questions, portfolio explanations, and fast follow-ups."],
+            ["QuanAd 2.0", "A five-specialist consensus system forms independent opinions before synthesis.", "High-consequence investment reviews, disagreement checks, and risk-heavy questions."],
+            ["QuanAd 2.1", "An Equity Research Desk creates a ticker-based run with a shared snapshot, ordered analyst reports, event timeline, and final PM-style verdict.", "Durable stock research reports that need evidence, caveats, and downloadable output."],
           ]}
+        />
+        <Callout type="info">
+          <strong>Implementation note:</strong> queued jobs and automatic API routing are scalability mechanics, not
+          additional user-facing agent architectures. They belong in the API reference, while this section describes the
+          three product modes users can intentionally choose.
+        </Callout>
+      </section>
+
+      <section id="single-agent" data-doc-section className="mt-16 scroll-mt-24">
+        <SectionHeader title="QuanAd 1.0 single advisor">
+          <p>
+            QuanAd 1.0 is the default AI Advisor mode. It is optimized for speed and conversational continuity: one
+            tool-using advisor interprets the request, calls the relevant market or portfolio tools, and returns a concise
+            answer.
+          </p>
+        </SectionHeader>
+        <DocTable
+          headers={["Capability", "How it works"]}
+          rows={[
+            ["Fast routing", "The advisor chooses the smallest useful tool path instead of launching a full research workflow."],
+            ["Tool-backed answers", "It can use quotes, market research, sentiment, prediction, optimization, and portfolio context when needed."],
+            ["Session continuity", "Chat history and session context help follow-up questions stay connected to the previous answer."],
+            ["Best default", "It remains the default model because most advisor questions do not need multi-agent debate or report generation."],
+          ]}
+        />
+        <CodeBlock
+          title="QuanAd 1.0 flow"
+          language="text"
+          code={`User question
+  -> single advisor reasoning
+  -> relevant tool calls
+  -> concise answer with caveats`}
         />
       </section>
 
@@ -1362,11 +1429,43 @@ Risk flags can downgrade an otherwise bullish result when downside evidence is s
         />
       </section>
 
+      <section id="research-desk" data-doc-section className="mt-16 scroll-mt-24">
+        <SectionHeader title="QuanAd 2.1 Equity Research Desk">
+          <p>
+            QuanAd 2.1 is not a normal chat response. It turns a ticker into a structured research run with visible
+            progress, report files, event logs, risk review, and a final portfolio-manager-style verdict.
+          </p>
+        </SectionHeader>
+        <DocTable
+          headers={["Stage", "Focus"]}
+          rows={[
+            ["Shared snapshot", "Resolves the ticker once, then captures price, fundamentals, technical indicators, news, sentiment, and risk context."],
+            ["Analyst team", "Market, social sentiment, news, and fundamentals analysts write focused evidence-based reports."],
+            ["Research debate", "Bull and bear researchers stress-test the thesis before the evaluator synthesizes agreement and disagreement."],
+            ["Trading desk", "The trader proposes entry considerations, invalidation conditions, horizon, and sizing caveats without implying execution."],
+            ["Risk review and PM verdict", "Risk analysts evaluate upside/downside controls, then the portfolio manager issues the final recommendation and confidence."],
+          ]}
+        />
+        <CodeBlock
+          title="QuanAd 2.1 workflow"
+          language="text"
+          code={`Ticker + depth
+  -> shared data snapshot
+  -> analyst reports
+  -> bull / bear debate
+  -> trader plan
+  -> risk review
+  -> final PM verdict
+  -> downloadable report and optional share link`}
+        />
+      </section>
+
       <section id="api-chat" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader title="Chat endpoint">
           <p>
             Use the chat endpoint for programmatic advisor access. The endpoint supports session persistence and explicit
-            routing through single, consensus, or auto mode.
+            routing through single, consensus, or auto mode. The queued job endpoints are a scalability path for longer
+            requests: they submit work to Redis and poll the worker instead of blocking the browser.
           </p>
         </SectionHeader>
         <CodeBlock
@@ -1390,12 +1489,40 @@ Risk flags can downgrade an otherwise bullish result when downside evidence is s
             ["remember", "boolean", "Whether to persist the exchange in chat history."],
           ]}
         />
+        <DocTable
+          headers={["Endpoint", "Purpose"]}
+          rows={[
+            ["POST /api/v1/agent/chat/jobs", "Queue a chat request for the Redis-backed worker."],
+            ["GET /api/v1/agent/chat/jobs/{job_id}", "Poll queued job status, result, and error state."],
+            ["WS /ws/agent/chat/{session_id}", "Stream chat updates over WebSocket for a session."],
+          ]}
+        />
+      </section>
+
+      <section id="api-research" data-doc-section className="mt-16 scroll-mt-24">
+        <SectionHeader title="Equity research APIs">
+          <p>
+            Equity research endpoints power analyst-style runs, event streams, saved reports, and public report sharing.
+          </p>
+        </SectionHeader>
+        <DocTable
+          headers={["Endpoint", "Purpose"]}
+          rows={[
+            ["POST /api/v1/equity-research/runs", "Start a research run for a ticker."],
+            ["GET /api/v1/equity-research/runs/{run_id}", "Load run detail, snapshot, reports, and latest events."],
+            ["GET /api/v1/equity-research/runs/{run_id}/reports", "Load analyst reports for a run."],
+            ["GET /api/v1/equity-research/runs/{run_id}/events/list", "Load event history with cursor support."],
+            ["GET /api/v1/equity-research/runs/{run_id}/events", "Stream run events."],
+            ["PATCH /api/v1/equity-research/runs/{run_id}/share", "Create or update public sharing."],
+            ["GET /api/v1/equity-research/shared/{share_slug}", "Read a public shared report."],
+          ]}
+        />
       </section>
 
       <section id="api-market" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader title="Market and sentiment APIs">
           <p>
-            These endpoints power quote lookup, market search, chart views, and headline sentiment workflows.
+            These endpoints power quote lookup, market search, chart views, news, and headline sentiment workflows.
           </p>
         </SectionHeader>
         <DocTable
@@ -1403,6 +1530,8 @@ Risk flags can downgrade an otherwise bullish result when downside evidence is s
           rows={[
             ["GET /api/v1/market/search?q=AAPL", "Search symbols and companies for picker-style interfaces."],
             ["GET /api/v1/market/quote/{ticker}", "Fetch quote, chart, and detail data for a ticker."],
+            ["GET /api/v1/news/categories", "Fetch news category metadata."],
+            ["GET /api/v1/news", "Fetch authenticated news feeds with category and ticker filters."],
             ["POST /api/v1/sentiment", "Classify one or more financial headlines and return aggregate mood."],
             ["POST /api/v1/predict", "Run directional ML prediction where available."],
           ]}
@@ -1432,8 +1561,13 @@ Risk flags can downgrade an otherwise bullish result when downside evidence is s
             ["GET /api/v1/portfolios", "List portfolios for the current user."],
             ["POST /api/v1/portfolios", "Create a portfolio with name and currency."],
             ["GET /api/v1/portfolios/{id}/holdings", "Load holdings for a selected portfolio."],
+            ["POST /api/v1/portfolios/{id}/holdings", "Add a holding to a portfolio."],
+            ["PATCH /api/v1/portfolios/{id}/holdings/{holding_id}", "Update quantity, average cost, or holding metadata."],
+            ["GET /api/v1/watchlists", "List watchlists for the current user."],
+            ["GET /api/v1/watchlists/{id}/assets", "Load assets for a watchlist."],
+            ["POST /api/v1/watchlists/{id}/assets", "Add an asset to a watchlist."],
             ["POST /api/v1/optimize", "Run classical or quantum optimization for a ticker universe."],
-            ["GET /api/v1/portfolio-risk/{id}", "Return risk snapshot, allocation, and correlation data."],
+            ["GET /api/v1/risk/portfolios/{id}", "Return risk snapshot, allocation, and correlation data."],
           ]}
         />
         <CodeBlock
@@ -1452,9 +1586,20 @@ Risk flags can downgrade an otherwise bullish result when downside evidence is s
         <SectionHeader title="Backtesting API">
           <p>
             Backtesting APIs run strategy simulations and return metrics, equity curves, and trades. They are intended
-            for strategy research, not live execution.
+            for strategy research, saved run review, market-data replay, and validation workflows, not live execution.
           </p>
         </SectionHeader>
+        <DocTable
+          headers={["Endpoint", "Purpose"]}
+          rows={[
+            ["GET /api/v1/backtests/strategies/options", "List available strategy templates."],
+            ["POST /api/v1/backtests/run", "Run a strategy simulation."],
+            ["GET /api/v1/backtests/runs", "List saved backtest runs."],
+            ["GET /api/v1/backtests/market-data/candles", "Fetch candle data for charting and replay."],
+            ["POST /api/v1/backtests/replay-sessions", "Create a replay session."],
+            ["PATCH /api/v1/backtests/replay-sessions/{session_id}", "Update replay state and notes."],
+          ]}
+        />
         <CodeBlock
           title="POST /api/v1/backtests/run"
           language="json"
