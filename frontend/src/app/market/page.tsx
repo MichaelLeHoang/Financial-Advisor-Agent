@@ -985,12 +985,12 @@ function MarketResearchDrawer({
                     <div className="space-y-4">
                         <Link
                             href={`/research/${detail.run.run_id}?from=market`}
-                            className="inline-flex h-9 w-full items-center justify-center rounded-xl border border-white/[0.10] bg-white/[0.035] px-3 text-sm font-semibold text-white hover:bg-white/[0.06]"
+                            className="inline-flex h-9 w-full items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.035] px-3 text-sm font-semibold text-white hover:bg-white/[0.06]"
                         >
                             Open Full Report
                         </Link>
                         {isComplete ? (
-                            <ResearchRunCompactResult run={detail.run} from="market" />
+                            <ResearchRunCompactResult run={detail.run} from="market" showOpenLink={false} />
                         ) : (
                             <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
                                 <div className="mb-3 flex items-center justify-between">
@@ -1318,28 +1318,54 @@ function MarketChartDialog({
                             </div>
                         </DialogHeader>
 
-                        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-y border-white/[0.06] px-4 py-3 sm:px-6">
-                            <div className="flex flex-wrap items-center gap-2">
-                                {(Object.keys(CHART_STYLE_LABELS) as DetailChartStyle[]).map((style) => {
-                                    const disabled = compareMode && style !== "line";
-                                    return (
-                                        <Button
-                                            key={style}
-                                            type="button"
-                                            size="sm"
-                                            variant={chartStyle === style ? "secondary" : "outline"}
-                                            disabled={disabled}
-                                            className="h-8 rounded-lg px-3 text-xs"
-                                            onClick={() => onStyleChange(style)}
-                                        >
-                                            <ChartModeIcon mode={style} />
-                                            {CHART_STYLE_LABELS[style]}
-                                        </Button>
-                                    );
-                                })}
-                                {compareLoading && <Loader2 className="size-4 animate-spin text-white/40" />}
+                        <div className="flex shrink-0 flex-col gap-3 border-y border-white/[0.06] px-4 py-3 sm:px-6">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {(Object.keys(CHART_STYLE_LABELS) as DetailChartStyle[]).map((style) => {
+                                        const disabled = compareMode && style !== "line";
+                                        const active = chartStyle === style;
+                                        return (
+                                            <Button
+                                                key={style}
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                disabled={disabled}
+                                                className={cn(
+                                                    "h-8 rounded-lg border border-transparent bg-transparent px-3 text-xs text-white/48 hover:bg-white/[0.055] hover:text-white",
+                                                    active && "border-white/[0.10] bg-white/[0.12] text-white hover:bg-white/[0.14]"
+                                                )}
+                                                onClick={() => onStyleChange(style)}
+                                            >
+                                                <ChartModeIcon mode={style} />
+                                                {CHART_STYLE_LABELS[style]}
+                                            </Button>
+                                        );
+                                    })}
+                                    {compareLoading && <Loader2 className="size-4 animate-spin text-white/40" />}
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 rounded-full border border-white/[0.06] p-1">
+                                    {CHART_DETAIL_RANGES.map((value) => {
+                                        const active = range === value;
+                                        return (
+                                            <Button
+                                                key={value}
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                className={cn(
+                                                    "h-7 rounded-full bg-transparent px-2.5 text-[11px] text-white/45 hover:bg-white/[0.055] hover:text-white",
+                                                    active && "bg-white/[0.12] text-white hover:bg-white/[0.14]"
+                                                )}
+                                                onClick={() => onRangeChange(value)}
+                                            >
+                                                {value}
+                                            </Button>
+                                        );
+                                    })}
+                                </div>
                             </div>
-                            <div className="relative w-full sm:w-72">
+                            <div className="relative w-full sm:w-80">
                                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/35" />
                                 <Input
                                     value={compareQuery}
@@ -1530,21 +1556,7 @@ function MarketChartDialog({
                                     )}
                                 </div>
                             </div>
-                            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-3">
-                                <div className="flex flex-wrap gap-2">
-                                    {CHART_DETAIL_RANGES.map((value) => (
-                                        <Button
-                                            key={value}
-                                            type="button"
-                                            size="sm"
-                                            variant={range === value ? "secondary" : "outline"}
-                                            className="h-8 rounded-full px-3 text-xs"
-                                            onClick={() => onRangeChange(value)}
-                                        >
-                                            {value}
-                                        </Button>
-                                    ))}
-                                </div>
+                            <div className="mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-white/[0.06] pt-3">
                                 <Button
                                     type="button"
                                     size="sm"

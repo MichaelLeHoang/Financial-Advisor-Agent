@@ -24,6 +24,7 @@ interface Message {
   content: string;
   status?: "fetching" | "done";
   researchTicker?: string;
+  researchRunId?: string;
 }
 
 const GREETING: Message = {
@@ -73,6 +74,15 @@ function extractInvestmentTicker(message: string) {
   if (!hasIntent) return null;
   const match = message.match(/\b[A-Z]{1,5}(?:\.[A-Z]{1,3})?\b/);
   return match?.[0] ?? null;
+}
+
+function extractTickerForResearch(message: string) {
+  const command = extractResearchCommand(message);
+  if (command) return command.ticker;
+  const intentTicker = extractInvestmentTicker(message);
+  if (intentTicker) return intentTicker.toUpperCase();
+  const match = message.match(/\b[A-Z]{1,5}(?:\.[A-Z]{1,3})?\b/);
+  return match?.[0]?.toUpperCase() ?? null;
 }
 
 const WORKFLOW_STEPS = [
@@ -289,13 +299,23 @@ export default function ChatPage() {
     const researchCommand = extractResearchCommand(text);
     const investmentTicker = researchCommand?.ticker ?? extractInvestmentTicker(text);
 
-    if (researchCommand) {
+    if (researchCommand || version === "2.1") {
+      const ticker = researchCommand?.ticker ?? extractTickerForResearch(text);
+      if (!ticker) {
+        setMessages((prev) => [...prev, userMsg, {
+          id: getUniqueId(),
+          role: "assistant",
+          content: "QuanAd 2.1 needs a ticker to start a full Equity Research Desk run. Try `AAPL`, `NVDA`, or `/analyze MSFT deep`.",
+        }]);
+        isStreamingRef.current = false;
+        return;
+      }
       setMessages((prev) => [...prev, userMsg, { id: getUniqueId(), role: "assistant", content: "Creating QuanAd 2.1 research run...", status: "fetching" }]);
       setIsLoading(true);
       try {
         const run = await api.createEquityResearchRun({
-          ticker: researchCommand.ticker,
-          research_depth: researchCommand.depth,
+          ticker,
+          research_depth: researchCommand?.depth ?? "shallow",
           source_surface: "ai_advisor",
         });
         setMessages((prev) =>
@@ -304,6 +324,7 @@ export default function ChatPage() {
             role: "assistant",
             content: `QuanAd 2.1 research run created for ${run.ticker}. Open the full workspace: /research/${run.run_id}`,
             researchTicker: run.ticker,
+            researchRunId: run.run_id,
           })
         );
       } catch (err: any) {
@@ -486,7 +507,7 @@ export default function ChatPage() {
               {msg.status === "fetching" ? (
                 <div className="w-full max-w-[92%] sm:max-w-[75%]">
                   <Plan
-                    mode={version === "2.0" ? "consensus" : "single"}
+                    mode={version === "2.1" ? "research" : version === "2.0" ? "consensus" : "single"}
                     isActive={true}
                     activeTool={activeTool}
                     completedTools={completedTools}
@@ -506,24 +527,30 @@ export default function ChatPage() {
                       <div className="space-y-3">
                         <Markdown content={msg.content} />
                         <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
-                          <p className="text-sm font-semibold text-white">Generate a full QuanAd 2.1 Research Report?</p>
+                          <p className="text-sm font-semibold text-white">
+                            {msg.researchRunId ? "QuanAd 2.1 Research Report" : "Generate a full QuanAd 2.1 Research Report?"}
+                          </p>
                           <p className="mt-1 text-xs leading-5 text-white/55">
-                            Run market, news, sentiment, fundamentals, trading, and risk-management agents for {msg.researchTicker}.
+                            {msg.researchRunId
+                              ? `The Equity Research Desk run for ${msg.researchTicker} is ready to open.`
+                              : `Run market, news, sentiment, fundamentals, trading, and risk-management agents for ${msg.researchTicker}.`}
                           </p>
                           <div className="mt-3 flex flex-wrap gap-2">
                             <Link
-                              href={`/research?ticker=${encodeURIComponent(msg.researchTicker)}&source=ai_advisor`}
+                              href={msg.researchRunId ? `/research/${msg.researchRunId}?from=ai_advisor` : `/research?ticker=${encodeURIComponent(msg.researchTicker)}&source=ai_advisor`}
                               className="inline-flex h-9 items-center rounded-lg bg-indigo-primary px-3 text-xs font-semibold text-white hover:bg-indigo-primary/90"
                             >
-                              Generate Full Report
+                              {msg.researchRunId ? "Open Full Report" : "Generate Full Report"}
                             </Link>
-                            <button
-                              type="button"
-                              onClick={() => setInput(`Give me a quick answer on ${msg.researchTicker}.`)}
-                              className="inline-flex h-9 items-center rounded-lg border border-white/[0.10] px-3 text-xs font-semibold text-white/60 hover:text-white"
-                            >
-                              Quick Answer
-                            </button>
+                            {!msg.researchRunId && (
+                              <button
+                                type="button"
+                                onClick={() => setInput(`Give me a quick answer on ${msg.researchTicker}.`)}
+                                className="inline-flex h-9 items-center rounded-lg border border-white/[0.10] px-3 text-xs font-semibold text-white/60 hover:text-white"
+                              >
+                                Quick Answer
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>

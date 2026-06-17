@@ -8,8 +8,11 @@ import {
   ArrowRight,
   BarChart3,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Circle,
   CircleDotDashed,
+  Download,
   ExternalLink,
   FileText,
   Lock,
@@ -40,6 +43,8 @@ const AGENT_GROUPS = [
   { title: "Risk Management Agents", agents: [["risky", "Risky Analyst"], ["neutral", "Neutral Analyst"], ["safe", "Safe Analyst"]] },
   { title: "Final Verdict", agents: [["pm", "Portfolio Manager"]] },
 ] as const;
+
+const AGENT_ORDER: string[] = AGENT_GROUPS.flatMap((group) => group.agents.map(([key]) => key));
 
 const REPORT_FILES: Record<string, string> = {
   market: "market_report.md",
@@ -292,43 +297,69 @@ export function AgentProgressSidebar({
   compact?: boolean;
 }) {
   const reportByAgent = useMemo(() => new Map(reports.map((report) => [report.agent_key, report])), [reports]);
-  const firstPendingMarkedRunning = status === "running";
-  let markedRunning = false;
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set(AGENT_GROUPS.map((group) => group.title)));
+  const runningAgentKey = useMemo(() => {
+    if (status !== "running") return null;
+    for (const group of AGENT_GROUPS) {
+      const pending = group.agents.find(([key]) => !reportByAgent.has(key));
+      if (pending) return pending[0];
+    }
+    return null;
+  }, [reportByAgent, status]);
 
   return (
     <div className={cn("space-y-4", compact && "space-y-3")}>
-      {AGENT_GROUPS.map((group) => (
-        <div key={group.title}>
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-white/32">{group.title}</p>
-          <div className="space-y-1">
-            {group.agents.map(([key, name]) => {
-              const report = reportByAgent.get(key);
-              let agentStatus = report?.status ?? "pending";
-              if (!report && firstPendingMarkedRunning && !markedRunning) {
-                agentStatus = "running";
-                markedRunning = true;
-              }
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  disabled={!report}
-                  onClick={() => report && onSelectAgent?.(key)}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors",
-                    selectedAgent === key ? "bg-indigo-primary/16 text-white" : "text-white/58 hover:bg-white/[0.05]",
-                    !report && "cursor-default hover:bg-transparent"
-                  )}
-                >
-                  <StatusIcon status={agentStatus} />
-                  <span className="min-w-0 flex-1 truncate">{name}</span>
-                  {report && <span className="text-[10px] text-white/30">{REPORT_FILES[key]}</span>}
-                </button>
-              );
-            })}
+      {AGENT_GROUPS.map((group) => {
+        const expanded = expandedGroups.has(group.title);
+        return (
+          <div key={group.title}>
+            <button
+              type="button"
+              aria-expanded={expanded}
+              onClick={() => {
+                setExpandedGroups((current) => {
+                  const next = new Set(current);
+                  if (next.has(group.title)) next.delete(group.title);
+                  else next.add(group.title);
+                  return next;
+                });
+              }}
+              className="mb-2 flex w-full items-center justify-between rounded-lg px-1.5 py-1 text-left text-[11px] font-semibold uppercase tracking-widest text-indigo-primary transition-colors hover:bg-white/[0.04] hover:text-indigo-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/40"
+            >
+              <span>{group.title}</span>
+              {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+            </button>
+            {expanded && (
+              <div className="space-y-1">
+                {group.agents.map(([key, name]) => {
+                  const report = reportByAgent.get(key);
+                  let agentStatus = report?.status ?? "pending";
+                  if (!report && runningAgentKey === key) {
+                    agentStatus = "running";
+                  }
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      disabled={!report}
+                      onClick={() => report && onSelectAgent?.(key)}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors",
+                        selectedAgent === key ? "bg-indigo-primary/16 text-white" : "text-white/58 hover:bg-white/[0.05]",
+                        !report && "cursor-default hover:bg-transparent"
+                      )}
+                    >
+                      <StatusIcon status={agentStatus} />
+                      <span className="min-w-0 flex-1 truncate">{name}</span>
+                      {report && <span className="text-[10px] text-white/30">{REPORT_FILES[key]}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -354,7 +385,7 @@ export function MessagesToolsFeed({ events }: { events: EquityResearchEvent[] })
             </span>
             <span className="text-[10px] text-white/28">{new Date(event.timestamp).toLocaleTimeString()}</span>
           </div>
-          <p className="mt-2 text-sm font-semibold text-white/75">{event.label}</p>
+          <p className="mt-2 text-sm font-semibold text-indigo-primary">{event.label}</p>
           <p className="mt-1 text-xs leading-5 text-white/45">{event.content}</p>
           {event.tool_name && (
             <p className="mt-2 rounded-lg bg-black/20 px-2 py-1 font-mono text-[10px] text-cyan-200/70">{event.tool_name}</p>
@@ -383,7 +414,7 @@ function ConfigRow({ label, value, locked, lockText }: { label: string; value: s
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-widest text-white/32">{label}</p>
+        <p className="text-xs font-semibold uppercase tracking-widest text-indigo-primary">{label}</p>
         {locked && <Lock className="size-3.5 text-amber-warning" />}
       </div>
       <p className="mt-1 text-sm font-semibold capitalize text-white/72">{value}</p>
@@ -483,15 +514,16 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
       <aside className="space-y-4 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold text-white">Configuration</h3>
+            <h3 className="text-sm font-semibold text-indigo-primary">Configuration</h3>
             {detail.run.share_slug ? (
               <Link href={`/r/${detail.run.share_slug}`} className="text-xs text-indigo-200 hover:text-white">Shared</Link>
             ) : <ShareButton run={detail.run} />}
           </div>
           <AnalysisConfigPanel run={detail.run} />
+          <DownloadAnalysisButton detail={detail} />
         </div>
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
-          <h3 className="mb-3 text-sm font-semibold text-white">Messages & Tools</h3>
+          <h3 className="mb-3 text-sm font-semibold text-indigo-primary">Messages & Tools</h3>
           <MessagesToolsFeed events={events} />
         </div>
       </aside>
@@ -499,11 +531,73 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
   );
 }
 
+function DownloadAnalysisButton({ detail }: { detail: EquityResearchRunDetail }) {
+  const disabled = detail.reports.length === 0;
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => downloadResearchMarkdown(detail)}
+      className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-indigo-primary/25 bg-indigo-primary/10 px-3 py-2 text-xs font-semibold text-indigo-100 transition-colors hover:bg-indigo-primary/16 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+    >
+      <Download className="size-3.5" /> Download Analysis
+    </button>
+  );
+}
+
+function downloadResearchMarkdown(detail: EquityResearchRunDetail) {
+  const run = detail.run;
+  const orderedReports = [...detail.reports].sort((a, b) => {
+    const aIndex = AGENT_ORDER.indexOf(a.agent_key);
+    const bIndex = AGENT_ORDER.indexOf(b.agent_key);
+    return aIndex - bIndex;
+  });
+  const content = [
+    `# QuanAd 2.1 Equity Research Report: ${run.ticker}`,
+    "",
+    `- Company: ${run.company_name ?? "Unknown"}`,
+    `- Exchange: ${run.exchange ?? "Unknown"}`,
+    `- Analysis date: ${run.analysis_date}`,
+    `- Recommendation: ${run.recommendation.toUpperCase()}`,
+    `- Confidence: ${Math.round(run.confidence * 100)}%`,
+    `- Research depth: ${run.research_depth}`,
+    "",
+    run.final_summary ? `## Final Summary\n\n${run.final_summary}\n` : "",
+    "## Agent Reports",
+    "",
+    ...orderedReports.flatMap((report) => [
+      `### ${REPORT_FILES[report.agent_key] ?? report.title}`,
+      "",
+      report.markdown,
+      "",
+    ]),
+    "## Disclaimer",
+    "",
+    run.disclaimer,
+    "",
+  ].filter(Boolean).join("\n");
+
+  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${run.ticker.toLowerCase()}-quanad-2.1-analysis.md`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 function ShareButton({ run }: { run: EquityResearchRun }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   if (user.is_guest) {
-    return <span className="inline-flex items-center gap-1 text-xs text-white/35"><Lock className="size-3" /> Sign in to share</span>;
+    const next = `/research/${run.run_id}?from=${run.source_surface}`;
+    return (
+      <Link href={`/login?next=${encodeURIComponent(next)}`} className="inline-flex items-center gap-1 text-xs text-indigo-200 hover:text-white">
+        <Lock className="size-3" /> Sign in to share
+      </Link>
+    );
   }
   return (
     <button
@@ -533,7 +627,15 @@ function recommendationTone(recommendation: ResearchRecommendation) {
   return { label: "INSUFFICIENT DATA", className: "bg-slate-400/14 text-slate-200 ring-1 ring-slate-400/25" };
 }
 
-export function ResearchRunCompactResult({ run, from }: { run: EquityResearchRun; from?: ResearchSourceSurface }) {
+export function ResearchRunCompactResult({
+  run,
+  from,
+  showOpenLink = true,
+}: {
+  run: EquityResearchRun;
+  from?: ResearchSourceSurface;
+  showOpenLink?: boolean;
+}) {
   const tone = recommendationTone(run.recommendation);
   const fullReportHref = from ? `/research/${run.run_id}?from=${from}` : `/research/${run.run_id}`;
   return (
@@ -543,12 +645,14 @@ export function ResearchRunCompactResult({ run, from }: { run: EquityResearchRun
         <span className="text-xs text-white/45">{Math.round(run.confidence * 100)}% confidence</span>
       </div>
       <p className="mt-3 text-sm text-white/62">{run.final_summary ?? "Final verdict is pending."}</p>
-      <Link
-        href={fullReportHref}
-        className="on-accent accent-gradient-surface mt-4 inline-flex h-9 w-full items-center justify-center rounded-xl px-3 text-sm font-semibold"
-      >
-        Open Full Report
-      </Link>
+      {showOpenLink && (
+        <Link
+          href={fullReportHref}
+          className="on-accent accent-gradient-surface mt-4 inline-flex h-9 w-full items-center justify-center rounded-full px-3 text-sm font-semibold"
+        >
+          Open Full Report
+        </Link>
+      )}
     </div>
   );
 }
