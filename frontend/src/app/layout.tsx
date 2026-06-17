@@ -21,7 +21,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     || pathname.startsWith("/news")
     || pathname.startsWith("/blog")
     || pathname.startsWith("/pricing")
-    || pathname.startsWith("/docs");
+    || pathname.startsWith("/docs")
+    || pathname.startsWith("/research")
+    || pathname.startsWith("/r/");
 
   const [entryChecked, setEntryChecked] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);

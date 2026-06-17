@@ -594,6 +594,13 @@ export default function MarketPage() {
                             <Trash2 data-icon="inline-start" />
                             Clear all
                         </Button>
+                        <Link
+                            href="/research?source=market"
+                            className="inline-flex h-8 items-center gap-1 rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 px-3 text-sm font-medium text-indigo-100 transition-colors hover:bg-indigo-primary/18 hover:text-white"
+                        >
+                            <Radio className="size-3.5" />
+                            Research Desk
+                        </Link>
                         <span className="text-xs text-white/32">{stocks.length} symbols</span>
                     </div>
                 </div>
@@ -977,13 +984,13 @@ function MarketResearchDrawer({
                 ) : (
                     <div className="space-y-4">
                         <Link
-                            href={`/research/${detail.run.run_id}`}
+                            href={`/research/${detail.run.run_id}?from=market`}
                             className="inline-flex h-9 w-full items-center justify-center rounded-xl border border-white/[0.10] bg-white/[0.035] px-3 text-sm font-semibold text-white hover:bg-white/[0.06]"
                         >
                             Open Full Report
                         </Link>
                         {isComplete ? (
-                            <ResearchRunCompactResult run={detail.run} />
+                            <ResearchRunCompactResult run={detail.run} from="market" />
                         ) : (
                             <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
                                 <div className="mb-3 flex items-center justify-between">

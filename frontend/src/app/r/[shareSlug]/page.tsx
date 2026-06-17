@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { api } from "@/lib/api";
@@ -8,14 +8,15 @@ import type { PublicEquityResearchReport } from "@/lib/api";
 import Markdown from "@/components/ui/markdown";
 import { FinalDecisionCard, ReportFileList } from "@/components/equity-research/ResearchComponents";
 
-export default function SharedResearchReportPage({ params }: { params: { shareSlug: string } }) {
+export default function SharedResearchReportPage({ params }: { params: Promise<{ shareSlug: string }> }) {
+  const { shareSlug } = use(params);
   const [data, setData] = useState<PublicEquityResearchReport | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    api.publicEquityResearchReport(params.shareSlug)
+    api.publicEquityResearchReport(shareSlug)
       .then((payload) => {
         if (cancelled) return;
         setData(payload);
@@ -27,7 +28,7 @@ export default function SharedResearchReportPage({ params }: { params: { shareSl
     return () => {
       cancelled = true;
     };
-  }, [params.shareSlug]);
+  }, [shareSlug]);
 
   const report = data?.reports.find((item) => item.agent_key === selected) ?? data?.reports[0];
 

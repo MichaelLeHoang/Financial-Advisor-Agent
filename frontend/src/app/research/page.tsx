@@ -8,11 +8,16 @@ import { api } from "@/lib/api";
 import type { ResearchDepth, ResearchSourceSurface } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { ResearchDepthSelector, normalizeResearchTicker } from "@/components/equity-research/ResearchComponents";
+import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 
 function sourceFromQuery(value: string | null): ResearchSourceSurface {
   if (value === "intro-demo") return "introduction";
   if (value === "market" || value === "ai_advisor" || value === "shared" || value === "introduction") return value;
   return "research";
+}
+
+function researchRunHref(runId: string, source: ResearchSourceSurface) {
+  return `/research/${runId}?from=${source}`;
 }
 
 function ResearchLandingContent() {
@@ -36,7 +41,7 @@ function ResearchLandingContent() {
       source_surface: source,
       research_depth: depth,
     }).then((run) => {
-      if (!cancelled) router.replace(`/research/${run.run_id}`);
+      if (!cancelled) router.replace(researchRunHref(run.run_id, source));
     }).catch((err: any) => {
       if (!cancelled) setError(err.message ?? "Could not start research run.");
     }).finally(() => {
@@ -47,18 +52,18 @@ function ResearchLandingContent() {
     };
   }, [autoStart, depth, initialTicker, router, source]);
 
-  const start = async () => {
-    const normalized = normalizeResearchTicker(ticker);
+  const start = async (value = ticker) => {
+    const normalized = normalizeResearchTicker(value);
     if (!normalized) return;
     setLoading(true);
     setError(null);
     try {
       const run = await api.createEquityResearchRun({
         ticker: normalized,
-        source_surface: "research",
+        source_surface: source,
         research_depth: user.is_guest ? "shallow" : depth,
       });
-      router.push(`/research/${run.run_id}`);
+      router.push(researchRunHref(run.run_id, source));
     } catch (err: any) {
       setError(err.message ?? "Could not start research run.");
     } finally {
@@ -69,8 +74,8 @@ function ResearchLandingContent() {
   return (
     <main className="min-h-screen bg-[#06080d] px-4 py-6 text-white sm:px-8">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-        <Link href="/" className="inline-flex items-center gap-2 text-sm text-white/45 hover:text-white">
-          <ArrowLeft className="size-4" /> AI Advisor
+        <Link href={source === "market" ? "/market" : source === "introduction" ? "/introduction#equity-research-demo" : "/"} className="inline-flex items-center gap-2 text-sm text-white/45 hover:text-white">
+          <ArrowLeft className="size-4" /> {source === "market" ? "Market" : source === "introduction" ? "Introduction Demo" : "AI Advisor"}
         </Link>
         <Link href="/login" className="inline-flex h-9 items-center rounded-full border border-white/[0.12] bg-white/[0.035] px-3 text-sm font-semibold text-white/70 hover:text-white">
           Sign In
@@ -88,22 +93,21 @@ function ResearchLandingContent() {
 
         <div className="mt-8 w-full max-w-3xl">
           <div className="flex items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.045] p-1.5 shadow-[0_18px_60px_rgba(0,0,0,0.20)] focus-within:border-indigo-primary/55">
-            <input
+            <TickerSuggestionInput
               value={ticker}
-              onChange={(event) => setTicker(normalizeResearchTicker(event.target.value))}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  start();
-                }
+              onValueChange={(value) => setTicker(normalizeResearchTicker(value))}
+              onSelect={(selected) => {
+                setTicker(selected);
+                void start(selected);
               }}
+              existingTickers={[]}
               placeholder="Enter a ticker (AAPL, MSFT, NVDA...)"
-              className="h-12 min-w-0 flex-1 bg-transparent px-5 text-lg font-semibold text-white placeholder:text-white/30 focus:outline-none"
-              aria-label="Ticker for equity research"
+              className="min-w-0 flex-1"
+              inputClassName="h-12 rounded-full border-0 bg-transparent pl-10 pr-9 text-lg font-semibold text-white placeholder:text-white/30 focus-visible:ring-0"
             />
             <button
               type="button"
-              onClick={start}
+              onClick={() => start()}
               disabled={loading || !ticker}
               className="h-12 rounded-full bg-indigo-primary px-5 text-sm font-bold text-white transition-colors hover:bg-indigo-primary/90 disabled:opacity-45"
             >

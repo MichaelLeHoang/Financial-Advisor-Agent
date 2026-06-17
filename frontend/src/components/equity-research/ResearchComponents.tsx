@@ -31,6 +31,7 @@ import type {
 import { cn } from "@/lib/utils";
 import Markdown from "@/components/ui/markdown";
 import { useAuth } from "@/components/auth/AuthProvider";
+import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 
 const AGENT_GROUPS = [
   { title: "Analyst Agents", agents: [["market", "Market Analyst"], ["social", "Social Media Analyst"], ["news", "News Analyst"], ["fundamentals", "Fundamentals Analyst"]] },
@@ -77,8 +78,8 @@ export function TickerAnalyzeInput({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const submit = async () => {
-    const normalized = normalizeResearchTicker(ticker);
+  const submit = async (value = ticker) => {
+    const normalized = normalizeResearchTicker(value);
     if (!normalized) return;
     setLoading(true);
     setError(null);
@@ -93,7 +94,7 @@ export function TickerAnalyzeInput({
         research_depth: "shallow",
       });
       onCreated?.(run);
-      if (!onCreated) router.push(`/research/${run.run_id}`);
+      if (!onCreated) router.push(`/research/${run.run_id}?from=${source}`);
     } catch (err: any) {
       setError(err.message ?? "Could not start research run.");
     } finally {
@@ -104,22 +105,21 @@ export function TickerAnalyzeInput({
   return (
     <div className={cn("w-full", compact ? "max-w-xl" : "max-w-3xl")}>
       <div className="flex items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.045] p-1.5 shadow-[0_18px_60px_rgba(0,0,0,0.20)] focus-within:border-indigo-primary/55">
-        <input
+        <TickerSuggestionInput
           value={ticker}
-          onChange={(event) => setTicker(normalizeResearchTicker(event.target.value))}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              submit();
-            }
+          onValueChange={(value) => setTicker(normalizeResearchTicker(value))}
+          onSelect={(selected) => {
+            setTicker(selected);
+            void submit(selected);
           }}
+          existingTickers={[]}
           placeholder="Enter a ticker: AAPL, MSFT, NVDA..."
-          aria-label="Ticker for QuanAd 2.1 research"
-          className="h-11 min-w-0 flex-1 bg-transparent px-4 text-base font-semibold text-white placeholder:text-white/30 focus:outline-none"
+          className="min-w-0 flex-1"
+          inputClassName="h-11 rounded-full border-0 bg-transparent pl-10 pr-9 text-base font-semibold text-white placeholder:text-white/30 focus-visible:ring-0"
         />
         <button
           type="button"
-          onClick={submit}
+          onClick={() => submit()}
           disabled={loading || !ticker.trim()}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-primary text-white transition-colors hover:bg-indigo-primary/90 disabled:cursor-not-allowed disabled:opacity-45"
           aria-label="Generate research report"
@@ -134,36 +134,106 @@ export function TickerAnalyzeInput({
 
 export function EquityResearchIntroDemo() {
   return (
-    <section className="relative mx-auto mt-10 max-w-6xl overflow-hidden rounded-3xl border border-white/[0.08] bg-[#090b12] px-5 py-7 shadow-[0_24px_90px_rgba(0,0,0,0.32)] sm:px-8 sm:py-9">
+    <section id="equity-research-demo" className="relative mx-auto mt-10 max-w-6xl scroll-mt-24 overflow-hidden rounded-3xl border border-white/[0.08] bg-[#090b12] px-5 py-7 shadow-[0_24px_90px_rgba(0,0,0,0.32)] sm:px-8 sm:py-9">
       <div className="grid gap-7 lg:grid-cols-[1fr_0.8fr] lg:items-center">
         <div>
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-indigo-primary/25 bg-indigo-primary/10 px-3 py-1 text-xs font-semibold text-indigo-200">
             <Radio className="size-3.5" /> QuanAd 2.1 Equity Research Desk
           </div>
-          <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Try a QuanAd 2.1 Equity Research Run</h2>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/62">
-            Enter a ticker and watch QuanAd generate a structured research report through market, news, sentiment, fundamentals, trading, and risk-management agents.
-          </p>
+          <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">What stock would you like to analyze?</h2>
           <div className="mt-6">
             <TickerAnalyzeInput source="introduction" />
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-white/42">
-            <span>Guest demo includes shallow analysis.</span>
+            {/* <span>
+              Inspired by Trading Agent research patterns. Read the paper{" "}
+              <a href="https://arxiv.org/pdf/2412.20138" target="_blank" rel="noopener noreferrer" className="text-indigo-200 underline decoration-indigo-200/30 underline-offset-2 hover:text-white">
+                arXiv:2412.20138
+              </a>.
+            </span> */}
             <Link
-              href="/research"
+              href="/research?source=introduction"
               target="_blank"
               className="inline-flex items-center gap-1.5 text-indigo-200 hover:text-white"
             >
               Open full demo in new tab <ExternalLink className="size-3" />
             </Link>
           </div>
+      
+          <p className="mt-1 text-xs text-white/38"> Inspired by Trading Agent research patterns. Read the paper{" "}
+              <a href="https://arxiv.org/pdf/2412.20138" target="_blank" rel="noopener noreferrer" className="text-indigo-200 underline decoration-indigo-200/30 underline-offset-2 hover:text-white">
+                arXiv:2412.20138
+              </a>.
+          </p>
           <p className="mt-4 text-xs text-white/38">Not investment advice. For educational and informational use only.</p>
+          
         </div>
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
-          <AgentProgressSidebar reports={[]} status="running" compact />
+          <ResearchDemoProgressLoop />
         </div>
       </div>
     </section>
+  );
+}
+
+function ResearchDemoProgressLoop() {
+  const steps = [
+    "Market Analyst",
+    "News Analyst",
+    "Sentiment Analyst",
+    "Fundamentals Analyst",
+    "Bull Researcher",
+    "Bear Researcher",
+    "Trader",
+    "Risk Review",
+    "Portfolio Manager",
+  ];
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setActive((current) => (current + 1) % steps.length);
+    }, 1100);
+    return () => window.clearInterval(timer);
+  }, [steps.length]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-widest text-white/35">Workflow</p>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-indigo-primary via-cyan-secondary to-emerald-300 transition-[width] duration-500"
+          style={{ width: `${((active + 1) / steps.length) * 100}%` }}
+        />
+      </div>
+      <div className="space-y-1.5">
+        {steps.map((step, index) => {
+          const completed = index < active;
+          const running = index === active;
+          return (
+            <div
+              key={step}
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-2 py-2 transition-colors",
+                running ? "bg-indigo-primary/14 text-white" : completed ? "text-white/38" : "text-white/28"
+              )}
+            >
+              {running ? (
+                <CircleDotDashed className="size-4 animate-spin text-indigo-200" />
+              ) : completed ? (
+                <CheckCircle2 className="size-4 text-emerald-300" />
+              ) : (
+                <Circle className="size-4" />
+              )}
+              <span className="text-sm font-medium">{step}</span>
+              {running && <span className="ml-auto text-[10px] uppercase tracking-wider text-indigo-100/70">processing</span>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -463,8 +533,9 @@ function recommendationTone(recommendation: ResearchRecommendation) {
   return { label: "INSUFFICIENT DATA", className: "bg-slate-400/14 text-slate-200 ring-1 ring-slate-400/25" };
 }
 
-export function ResearchRunCompactResult({ run }: { run: EquityResearchRun }) {
+export function ResearchRunCompactResult({ run, from }: { run: EquityResearchRun; from?: ResearchSourceSurface }) {
   const tone = recommendationTone(run.recommendation);
+  const fullReportHref = from ? `/research/${run.run_id}?from=${from}` : `/research/${run.run_id}`;
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
       <div className="flex items-center justify-between gap-3">
@@ -473,7 +544,7 @@ export function ResearchRunCompactResult({ run }: { run: EquityResearchRun }) {
       </div>
       <p className="mt-3 text-sm text-white/62">{run.final_summary ?? "Final verdict is pending."}</p>
       <Link
-        href={`/research/${run.run_id}`}
+        href={fullReportHref}
         className="on-accent accent-gradient-surface mt-4 inline-flex h-9 w-full items-center justify-center rounded-xl px-3 text-sm font-semibold"
       >
         Open Full Report
