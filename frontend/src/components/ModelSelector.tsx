@@ -73,12 +73,20 @@ const MODELS: {
 
 // ─── Selector component ────────────────────
 
-export default function ModelSelector() {
+export default function ModelSelector({
+  placement = "bottom",
+  compact = false,
+}: {
+  placement?: "bottom" | "top";
+  compact?: boolean;
+}) {
   const { version, setVersion } = useModel();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const active = MODELS.find((m) => m.version === version) ?? MODELS[0];
   const ActiveIcon = active.icon;
+  const menuPosition = placement === "top" ? "bottom-12" : "top-12";
+  const menuAlignment = compact ? "right-0" : "left-0";
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -95,10 +103,10 @@ export default function ModelSelector() {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className="flex h-10 items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--surface-control)] px-4 text-sm font-semibold text-[var(--text-primary)] shadow-[var(--shadow-control)] transition-colors hover:bg-[var(--surface-control-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+        className={`flex h-10 items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--surface-control)] text-sm font-semibold text-[var(--text-primary)] shadow-[var(--shadow-control)] transition-colors hover:bg-[var(--surface-control-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 ${compact ? "px-3" : "px-4"}`}
       >
         <ActiveIcon className={`size-4 ${version === "2.0" ? "text-emerald-400" : version === "2.1" ? "text-cyan-300" : "text-indigo-primary"}`} />
-        {active.label}
+        <span className={compact ? "hidden sm:inline" : undefined}>{active.label}</span>
         <ChevronDown className="size-4 text-[var(--text-subtle)]" />
       </button>
 
@@ -110,7 +118,7 @@ export default function ModelSelector() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.98 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute left-0 top-12 z-30 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
+            className={`absolute ${menuAlignment} ${menuPosition} z-30 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]`}
           >
             <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-subtle)]">Models</div>
             {MODELS.map((model) => {

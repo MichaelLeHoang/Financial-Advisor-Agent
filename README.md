@@ -178,7 +178,7 @@ Each specialist returns a structured `AgentOpinion` with verdict, confidence, re
 | **Market and Watchlist** | Live quote lookup, symbol search, chart detail, comparison charts, market sections, and earnings context |
 | **Portfolio Workspace** | Supabase-backed portfolios and holdings with base currency, converted values, P&L, weights, and optimization |
 | **Sentiment Analysis** | FinBERT (ProsusAI) fine-tuned on financial text |
-| **ML Prediction** | Random Forest + LSTM trained on 2 years of OHLCV + technical indicators |
+| **ML Prediction** | Random Forest, LSTM, and ensemble return forecasts with walk-forward validation metrics |
 | **Statistical Profiling** | Returns distribution, skewness, kurtosis, autocorrelation |
 | **Risk Assessment** | VaR, CVaR, max drawdown, downside deviation, concentration analysis |
 | **Classical Optimization** | Markowitz Mean-Variance (scipy SLSQP) |
@@ -265,6 +265,11 @@ QDRANT_COLLECTION_NEWS=financial_news
 
 # Optional: Redis queue/cache
 REDIS_URL=redis://localhost:6379/0
+
+# Market data providers
+FINNHUB_API_KEY=
+ALPHA_VANTAGE_API_KEY=
+SEC_USER_AGENT=QuanAd research contact@example.com
 
 # Optional: embedding provider (local is free, gemini requires API)
 EMBEDDING_PROVIDER=local
@@ -377,7 +382,7 @@ The SaaS implementation plan, sprint checklists, service setup notes, and securi
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/v1/query` | RAG-only Q&A |
-| `POST` | `/api/v1/predict` | ML price prediction (RF or LSTM) |
+| `POST` | `/api/v1/predict` | ML prediction using RF, LSTM, or ensemble mode |
 | `POST` | `/api/v1/sentiment` | FinBERT sentiment analysis |
 | `POST` | `/api/v1/optimize` | Portfolio optimization (classical or quantum) |
 | `POST` | `/api/v1/ingest` | Manually trigger news ingestion |
@@ -470,6 +475,26 @@ curl -X POST http://localhost:8000/api/v1/agent/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "What is the current price of AAPL?", "mode": "single"}'
 ```
+
+### Example: ensemble prediction
+
+```bash
+curl -X POST http://localhost:8000/api/v1/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ticker": "AAPL",
+    "model": "ensemble",
+    "horizon_days": 1,
+    "lookback_period": "2y",
+    "target": "return",
+    "include_validation": true,
+    "include_backtest": true
+  }'
+```
+
+Ensemble prediction returns Random Forest, LSTM, simple-average, and weighted-ensemble forecasts. The simple average is the arithmetic mean of available model returns. The weighted ensemble uses inverse walk-forward validation MAE, so the lower-error model receives more weight. Validation metrics are reported on out-of-sample rolling windows: MAE and RMSE measure return forecast error, MAPE is included only when meaningful, and directional accuracy measures how often the predicted return sign matched the realized return sign.
+
+Prediction output is a robustness-oriented research signal, not guaranteed accuracy or financial advice.
 
 ### Example: Portfolio optimization
 

@@ -207,12 +207,18 @@ export default function HelpPage() {
               <p className="mt-2 text-sm leading-6 text-white/48">
                 Use the platform for research and workflow support only. AI outputs are not guarantees, recommendations, or professional financial advice.
               </p>
+              <Link href="/terms" className="mt-3 inline-flex text-sm font-semibold text-indigo-300 transition-colors hover:text-white">
+                Read Terms of Service
+              </Link>
             </div>
             <div id="privacy-policy" className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
               <h2 className="text-sm font-semibold text-white/86">Privacy Policy</h2>
               <p className="mt-2 text-sm leading-6 text-white/48">
                 Account, profile, and usage data support authentication, billing, product workflows, and customer support diagnostics.
               </p>
+              <Link href="/privacy" className="mt-3 inline-flex text-sm font-semibold text-indigo-300 transition-colors hover:text-white">
+                Read Privacy Policy
+              </Link>
             </div>
             <div id="other-policies" className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
               <h2 className="text-sm font-semibold text-white/86">Other Policies</h2>

@@ -1,9 +1,10 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Provider, Session, User } from "@supabase/supabase-js";
 import { api } from "@/lib/api";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+import { clearLocalChatHistory, notifyChatPrivacyReset } from "@/lib/local-chat-history";
 
 export type Plan = "free" | "pro" | "trader" | "quant" | "execution_addon";
 
@@ -25,7 +26,7 @@ interface AuthContextValue {
   updateProfile: (profile: Partial<Pick<AuthUser, "display_name" | "username" | "avatar_url">>) => void;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
-  signInWithOAuth: (provider: Provider) => Promise<void>;
+  signInWithOAuth: (provider: Provider, nextPath?: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -65,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser>(GUEST_USER);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const previousIdentityRef = useRef<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -139,6 +141,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (loading) return;
+    const identity = user.is_guest ? "guest" : `user:${user.id}`;
+    const previousIdentity = previousIdentityRef.current;
+    previousIdentityRef.current = identity;
+
+    if (previousIdentity && previousIdentity !== identity) {
+      clearLocalChatHistory();
+      notifyChatPrivacyReset();
+    }
+  }, [loading, user.id, user.is_guest]);
+
   const signIn = async (email: string, password: string) => {
     setError(null);
     const supabase = getSupabaseBrowserClient();
@@ -182,19 +196,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     const supabase = getSupabaseBrowserClient();
     await supabase.auth.signOut();
+    clearLocalChatHistory();
+    notifyChatPrivacyReset();
     setAuthSession(null);
     setUser(GUEST_USER);
     setError(null);
     api.setAuthToken(null);
   };
 
-  const signInWithOAuth = async (provider: Provider) => {
+  const signInWithOAuth = async (provider: Provider, nextPath = "/") => {
     setError(null);
     const supabase = getSupabaseBrowserClient();
+    const safeNext = nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/";
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/login?next=${encodeURIComponent(safeNext)}`,
       },
     });
     if (oauthError) {

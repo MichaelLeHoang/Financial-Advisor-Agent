@@ -406,6 +406,11 @@ export function AnalysisConfigPanel({ run }: { run: EquityResearchRun }) {
       <ConfigRow label="Quick Thinking" value={run.quick_model} locked={isGuest} lockText="Sign up to choose Quick Thinking models." />
       <ConfigRow label="Deep Thinking" value={run.deep_model} locked={isGuest} lockText="Sign up to choose Deep Thinking models." />
       <ConfigRow label="Analyst Team" value={run.selected_analysts.join(", ")} locked={isGuest} lockText="Sign up to customize analyst team." />
+      {isGuest && (
+        <p className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2 text-xs leading-5 text-white/42">
+          Public runs use fixed configuration. Sign in to configure future research runs before generation.
+        </p>
+      )}
     </div>
   );
 }
@@ -492,6 +497,7 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
   if (!detail) return <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-8 text-white/45">Loading QuanAd 2.1 workspace...</div>;
 
   const selectedReport = detail.reports.find((report) => report.agent_key === selectedAgent) ?? detail.reports.find((report) => report.agent_key === "pm") ?? detail.reports[0];
+  const hasFinalDecision = detail.reports.some((report) => report.agent_key === "pm");
 
   return (
     <div className="grid min-h-[calc(100vh-5rem)] gap-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
@@ -503,7 +509,12 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
         <ReportFileList reports={detail.reports} selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} />
         <article className="min-h-[30rem] rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
           {selectedReport ? (
-            <Markdown content={selectedReport.markdown} />
+            <>
+              <Markdown content={selectedReport.markdown} />
+              {selectedReport.agent_key === "pm" && detail.run.status === "completed" && (
+                <FinalDecisionDownloadGate detail={detail} />
+              )}
+            </>
           ) : (
             <div className="flex min-h-[20rem] items-center justify-center text-center text-white/42">
               Agent reports will appear here as the run progresses.
@@ -520,7 +531,15 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
             ) : <ShareButton run={detail.run} />}
           </div>
           <AnalysisConfigPanel run={detail.run} />
-          <DownloadAnalysisButton detail={detail} />
+          {detail.run.status === "completed" && hasFinalDecision && (
+            <button
+              type="button"
+              onClick={() => setSelectedAgent("pm")}
+              className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-indigo-primary/25 bg-indigo-primary/10 px-3 py-2 text-xs font-semibold text-indigo-100 transition-colors hover:bg-indigo-primary/16 hover:text-white"
+            >
+              <Download className="size-3.5" /> Download in Final Decision
+            </button>
+          )}
         </div>
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
           <h3 className="mb-3 text-sm font-semibold text-indigo-primary">Messages & Tools</h3>
@@ -531,17 +550,51 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
   );
 }
 
-function DownloadAnalysisButton({ detail }: { detail: EquityResearchRunDetail }) {
+function FinalDecisionDownloadGate({ detail }: { detail: EquityResearchRunDetail }) {
+  const { user } = useAuth();
   const disabled = detail.reports.length === 0;
+  const next = `/research/${detail.run.run_id}?from=${detail.run.source_surface}`;
+
+  if (user.is_guest) {
+    return (
+      <div className="mt-6 rounded-2xl border border-indigo-primary/20 bg-indigo-primary/10 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-indigo-primary">Download available after sign in</p>
+            <p className="mt-1 text-xs leading-5 text-white/48">
+              Create or sign in to an account to download this completed analysis.
+            </p>
+          </div>
+          <Link
+            href={`/login?next=${encodeURIComponent(next)}`}
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-indigo-primary/30 bg-indigo-primary/16 px-4 text-xs font-semibold text-indigo-100 transition-colors hover:bg-indigo-primary/24 hover:text-white"
+          >
+            <Lock className="size-3.5" /> Sign in to download
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => downloadResearchMarkdown(detail)}
-      className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-indigo-primary/25 bg-indigo-primary/10 px-3 py-2 text-xs font-semibold text-indigo-100 transition-colors hover:bg-indigo-primary/16 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
-    >
-      <Download className="size-3.5" /> Download Analysis
-    </button>
+    <div className="mt-6 rounded-2xl border border-indigo-primary/20 bg-indigo-primary/10 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-indigo-primary">Final report is ready</p>
+          <p className="mt-1 text-xs leading-5 text-white/48">
+            Download the full markdown package with the final decision and all agent reports.
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => downloadResearchMarkdown(detail)}
+          className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-indigo-primary/30 bg-indigo-primary/16 px-4 text-xs font-semibold text-indigo-100 transition-colors hover:bg-indigo-primary/24 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          <Download className="size-3.5" /> Download Analysis
+        </button>
+      </div>
+    </div>
   );
 }
 

@@ -1,5 +1,6 @@
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from src.auth.supabase import GUEST_USER_ID, get_current_or_guest_user
@@ -7,9 +8,22 @@ from src.saas.models import AuthenticatedUser, Plan
 from src.saas.repository import store
 
 
-def _override_user(user_id, plan=Plan.FREE):
+@pytest.fixture(autouse=True)
+def use_in_memory_saas_store(monkeypatch):
+    monkeypatch.setattr("src.saas.routes.get_store", lambda user=None: store)
+    yield
+    try:
+        from src.api.app import app
+
+        app.dependency_overrides.clear()
+    except Exception:
+        pass
+    store.reset()
+
+
+def _override_user(user_id, plan=Plan.FREE, is_guest=False):
     async def dependency():
-        return AuthenticatedUser(id=user_id, email=f"{user_id}@example.com", plan=plan, is_guest=True)
+        return AuthenticatedUser(id=user_id, email=f"{user_id}@example.com", plan=plan, is_guest=is_guest)
 
     return dependency
 
@@ -66,7 +80,7 @@ def test_watchlist_routes_are_user_scoped():
     store.reset()
 
 
-def test_routes_allow_anonymous_free_guest_access():
+def test_routes_restrict_anonymous_guest_persistence():
     from src.api.app import app
 
     client = TestClient(app)
@@ -79,12 +93,11 @@ def test_routes_allow_anonymous_free_guest_access():
     assert me.json()["is_guest"] is True
 
     created = client.post("/api/v1/portfolios", json={"name": "Guest Portfolio", "base_currency": "USD"})
-    assert created.status_code == 201
-    assert created.json()["user_id"] == str(GUEST_USER_ID)
+    assert created.status_code == 401
 
     listed = client.get("/api/v1/portfolios")
     assert listed.status_code == 200
-    assert len(listed.json()) == 1
+    assert listed.json() == []
 
     store.reset()
 

@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Brain, ClipboardList, Image, Loader2, Paperclip, PieChart, Send, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
-import { getDemoChatConversation } from "@/lib/demo-chat-history";
+import { loadLocalChatMessages, saveLocalChatMessages } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
 import ModelSelector, { useModel, apiModeFromVersion } from "@/components/ModelSelector";
@@ -143,7 +143,7 @@ const letterVariants = {
 };
 
 export default function ChatPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { version } = useModel();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -166,6 +166,24 @@ export default function ChatPage() {
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [completedTools, setCompletedTools] = useState<string[]>([]);
   const firstName = getFirstName(user?.display_name || user?.email || "");
+
+  useEffect(() => {
+    const handlePrivacyReset = () => {
+      isStreamingRef.current = false;
+      setMessages([GREETING]);
+      setInput("");
+      setIsLoading(false);
+      setIsHistoryLoading(false);
+      setUpgradeMessage(null);
+      setActiveTool(null);
+      setCompletedTools([]);
+      appliedPromptRef.current = null;
+      router.replace("/");
+    };
+
+    window.addEventListener("chat-privacy:reset", handlePrivacyReset);
+    return () => window.removeEventListener("chat-privacy:reset", handlePrivacyReset);
+  }, [router]);
 
   const handleInput = (e: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
@@ -202,7 +220,7 @@ export default function ChatPage() {
   }, [input]);
 
   useEffect(() => {
-    if (isStreamingRef.current) return;
+    if (authLoading || isStreamingRef.current) return;
     let cancelled = false;
 
     async function loadSession() {
@@ -210,6 +228,16 @@ export default function ChatPage() {
       setUpgradeMessage(null);
 
       try {
+        if (user.is_guest) {
+          const localMessages = loadLocalChatMessages(activeSessionId).map((message) => ({
+            id: String(message.id),
+            role: message.role,
+            content: message.content,
+          }));
+          if (!cancelled) setMessages(localMessages.length > 0 ? localMessages : [GREETING]);
+          return;
+        }
+
         const res = await api.chatSessionMessages(activeSessionId);
         if (cancelled) return;
 
@@ -218,26 +246,9 @@ export default function ChatPage() {
           role: message.role,
           content: message.content,
         }));
-        const demoConversation = getDemoChatConversation(activeSessionId);
-        const demoMessages = demoConversation?.messages.map((message) => ({
-          id: String(message.id),
-          role: message.role,
-          content: message.content,
-        })) ?? [];
-        setMessages(loadedMessages.length > 0 ? loadedMessages : demoMessages.length > 0 ? demoMessages : [GREETING]);
+        setMessages(loadedMessages.length > 0 ? loadedMessages : [GREETING]);
       } catch (err: any) {
         if (cancelled) return;
-        const demoConversation = getDemoChatConversation(activeSessionId);
-        if (demoConversation) {
-          setMessages(
-            demoConversation.messages.map((message) => ({
-              id: String(message.id),
-              role: message.role,
-              content: message.content,
-            }))
-          );
-          return;
-        }
         setMessages([
           {
             id: "history-error",
@@ -256,7 +267,16 @@ export default function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeSessionId]);
+  }, [activeSessionId, authLoading, user.id, user.is_guest]);
+
+  useEffect(() => {
+    if (authLoading || !user.is_guest || isHistoryLoading) return;
+    if (activeSessionId === "default") return;
+    if (!messages.some((message) => message.role === "user")) return;
+
+    saveLocalChatMessages(activeSessionId, messages);
+    window.dispatchEvent(new Event("chat-sessions:changed"));
+  }, [activeSessionId, authLoading, isHistoryLoading, messages, user.id, user.is_guest]);
 
   useEffect(() => {
     const prompt = promptParam?.trim();
@@ -357,9 +377,10 @@ export default function ChatPage() {
 
     try {
       const mode = apiModeFromVersion(version);
+      const remember = !user.is_guest;
       let res;
       try {
-        const queued = await api.chatJob(text, targetSessionId, true, mode);
+        const queued = await api.chatJob(text, targetSessionId, remember, mode);
 
         res = await api.waitForChatJob(queued.job_id, (job) => {
           if (job.status === "queued") {
@@ -390,7 +411,7 @@ export default function ChatPage() {
               : m
           )
         );
-        res = await api.chat(text, targetSessionId, true, mode);
+        res = await api.chat(text, targetSessionId, remember, mode);
       }
 
       setMessages((prev) =>
@@ -445,12 +466,8 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden">
-      <div className="absolute left-4 top-3 z-20 sm:left-8 sm:top-6">
-        <ModelSelector />
-      </div>
-
       {/* Messages */}
-      <div ref={scrollRef} className="relative flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-16 sm:space-y-6 sm:px-8 sm:pb-4 sm:pt-24">
+      <div ref={scrollRef} className="relative flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-4 sm:space-y-6 sm:px-8 sm:pb-4 sm:pt-6">
         {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
         {isHistoryLoading && (
           <Card className="mx-auto max-w-fit rounded-xl border-indigo-primary/30 bg-indigo-primary/10 px-4 py-2 text-sm text-indigo-primary shadow-none">
@@ -573,7 +590,7 @@ export default function ChatPage() {
           layout
           ref={wrapperRef}
           onClick={() => setIsActive(true)}
-          className="mx-auto w-full max-w-5xl overflow-hidden rounded-[24px] border bg-white/[0.045] p-1.5 text-white transition-colors sm:p-2 cursor-text"
+          className="mx-auto w-full max-w-5xl overflow-visible rounded-[24px] border bg-white/[0.045] p-1.5 text-white transition-colors sm:p-2 cursor-text"
           animate={{
             borderColor: isActive || input ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)",
             backgroundColor: isActive || input ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.035)",
@@ -594,9 +611,9 @@ export default function ChatPage() {
                 }
               }}
               rows={1}
-              className="relative z-10 w-full max-h-[240px] min-h-12 border-transparent bg-transparent pl-3 pr-12 py-3 text-sm text-white focus-visible:border-transparent focus-visible:ring-0 sm:min-h-14 sm:pl-4 sm:pr-14 sm:py-3.5 resize-none overflow-y-auto"
+              className="relative z-10 w-full max-h-[240px] min-h-12 border-transparent bg-transparent px-3 py-3 text-sm text-white focus-visible:border-transparent focus-visible:ring-0 sm:min-h-14 sm:px-4 sm:py-3.5 resize-none overflow-y-auto"
             />
-            <div className="absolute inset-0 pointer-events-none flex items-start pl-3 pr-12 py-3 sm:pl-4 sm:pr-14 sm:py-3.5">
+            <div className="absolute inset-0 pointer-events-none flex items-start px-3 py-3 sm:px-4 sm:py-3.5">
               <AnimatePresence mode="wait">
                 {showPlaceholder && !isActive && !input && (
                   <motion.span
@@ -616,18 +633,6 @@ export default function ChatPage() {
                 )}
               </AnimatePresence>
             </div>
-
-            <div className="absolute right-1.5 bottom-1.5 z-20 sm:right-2 sm:bottom-2">
-              <Button
-                onClick={handleSend}
-                disabled={isLoading}
-                size="icon"
-                className="on-accent accent-gradient-surface h-9 w-9 shrink-0 rounded-xl shadow-[var(--shadow-primary-action)] hover:shadow-[var(--shadow-primary-action-hover)]"
-                aria-label="Send message"
-              >
-                <Send className="w-4 h-4" />
-              </Button>
-            </div>
           </div>
           <AnimatePresence>
             {(isActive || input) && (
@@ -636,7 +641,7 @@ export default function ChatPage() {
                 animate={{ opacity: 1, height: "auto", filter: "blur(0px)" }}
                 exit={{ opacity: 0, height: 0, filter: "blur(8px)" }}
                 transition={{ duration: 0.25 }}
-                className="overflow-hidden"
+                className="relative z-20"
               >
                 <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] px-1.5 pt-2 sm:gap-3 sm:px-2 sm:pt-3">
                   <div className="flex items-center gap-1 sm:gap-1.5">
@@ -658,6 +663,19 @@ export default function ChatPage() {
                       accept="image/*"
                       onChange={(event) => handleUpload(event, "image")}
                     />
+                  </div>
+
+                  <div className="ml-auto flex shrink-0 items-center gap-2">
+                    <ModelSelector placement="top" compact />
+                    <Button
+                      onClick={handleSend}
+                      disabled={isLoading || !input.trim()}
+                      size="icon"
+                      className="on-accent accent-gradient-surface h-10 w-10 shrink-0 rounded-full shadow-[var(--shadow-primary-action)] hover:shadow-[var(--shadow-primary-action-hover)] disabled:opacity-45"
+                      aria-label="Send message"
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
               </motion.div>

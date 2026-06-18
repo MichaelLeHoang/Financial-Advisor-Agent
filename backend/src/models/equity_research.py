@@ -114,6 +114,11 @@ class EquityResearchSnapshot(BaseModel):
     sentiment_summary: dict[str, Any] = Field(default_factory=dict)
     risk_metrics: dict[str, Any] = Field(default_factory=dict)
     data_sources: list[str] = Field(default_factory=list)
+    source_quality: dict[str, Any] = Field(default_factory=dict)
+    provider_status: list[dict[str, Any]] = Field(default_factory=list)
+    evidence_items: list[dict[str, Any]] = Field(default_factory=list)
+    analyst_context: dict[str, Any] = Field(default_factory=dict)
+    filing_context: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 

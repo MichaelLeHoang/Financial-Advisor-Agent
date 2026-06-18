@@ -49,6 +49,8 @@ export default function ProfileMenu({
     const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [policyAccepted, setPolicyAccepted] = useState(false);
+    const [authFormError, setAuthFormError] = useState<string | null>(null);
     const [authSubmitting, setAuthSubmitting] = useState(false);
     const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -60,6 +62,11 @@ export default function ProfileMenu({
 
     const submitAuth = async (event: FormEvent) => {
         event.preventDefault();
+        setAuthFormError(null);
+        if (authMode === "signup" && !policyAccepted) {
+            setAuthFormError("Please agree to the Terms of Service and Privacy Policy to create an account.");
+            return;
+        }
         setAuthSubmitting(true);
         try {
             if (authMode === "signin") {
@@ -234,10 +241,26 @@ export default function ProfileMenu({
                             required
                             minLength={6}
                         />
-                        {authError && <p className="text-xs text-red-negative">{authError}</p>}
+                        {authMode === "signup" && (
+                            <label className="flex items-start gap-2 rounded-lg border border-white/[0.06] bg-white/[0.025] p-2">
+                                <input
+                                    type="checkbox"
+                                    checked={policyAccepted}
+                                    onChange={(event) => setPolicyAccepted(event.target.checked)}
+                                    className="mt-1 size-3.5 rounded border-white/15 bg-white/5 accent-indigo-primary"
+                                />
+                                <span className="text-[11px] leading-4 text-white/45">
+                                    I agree to the{" "}
+                                    <a href="/terms" target="_blank" rel="noopener noreferrer" className="font-semibold text-indigo-300 hover:text-white">Terms</a>
+                                    {" "}and{" "}
+                                    <a href="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-indigo-300 hover:text-white">Privacy Policy</a>.
+                                </span>
+                            </label>
+                        )}
+                        {(authFormError || authError) && <p className="text-xs text-red-negative">{authFormError || authError}</p>}
                         <Button
                             type="submit"
-                            disabled={authSubmitting}
+                            disabled={authSubmitting || (authMode === "signup" && !policyAccepted)}
                             className="theme-solid-action h-10 w-full rounded-lg text-sm font-semibold"
                         >
                             {authSubmitting ? "Working..." : authMode === "signin" ? "Sign in" : "Create account"}

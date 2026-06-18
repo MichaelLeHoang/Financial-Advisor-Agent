@@ -1,6 +1,6 @@
 import asyncio
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials
 import inngest.fast_api
@@ -16,11 +16,13 @@ from src.services.ingestion import ingest_news
 
 from src.ml.preprocessing import prepare_training_data
 from src.ml.models import RandomForestPredictor, LSTMPredictor, evaluate_model
+from src.ml.ensemble import EnsemblePredictionService, PredictionDataError
 from src.ml.sentiment import SentimentAnalyzer
 
 from src.quantum.portfolio import optimize_portfolio, quantum_optimize_portfolio
 from src.agent.agent import FinancialAdvisorAgent
 from src.config import settings
+from src.data.market_data_service import market_data_service
 from src.data.vector_db import get_qdrant_client
 from src.auth.supabase import get_current_or_guest_user
 from src.saas.entitlements import FeatureKey, enforce_feature
@@ -38,8 +40,7 @@ from src.api.equity_research import router as equity_research_router
 from src.llm.routing_policy import LLMMode
 from src.core.redis_client import RedisUnavailable
 
-from pydantic import BaseModel
-import yfinance as yf
+from pydantic import BaseModel, Field
 import math
 
 MARKET_QUOTE_TIMEOUT_SECONDS = 12
@@ -103,8 +104,14 @@ def get_agent(
 # Request/Response Models
 class PredictRequest(BaseModel):
     ticker: str = "AAPL"
-    model_type: str = "random_forest"  # "random_forest" or "lstm"
+    model_type: str = "ensemble"  # "random_forest", "lstm", or "ensemble"
+    model: str | None = None
     sequence_length: int = 5
+    horizon_days: int = Field(default=1, ge=1)
+    lookback_period: str = "2y"
+    target: str = "return"
+    include_validation: bool = True
+    include_backtest: bool = True
 
 class SentimentRequest(BaseModel):
     texts: list[str]
@@ -139,6 +146,30 @@ class AgentJobStatusResponse(BaseModel):
     created_at: float | None = None
     started_at: float | None = None
     finished_at: float | None = None
+
+
+def _chat_session_conflict_message() -> str:
+    return "Chat session not found"
+
+
+def _ensure_chat_session_available(session_id: str, user: AuthenticatedUser) -> None:
+    """Reject client-supplied session ids that already belong to another user."""
+    if user.is_guest:
+        return
+    from src.agent.history import session_claimed_by_another_user
+
+    if session_claimed_by_another_user(session_id, str(user.id)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message())
+
+
+def _ensure_chat_session_owned(session_id: str, user: AuthenticatedUser) -> None:
+    """Require an existing saved session owned by the current authenticated user."""
+    if user.is_guest:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to use saved chat sessions.")
+    from src.agent.history import session_belongs_to_user
+
+    if not session_belongs_to_user(session_id, str(user.id)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message())
 
 class EarningsPoint(BaseModel):
     date: str
@@ -197,6 +228,9 @@ class MarketQuoteResponse(BaseModel):
     history: list[MarketQuotePoint]
     earnings: list[EarningsPoint] = []
     quarterly_financials: list[QuarterlyFinancial] = []
+    data_sources: list[str] = []
+    source_quality: dict | None = None
+    provider_status: list[dict] = []
 
 
 def _service_state(configured: bool, ok: bool | None = None, detail: str | None = None) -> dict:
@@ -287,6 +321,20 @@ def _status_rollup(services: dict[str, dict]) -> dict:
         "degraded_optional_services": optional_errors,
     }
 
+
+def _market_data_status() -> dict:
+    providers = {
+        "finnhub": settings.is_configured("finnhub_api_key"),
+        "alpha_vantage": settings.is_configured("alpha_vantage_api_key"),
+        "sec_edgar": bool(settings.sec_user_agent),
+        "yfinance_fallback": True,
+    }
+    return {
+        "status": "configured" if providers["finnhub"] or providers["alpha_vantage"] else "fallback_only",
+        "providers": providers,
+        "primary_order": ["finnhub", "alpha_vantage", "sec_edgar", "yfinance_fallback"],
+    }
+
 # basic api endpoints 
 
 @app.get("/health")
@@ -325,6 +373,7 @@ async def service_status():
             or settings.is_configured("telegram_bot_token")
             or settings.is_configured("notification_secret_key")
         ),
+        "market_data": _market_data_status(),
     }
     rollup = _status_rollup(services)
 
@@ -336,6 +385,45 @@ async def service_status():
     }
 
 def _fetch_market_quote_response(normalized: str, period: str, interval: str) -> MarketQuoteResponse:
+    snapshot = market_data_service.fetch_snapshot(normalized, period=period, interval=interval, include_news=False, include_sec=False)
+    if snapshot.latest_price is None and not snapshot.history:
+        raise HTTPException(status_code=404, detail=f"No market data found for {normalized}")
+
+    return MarketQuoteResponse(
+        ticker=normalized,
+        name=snapshot.company_name or normalized,
+        exchange=snapshot.exchange,
+        sector=snapshot.sector,
+        price=round(float(snapshot.latest_price or (snapshot.history[-1].price if snapshot.history else 0)), 2),
+        change=round(float(snapshot.daily_change or 0), 2),
+        currency=snapshot.currency,
+        open_price=_round_optional(snapshot.open_price),
+        day_high=_round_optional(snapshot.day_high),
+        day_low=_round_optional(snapshot.day_low),
+        market_cap=snapshot.market_cap,
+        volume=snapshot.volume,
+        pe_ratio=_round_optional(snapshot.pe_ratio),
+        fifty_two_week_high=_round_optional(snapshot.fifty_two_week_high),
+        fifty_two_week_low=_round_optional(snapshot.fifty_two_week_low),
+        dividend_yield=_round_optional(snapshot.dividend_yield),
+        dividend_rate=_round_optional(snapshot.dividend_rate),
+        quarterly_dividend_amount=_round_optional((snapshot.dividend_rate / 4) if snapshot.dividend_rate else None),
+        history=[
+            MarketQuotePoint(
+                label=point.label,
+                price=point.price,
+                volume=point.volume,
+                open=_round_optional(point.open),
+                high=_round_optional(point.high),
+                low=_round_optional(point.low),
+            )
+            for point in snapshot.history
+        ],
+        data_sources=snapshot.data_sources,
+        source_quality=snapshot.source_quality,
+        provider_status=[status.__dict__ for status in snapshot.provider_status],
+    )
+
     try:
         stock = yf.Ticker(normalized)
         info = stock.info or {}
@@ -542,36 +630,16 @@ async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
 
 def _search_market_symbols(query: str, safe_limit: int) -> list[MarketSymbolSearchResult]:
     try:
-        search = yf.Search(
-            query,
-            max_results=safe_limit,
-            news_count=0,
-            lists_count=0,
-            include_research=False,
-            include_cultural_assets=False,
-            enable_fuzzy_query=True,
-        )
-        results = []
-        seen = set()
-
-        for quote in search.quotes or []:
-            symbol = str(quote.get("symbol") or "").strip().upper()
-            if not symbol or symbol in seen:
-                continue
-            seen.add(symbol)
-            results.append(
-                MarketSymbolSearchResult(
-                    ticker=symbol,
-                    name=quote.get("longname") or quote.get("shortname") or symbol,
-                    exchange=quote.get("exchDisp") or quote.get("exchange"),
-                    sector=quote.get("sectorDisp") or quote.get("sector") or quote.get("quoteType"),
-                    quote_type=quote.get("typeDisp") or quote.get("quoteType"),
-                )
+        return [
+            MarketSymbolSearchResult(
+                ticker=row["ticker"],
+                name=row["name"],
+                exchange=row.get("exchange"),
+                sector=row.get("sector"),
+                quote_type=row.get("quote_type"),
             )
-            if len(results) >= safe_limit:
-                break
-
-        return results
+            for row in market_data_service.search_symbols(query, safe_limit)
+        ]
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Unable to search market symbols: {exc}")
 
@@ -662,30 +730,57 @@ async def predict_stock(req: PredictRequest, user: AuthenticatedUser = Depends(g
     Train a model on historical data and predict direction.
     POST /api/v1/predict
     {"ticker": "AAPL", "model_type": "random_forest", "sequence_length": 5}
+    {"ticker": "AAPL", "model": "ensemble", "include_validation": true}
     """
     enforce_feature(user, FeatureKey.ML_PREDICTION)
-    try: 
+    selected_model = (req.model or req.model_type or "ensemble").strip().lower()
+    ticker = req.ticker.strip().upper()
+    if not ticker:
+        raise HTTPException(status_code=400, detail="Ticker is required")
+    if selected_model == "ensemble":
+        if req.target != "return":
+            raise HTTPException(status_code=400, detail="Only target='return' is supported for ensemble predictions")
+        try:
+            service = EnsemblePredictionService()
+            return await asyncio.to_thread(
+                service.predict_with_models,
+                ticker,
+                horizon_days=req.horizon_days,
+                lookback_period=req.lookback_period,
+                target=req.target,
+                include_validation=req.include_validation,
+                include_backtest=req.include_backtest,
+                sequence_length=max(req.sequence_length, 2),
+            )
+        except PredictionDataError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Unable to run ensemble prediction for {ticker}: {exc}") from exc
+
+    try:
         data = prepare_training_data(
-            req.ticker, 
+            ticker,
             sequence_length=req.sequence_length,
-            model_type=req.model_type,
+            model_type=selected_model,
         )
-        if req.model_type == "random_forest":
+        if selected_model == "random_forest":
             model = RandomForestPredictor(n_estimators=200)
-        elif req.model_type == "lstm":
+        elif selected_model == "lstm":
             model = LSTMPredictor(epochs=20)
         else:
-            raise HTTPException(status_code=400, detail="Invalid model_type. Must be 'random_forest' or 'lstm'")
+            raise HTTPException(status_code=400, detail="Invalid model. Must be 'random_forest', 'lstm', or 'ensemble'")
         
         train_metrics = model.train(data["X_train"], data["y_train"])
         test_metrics = evaluate_model(model, data["X_test"], data["y_test"], data["scaler"])
         
         return {
-            "ticker": req.ticker,
-            "model_type": req.model_type,
+            "ticker": ticker,
+            "model_type": selected_model,
             "train_metrics": train_metrics,
             "test_metrics": test_metrics,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -742,16 +837,17 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
     from src.agent.history import load_history, append_message
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
+    _ensure_chat_session_available(req.session_id, user)
     try:
         agent = get_agent(user=user, task_type="chat", preferred_mode=req.preferred_mode)
 
-        # Load persistent history for this session
-        history = load_history(req.session_id, str(user.id))
+        # Guests can chat, but their conversation state must stay client-local.
+        history = [] if user.is_guest else load_history(req.session_id, str(user.id))
         agent._history = [{"role": item["role"], "content": item["content"]} for item in history]
         response = agent.chat(req.message, remember=False, mode=req.mode)  # we handle persistence
 
         # Persist both turns
-        if req.remember:
+        if req.remember and not user.is_guest:
             append_message(req.session_id, "user", req.message, str(user.id))
             append_message(req.session_id, "assistant", response, str(user.id))
         return {"response": response, "session_id": req.session_id, "mode": req.mode}
@@ -783,6 +879,7 @@ async def create_agent_chat_job(req: AgentChatRequest, user: AuthenticatedUser =
 
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
+    _ensure_chat_session_available(req.session_id, user)
 
     kind = "consensus" if req.mode == "consensus" or (req.mode == "auto" and _is_consensus_query(req.message)) else "single"
     payload = {
@@ -790,7 +887,8 @@ async def create_agent_chat_job(req: AgentChatRequest, user: AuthenticatedUser =
         "plan": user.plan.value if hasattr(user.plan, "value") else str(user.plan),
         "session_id": req.session_id,
         "message": req.message,
-        "remember": req.remember,
+        "remember": req.remember and not user.is_guest,
+        "is_guest": user.is_guest,
         "mode": req.mode,
         "preferred_mode": req.preferred_mode,
     }
@@ -840,6 +938,7 @@ async def agent_consensus(req: AgentChatRequest, user: AuthenticatedUser = Depen
 
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
+    _ensure_chat_session_available(req.session_id, user)
     try:
         orchestrator = QuanAdOrchestrator(
             user_id=str(user.id),
@@ -851,7 +950,7 @@ async def agent_consensus(req: AgentChatRequest, user: AuthenticatedUser = Depen
         synthesis = orchestrator._synthesize_response(req.message, result)
 
         # Persist
-        if req.remember:
+        if req.remember and not user.is_guest:
             append_message(req.session_id, "user", req.message, str(user.id))
             append_message(req.session_id, "assistant", synthesis, str(user.id))
 
@@ -895,7 +994,11 @@ async def agent_reset(
     """
     from src.agent.history import clear_history
 
-    clear_history(session_id, str(user.id))
+    if user.is_guest:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to reset saved chat history.")
+
+    if not clear_history(session_id, str(user.id)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message())
     get_agent().reset_history()
 
     return {"status": "ok", "session_id": session_id}
@@ -904,6 +1007,9 @@ async def agent_reset(
 async def list_agent_sessions(user: AuthenticatedUser = Depends(get_current_or_guest_user)):
     """List all conversation sessions."""
     from src.agent.history import list_sessions
+
+    if user.is_guest:
+        return []
 
     return list_sessions(str(user.id))
 
@@ -916,6 +1022,10 @@ async def get_agent_session_messages(
     """Load all messages for a conversation session."""
     from src.agent.history import load_history
 
+    if user.is_guest:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to load saved chat history.")
+
+    _ensure_chat_session_available(session_id, user)
     return {"session_id": session_id, "messages": load_history(session_id, str(user.id))}
 
 
@@ -928,7 +1038,14 @@ async def rename_agent_session(
     """Rename a conversation session."""
     from src.agent.history import rename_session
 
-    return rename_session(session_id, req.title, str(user.id))
+    if user.is_guest:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to save and rename chat history.")
+
+    _ensure_chat_session_owned(session_id, user)
+    try:
+        return rename_session(session_id, req.title, str(user.id))
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message()) from exc
 
 
 @app.delete("/api/v1/agent/sessions/{session_id}")
@@ -939,7 +1056,11 @@ async def delete_agent_session(
     """Delete a conversation session."""
     from src.agent.history import clear_history
 
-    clear_history(session_id, str(user.id))
+    if user.is_guest:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to delete saved chat history.")
+
+    if not clear_history(session_id, str(user.id)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message())
     return {"status": "ok", "session_id": session_id}
 
 
@@ -966,6 +1087,7 @@ async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Qu
             user = await get_current_or_guest_user(HTTPAuthorizationCredentials(scheme="Bearer", credentials=token))
         except Exception:
             pass
+    _ensure_chat_session_available(session_id, user)
             
     try: 
         while True: 
@@ -975,7 +1097,7 @@ async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Qu
             agent = get_agent(user=user)
             
             # Load DB history and prepare for LangGraph
-            db_history = load_history(session_id, str(user.id))
+            db_history = [] if user.is_guest else load_history(session_id, str(user.id))
             is_new_session = len(db_history) == 0
             
             # Format history for LangChain
@@ -983,7 +1105,8 @@ async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Qu
             messages.append({"role": "user", "content": message})
             
             # Save user message
-            append_message(session_id, "user", message, str(user.id))
+            if not user.is_guest:
+                append_message(session_id, "user", message, str(user.id))
 
             assistant_full_content = ""
 
@@ -1035,10 +1158,11 @@ async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Qu
                         })
 
             # Save the final assistant response to DB
-            append_message(session_id, "assistant", assistant_full_content, str(user.id))
+            if not user.is_guest:
+                append_message(session_id, "assistant", assistant_full_content, str(user.id))
 
             # Generate smart AI title if it's the very first message
-            if is_new_session:
+            if is_new_session and not user.is_guest:
                 try:
                     title_prompt = (
                         "Summarize the following user prompt in 2 to 5 words for a chat session title. "

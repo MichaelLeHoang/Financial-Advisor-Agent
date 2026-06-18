@@ -112,6 +112,11 @@ export interface EquityResearchSnapshot {
   sentiment_summary: Record<string, unknown>;
   risk_metrics: Record<string, unknown>;
   data_sources: string[];
+  source_quality?: Record<string, unknown>;
+  provider_status?: Array<Record<string, unknown>>;
+  evidence_items?: Array<Record<string, unknown>>;
+  analyst_context?: Record<string, unknown>;
+  filing_context?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -214,6 +219,33 @@ export interface PredictResult {
   model_type: string;
   train_metrics: Record<string, number>;
   test_metrics: Record<string, number>;
+  summary?: string;
+  current_price?: number;
+  currentPrice?: number;
+  finalPrediction?: {
+    direction: "UP" | "DOWN" | "NEUTRAL";
+    predictedPrice?: number;
+    predictedReturn?: number;
+    confidence?: "low" | "medium" | "high" | string;
+  };
+  modelBreakdown?: Record<string, {
+    direction: "UP" | "DOWN" | "NEUTRAL";
+    predictedPrice: number;
+    predictedReturn: number;
+  }>;
+  predictions?: Record<string, {
+    predicted_return: number;
+    predicted_price: number;
+    direction?: "UP" | "DOWN" | "NEUTRAL";
+  }>;
+  weights?: Record<string, number | string>;
+  validation?: Record<string, Record<string, number>>;
+  agreement?: { status: string; spread: number; message: string };
+  agreementDisplay?: { status: "strong" | "moderate" | "weak" | "disagreement" | string; spread: number; explanation: string };
+  confidence?: string;
+  warnings?: string[];
+  risk_notes?: string[];
+  caveat?: string;
 }
 
 export interface UpgradeRequiredDetail {
@@ -362,6 +394,9 @@ export interface MarketQuote {
   history: MarketQuotePoint[];
   earnings?: EarningsPoint[];
   quarterly_financials?: QuarterlyFinancial[];
+  data_sources?: string[];
+  source_quality?: Record<string, unknown> | null;
+  provider_status?: Array<Record<string, unknown>>;
 }
 
 export interface MarketSymbolSearchResult {
@@ -1038,8 +1073,8 @@ export const api = {
     }),
 
   /** ML stock prediction */
-  predict: (ticker: string, modelType: "random_forest" | "lstm" = "random_forest") =>
-    post<PredictResult>("/api/v1/predict", { ticker, model_type: modelType }),
+  predict: (ticker: string, modelType: "random_forest" | "lstm" | "ensemble" = "ensemble") =>
+    post<PredictResult>("/api/v1/predict", { ticker, model: modelType }),
 
   marketQuote: (ticker: string, period = "1mo", interval = "1d") =>
     get<MarketQuote>(`/api/v1/market/quote/${encodeURIComponent(ticker)}?period=${period}&interval=${interval}`),

@@ -3,6 +3,42 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
+import type React from "react";
+
+function textFromChildren(children: React.ReactNode): string {
+  if (typeof children === "string") return children;
+  if (Array.isArray(children)) return children.map(textFromChildren).join("");
+  return "";
+}
+
+function highlightClass(text: string) {
+  const normalized = text.toLowerCase();
+  if (/\b(buy|bullish|upside|support|outperform)\b/i.test(text)) {
+    return "text-emerald-200 bg-emerald-400/10 ring-emerald-300/20";
+  }
+  if (/\b(sell|bearish|downside|resistance|downgrade)\b/i.test(text)) {
+    return "text-rose-200 bg-rose-400/10 ring-rose-300/20";
+  }
+  if (/\b(hold|neutral|balanced|watch)\b/i.test(text)) {
+    return "text-sky-200 bg-sky-400/10 ring-sky-300/20";
+  }
+  if (normalized.includes("risk") || normalized.includes("warning") || normalized.includes("limitation") || normalized.includes("source gap")) {
+    return "text-amber-200 bg-amber-400/10 ring-amber-300/20";
+  }
+  if (normalized.includes("confidence") || normalized.includes("evidence") || normalized.includes("source")) {
+    return "text-indigo-100 bg-indigo-primary/12 ring-indigo-primary/25";
+  }
+  return "text-white bg-white/[0.06] ring-white/[0.08]";
+}
+
+function HighlightValue({ children }: { children: React.ReactNode }) {
+  const text = textFromChildren(children);
+  return (
+    <strong className={`rounded-md px-1.5 py-0.5 font-semibold ring-1 ${highlightClass(text)}`}>
+      {children}
+    </strong>
+  );
+}
 
 const components: Components = {
   h1: ({ children }) => (
@@ -15,14 +51,14 @@ const components: Components = {
     <h3 className="mb-2 mt-3 text-base font-semibold text-indigo-primary first:mt-0">{children}</h3>
   ),
   p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
-  strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+  strong: ({ children }) => <HighlightValue>{children}</HighlightValue>,
   em: ({ children }) => <em className="text-white/70">{children}</em>,
   ul: ({ children }) => <ul className="mb-3 ml-5 list-none space-y-1.5 last:mb-0 [&_ul]:mb-0 [&_ul]:mt-1.5 [&_ul]:ml-5">{children}</ul>,
   ol: ({ children }) => (
     <ol className="mb-3 ml-5 list-decimal space-y-1.5 last:mb-0">{children}</ol>
   ),
   li: ({ children }) => (
-    <li className="relative pl-5 before:absolute before:left-0 before:top-[0.6em] before:h-1.5 before:w-1.5 before:rounded-full before:bg-indigo-primary/60">
+    <li className="relative pl-5 leading-relaxed before:absolute before:left-0 before:top-[0.65em] before:h-1.5 before:w-1.5 before:rounded-full before:bg-indigo-primary/60">
       {children}
     </li>
   ),
@@ -71,8 +107,16 @@ const components: Components = {
       {children}
     </thead>
   ),
-  th: ({ children }) => <th className="px-3 py-2 font-medium">{children}</th>,
-  td: ({ children }) => <td className="px-3 py-2 text-white/70">{children}</td>,
+  th: ({ children }) => <th className="px-3 py-2 font-medium text-indigo-100">{children}</th>,
+  td: ({ children }) => {
+    const text = textFromChildren(children);
+    const shouldHighlight = /\b(buy|sell|hold|bullish|bearish|neutral|risk|support|resistance|confidence|source|unavailable|limited)\b/i.test(text);
+    return (
+      <td className="px-3 py-2 text-white/70">
+        {shouldHighlight ? <span className={`rounded-md px-1.5 py-0.5 ring-1 ${highlightClass(text)}`}>{children}</span> : children}
+      </td>
+    );
+  },
   hr: () => <hr className="my-4 border-white/[0.08]" />,
 };
 
