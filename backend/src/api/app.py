@@ -1,6 +1,6 @@
 import asyncio
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials
 import inngest.fast_api
@@ -745,13 +745,13 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
     try:
         agent = get_agent(user=user, task_type="chat", preferred_mode=req.preferred_mode)
 
-        # Load persistent history for this session
-        history = load_history(req.session_id, str(user.id))
+        # Guests can chat, but their conversation state must stay client-local.
+        history = [] if user.is_guest else load_history(req.session_id, str(user.id))
         agent._history = [{"role": item["role"], "content": item["content"]} for item in history]
         response = agent.chat(req.message, remember=False, mode=req.mode)  # we handle persistence
 
         # Persist both turns
-        if req.remember:
+        if req.remember and not user.is_guest:
             append_message(req.session_id, "user", req.message, str(user.id))
             append_message(req.session_id, "assistant", response, str(user.id))
         return {"response": response, "session_id": req.session_id, "mode": req.mode}
@@ -790,7 +790,8 @@ async def create_agent_chat_job(req: AgentChatRequest, user: AuthenticatedUser =
         "plan": user.plan.value if hasattr(user.plan, "value") else str(user.plan),
         "session_id": req.session_id,
         "message": req.message,
-        "remember": req.remember,
+        "remember": req.remember and not user.is_guest,
+        "is_guest": user.is_guest,
         "mode": req.mode,
         "preferred_mode": req.preferred_mode,
     }
@@ -851,7 +852,7 @@ async def agent_consensus(req: AgentChatRequest, user: AuthenticatedUser = Depen
         synthesis = orchestrator._synthesize_response(req.message, result)
 
         # Persist
-        if req.remember:
+        if req.remember and not user.is_guest:
             append_message(req.session_id, "user", req.message, str(user.id))
             append_message(req.session_id, "assistant", synthesis, str(user.id))
 
@@ -895,6 +896,9 @@ async def agent_reset(
     """
     from src.agent.history import clear_history
 
+    if user.is_guest:
+        return {"status": "ok", "session_id": session_id}
+
     clear_history(session_id, str(user.id))
     get_agent().reset_history()
 
@@ -904,6 +908,9 @@ async def agent_reset(
 async def list_agent_sessions(user: AuthenticatedUser = Depends(get_current_or_guest_user)):
     """List all conversation sessions."""
     from src.agent.history import list_sessions
+
+    if user.is_guest:
+        return []
 
     return list_sessions(str(user.id))
 
@@ -915,6 +922,9 @@ async def get_agent_session_messages(
 ):
     """Load all messages for a conversation session."""
     from src.agent.history import load_history
+
+    if user.is_guest:
+        return {"session_id": session_id, "messages": []}
 
     return {"session_id": session_id, "messages": load_history(session_id, str(user.id))}
 
@@ -928,6 +938,9 @@ async def rename_agent_session(
     """Rename a conversation session."""
     from src.agent.history import rename_session
 
+    if user.is_guest:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to save and rename chat history.")
+
     return rename_session(session_id, req.title, str(user.id))
 
 
@@ -938,6 +951,9 @@ async def delete_agent_session(
 ):
     """Delete a conversation session."""
     from src.agent.history import clear_history
+
+    if user.is_guest:
+        return {"status": "ok", "session_id": session_id}
 
     clear_history(session_id, str(user.id))
     return {"status": "ok", "session_id": session_id}
@@ -975,7 +991,7 @@ async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Qu
             agent = get_agent(user=user)
             
             # Load DB history and prepare for LangGraph
-            db_history = load_history(session_id, str(user.id))
+            db_history = [] if user.is_guest else load_history(session_id, str(user.id))
             is_new_session = len(db_history) == 0
             
             # Format history for LangChain
@@ -983,7 +999,8 @@ async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Qu
             messages.append({"role": "user", "content": message})
             
             # Save user message
-            append_message(session_id, "user", message, str(user.id))
+            if not user.is_guest:
+                append_message(session_id, "user", message, str(user.id))
 
             assistant_full_content = ""
 
@@ -1035,10 +1052,11 @@ async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Qu
                         })
 
             # Save the final assistant response to DB
-            append_message(session_id, "assistant", assistant_full_content, str(user.id))
+            if not user.is_guest:
+                append_message(session_id, "assistant", assistant_full_content, str(user.id))
 
             # Generate smart AI title if it's the very first message
-            if is_new_session:
+            if is_new_session and not user.is_guest:
                 try:
                     title_prompt = (
                         "Summarize the following user prompt in 2 to 5 words for a chat session title. "

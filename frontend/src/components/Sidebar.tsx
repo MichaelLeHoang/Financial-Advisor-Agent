@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { ChatSession } from "@/lib/api";
-import { DEMO_CHAT_SESSIONS, isDemoChatSession } from "@/lib/demo-chat-history";
+import { deleteLocalChatSession, listLocalChatSessions, renameLocalChatSession } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { Plan } from "@/components/auth/AuthProvider";
@@ -87,16 +87,13 @@ export default function Sidebar({
     const [mobileOpen, setMobileOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
     const [sessions, setSessions] = useState<ChatSession[]>([]);
-    const visibleNav = getVisibleNav(user?.plan ?? "free");
-    const visibleMoreNav = getVisibleMoreNav(user?.plan ?? "free");
+    const isGuest = Boolean(user?.is_guest);
+    const visibleNav = isGuest
+        ? NAV.filter((item) => item.href === "/" || item.href === "/market")
+        : getVisibleNav(user?.plan ?? "free");
+    const visibleMoreNav = isGuest ? [] : getVisibleMoreNav(user?.plan ?? "free");
     const activeSessionId = path === "/" ? searchParams.get("session") || "default" : null;
-    const displaySessions = useMemo(() => {
-        const realSessionIds = new Set(sessions.map((session) => session.session_id));
-        return [
-            ...sessions,
-            ...DEMO_CHAT_SESSIONS.filter((session) => !realSessionIds.has(session.session_id)),
-        ];
-    }, [sessions]);
+    const displaySessions = useMemo(() => sessions, [sessions]);
 
     const openSearch = useCallback(() => {
         setSearchOpen(true);
@@ -104,12 +101,17 @@ export default function Sidebar({
     }, []);
 
     const refreshSessions = useCallback(async () => {
+        if (user?.is_guest) {
+            setSessions(listLocalChatSessions());
+            return;
+        }
+
         try {
             setSessions(await api.chatSessions());
         } catch {
             setSessions([]);
         }
-    }, [user?.id]);
+    }, [user?.id, user?.is_guest]);
 
     const startNewAnalysis = useCallback(() => {
         const nextSessionId = typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -185,6 +187,7 @@ export default function Sidebar({
                 moreNav={visibleMoreNav}
                 sessions={displaySessions}
                 activeSessionId={activeSessionId}
+                isGuest={isGuest}
                 onNewAnalysis={startNewAnalysis}
                 onSearchClick={openSearch}
                 onSessionsChanged={refreshSessions}
@@ -220,6 +223,7 @@ export default function Sidebar({
                                 moreNav={visibleMoreNav}
                                 sessions={displaySessions}
                                 activeSessionId={activeSessionId}
+                                isGuest={isGuest}
                                 onNewAnalysis={startNewAnalysis}
                                 onSearchClick={openSearch}
                                 onSessionsChanged={refreshSessions}
@@ -245,6 +249,7 @@ function DesktopSidebar({
     moreNav,
     sessions,
     activeSessionId,
+    isGuest,
     onNewAnalysis,
     onSearchClick,
     onSessionsChanged,
@@ -260,6 +265,7 @@ function DesktopSidebar({
     moreNav: NavItem[];
     sessions: ChatSession[];
     activeSessionId: string | null;
+    isGuest: boolean;
     onNewAnalysis: () => void;
     onSearchClick: () => void;
     onSessionsChanged: () => void;
@@ -287,6 +293,7 @@ function DesktopSidebar({
                     moreNav={moreNav}
                     sessions={sessions}
                     activeSessionId={activeSessionId}
+                    isGuest={isGuest}
                     onNewAnalysis={onNewAnalysis}
                     onSearchClick={onSearchClick}
                     onSessionsChanged={onSessionsChanged}
@@ -302,6 +309,7 @@ function DesktopSidebar({
                     moreNav={moreNav}
                     sessions={sessions}
                     activeSessionId={activeSessionId}
+                    isGuest={isGuest}
                     recentsOpen={recentsOpen}
                     onNewAnalysis={onNewAnalysis}
                     onSearchClick={onSearchClick}
@@ -324,6 +332,7 @@ function MiniSidebar({
     moreNav,
     sessions,
     activeSessionId,
+    isGuest,
     recentsOpen,
     onNewAnalysis,
     onSearchClick,
@@ -340,6 +349,7 @@ function MiniSidebar({
     moreNav: NavItem[];
     sessions: ChatSession[];
     activeSessionId: string | null;
+    isGuest: boolean;
     recentsOpen: boolean;
     onNewAnalysis: () => void;
     onSearchClick: () => void;
@@ -496,6 +506,7 @@ function MiniSidebar({
                                             key={session.session_id}
                                             session={session}
                                             active={activeSessionId === session.session_id}
+                                            isGuest={isGuest}
                                             onSessionsChanged={onSessionsChanged}
                                             onSessionDeleted={onSessionDeleted}
                                         />
@@ -522,6 +533,7 @@ function SidebarSurface({
     moreNav,
     sessions,
     activeSessionId,
+    isGuest,
     onNewAnalysis,
     onSearchClick,
     onToggle,
@@ -536,6 +548,7 @@ function SidebarSurface({
     moreNav: NavItem[];
     sessions: ChatSession[];
     activeSessionId: string | null;
+    isGuest: boolean;
     onNewAnalysis: () => void;
     onSearchClick: () => void;
     onToggle?: () => void;
@@ -703,6 +716,7 @@ function SidebarSurface({
                                         session={session}
                                         compact
                                         active={activeSessionId === session.session_id}
+                                        isGuest={isGuest}
                                         onSessionsChanged={onSessionsChanged}
                                         onSessionDeleted={onSessionDeleted}
                                     />
@@ -776,19 +790,20 @@ function RecentThreadRow({
     session,
     compact = false,
     active = false,
+    isGuest = false,
     onSessionsChanged,
     onSessionDeleted,
 }: {
     session: ChatSession;
     compact?: boolean;
     active?: boolean;
+    isGuest?: boolean;
     onSessionsChanged: () => void;
     onSessionDeleted: (sessionId: string) => void;
 }) {
     const [menuOpen, setMenuOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0 });
-    const isDemoSession = isDemoChatSession(session.session_id);
     const rowRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -834,7 +849,11 @@ function RecentThreadRow({
         if (!nextTitle || nextTitle === session.title) return;
 
         try {
-            await api.renameChatSession(session.session_id, nextTitle);
+            if (isGuest) {
+                renameLocalChatSession(session.session_id, nextTitle);
+            } else {
+                await api.renameChatSession(session.session_id, nextTitle);
+            }
             onSessionsChanged();
         } catch (error) {
             window.alert(error instanceof Error ? error.message : "Unable to rename this chat.");
@@ -846,7 +865,11 @@ function RecentThreadRow({
         if (!window.confirm(`Delete "${session.title}"?`)) return;
 
         try {
-            await api.deleteChatSession(session.session_id);
+            if (isGuest) {
+                deleteLocalChatSession(session.session_id);
+            } else {
+                await api.deleteChatSession(session.session_id);
+            }
             onSessionDeleted(session.session_id);
         } catch (error) {
             window.alert(error instanceof Error ? error.message : "Unable to delete this chat.");
@@ -860,40 +883,38 @@ function RecentThreadRow({
                 aria-current={active ? "page" : undefined}
                 className={cn(
                     "flex items-center rounded-xl text-sm outline-none transition-all duration-200 hover:bg-white/[0.05] hover:text-white focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
-                    isDemoSession ? "pr-3" : "pr-10",
+                    "pr-10",
                     compact ? "h-9 px-3 text-white/48" : "h-10 px-3 text-white/62",
                     active && "bg-white/[0.07] text-white"
                 )}
             >
                 <span className="truncate">{session.title}</span>
             </Link>
-            {!isDemoSession && (
-                <button
-                    ref={triggerRef}
-                    type="button"
-                    aria-label={`Open actions for ${session.title}`}
-                    aria-haspopup="menu"
-                    aria-expanded={menuOpen}
-                    onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        const rect = event.currentTarget.getBoundingClientRect();
-                        setMenuPosition({
-                            left: Math.min(rect.right, window.innerWidth - 176),
-                            top: Math.min(rect.top, window.innerHeight - 230),
-                        });
-                        setMenuOpen((open) => !open);
-                    }}
-                    className={cn(
-                        "absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg bg-transparent text-white/40 opacity-0 transition-colors hover:bg-transparent hover:text-white group-hover/thread:opacity-100 focus:bg-transparent focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
-                        menuOpen && "bg-transparent text-white opacity-100"
-                    )}
-                >
-                    <MoreHorizontal className="h-4 w-4" />
-                </button>
-            )}
+            <button
+                ref={triggerRef}
+                type="button"
+                aria-label={`Open actions for ${session.title}`}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    setMenuPosition({
+                        left: Math.min(rect.right, window.innerWidth - 176),
+                        top: Math.min(rect.top, window.innerHeight - 230),
+                    });
+                    setMenuOpen((open) => !open);
+                }}
+                className={cn(
+                    "absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg bg-transparent text-white/40 opacity-0 transition-colors hover:bg-transparent hover:text-white group-hover/thread:opacity-100 focus:bg-transparent focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                    menuOpen && "bg-transparent text-white opacity-100"
+                )}
+            >
+                <MoreHorizontal className="h-4 w-4" />
+            </button>
 
-            {!isDemoSession && mounted && createPortal(
+            {mounted && createPortal(
                 <AnimatePresence>
                     {menuOpen && (
                     <motion.div

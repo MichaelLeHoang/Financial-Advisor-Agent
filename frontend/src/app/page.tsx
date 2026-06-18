@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Brain, ClipboardList, Image, Loader2, Paperclip, PieChart, Send, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
-import { getDemoChatConversation } from "@/lib/demo-chat-history";
+import { loadLocalChatMessages, saveLocalChatMessages } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
 import ModelSelector, { useModel, apiModeFromVersion } from "@/components/ModelSelector";
@@ -143,7 +143,7 @@ const letterVariants = {
 };
 
 export default function ChatPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { version } = useModel();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -202,7 +202,7 @@ export default function ChatPage() {
   }, [input]);
 
   useEffect(() => {
-    if (isStreamingRef.current) return;
+    if (authLoading || isStreamingRef.current) return;
     let cancelled = false;
 
     async function loadSession() {
@@ -210,6 +210,16 @@ export default function ChatPage() {
       setUpgradeMessage(null);
 
       try {
+        if (user.is_guest) {
+          const localMessages = loadLocalChatMessages(activeSessionId).map((message) => ({
+            id: String(message.id),
+            role: message.role,
+            content: message.content,
+          }));
+          if (!cancelled) setMessages(localMessages.length > 0 ? localMessages : [GREETING]);
+          return;
+        }
+
         const res = await api.chatSessionMessages(activeSessionId);
         if (cancelled) return;
 
@@ -218,26 +228,9 @@ export default function ChatPage() {
           role: message.role,
           content: message.content,
         }));
-        const demoConversation = getDemoChatConversation(activeSessionId);
-        const demoMessages = demoConversation?.messages.map((message) => ({
-          id: String(message.id),
-          role: message.role,
-          content: message.content,
-        })) ?? [];
-        setMessages(loadedMessages.length > 0 ? loadedMessages : demoMessages.length > 0 ? demoMessages : [GREETING]);
+        setMessages(loadedMessages.length > 0 ? loadedMessages : [GREETING]);
       } catch (err: any) {
         if (cancelled) return;
-        const demoConversation = getDemoChatConversation(activeSessionId);
-        if (demoConversation) {
-          setMessages(
-            demoConversation.messages.map((message) => ({
-              id: String(message.id),
-              role: message.role,
-              content: message.content,
-            }))
-          );
-          return;
-        }
         setMessages([
           {
             id: "history-error",
@@ -256,7 +249,16 @@ export default function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeSessionId]);
+  }, [activeSessionId, authLoading, user.is_guest]);
+
+  useEffect(() => {
+    if (authLoading || !user.is_guest || isHistoryLoading) return;
+    if (activeSessionId === "default") return;
+    if (!messages.some((message) => message.role === "user")) return;
+
+    saveLocalChatMessages(activeSessionId, messages);
+    window.dispatchEvent(new Event("chat-sessions:changed"));
+  }, [activeSessionId, authLoading, isHistoryLoading, messages, user.is_guest]);
 
   useEffect(() => {
     const prompt = promptParam?.trim();
@@ -357,9 +359,10 @@ export default function ChatPage() {
 
     try {
       const mode = apiModeFromVersion(version);
+      const remember = !user.is_guest;
       let res;
       try {
-        const queued = await api.chatJob(text, targetSessionId, true, mode);
+        const queued = await api.chatJob(text, targetSessionId, remember, mode);
 
         res = await api.waitForChatJob(queued.job_id, (job) => {
           if (job.status === "queued") {
@@ -390,7 +393,7 @@ export default function ChatPage() {
               : m
           )
         );
-        res = await api.chat(text, targetSessionId, true, mode);
+        res = await api.chat(text, targetSessionId, remember, mode);
       }
 
       setMessages((prev) =>

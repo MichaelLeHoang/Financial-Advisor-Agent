@@ -21,6 +21,7 @@ def execute_llm_job(job: QueuedJob) -> dict[str, Any]:
     message = str(payload["message"])
     mode = str(payload.get("mode", "single"))
     remember = bool(payload.get("remember", True))
+    is_guest = bool(payload.get("is_guest")) or user_id == "00000000-0000-0000-0000-000000000001"
     preferred_mode = payload.get("preferred_mode")
 
     agent = FinancialAdvisorAgent(
@@ -29,7 +30,7 @@ def execute_llm_job(job: QueuedJob) -> dict[str, Any]:
         task_type="chat",
         preferred_mode=preferred_mode if preferred_mode in {"fast", "balanced", "deep_research", "coding_export"} else None,
     )
-    history = load_history(session_id, user_id)
+    history = [] if is_guest else load_history(session_id, user_id)
     agent._history = [{"role": item["role"], "content": item["content"]} for item in history]
 
     def compute_response() -> str:
@@ -50,7 +51,7 @@ def execute_llm_job(job: QueuedJob) -> dict[str, Any]:
             settings.llm_cache_ttl_seconds,
             compute_response,
         )
-    if remember:
+    if remember and not is_guest:
         append_message(session_id, "user", message, user_id)
         append_message(session_id, "assistant", response, user_id)
 

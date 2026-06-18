@@ -7,6 +7,11 @@ from pathlib import Path
 from datetime import UTC, datetime
 
 DB_PATH = Path(__file__).parent.parent.parent / "data" / "conversations.db"
+GUEST_USER_ID = "00000000-0000-0000-0000-000000000001"
+
+
+def _is_guest_user(user_id: str) -> bool:
+    return str(user_id) == GUEST_USER_ID
 
 
 def _get_connection() -> sqlite3.Connection:
@@ -81,6 +86,8 @@ def _touch_session(conn: sqlite3.Connection, user_id: str, session_id: str, titl
 
 def load_history(session_id: str, user_id: str = "00000000-0000-0000-0000-000000000001") -> list[dict]:
     """Load all messages for a session, ordered oldest first."""
+    if _is_guest_user(user_id):
+        return []
     conn = _get_connection()
     rows = conn.execute(
         "SELECT id, role, content, created_at FROM messages WHERE user_id=? AND session=? ORDER BY id",
@@ -97,6 +104,8 @@ def append_message(
     user_id: str = "00000000-0000-0000-0000-000000000001",
 ) -> None:
     """Append a single message to the session history."""
+    if _is_guest_user(user_id):
+        return
     conn = _get_connection()
     title = _default_title(content) if role == "user" else None
     _touch_session(conn, user_id, session_id, title)
@@ -110,6 +119,8 @@ def append_message(
 
 def clear_history(session_id: str, user_id: str = "00000000-0000-0000-0000-000000000001") -> None:
     """Delete all messages for a session and remove the session record."""
+    if _is_guest_user(user_id):
+        return
     conn = _get_connection()
     conn.execute("DELETE FROM messages WHERE user_id=? AND session=?", (user_id, session_id))
     conn.execute("DELETE FROM sessions WHERE user_id=? AND session=?", (user_id, session_id))
@@ -123,6 +134,13 @@ def rename_session(
     user_id: str = "00000000-0000-0000-0000-000000000001",
 ) -> dict:
     """Rename a session and return its metadata."""
+    if _is_guest_user(user_id):
+        return {
+            "session_id": session_id,
+            "title": _default_title(title),
+            "message_count": 0,
+            "last_active": datetime.now(UTC).isoformat(),
+        }
     clean_title = _default_title(title)
     conn = _get_connection()
     _touch_session(conn, user_id, session_id, clean_title)
@@ -152,6 +170,8 @@ def rename_session(
 
 def list_sessions(user_id: str = "00000000-0000-0000-0000-000000000001") -> list[dict]:
     """List all sessions with message count and last activity."""
+    if _is_guest_user(user_id):
+        return []
     conn = _get_connection()
     conn.execute("""
         INSERT OR IGNORE INTO sessions (user_id, session, title, created_at, updated_at)

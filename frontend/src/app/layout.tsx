@@ -7,7 +7,8 @@ import Sidebar from "@/components/Sidebar";
 import SettingsModal from "@/components/SettingsModal";
 import EditProfileModal from "@/components/EditProfileModal";
 import AlertsModal from "@/components/AlertsModal";
-import { AuthProvider } from "@/components/auth/AuthProvider";
+import { AuthProvider, useAuth } from "@/components/auth/AuthProvider";
+import PublicAccessGate from "@/components/auth/PublicAccessGate";
 import { ModelProvider } from "@/components/ModelSelector";
 
 const SETTINGS_STORAGE_KEY = "financial-advisor.settings";
@@ -96,43 +97,77 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body data-theme={settings.theme} className="flex h-screen overflow-hidden relative">
         <AuthProvider>
           <ModelProvider>
-          <Sidebar
-            isOpen={isSidebarOpen}
-            onToggle={() => setIsSidebarOpen((open) => !open)}
-            onSettingsClick={() => setIsSettingsOpen(true)}
-            onProfileClick={() => setIsProfileOpen(true)}
-            onAlertsClick={() => setIsAlertsOpen(true)}
-          />
-
-          {/* Main content area */}
-          <main className={`flex-1 flex flex-col relative z-10 overflow-hidden transition-[margin] duration-300 ease-out ${isSidebarOpen ? "md:ml-72" : "md:ml-16"}`}>
-            <div className="flex-1 overflow-y-auto">
+            <MainWorkspace
+              isSidebarOpen={isSidebarOpen}
+              onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
+              onSettingsClick={() => setIsSettingsOpen(true)}
+              onProfileClick={() => setIsProfileOpen(true)}
+              onAlertsClick={() => setIsAlertsOpen(true)}
+            >
               {children}
-            </div>
-          </main>
+            </MainWorkspace>
 
-          {/* Settings Modal */}
-          <SettingsModal
-            isOpen={isSettingsOpen}
-            onClose={() => setIsSettingsOpen(false)}
-            settings={settings}
-            setSettings={updateSettings}
-          />
+            {/* Settings Modal */}
+            <SettingsModal
+              isOpen={isSettingsOpen}
+              onClose={() => setIsSettingsOpen(false)}
+              settings={settings}
+              setSettings={updateSettings}
+            />
 
-          {/* Edit Profile Modal */}
-          <EditProfileModal
-            isOpen={isProfileOpen}
-            onClose={() => setIsProfileOpen(false)}
-          />
+            {/* Edit Profile Modal */}
+            <EditProfileModal
+              isOpen={isProfileOpen}
+              onClose={() => setIsProfileOpen(false)}
+            />
 
-          {/* Alerts Modal */}
-          <AlertsModal
-            isOpen={isAlertsOpen}
-            onClose={() => setIsAlertsOpen(false)}
-          />
+            {/* Alerts Modal */}
+            <AlertsModal
+              isOpen={isAlertsOpen}
+              onClose={() => setIsAlertsOpen(false)}
+            />
           </ModelProvider>
         </AuthProvider>
       </body>
     </html>
+  );
+}
+
+function MainWorkspace({
+  children,
+  isSidebarOpen,
+  onToggleSidebar,
+  onSettingsClick,
+  onProfileClick,
+  onAlertsClick,
+}: {
+  children: React.ReactNode;
+  isSidebarOpen: boolean;
+  onToggleSidebar: () => void;
+  onSettingsClick: () => void;
+  onProfileClick: () => void;
+  onAlertsClick: () => void;
+}) {
+  const pathname = usePathname();
+  const { user, loading } = useAuth();
+  const isPublicAppPath = pathname === "/" || pathname.startsWith("/market");
+  const shouldGate = !loading && Boolean(user.is_guest) && !isPublicAppPath;
+
+  return (
+    <>
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onToggle={onToggleSidebar}
+        onSettingsClick={onSettingsClick}
+        onProfileClick={onProfileClick}
+        onAlertsClick={onAlertsClick}
+      />
+
+      <main className={`flex-1 flex flex-col relative z-10 overflow-hidden transition-[margin] duration-300 ease-out ${isSidebarOpen ? "md:ml-72" : "md:ml-16"}`}>
+        <div className="flex-1 overflow-y-auto">
+          {shouldGate ? <PublicAccessGate /> : children}
+        </div>
+      </main>
+    </>
   );
 }

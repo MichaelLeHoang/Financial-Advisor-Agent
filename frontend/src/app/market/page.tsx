@@ -78,6 +78,7 @@ import {
     ResearchDepthSelector,
     ResearchRunCompactResult,
 } from "@/components/equity-research/ResearchComponents";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 interface StockInfo extends MarketSymbol {
     data: MarketPoint[];
@@ -308,6 +309,7 @@ function DetailChartTooltip({
 }
 
 export default function MarketPage() {
+    const { user } = useAuth();
     const searchInputRef = useRef<HTMLInputElement>(null);
     const marketTopRef = useRef<HTMLDivElement>(null);
     const [stocks, setStocks] = useState<StockInfo[]>(() => DEFAULT_MARKET_TICKERS.map(createStock));
@@ -333,15 +335,25 @@ export default function MarketPage() {
 
     const localMatches = useMemo(() => searchMarketSymbols(query), [query]);
     const matches = symbolMatches.length > 0 ? symbolMatches : localMatches;
+    const isGuest = Boolean(user?.is_guest);
+
+    const requireSignInForMarketSave = () => {
+        setUpgradeMessage("Sign in to add, remove, or save stocks in your Market workspace. Public users can still search tickers and preview charts.");
+    };
 
     useEffect(() => {
+        if (isGuest) {
+            setMounted(true);
+            return;
+        }
+
         const saved = readSavedMarketStocks();
         if (saved.length > 0) {
             setStocks(saved.map(createStock));
         }
         setSkipRemoveConfirm(window.localStorage.getItem("market.skipRemoveConfirm") === "true");
         setMounted(true);
-    }, []);
+    }, [isGuest]);
 
     useEffect(() => {
         if (!mounted) return;
@@ -350,9 +362,9 @@ export default function MarketPage() {
     }, [mounted]);
 
     useEffect(() => {
-        if (!mounted) return;
+        if (!mounted || isGuest) return;
         window.localStorage.setItem(MARKET_STOCKS_STORAGE_KEY, JSON.stringify(stocks.map((stock) => stock.ticker)));
-    }, [mounted, stocks]);
+    }, [isGuest, mounted, stocks]);
 
     useEffect(() => {
         const normalized = query.trim();
@@ -413,6 +425,12 @@ export default function MarketPage() {
     };
 
     const addTicker = (value: string) => {
+        if (isGuest) {
+            requireSignInForMarketSave();
+            setSearchOpen(false);
+            return;
+        }
+
         const ticker = normalizeTicker(value);
         if (!ticker) return;
 
@@ -433,6 +451,11 @@ export default function MarketPage() {
     };
 
     const removeTicker = (ticker: string) => {
+        if (isGuest) {
+            requireSignInForMarketSave();
+            return;
+        }
+
         setStocks((current) => current.filter((stock) => stock.ticker !== ticker));
         setSelectedStock((current) => current?.ticker === ticker ? null : current);
     };
@@ -579,7 +602,13 @@ export default function MarketPage() {
                             size="sm"
                             variant="outline"
                             className="rounded-xl"
-                            onClick={() => setStocks(DEFAULT_MARKET_TICKERS.map(createStock))}
+                            onClick={() => {
+                                if (isGuest) {
+                                    requireSignInForMarketSave();
+                                    return;
+                                }
+                                setStocks(DEFAULT_MARKET_TICKERS.map(createStock));
+                            }}
                         >
                             Restore defaults
                         </Button>
@@ -588,7 +617,13 @@ export default function MarketPage() {
                             size="sm"
                             variant="outline"
                             className="rounded-xl"
-                            onClick={() => setStocks([])}
+                            onClick={() => {
+                                if (isGuest) {
+                                    requireSignInForMarketSave();
+                                    return;
+                                }
+                                setStocks([]);
+                            }}
                             disabled={stocks.length === 0}
                         >
                             <Trash2 data-icon="inline-start" />

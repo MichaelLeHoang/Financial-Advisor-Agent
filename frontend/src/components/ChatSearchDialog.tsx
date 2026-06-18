@@ -6,8 +6,9 @@ import { Clock, MessageSquare, Search } from "lucide-react";
 
 import { api } from "@/lib/api";
 import type { ChatMessage, ChatSession } from "@/lib/api";
-import { DEMO_CHAT_CONVERSATIONS } from "@/lib/demo-chat-history";
+import { loadLocalChatMessages, listLocalChatSessions } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/components/auth/AuthProvider";
 import {
   Card,
   CardContent,
@@ -40,6 +41,7 @@ export default function ChatSearchDialog({
   sessions: ChatSession[];
 }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [query, setQuery] = useState("");
   const [conversations, setConversations] = useState<SearchConversation[]>([]);
   const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
@@ -54,6 +56,18 @@ export default function ChatSearchDialog({
       setLoading(true);
 
       try {
+        if (user.is_guest) {
+          const localSessions = sessions.length > 0 ? sessions : listLocalChatSessions();
+          const localConversations = localSessions.map((session) => ({
+            ...session,
+            messages: loadLocalChatMessages(session.session_id),
+          }));
+          if (cancelled) return;
+          setConversations(localConversations);
+          setHoveredSessionId((current) => current ?? localConversations[0]?.session_id ?? null);
+          return;
+        }
+
         const sourceSessions = sessions.length > 0 ? sessions : await api.chatSessions();
         const realConversations = await Promise.all(
           sourceSessions.map(async (session) => {
@@ -63,17 +77,12 @@ export default function ChatSearchDialog({
         );
 
         if (cancelled) return;
-        const realIds = new Set(realConversations.map((conversation) => conversation.session_id));
-        const nextConversations = [
-          ...realConversations,
-          ...DEMO_CHAT_CONVERSATIONS.filter((conversation) => !realIds.has(conversation.session_id)),
-        ];
-        setConversations(nextConversations);
-        setHoveredSessionId((current) => current ?? nextConversations[0]?.session_id ?? null);
+        setConversations(realConversations);
+        setHoveredSessionId((current) => current ?? realConversations[0]?.session_id ?? null);
       } catch {
         if (cancelled) return;
-        setConversations(DEMO_CHAT_CONVERSATIONS);
-        setHoveredSessionId((current) => current ?? DEMO_CHAT_CONVERSATIONS[0]?.session_id ?? null);
+        setConversations([]);
+        setHoveredSessionId(null);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -84,7 +93,7 @@ export default function ChatSearchDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, sessions]);
+  }, [open, sessions, user.is_guest]);
 
   const filteredConversations = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
