@@ -28,6 +28,34 @@ def test_chat_history_lists_loads_renames_and_scopes_by_user(tmp_path, monkeypat
     assert history.list_sessions("user-1")[0]["title"] == "Renamed NVDA brief"
     assert history.list_sessions("user-2")[0]["title"] == "Other user's chat"
 
-    history.clear_history("session-a", "user-1")
+    assert history.clear_history("session-a", "user-1") is True
     assert history.load_history("session-a", "user-1") == []
     assert history.load_history("session-a", "user-2")[0]["content"] == "Other user's chat"
+
+
+def test_chat_history_detects_cross_user_session_ids(tmp_path, monkeypatch):
+    monkeypatch.setattr(history, "DB_PATH", tmp_path / "conversations.db")
+
+    history.append_message("shared-looking-session", "user", "User A private chat", "user-a")
+
+    assert history.session_belongs_to_user("shared-looking-session", "user-a") is True
+    assert history.session_belongs_to_user("shared-looking-session", "user-b") is False
+    assert history.session_claimed_by_another_user("shared-looking-session", "user-b") is True
+    assert history.session_claimed_by_another_user("new-session", "user-b") is False
+
+
+def test_rename_and_delete_require_existing_owned_session(tmp_path, monkeypatch):
+    monkeypatch.setattr(history, "DB_PATH", tmp_path / "conversations.db")
+
+    history.append_message("owned-session", "user", "Owner chat", "owner")
+
+    try:
+        history.rename_session("owned-session", "Bad rename", "other")
+    except KeyError:
+        pass
+    else:
+        raise AssertionError("Expected cross-user rename to fail")
+
+    assert history.clear_history("owned-session", "other") is False
+    assert history.load_history("owned-session", "owner")[0]["content"] == "Owner chat"
+    assert history.clear_history("owned-session", "owner") is True

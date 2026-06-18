@@ -48,6 +48,17 @@ export default function ChatSearchDialog({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    const handlePrivacyReset = () => {
+      setConversations([]);
+      setHoveredSessionId(null);
+      setQuery("");
+    };
+
+    window.addEventListener("chat-privacy:reset", handlePrivacyReset);
+    return () => window.removeEventListener("chat-privacy:reset", handlePrivacyReset);
+  }, []);
+
+  useEffect(() => {
     if (!open) return;
 
     let cancelled = false;
@@ -93,7 +104,7 @@ export default function ChatSearchDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, sessions, user.is_guest]);
+  }, [open, sessions, user.id, user.is_guest]);
 
   const filteredConversations = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();

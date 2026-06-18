@@ -167,6 +167,24 @@ export default function ChatPage() {
   const [completedTools, setCompletedTools] = useState<string[]>([]);
   const firstName = getFirstName(user?.display_name || user?.email || "");
 
+  useEffect(() => {
+    const handlePrivacyReset = () => {
+      isStreamingRef.current = false;
+      setMessages([GREETING]);
+      setInput("");
+      setIsLoading(false);
+      setIsHistoryLoading(false);
+      setUpgradeMessage(null);
+      setActiveTool(null);
+      setCompletedTools([]);
+      appliedPromptRef.current = null;
+      router.replace("/");
+    };
+
+    window.addEventListener("chat-privacy:reset", handlePrivacyReset);
+    return () => window.removeEventListener("chat-privacy:reset", handlePrivacyReset);
+  }, [router]);
+
   const handleInput = (e: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     e.target.style.height = "auto";
@@ -249,7 +267,7 @@ export default function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeSessionId, authLoading, user.is_guest]);
+  }, [activeSessionId, authLoading, user.id, user.is_guest]);
 
   useEffect(() => {
     if (authLoading || !user.is_guest || isHistoryLoading) return;
@@ -258,7 +276,7 @@ export default function ChatPage() {
 
     saveLocalChatMessages(activeSessionId, messages);
     window.dispatchEvent(new Event("chat-sessions:changed"));
-  }, [activeSessionId, authLoading, isHistoryLoading, messages, user.is_guest]);
+  }, [activeSessionId, authLoading, isHistoryLoading, messages, user.id, user.is_guest]);
 
   useEffect(() => {
     const prompt = promptParam?.trim();

@@ -5,7 +5,7 @@ import traceback
 from typing import Any
 
 from src.agent.agent import FinancialAdvisorAgent
-from src.agent.history import append_message, load_history
+from src.agent.history import append_message, load_history, session_claimed_by_another_user
 from src.agent.llm_queue import LLMJobQueue, QueuedJob
 from src.config import settings
 from src.core.cache import cached_value
@@ -23,6 +23,8 @@ def execute_llm_job(job: QueuedJob) -> dict[str, Any]:
     remember = bool(payload.get("remember", True))
     is_guest = bool(payload.get("is_guest")) or user_id == "00000000-0000-0000-0000-000000000001"
     preferred_mode = payload.get("preferred_mode")
+    if not is_guest and session_claimed_by_another_user(session_id, user_id):
+        raise PermissionError("Chat session not found")
 
     agent = FinancialAdvisorAgent(
         user_id=user_id,

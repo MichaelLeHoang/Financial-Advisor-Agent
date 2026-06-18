@@ -1,6 +1,18 @@
 import type { ChatMessage, ChatSession } from "@/lib/api";
 
 const LOCAL_CHAT_STORAGE_KEY = "quanad.guestChatSessions";
+const LEGACY_CHAT_STORAGE_KEYS = [
+  LOCAL_CHAT_STORAGE_KEY,
+  "financial-advisor.chat",
+  "financial-advisor.chatHistory",
+  "financial-advisor.messages",
+  "financial-advisor.sessions",
+  "quanad.chat",
+  "quanad.chatHistory",
+  "quanad.chatSessions",
+  "chatHistory",
+  "chatSessions",
+];
 
 type StoredSession = ChatSession & {
   messages: ChatMessage[];
@@ -83,4 +95,38 @@ export function renameLocalChatSession(sessionId: string, title: string) {
 
 export function deleteLocalChatSession(sessionId: string) {
   writeSessions(readSessions().filter((session) => session.session_id !== sessionId));
+}
+
+export function clearLocalChatHistory() {
+  if (typeof window === "undefined") return;
+  const shouldClearKey = (key: string) => {
+    const normalized = key.toLowerCase();
+    return LEGACY_CHAT_STORAGE_KEYS.includes(key)
+      || (normalized.includes("chat") && (normalized.includes("quanad") || normalized.includes("financial-advisor")));
+  };
+
+  for (const key of LEGACY_CHAT_STORAGE_KEYS) {
+    try {
+      window.sessionStorage?.removeItem(key);
+      window.localStorage?.removeItem(key);
+    } catch {
+      // Ignore storage access failures in private browsing or restricted contexts.
+    }
+  }
+  for (const storage of [window.sessionStorage, window.localStorage]) {
+    try {
+      const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter((key): key is string => Boolean(key));
+      for (const key of keys) {
+        if (shouldClearKey(key)) storage.removeItem(key);
+      }
+    } catch {
+      // Ignore storage access failures in private browsing or restricted contexts.
+    }
+  }
+}
+
+export function notifyChatPrivacyReset() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event("chat-privacy:reset"));
+  window.dispatchEvent(new Event("chat-sessions:changed"));
 }

@@ -16,6 +16,7 @@ from src.services.ingestion import ingest_news
 
 from src.ml.preprocessing import prepare_training_data
 from src.ml.models import RandomForestPredictor, LSTMPredictor, evaluate_model
+from src.ml.ensemble import EnsemblePredictionService, PredictionDataError
 from src.ml.sentiment import SentimentAnalyzer
 
 from src.quantum.portfolio import optimize_portfolio, quantum_optimize_portfolio
@@ -39,7 +40,7 @@ from src.api.equity_research import router as equity_research_router
 from src.llm.routing_policy import LLMMode
 from src.core.redis_client import RedisUnavailable
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import math
 
 MARKET_QUOTE_TIMEOUT_SECONDS = 12
@@ -103,8 +104,14 @@ def get_agent(
 # Request/Response Models
 class PredictRequest(BaseModel):
     ticker: str = "AAPL"
-    model_type: str = "random_forest"  # "random_forest" or "lstm"
+    model_type: str = "ensemble"  # "random_forest", "lstm", or "ensemble"
+    model: str | None = None
     sequence_length: int = 5
+    horizon_days: int = Field(default=1, ge=1)
+    lookback_period: str = "2y"
+    target: str = "return"
+    include_validation: bool = True
+    include_backtest: bool = True
 
 class SentimentRequest(BaseModel):
     texts: list[str]
@@ -139,6 +146,30 @@ class AgentJobStatusResponse(BaseModel):
     created_at: float | None = None
     started_at: float | None = None
     finished_at: float | None = None
+
+
+def _chat_session_conflict_message() -> str:
+    return "Chat session not found"
+
+
+def _ensure_chat_session_available(session_id: str, user: AuthenticatedUser) -> None:
+    """Reject client-supplied session ids that already belong to another user."""
+    if user.is_guest:
+        return
+    from src.agent.history import session_claimed_by_another_user
+
+    if session_claimed_by_another_user(session_id, str(user.id)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message())
+
+
+def _ensure_chat_session_owned(session_id: str, user: AuthenticatedUser) -> None:
+    """Require an existing saved session owned by the current authenticated user."""
+    if user.is_guest:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to use saved chat sessions.")
+    from src.agent.history import session_belongs_to_user
+
+    if not session_belongs_to_user(session_id, str(user.id)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message())
 
 class EarningsPoint(BaseModel):
     date: str
@@ -699,30 +730,57 @@ async def predict_stock(req: PredictRequest, user: AuthenticatedUser = Depends(g
     Train a model on historical data and predict direction.
     POST /api/v1/predict
     {"ticker": "AAPL", "model_type": "random_forest", "sequence_length": 5}
+    {"ticker": "AAPL", "model": "ensemble", "include_validation": true}
     """
     enforce_feature(user, FeatureKey.ML_PREDICTION)
-    try: 
+    selected_model = (req.model or req.model_type or "ensemble").strip().lower()
+    ticker = req.ticker.strip().upper()
+    if not ticker:
+        raise HTTPException(status_code=400, detail="Ticker is required")
+    if selected_model == "ensemble":
+        if req.target != "return":
+            raise HTTPException(status_code=400, detail="Only target='return' is supported for ensemble predictions")
+        try:
+            service = EnsemblePredictionService()
+            return await asyncio.to_thread(
+                service.predict_with_models,
+                ticker,
+                horizon_days=req.horizon_days,
+                lookback_period=req.lookback_period,
+                target=req.target,
+                include_validation=req.include_validation,
+                include_backtest=req.include_backtest,
+                sequence_length=max(req.sequence_length, 2),
+            )
+        except PredictionDataError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Unable to run ensemble prediction for {ticker}: {exc}") from exc
+
+    try:
         data = prepare_training_data(
-            req.ticker, 
+            ticker,
             sequence_length=req.sequence_length,
-            model_type=req.model_type,
+            model_type=selected_model,
         )
-        if req.model_type == "random_forest":
+        if selected_model == "random_forest":
             model = RandomForestPredictor(n_estimators=200)
-        elif req.model_type == "lstm":
+        elif selected_model == "lstm":
             model = LSTMPredictor(epochs=20)
         else:
-            raise HTTPException(status_code=400, detail="Invalid model_type. Must be 'random_forest' or 'lstm'")
+            raise HTTPException(status_code=400, detail="Invalid model. Must be 'random_forest', 'lstm', or 'ensemble'")
         
         train_metrics = model.train(data["X_train"], data["y_train"])
         test_metrics = evaluate_model(model, data["X_test"], data["y_test"], data["scaler"])
         
         return {
-            "ticker": req.ticker,
-            "model_type": req.model_type,
+            "ticker": ticker,
+            "model_type": selected_model,
             "train_metrics": train_metrics,
             "test_metrics": test_metrics,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -779,6 +837,7 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
     from src.agent.history import load_history, append_message
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
+    _ensure_chat_session_available(req.session_id, user)
     try:
         agent = get_agent(user=user, task_type="chat", preferred_mode=req.preferred_mode)
 
@@ -820,6 +879,7 @@ async def create_agent_chat_job(req: AgentChatRequest, user: AuthenticatedUser =
 
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
+    _ensure_chat_session_available(req.session_id, user)
 
     kind = "consensus" if req.mode == "consensus" or (req.mode == "auto" and _is_consensus_query(req.message)) else "single"
     payload = {
@@ -878,6 +938,7 @@ async def agent_consensus(req: AgentChatRequest, user: AuthenticatedUser = Depen
 
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
+    _ensure_chat_session_available(req.session_id, user)
     try:
         orchestrator = QuanAdOrchestrator(
             user_id=str(user.id),
@@ -934,9 +995,10 @@ async def agent_reset(
     from src.agent.history import clear_history
 
     if user.is_guest:
-        return {"status": "ok", "session_id": session_id}
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to reset saved chat history.")
 
-    clear_history(session_id, str(user.id))
+    if not clear_history(session_id, str(user.id)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message())
     get_agent().reset_history()
 
     return {"status": "ok", "session_id": session_id}
@@ -961,8 +1023,9 @@ async def get_agent_session_messages(
     from src.agent.history import load_history
 
     if user.is_guest:
-        return {"session_id": session_id, "messages": []}
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to load saved chat history.")
 
+    _ensure_chat_session_available(session_id, user)
     return {"session_id": session_id, "messages": load_history(session_id, str(user.id))}
 
 
@@ -978,7 +1041,11 @@ async def rename_agent_session(
     if user.is_guest:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to save and rename chat history.")
 
-    return rename_session(session_id, req.title, str(user.id))
+    _ensure_chat_session_owned(session_id, user)
+    try:
+        return rename_session(session_id, req.title, str(user.id))
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message()) from exc
 
 
 @app.delete("/api/v1/agent/sessions/{session_id}")
@@ -990,9 +1057,10 @@ async def delete_agent_session(
     from src.agent.history import clear_history
 
     if user.is_guest:
-        return {"status": "ok", "session_id": session_id}
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to delete saved chat history.")
 
-    clear_history(session_id, str(user.id))
+    if not clear_history(session_id, str(user.id)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message())
     return {"status": "ok", "session_id": session_id}
 
 
@@ -1019,6 +1087,7 @@ async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Qu
             user = await get_current_or_guest_user(HTTPAuthorizationCredentials(scheme="Bearer", credentials=token))
         except Exception:
             pass
+    _ensure_chat_session_available(session_id, user)
             
     try: 
         while True: 

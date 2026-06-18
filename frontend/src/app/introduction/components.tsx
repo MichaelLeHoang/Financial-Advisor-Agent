@@ -237,8 +237,8 @@ export function IntroductionFooter() {
           <div>
             <h2 className="text-xs font-semibold uppercase tracking-widest text-white/35">Terms & Policies</h2>
             <div className="mt-3 grid gap-2 text-white/36">
-              <Link href="/introduction/help#terms-of-use" className="transition-colors hover:text-white/70">Terms of Use</Link>
-              <Link href="/introduction/help#privacy-policy" className="transition-colors hover:text-white/70">Privacy Policy</Link>
+              <Link href="/terms" className="transition-colors hover:text-white/70">Terms of Service</Link>
+              <Link href="/privacy" className="transition-colors hover:text-white/70">Privacy Policy</Link>
               <Link href="/introduction/help#other-policies" className="transition-colors hover:text-white/70">Other Policies</Link>
             </div>
           </div>

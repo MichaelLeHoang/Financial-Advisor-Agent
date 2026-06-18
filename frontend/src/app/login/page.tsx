@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import type { Provider } from "@supabase/supabase-js";
@@ -15,18 +15,37 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 
+function getSafeNextTarget() {
+  if (typeof window === "undefined") return "/";
+  const next = new URLSearchParams(window.location.search).get("next");
+  return next?.startsWith("/") && !next.startsWith("//") ? next : "/";
+}
+
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, signUp, signInWithOAuth, error: authError } = useAuth();
+  const { signIn, signUp, signInWithOAuth, user, loading, error: authError } = useAuth();
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [policyAccepted, setPolicyAccepted] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<Provider | null>(null);
 
+  useEffect(() => {
+    if (!loading && !user.is_guest) {
+      router.replace(getSafeNextTarget());
+    }
+  }, [loading, router, user.is_guest]);
+
   const submitAuth = async (event: FormEvent) => {
     event.preventDefault();
+    setFormError(null);
+    if (authMode === "signup" && !policyAccepted) {
+      setFormError("Please agree to the Terms of Service and Privacy Policy to create an account.");
+      return;
+    }
     setSubmitting(true);
     try {
       if (authMode === "signin") {
@@ -34,8 +53,7 @@ export default function LoginPage() {
       } else {
         await signUp(email, password);
       }
-      const next = new URLSearchParams(window.location.search).get("next");
-      router.push(next?.startsWith("/") && !next.startsWith("//") ? next : "/");
+      router.replace(getSafeNextTarget());
     } finally {
       setSubmitting(false);
     }
@@ -52,9 +70,14 @@ export default function LoginPage() {
   };
 
   const handleOAuthSignIn = async (provider: Provider) => {
+    setFormError(null);
+    if (authMode === "signup" && !policyAccepted) {
+      setFormError("Please agree to the Terms of Service and Privacy Policy before continuing.");
+      return;
+    }
     setOauthLoading(provider);
     try {
-      await signInWithOAuth(provider);
+      await signInWithOAuth(provider, getSafeNextTarget());
       // signInWithOAuth redirects to the OAuth provider — we don't reach here
       // unless there's a client-side error (caught below).
     } catch {
@@ -223,15 +246,38 @@ export default function LoginPage() {
               </div>
             )}
 
+            {authMode === "signup" && (
+              <label className="flex items-start gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-left">
+                <input
+                  type="checkbox"
+                  checked={policyAccepted}
+                  onChange={(event) => setPolicyAccepted(event.target.checked)}
+                  className="mt-1 size-4 rounded border-white/15 bg-white/5 accent-indigo-500"
+                  aria-describedby="signup-policy-consent"
+                />
+                <span id="signup-policy-consent" className="text-xs leading-5 text-white/48">
+                  I agree to the{" "}
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" className="font-semibold text-indigo-300 transition-colors hover:text-white">
+                    Terms of Service
+                  </a>{" "}
+                  and{" "}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-indigo-300 transition-colors hover:text-white">
+                    Privacy Policy
+                  </a>
+                  .
+                </span>
+              </label>
+            )}
+
             {/* Error */}
-            {authError && (
-              <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{authError}</p>
+            {(formError || authError) && (
+              <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{formError || authError}</p>
             )}
 
             {/* Submit */}
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || (authMode === "signup" && !policyAccepted)}
               className="group flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 text-sm font-semibold text-white shadow-[0_0_0_1px_rgba(99,102,241,0.5),0_8px_22px_rgba(99,102,241,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] transition-all hover:from-indigo-400 hover:to-indigo-500 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.6),0_14px_36px_rgba(99,102,241,0.35)] active:scale-[0.98] disabled:opacity-50"
             >
               {submitting ? (

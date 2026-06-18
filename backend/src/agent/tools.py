@@ -2,7 +2,8 @@ from langchain_core.tools import tool
 from src.data.fetch import fetch_stock_history
 from src.ml.sentiment import SentimentAnalyzer 
 from src.ml.preprocessing import prepare_training_data
-from src.ml.models import RandomForestPredictor, evaluate_model
+from src.ml.models import LSTMPredictor, RandomForestPredictor, evaluate_model
+from src.ml.ensemble import EnsemblePredictionService, PredictionDataError
 from src.quantum.portfolio import optimize_portfolio, quantum_optimize_portfolio
 from src.core.cache import cached_value
 from src.data.market_data_service import market_data_service
@@ -67,14 +68,17 @@ def analyze_sentiment(texts: list[str]) -> str:
         return f"Error analyzing sentiment: {str(e)}"
 
 
-@tool 
-def predict_stock_price(ticker: str) -> str: 
-    """Predict stock price direction using Random Forest ML model. Returns model accuracy metrics and predicted direction."""
+@tool
+def predict_stock_price(ticker: str, model: str = "ensemble") -> str:
+    """Predict stock movement using Random Forest, LSTM, or ensemble mode. Defaults to ensemble unless a single model is explicitly requested. Returns only computed metrics and caveats."""
     try:
         # Normalize ticker
         ticker = ticker.upper().strip()
         if not ticker:
             return "Error: Please provide a valid stock ticker symbol (e.g. AAPL, MSFT)."
+        selected_model = (model or "ensemble").strip().lower()
+        if selected_model not in {"random_forest", "lstm", "ensemble"}:
+            return "Error: model must be one of random_forest, lstm, or ensemble."
 
         # Fetch data first to check availability
         raw = fetch_stock_history([ticker], period="2y")
@@ -89,29 +93,133 @@ def predict_stock_price(ticker: str) -> str:
                 f"This ticker may be a recent IPO or have limited data."
             )
 
-        data = prepare_training_data(ticker, sequence_length=5, model_type="random_forest")
+        if selected_model == "ensemble":
+            try:
+                result = EnsemblePredictionService().predict_with_models(
+                    ticker,
+                    horizon_days=1,
+                    lookback_period="2y",
+                    target="return",
+                    include_validation=True,
+                    include_backtest=True,
+                    sequence_length=30,
+                )
+            except PredictionDataError as exc:
+                return f"Error: {exc}"
+            return _format_ensemble_prediction_for_agent(result)
+
+        data = prepare_training_data(ticker, sequence_length=5, model_type=selected_model)
 
         if data["X_train"].shape[0] == 0 or data["X_test"].shape[0] == 0:
             return f"Error: Insufficient processed data for {ticker} after feature engineering. The stock may have too many missing values."
 
-        model = RandomForestPredictor(n_estimators=200)
-        model.train(data["X_train"], data["y_train"])
-        metrics = evaluate_model(model, data["X_test"], data["y_test"], data["scaler"])
+        predictor = RandomForestPredictor(n_estimators=200) if selected_model == "random_forest" else LSTMPredictor(epochs=20)
+        predictor.train(data["X_train"], data["y_train"])
+        metrics = evaluate_model(predictor, data["X_test"], data["y_test"], data["scaler"])
 
-        last_pred = model.predict(data["X_test"][-1:])
+        last_pred = predictor.predict(data["X_test"][-1:])
         last_actual = data["y_test"][-1]
 
         direction = "UP ↑" if last_pred[0] > last_actual else "DOWN ↓"
+        display_name = "Random Forest (200 trees)" if selected_model == "random_forest" else "LSTM"
 
         return (
             f"Stock: {ticker}\n"
-            f"Model: Random Forest (200 trees)\n"
+            f"Model: {display_name}\n"
             f"Test MAE: ${metrics['test_mae_dollars']:.2f}\n"
             f"Test RMSE: ${metrics['test_rmse_dollars']:.2f}\n"
-            f"Predicted Direction: {direction}"
+            f"Predicted Direction: {direction}\n"
+            f"Caveat: This is educational analysis, not financial advice."
         )
     except Exception as e:
         return f"Error predicting {ticker}: {str(e)}"
+
+
+def _format_ensemble_prediction_for_agent(result: dict) -> str:
+    predictions = result.get("predictions", {})
+    validation = result.get("validation", {})
+    weights = result.get("weights", {})
+    agreement = result.get("agreement", {})
+    final_prediction = predictions.get("weighted_ensemble") or result.get("finalPrediction") or {}
+    current_price = float(result.get("current_price") or result.get("currentPrice") or 0)
+    predicted_price = _prediction_value(final_prediction, "predicted_price", "predictedPrice")
+    predicted_return = _prediction_value(final_prediction, "predicted_return", "predictedReturn")
+
+    lines = [
+        result.get("summary") or f"The ensemble model generated a prediction for {result.get('ticker')}.",
+        "",
+        f"Current price: ${current_price:.2f}",
+    ]
+    if predicted_price is not None and predicted_return is not None:
+        lines.extend([
+            f"Weighted ensemble prediction: ${predicted_price:.2f}",
+            f"Expected move: {predicted_return:+.2%}",
+        ])
+
+    labels = {
+        "random_forest": "Random Forest",
+        "lstm": "LSTM",
+        "simple_average": "Simple Average",
+        "weighted_ensemble": "Weighted Ensemble",
+    }
+    lines.extend(["", "Model breakdown:"])
+    for key in ["random_forest", "lstm", "simple_average", "weighted_ensemble"]:
+        item = predictions.get(key)
+        if not item:
+            continue
+        item_return = float(item["predicted_return"])
+        lines.append(
+            f"- {labels[key]}: ${float(item['predicted_price']):.2f}, "
+            f"{_direction_label(item_return)}, return {item_return:+.2%}"
+        )
+
+    if "random_forest" in weights and "lstm" in weights:
+        lines.extend([
+            "",
+            "The weighted ensemble uses validation-based model weights:",
+            f"- Random Forest weight: {float(weights.get('random_forest', 0)):.0%}",
+            f"- LSTM weight: {float(weights.get('lstm', 0)):.0%}",
+        ])
+
+    validation_lines: list[str] = []
+    for key in ["random_forest", "lstm", "simple_average", "weighted_ensemble"]:
+        metric = validation.get(key)
+        if not metric:
+            continue
+        validation_lines.append(
+            f"- {labels[key]}: MAE {float(metric['mae']):.2%}, "
+            f"RMSE {float(metric['rmse']):.2%}, "
+            f"Directional Accuracy {float(metric['directional_accuracy']):.0%}"
+        )
+    if validation_lines:
+        lines.extend(["", "Validation summary:"])
+        lines.extend(validation_lines)
+
+    if agreement:
+        display_agreement = result.get("agreementDisplay") or {}
+        status = display_agreement.get("status") or str(agreement.get("status", "weak")).replace("_agreement", "")
+        explanation = display_agreement.get("explanation") or agreement.get("message", "")
+        lines.extend(["", f"Model agreement: {str(status).title()}. {explanation}"])
+    lines.append(f"Confidence: {str(result.get('confidence', 'low')).title()}.")
+
+    warnings = result.get("warnings") or []
+    if warnings:
+        lines.append("Warnings: " + "; ".join(warnings))
+    lines.append(result.get("caveat") or "This is educational analysis, not financial advice.")
+    return "\n".join(lines)
+
+
+def _prediction_value(prediction: dict, snake_key: str, camel_key: str) -> float | None:
+    value = prediction.get(snake_key, prediction.get(camel_key))
+    return float(value) if isinstance(value, (int, float)) else None
+
+
+def _direction_label(predicted_return: float) -> str:
+    if abs(predicted_return) < 0.0005:
+        return "NEUTRAL →"
+    if predicted_return > 0:
+        return "UP ↑"
+    return "DOWN ↓"
 
 
 @tool

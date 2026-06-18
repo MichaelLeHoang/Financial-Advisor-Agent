@@ -1,4 +1,28 @@
 from fastapi.testclient import TestClient
+import base64
+import hashlib
+import hmac
+import json
+import time
+from uuid import uuid4
+
+from pydantic import SecretStr
+
+
+def _b64url(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("utf-8")
+
+
+def _sign(payload: dict, secret: str = "test-secret") -> str:
+    header = _b64url(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
+    body = _b64url(json.dumps(payload).encode())
+    signature = hmac.new(secret.encode(), f"{header}.{body}".encode(), hashlib.sha256).digest()
+    return f"{header}.{body}.{_b64url(signature)}"
+
+
+def _auth_headers(user_id) -> dict[str, str]:
+    token = _sign({"sub": str(user_id), "email": f"{user_id}@example.com", "exp": int(time.time()) + 3600})
+    return {"Authorization": f"Bearer {token}"}
 
 
 def test_status_endpoint_redacts_secrets_and_reports_services(monkeypatch):
@@ -64,8 +88,7 @@ def test_agent_reset_uses_default_session(monkeypatch):
 
     response = TestClient(api_app.app).post("/api/v1/agent/reset")
 
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok", "session_id": "default"}
+    assert response.status_code == 401
     assert cleared_sessions == []
 
 
@@ -108,3 +131,56 @@ def test_agent_chat_job_endpoints_use_queue(monkeypatch):
     status = client.get("/api/v1/agent/chat/jobs/job-1")
     assert status.status_code == 200
     assert status.json()["status"] == "queued"
+
+
+def test_agent_session_endpoints_scope_to_current_user(tmp_path, monkeypatch):
+    from src.api import app as api_app
+    from src.agent import history
+    from src.auth import supabase
+
+    monkeypatch.setattr(history, "DB_PATH", tmp_path / "conversations.db")
+    monkeypatch.setattr(supabase.settings, "supabase_jwt_secret", SecretStr("test-secret"))
+
+    user_a = uuid4()
+    user_b = uuid4()
+    history.append_message("session-a", "user", "User A private question", str(user_a))
+    history.append_message("session-a", "assistant", "User A private answer", str(user_a))
+    history.append_message("session-b", "user", "User B private question", str(user_b))
+
+    client = TestClient(api_app.app)
+
+    sessions_a = client.get("/api/v1/agent/sessions", headers=_auth_headers(user_a))
+    assert sessions_a.status_code == 200
+    assert [row["session_id"] for row in sessions_a.json()] == ["session-a"]
+
+    own_messages = client.get("/api/v1/agent/sessions/session-a/messages", headers=_auth_headers(user_a))
+    assert own_messages.status_code == 200
+    assert own_messages.json()["messages"][0]["content"] == "User A private question"
+
+    cross_messages = client.get("/api/v1/agent/sessions/session-b/messages", headers=_auth_headers(user_a))
+    assert cross_messages.status_code == 404
+
+    cross_rename = client.patch(
+        "/api/v1/agent/sessions/session-b",
+        headers=_auth_headers(user_a),
+        json={"title": "stolen"},
+    )
+    assert cross_rename.status_code == 404
+
+    cross_delete = client.delete("/api/v1/agent/sessions/session-b", headers=_auth_headers(user_a))
+    assert cross_delete.status_code == 404
+    assert history.load_history("session-b", str(user_b))[0]["content"] == "User B private question"
+
+
+def test_guest_cannot_load_or_mutate_saved_chat_sessions(tmp_path, monkeypatch):
+    from src.api import app as api_app
+    from src.agent import history
+
+    monkeypatch.setattr(history, "DB_PATH", tmp_path / "conversations.db")
+
+    client = TestClient(api_app.app)
+    assert client.get("/api/v1/agent/sessions").status_code == 200
+    assert client.get("/api/v1/agent/sessions").json() == []
+    assert client.get("/api/v1/agent/sessions/any/messages").status_code == 401
+    assert client.patch("/api/v1/agent/sessions/any", json={"title": "x"}).status_code == 401
+    assert client.delete("/api/v1/agent/sessions/any").status_code == 401

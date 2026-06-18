@@ -151,10 +151,13 @@ export default function Sidebar({
         refreshSessions();
 
         const handleChanged = () => refreshSessions();
+        const handlePrivacyReset = () => setSessions([]);
         window.addEventListener("chat-sessions:changed", handleChanged);
+        window.addEventListener("chat-privacy:reset", handlePrivacyReset);
 
         return () => {
             window.removeEventListener("chat-sessions:changed", handleChanged);
+            window.removeEventListener("chat-privacy:reset", handlePrivacyReset);
         };
     }, [refreshSessions]);
 

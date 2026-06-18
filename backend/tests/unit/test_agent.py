@@ -115,6 +115,12 @@ class TestAnalyzeSentimentTool:
 # predict_stock_price
 # ---------------------------------------------------------------------------
 
+def test_single_agent_prompt_prefers_ensemble_prediction():
+    from src.agent.agent import SYSTEM_PROMPT
+
+    assert 'predict_stock_price with model="ensemble"' in SYSTEM_PROMPT
+
+
 class TestPredictStockPriceTool:
     """Tests for the predict_stock_price agent tool."""
 
@@ -133,17 +139,62 @@ class TestPredictStockPriceTool:
             ),
         }
 
-    def test_returns_prediction_string(self):
+    def test_returns_ensemble_prediction_string_by_default(self):
+        from src.agent.tools import predict_stock_price
+
+        class FakeService:
+            def predict_with_models(self, *args, **kwargs):
+                return {
+                    "ticker": "NVDA",
+                    "summary": "The ensemble model predicts an UP ↑ direction for NVDA over the next trading period.",
+                    "current_price": 100.0,
+                    "predictions": {
+                        "random_forest": {"predicted_return": 0.01, "predicted_price": 101.0, "direction": "UP"},
+                        "lstm": {"predicted_return": 0.02, "predicted_price": 102.0, "direction": "UP"},
+                        "simple_average": {"predicted_return": 0.015, "predicted_price": 101.5, "direction": "UP"},
+                        "weighted_ensemble": {"predicted_return": 0.014, "predicted_price": 101.4, "direction": "UP"},
+                    },
+                    "weights": {"random_forest": 0.6, "lstm": 0.4, "method": "inverse_validation_mae"},
+                    "validation": {
+                        "random_forest": {"mae": 0.02, "rmse": 0.03, "directional_accuracy": 0.55},
+                        "lstm": {"mae": 0.03, "rmse": 0.04, "directional_accuracy": 0.52},
+                        "simple_average": {"mae": 0.021, "rmse": 0.031, "directional_accuracy": 0.56},
+                        "weighted_ensemble": {"mae": 0.018, "rmse": 0.028, "directional_accuracy": 0.58},
+                    },
+                    "agreement": {"status": "moderate_agreement", "message": "aligned"},
+                    "agreementDisplay": {"status": "moderate", "spread": 0.01, "explanation": "aligned"},
+                    "confidence": "medium",
+                    "warnings": [],
+                    "risk_notes": ["This is educational analysis, not financial advice."],
+                    "caveat": "This is AI-generated analysis based on historical market data and walk-forward validation. It is not professional financial advice.",
+                }
+
+        with (
+            patch("src.agent.tools.fetch_stock_history", return_value=_make_price_df([100 + i for i in range(50)])),
+            patch("src.agent.tools.EnsemblePredictionService", return_value=FakeService()),
+        ):
+            result = predict_stock_price.invoke({"ticker": "NVDA"})
+
+        assert "NVDA" in result
+        assert "ensemble model predicts" in result
+        assert "Weighted Ensemble" in result
+        assert "Validation summary" in result
+        assert "Model agreement" in result
+        assert "Confidence: Medium" in result
+        assert "not professional financial advice" in result.lower()
+
+    def test_returns_random_forest_prediction_string_when_requested(self):
         from src.agent.tools import predict_stock_price
 
         mock_data = self._make_training_data()
         mock_metrics = {"test_mae_dollars": 2.5, "test_rmse_dollars": 3.1}
 
         with (
+            patch("src.agent.tools.fetch_stock_history", return_value=_make_price_df([100 + i for i in range(50)])),
             patch("src.agent.tools.prepare_training_data", return_value=mock_data),
             patch("src.agent.tools.evaluate_model", return_value=mock_metrics),
         ):
-            result = predict_stock_price.invoke({"ticker": "NVDA"})
+            result = predict_stock_price.invoke({"ticker": "NVDA", "model": "random_forest"})
 
         assert "NVDA" in result
         assert "Random Forest" in result
@@ -152,7 +203,7 @@ class TestPredictStockPriceTool:
     def test_returns_error_on_exception(self):
         from src.agent.tools import predict_stock_price
 
-        with patch("src.agent.tools.prepare_training_data", side_effect=ValueError("no data")):
+        with patch("src.agent.tools.fetch_stock_history", side_effect=ValueError("no data")):
             result = predict_stock_price.invoke({"ticker": "XYZ"})
 
         assert "Error" in result
