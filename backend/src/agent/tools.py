@@ -5,6 +5,7 @@ from src.ml.preprocessing import prepare_training_data
 from src.ml.models import RandomForestPredictor, evaluate_model
 from src.quantum.portfolio import optimize_portfolio, quantum_optimize_portfolio
 from src.core.cache import cached_value
+from src.data.market_data_service import market_data_service
 
 @tool 
 def get_stock_info(ticker: str) -> str: 
@@ -12,22 +13,22 @@ def get_stock_info(ticker: str) -> str:
     ticker = ticker.upper().strip()
 
     def compute() -> str:
-        data = fetch_stock_history([ticker], period="5d")
-        if data.empty: 
+        snapshot = market_data_service.fetch_snapshot(ticker, period="5d", interval="1d", include_news=False, include_sec=False)
+        if snapshot.latest_price is None and not snapshot.history:
             return f"No data found for ticker {ticker}"
 
-        latest = data.iloc[-1]
-        prev = data.iloc[-2] if len(data) > 1 else latest
-
-        change = ( (latest["Close"] - prev["Close"])  / prev["Close"]) * 100
-
-        return (
-            f"Stock: {ticker}\n"
-            f"Latest Close: ${latest['Close']:.2f}\n"
-            f"Daily Change: {change:+.2f}%\n"
-            f"Volume: {int(latest['Volume']):,}\n"
-            f"High: ${latest['High']:.2f} | Low: ${latest['Low']:.2f}"
-        )
+        lines = [
+            f"Stock: {ticker}",
+            f"Company: {snapshot.company_name or 'Unavailable'}",
+            f"Latest Price: ${snapshot.latest_price or snapshot.history[-1].price:.2f}",
+            f"Daily Change: {(snapshot.daily_change or 0):+.2f}%",
+            f"Volume: {int(snapshot.volume or 0):,}",
+        ]
+        if snapshot.day_high and snapshot.day_low:
+            lines.append(f"High: ${snapshot.day_high:.2f} | Low: ${snapshot.day_low:.2f}")
+        lines.append(f"Data Sources: {', '.join(snapshot.data_sources) or 'Unavailable'}")
+        lines.append(f"Source Notes: {'; '.join(snapshot.source_quality.get('limitations', [])) or 'Primary configured sources available.'}")
+        return "\n".join(lines)
 
     try:
         return cached_value("stock_info", {"ticker": ticker}, 60, compute)
@@ -119,13 +120,11 @@ def search_financial_news(ticker: str) -> str:
     ticker = ticker.upper().strip()
 
     def compute() -> str:
-        import yfinance as yf
-
         if not ticker:
             return "Error: Please provide a valid stock ticker symbol."
 
-        stock = yf.Ticker(ticker)
-        news = stock.news
+        snapshot = market_data_service.fetch_snapshot(ticker, period="1mo", interval="1d", include_news=True, include_sec=False)
+        news = snapshot.news_items
 
         if not news:
             return f"No recent news found for {ticker}."
@@ -133,28 +132,10 @@ def search_financial_news(ticker: str) -> str:
         output = f"Recent news for {ticker}:\n\n"
         headlines = []
         for i, article in enumerate(news[:10], 1):
-            # yfinance now nests everything under article["content"]
-            content = article.get("content", article)  # fallback to flat structure
-            title = content.get("title", "No title")
-
-            # Provider is now a dict: {"displayName": "Yahoo Finance", ...}
-            provider = content.get("provider", {})
-            if isinstance(provider, dict):
-                publisher = provider.get("displayName", "Unknown")
-            else:
-                publisher = content.get("publisher", str(provider) if provider else "Unknown")
-
-            # URL is now nested: {"url": "https://...", "site": "finance"}
-            canonical = content.get("canonicalUrl", {})
-            if isinstance(canonical, dict):
-                link = canonical.get("url", "")
-            else:
-                link = content.get("link", str(canonical) if canonical else "")
-
-            # Date is now ISO string: "2026-06-11T18:42:57Z"
-            date_str = content.get("pubDate", content.get("displayTime", ""))
-            if date_str and len(str(date_str)) > 10:
-                date_str = str(date_str)[:19].replace("T", " ")
+            title = article.title
+            publisher = article.publisher or article.source
+            link = article.url or ""
+            date_str = article.published_at or ""
 
             if link:
                 output += f"{i}. [{publisher}] [{title}]({link})\n"
@@ -166,6 +147,8 @@ def search_financial_news(ticker: str) -> str:
             output += "\n"
             headlines.append(title)
 
+        output += f"\nData Sources: {', '.join(snapshot.data_sources)}\n"
+        output += f"Sentiment Signal: {snapshot.sentiment_summary.get('signal', 'limited')} ({snapshot.sentiment_summary.get('score', 0)})\n"
         output += "\nHeadlines for sentiment analysis:\n"
         for h in headlines:
             output += f"- {h}\n"
@@ -194,36 +177,30 @@ def research_market() -> str:
         output = "Market Overview:\n\n"
         for ticker, name in indices:
             try:
-                data = fetch_stock_history([ticker], period="5d")
-                if data.empty:
+                snapshot = market_data_service.fetch_snapshot(ticker, period="5d", interval="1d", include_news=False, include_sec=False)
+                if snapshot.latest_price is None:
                     output += f"{name} ({ticker}): No data available\n"
                     continue
-                latest = data.iloc[-1]
-                prev = data.iloc[-2] if len(data) > 1 else latest
-                change = ((latest["Close"] - prev["Close"]) / prev["Close"]) * 100
+                change = snapshot.daily_change or 0
                 arrow = "↑" if change >= 0 else "↓"
                 output += (
-                    f"{name} ({ticker}): ${latest['Close']:.2f} "
+                    f"{name} ({ticker}): ${snapshot.latest_price:.2f} "
                     f"{arrow} {change:+.2f}% | "
-                    f"Vol: {int(latest['Volume']):,}\n"
+                    f"Sources: {', '.join(snapshot.data_sources[:2])}\n"
                 )
             except Exception:
                 output += f"{name} ({ticker}): Error fetching data\n"
 
         # Also fetch market-wide news via SPY
-        import yfinance as yf
         try:
-            spy_news = yf.Ticker("SPY").news
-            if spy_news:
+            spy_snapshot = market_data_service.fetch_snapshot("SPY", period="1mo", interval="1d", include_news=True, include_sec=False)
+            if spy_snapshot.news_items:
                 output += "\nTop Market Headlines:\n"
                 headlines = []
-                for article in spy_news[:5]:
-                    content = article.get("content", article)
-                    title = content.get("title", "No title")
-                    provider = content.get("provider", {})
-                    pub = provider.get("displayName", "Unknown") if isinstance(provider, dict) else str(provider)
-                    canonical = content.get("canonicalUrl", {})
-                    link = canonical.get("url", "") if isinstance(canonical, dict) else content.get("link", str(canonical) if canonical else "")
+                for article in spy_snapshot.news_items[:5]:
+                    title = article.title
+                    pub = article.publisher or article.source
+                    link = article.url or ""
                     
                     if link:
                         output += f"  • [{pub}] [{title}]({link})\n"

@@ -266,6 +266,11 @@ QDRANT_COLLECTION_NEWS=financial_news
 # Optional: Redis queue/cache
 REDIS_URL=redis://localhost:6379/0
 
+# Market data providers
+FINNHUB_API_KEY=
+ALPHA_VANTAGE_API_KEY=
+SEC_USER_AGENT=QuanAd research contact@example.com
+
 # Optional: embedding provider (local is free, gemini requires API)
 EMBEDDING_PROVIDER=local
 

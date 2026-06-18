@@ -167,15 +167,23 @@ Your job is to synthesize their findings into a clear, actionable recommendation
 {opinions_text}
 
 ## Your Task
-Write a comprehensive but concise response that:
-1. Opens with the consensus verdict and confidence level
-2. Summarizes the key supporting evidence from each specialist
-3. Highlights any disagreements between specialists
-4. Calls out critical risk flags
-5. Provides a clear recommendation
-6. Ends with: "This is AI-generated analysis from QuanAd 2.0's multi-agent consensus system, not professional financial advice."
+Write a professional, source-aware consensus report. Use clear markdown sections:
 
-Use clear formatting with headers and bullet points. Be specific with numbers."""
+1. Final Consensus — verdict, confidence, consensus score, agreement ratio
+2. Key Evidence — the most important numbers and facts from the specialists
+3. Specialist Breakdown — concise view from each specialist
+4. Disagreement and Dissent — where agents disagree and why it matters
+5. Risk Flags — especially valuation, drawdown, concentration, volatility, data gaps, and risk-veto issues
+6. What Would Change The View — concrete evidence that would upgrade/downgrade the recommendation
+7. Actionable Research Next Steps — what the user should verify before acting
+
+Rules:
+- Be specific with numbers from the specialist outputs.
+- Do not invent market data, news, prices, or analyst targets.
+- If evidence is missing or tool output failed, say so and lower confidence.
+- Do not imply guaranteed returns or direct brokerage execution.
+- End with: "This is AI-generated analysis from QuanAd 2.0's multi-agent consensus system, not professional financial advice."
+"""
 
             response = llm.invoke([{"role": "user", "content": synthesis_prompt}])
 

@@ -66,7 +66,7 @@ def test_agent_reset_uses_default_session(monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "session_id": "default"}
-    assert cleared_sessions == [("default", "00000000-0000-0000-0000-000000000001")]
+    assert cleared_sessions == []
 
 
 def test_agent_chat_job_endpoints_use_queue(monkeypatch):

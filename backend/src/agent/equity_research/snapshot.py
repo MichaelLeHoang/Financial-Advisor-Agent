@@ -9,6 +9,7 @@ import pandas as pd
 import yfinance as yf
 from fastapi import HTTPException, status
 
+from src.data.market_data_service import market_data_service
 from src.models.equity_research import EquityResearchSnapshot
 
 
@@ -143,6 +144,56 @@ def _sentiment_summary(news_items: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def build_data_snapshot(run_id: UUID, ticker_symbol: str, analysis_date: date) -> EquityResearchSnapshot:
+    normalized = ticker_symbol.strip().upper()
+    market_snapshot = market_data_service.fetch_snapshot(normalized, period="6mo", interval="1d", include_news=True)
+    if not market_snapshot.company_name and not market_snapshot.exchange and not market_snapshot.latest_price:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Could not resolve {ticker_symbol}. Check the ticker and try again.",
+        )
+    return EquityResearchSnapshot(
+        run_id=run_id,
+        ticker=normalized,
+        company_name=market_snapshot.company_name,
+        exchange=market_snapshot.exchange,
+        analysis_date=analysis_date,
+        latest_price=market_snapshot.latest_price,
+        previous_close=market_snapshot.previous_close,
+        daily_change=market_snapshot.daily_change,
+        volume=market_snapshot.volume,
+        market_cap=market_snapshot.market_cap,
+        fundamentals={
+            **market_snapshot.fundamentals,
+            "sector": market_snapshot.sector or market_snapshot.fundamentals.get("sector"),
+            "industry": market_snapshot.industry or market_snapshot.fundamentals.get("industry"),
+            "market_cap": market_snapshot.market_cap,
+            "pe_ratio": market_snapshot.pe_ratio,
+        },
+        technical_indicators=market_snapshot.technical_indicators,
+        news_items=[
+            {
+                "title": item.title,
+                "publisher": item.publisher,
+                "url": item.url,
+                "published_at": item.published_at,
+                "source": item.source,
+                "summary": item.summary,
+                "sentiment": item.sentiment,
+                "sentiment_score": item.sentiment_score,
+            }
+            for item in market_snapshot.news_items
+        ],
+        rag_context=[],
+        sentiment_summary=market_snapshot.sentiment_summary,
+        risk_metrics=market_snapshot.risk_metrics,
+        data_sources=market_snapshot.data_sources,
+        source_quality=market_snapshot.source_quality,
+        provider_status=[status_item.__dict__ for status_item in market_snapshot.provider_status],
+        evidence_items=[item.__dict__ for item in market_snapshot.evidence_items],
+        analyst_context=market_snapshot.analyst_context,
+        filing_context=market_snapshot.filing_context,
+    )
+
     ticker = yf.Ticker(ticker_symbol)
     try:
         info = ticker.info or {}

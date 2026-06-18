@@ -37,3 +37,10 @@ def test_llm_queue_settings_have_safe_defaults():
     assert settings.llm_consensus_concurrency == 4
     assert settings.llm_per_user_concurrency == 2
     assert settings.llm_retry_attempts == 3
+
+
+def test_market_data_settings_have_safe_defaults():
+    settings = Settings(_env_file=None)
+
+    assert settings.sec_user_agent
+    assert settings.market_data_timeout_seconds == 10

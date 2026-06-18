@@ -112,6 +112,11 @@ export interface EquityResearchSnapshot {
   sentiment_summary: Record<string, unknown>;
   risk_metrics: Record<string, unknown>;
   data_sources: string[];
+  source_quality?: Record<string, unknown>;
+  provider_status?: Array<Record<string, unknown>>;
+  evidence_items?: Array<Record<string, unknown>>;
+  analyst_context?: Record<string, unknown>;
+  filing_context?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -362,6 +367,9 @@ export interface MarketQuote {
   history: MarketQuotePoint[];
   earnings?: EarningsPoint[];
   quarterly_financials?: QuarterlyFinancial[];
+  data_sources?: string[];
+  source_quality?: Record<string, unknown> | null;
+  provider_status?: Array<Record<string, unknown>>;
 }
 
 export interface MarketSymbolSearchResult {

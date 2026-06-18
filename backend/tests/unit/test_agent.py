@@ -1,6 +1,7 @@
 import pytest
 import numpy as np
 import pandas as pd
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
 
@@ -32,10 +33,21 @@ class TestGetStockInfoTool:
     def test_returns_formatted_string_on_success(self):
         from src.agent.tools import get_stock_info
 
-        with patch("src.agent.tools.fetch_stock_history", return_value=_make_price_df()) as mock_fetch:
+        snapshot = SimpleNamespace(
+            latest_price=153.0,
+            history=[],
+            company_name="Apple Inc.",
+            daily_change=2.0,
+            volume=1_000_000,
+            day_high=155.0,
+            day_low=150.0,
+            data_sources=["finnhub_quote"],
+            source_quality={"limitations": []},
+        )
+        with patch("src.agent.tools.market_data_service.fetch_snapshot", return_value=snapshot) as mock_fetch:
             result = get_stock_info.invoke({"ticker": "AAPL"})
 
-        mock_fetch.assert_called_once_with(["AAPL"], period="5d")
+        mock_fetch.assert_called_once_with("AAPL", period="5d", interval="1d", include_news=False, include_sec=False)
         assert "AAPL" in result
         assert "$" in result
         assert "Daily Change" in result
@@ -43,7 +55,8 @@ class TestGetStockInfoTool:
     def test_returns_error_string_on_empty_data(self):
         from src.agent.tools import get_stock_info
 
-        with patch("src.agent.tools.fetch_stock_history", return_value=pd.DataFrame()):
+        snapshot = SimpleNamespace(latest_price=None, history=[])
+        with patch("src.agent.tools.market_data_service.fetch_snapshot", return_value=snapshot):
             result = get_stock_info.invoke({"ticker": "FAKE"})
 
         assert "No data found" in result
@@ -51,7 +64,7 @@ class TestGetStockInfoTool:
     def test_returns_error_string_on_exception(self):
         from src.agent.tools import get_stock_info
 
-        with patch("src.agent.tools.fetch_stock_history", side_effect=RuntimeError("network down")):
+        with patch("src.agent.tools.market_data_service.fetch_snapshot", side_effect=RuntimeError("network down")):
             result = get_stock_info.invoke({"ticker": "AAPL"})
 
         assert "Error" in result

@@ -21,6 +21,7 @@ from src.ml.sentiment import SentimentAnalyzer
 from src.quantum.portfolio import optimize_portfolio, quantum_optimize_portfolio
 from src.agent.agent import FinancialAdvisorAgent
 from src.config import settings
+from src.data.market_data_service import market_data_service
 from src.data.vector_db import get_qdrant_client
 from src.auth.supabase import get_current_or_guest_user
 from src.saas.entitlements import FeatureKey, enforce_feature
@@ -39,7 +40,6 @@ from src.llm.routing_policy import LLMMode
 from src.core.redis_client import RedisUnavailable
 
 from pydantic import BaseModel
-import yfinance as yf
 import math
 
 MARKET_QUOTE_TIMEOUT_SECONDS = 12
@@ -197,6 +197,9 @@ class MarketQuoteResponse(BaseModel):
     history: list[MarketQuotePoint]
     earnings: list[EarningsPoint] = []
     quarterly_financials: list[QuarterlyFinancial] = []
+    data_sources: list[str] = []
+    source_quality: dict | None = None
+    provider_status: list[dict] = []
 
 
 def _service_state(configured: bool, ok: bool | None = None, detail: str | None = None) -> dict:
@@ -287,6 +290,20 @@ def _status_rollup(services: dict[str, dict]) -> dict:
         "degraded_optional_services": optional_errors,
     }
 
+
+def _market_data_status() -> dict:
+    providers = {
+        "finnhub": settings.is_configured("finnhub_api_key"),
+        "alpha_vantage": settings.is_configured("alpha_vantage_api_key"),
+        "sec_edgar": bool(settings.sec_user_agent),
+        "yfinance_fallback": True,
+    }
+    return {
+        "status": "configured" if providers["finnhub"] or providers["alpha_vantage"] else "fallback_only",
+        "providers": providers,
+        "primary_order": ["finnhub", "alpha_vantage", "sec_edgar", "yfinance_fallback"],
+    }
+
 # basic api endpoints 
 
 @app.get("/health")
@@ -325,6 +342,7 @@ async def service_status():
             or settings.is_configured("telegram_bot_token")
             or settings.is_configured("notification_secret_key")
         ),
+        "market_data": _market_data_status(),
     }
     rollup = _status_rollup(services)
 
@@ -336,6 +354,45 @@ async def service_status():
     }
 
 def _fetch_market_quote_response(normalized: str, period: str, interval: str) -> MarketQuoteResponse:
+    snapshot = market_data_service.fetch_snapshot(normalized, period=period, interval=interval, include_news=False, include_sec=False)
+    if snapshot.latest_price is None and not snapshot.history:
+        raise HTTPException(status_code=404, detail=f"No market data found for {normalized}")
+
+    return MarketQuoteResponse(
+        ticker=normalized,
+        name=snapshot.company_name or normalized,
+        exchange=snapshot.exchange,
+        sector=snapshot.sector,
+        price=round(float(snapshot.latest_price or (snapshot.history[-1].price if snapshot.history else 0)), 2),
+        change=round(float(snapshot.daily_change or 0), 2),
+        currency=snapshot.currency,
+        open_price=_round_optional(snapshot.open_price),
+        day_high=_round_optional(snapshot.day_high),
+        day_low=_round_optional(snapshot.day_low),
+        market_cap=snapshot.market_cap,
+        volume=snapshot.volume,
+        pe_ratio=_round_optional(snapshot.pe_ratio),
+        fifty_two_week_high=_round_optional(snapshot.fifty_two_week_high),
+        fifty_two_week_low=_round_optional(snapshot.fifty_two_week_low),
+        dividend_yield=_round_optional(snapshot.dividend_yield),
+        dividend_rate=_round_optional(snapshot.dividend_rate),
+        quarterly_dividend_amount=_round_optional((snapshot.dividend_rate / 4) if snapshot.dividend_rate else None),
+        history=[
+            MarketQuotePoint(
+                label=point.label,
+                price=point.price,
+                volume=point.volume,
+                open=_round_optional(point.open),
+                high=_round_optional(point.high),
+                low=_round_optional(point.low),
+            )
+            for point in snapshot.history
+        ],
+        data_sources=snapshot.data_sources,
+        source_quality=snapshot.source_quality,
+        provider_status=[status.__dict__ for status in snapshot.provider_status],
+    )
+
     try:
         stock = yf.Ticker(normalized)
         info = stock.info or {}
@@ -542,36 +599,16 @@ async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
 
 def _search_market_symbols(query: str, safe_limit: int) -> list[MarketSymbolSearchResult]:
     try:
-        search = yf.Search(
-            query,
-            max_results=safe_limit,
-            news_count=0,
-            lists_count=0,
-            include_research=False,
-            include_cultural_assets=False,
-            enable_fuzzy_query=True,
-        )
-        results = []
-        seen = set()
-
-        for quote in search.quotes or []:
-            symbol = str(quote.get("symbol") or "").strip().upper()
-            if not symbol or symbol in seen:
-                continue
-            seen.add(symbol)
-            results.append(
-                MarketSymbolSearchResult(
-                    ticker=symbol,
-                    name=quote.get("longname") or quote.get("shortname") or symbol,
-                    exchange=quote.get("exchDisp") or quote.get("exchange"),
-                    sector=quote.get("sectorDisp") or quote.get("sector") or quote.get("quoteType"),
-                    quote_type=quote.get("typeDisp") or quote.get("quoteType"),
-                )
+        return [
+            MarketSymbolSearchResult(
+                ticker=row["ticker"],
+                name=row["name"],
+                exchange=row.get("exchange"),
+                sector=row.get("sector"),
+                quote_type=row.get("quote_type"),
             )
-            if len(results) >= safe_limit:
-                break
-
-        return results
+            for row in market_data_service.search_symbols(query, safe_limit)
+        ]
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Unable to search market symbols: {exc}")
 
