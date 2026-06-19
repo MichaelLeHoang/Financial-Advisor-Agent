@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { ChatSession } from "@/lib/api";
-import { deleteLocalChatSession, listLocalChatSessions, renameLocalChatSession } from "@/lib/local-chat-history";
+import { createLocalChatSession, deleteLocalChatSession, listLocalChatSessions, renameLocalChatSession } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { Plan } from "@/components/auth/AuthProvider";
@@ -87,6 +87,7 @@ export default function Sidebar({
     const [mobileOpen, setMobileOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
     const [sessions, setSessions] = useState<ChatSession[]>([]);
+    const [sessionsLoading, setSessionsLoading] = useState(true);
     const isGuest = Boolean(user?.is_guest);
     const visibleNav = isGuest
         ? NAV.filter((item) => item.href === "/" || item.href === "/market")
@@ -101,8 +102,10 @@ export default function Sidebar({
     }, []);
 
     const refreshSessions = useCallback(async () => {
+        setSessionsLoading(true);
         if (user?.is_guest) {
             setSessions(listLocalChatSessions());
+            setSessionsLoading(false);
             return;
         }
 
@@ -110,6 +113,8 @@ export default function Sidebar({
             setSessions(await api.chatSessions());
         } catch {
             setSessions([]);
+        } finally {
+            setSessionsLoading(false);
         }
     }, [user?.id, user?.is_guest]);
 
@@ -117,9 +122,32 @@ export default function Sidebar({
         const nextSessionId = typeof crypto !== "undefined" && "randomUUID" in crypto
             ? crypto.randomUUID()
             : `session-${Date.now()}`;
+        const optimisticSession: ChatSession = {
+            session_id: nextSessionId,
+            title: "New chat",
+            message_count: 0,
+            last_active: new Date().toISOString(),
+        };
+
+        setSessions((current) => [optimisticSession, ...current.filter((session) => session.session_id !== nextSessionId)]);
         router.push(`/?session=${encodeURIComponent(nextSessionId)}`);
         setMobileOpen(false);
-    }, [router]);
+        window.setTimeout(() => window.dispatchEvent(new Event("chat-input:focus")), 80);
+
+        if (user?.is_guest) {
+            createLocalChatSession(nextSessionId);
+            return;
+        }
+
+        api.createChatSession(nextSessionId)
+            .then((savedSession) => {
+                setSessions((current) => [savedSession, ...current.filter((session) => session.session_id !== nextSessionId)]);
+            })
+            .catch(() => {
+                setSessions((current) => current.filter((session) => session.session_id !== nextSessionId));
+                router.replace("/");
+            });
+    }, [router, user?.is_guest]);
 
     const handleSessionDeleted = useCallback((sessionId: string) => {
         refreshSessions();
@@ -151,7 +179,10 @@ export default function Sidebar({
         refreshSessions();
 
         const handleChanged = () => refreshSessions();
-        const handlePrivacyReset = () => setSessions([]);
+        const handlePrivacyReset = () => {
+            setSessions([]);
+            setSessionsLoading(false);
+        };
         window.addEventListener("chat-sessions:changed", handleChanged);
         window.addEventListener("chat-privacy:reset", handlePrivacyReset);
 
@@ -189,6 +220,7 @@ export default function Sidebar({
                 nav={visibleNav}
                 moreNav={visibleMoreNav}
                 sessions={displaySessions}
+                sessionsLoading={sessionsLoading}
                 activeSessionId={activeSessionId}
                 isGuest={isGuest}
                 onNewAnalysis={startNewAnalysis}
@@ -225,6 +257,7 @@ export default function Sidebar({
                                 nav={visibleNav}
                                 moreNav={visibleMoreNav}
                                 sessions={displaySessions}
+                                sessionsLoading={sessionsLoading}
                                 activeSessionId={activeSessionId}
                                 isGuest={isGuest}
                                 onNewAnalysis={startNewAnalysis}
@@ -251,6 +284,7 @@ function DesktopSidebar({
     nav,
     moreNav,
     sessions,
+    sessionsLoading,
     activeSessionId,
     isGuest,
     onNewAnalysis,
@@ -267,6 +301,7 @@ function DesktopSidebar({
     nav: NavItem[];
     moreNav: NavItem[];
     sessions: ChatSession[];
+    sessionsLoading: boolean;
     activeSessionId: string | null;
     isGuest: boolean;
     onNewAnalysis: () => void;
@@ -295,6 +330,7 @@ function DesktopSidebar({
                     nav={nav}
                     moreNav={moreNav}
                     sessions={sessions}
+                    sessionsLoading={sessionsLoading}
                     activeSessionId={activeSessionId}
                     isGuest={isGuest}
                     onNewAnalysis={onNewAnalysis}
@@ -311,6 +347,7 @@ function DesktopSidebar({
                     nav={nav}
                     moreNav={moreNav}
                     sessions={sessions}
+                    sessionsLoading={sessionsLoading}
                     activeSessionId={activeSessionId}
                     isGuest={isGuest}
                     recentsOpen={recentsOpen}
@@ -334,6 +371,7 @@ function MiniSidebar({
     nav,
     moreNav,
     sessions,
+    sessionsLoading,
     activeSessionId,
     isGuest,
     recentsOpen,
@@ -351,6 +389,7 @@ function MiniSidebar({
     nav: NavItem[];
     moreNav: NavItem[];
     sessions: ChatSession[];
+    sessionsLoading: boolean;
     activeSessionId: string | null;
     isGuest: boolean;
     recentsOpen: boolean;
@@ -386,7 +425,7 @@ function MiniSidebar({
             <button
                 type="button"
                 onClick={onNewAnalysis}
-                aria-label="New analysis"
+	                aria-label="New chat"
                 className="mb-4 flex h-11 w-10 items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
                 <PenLine className="h-5 w-5" />
@@ -502,18 +541,22 @@ function MiniSidebar({
                             className="absolute left-12 top-0 w-72 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
                         >
                             <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/38">Recent conversations</div>
-                            {sessions.length > 0 ? (
+                            {sessionsLoading && sessions.length === 0 ? (
+                                <ChatHistorySkeleton compact count={4} />
+                            ) : sessions.length > 0 ? (
                                 <div className="max-h-72 overflow-y-auto pr-1">
-                                    {sessions.map((session) => (
-                                        <RecentThreadRow
-                                            key={session.session_id}
-                                            session={session}
-                                            active={activeSessionId === session.session_id}
-                                            isGuest={isGuest}
-                                            onSessionsChanged={onSessionsChanged}
-                                            onSessionDeleted={onSessionDeleted}
-                                        />
-                                    ))}
+                                    <AnimatePresence initial={false}>
+                                        {sessions.map((session) => (
+                                            <RecentThreadRow
+                                                key={session.session_id}
+                                                session={session}
+                                                active={activeSessionId === session.session_id}
+                                                isGuest={isGuest}
+                                                onSessionsChanged={onSessionsChanged}
+                                                onSessionDeleted={onSessionDeleted}
+                                            />
+                                        ))}
+                                    </AnimatePresence>
                                 </div>
                             ) : (
                                 <div className="px-3 py-2 text-sm text-white/38">No recent chats yet.</div>
@@ -535,6 +578,7 @@ function SidebarSurface({
     nav,
     moreNav,
     sessions,
+    sessionsLoading,
     activeSessionId,
     isGuest,
     onNewAnalysis,
@@ -550,6 +594,7 @@ function SidebarSurface({
     nav: NavItem[];
     moreNav: NavItem[];
     sessions: ChatSession[];
+    sessionsLoading: boolean;
     activeSessionId: string | null;
     isGuest: boolean;
     onNewAnalysis: () => void;
@@ -596,7 +641,7 @@ function SidebarSurface({
                 >
                     <span className="flex items-center gap-2">
                         <PenLine className="h-5 w-5" />
-                        New analysis
+                        New chat
                     </span>
                     <Sparkles className="h-4 w-4 text-white/70" />
                 </button>
@@ -712,18 +757,22 @@ function SidebarSurface({
                             Recent
                         </div>
                         <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" aria-label="Recent analysis threads">
-                            {sessions.length > 0 ? (
-                                sessions.map((session) => (
-                                    <RecentThreadRow
-                                        key={session.session_id}
-                                        session={session}
-                                        compact
-                                        active={activeSessionId === session.session_id}
-                                        isGuest={isGuest}
-                                        onSessionsChanged={onSessionsChanged}
-                                        onSessionDeleted={onSessionDeleted}
-                                    />
-                                ))
+                            {sessionsLoading && sessions.length === 0 ? (
+                                <ChatHistorySkeleton count={6} />
+                            ) : sessions.length > 0 ? (
+                                <AnimatePresence initial={false}>
+                                    {sessions.map((session) => (
+                                        <RecentThreadRow
+                                            key={session.session_id}
+                                            session={session}
+                                            compact
+                                            active={activeSessionId === session.session_id}
+                                            isGuest={isGuest}
+                                            onSessionsChanged={onSessionsChanged}
+                                            onSessionDeleted={onSessionDeleted}
+                                        />
+                                    ))}
+                                </AnimatePresence>
                             ) : (
                                 <div className="rounded-xl px-3 py-2 text-sm text-white/38">No recent chats yet.</div>
                             )}
@@ -789,6 +838,23 @@ function getVisibleMoreNav(plan: Plan): NavItem[] {
     return MORE_NAV.filter((item) => !item.minPlan || rank[plan] >= rank[item.minPlan]);
 }
 
+function ChatHistorySkeleton({ compact = false, count = 5 }: { compact?: boolean; count?: number }) {
+    return (
+        <div className="space-y-1 px-1" aria-label="Loading chat history">
+            {Array.from({ length: count }, (_, index) => (
+                <div
+                    key={index}
+                    className={cn(
+                        "animate-pulse rounded-xl bg-white/[0.045]",
+                        compact ? "h-9" : "h-10"
+                    )}
+                    style={{ width: `${92 - (index % 3) * 10}%` }}
+                />
+            ))}
+        </div>
+    );
+}
+
 function RecentThreadRow({
     session,
     compact = false,
@@ -807,13 +873,29 @@ function RecentThreadRow({
     const [menuOpen, setMenuOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0 });
+    const [editing, setEditing] = useState(false);
+    const [draftTitle, setDraftTitle] = useState(session.title);
+    const [savingTitle, setSavingTitle] = useState(false);
     const rowRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
+    const titleInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         setMounted(true);
     }, []);
+
+    useEffect(() => {
+        if (!editing) setDraftTitle(session.title);
+    }, [editing, session.title]);
+
+    useEffect(() => {
+        if (!editing) return;
+        window.requestAnimationFrame(() => {
+            titleInputRef.current?.focus();
+            titleInputRef.current?.select();
+        });
+    }, [editing]);
 
     useEffect(() => {
         if (!menuOpen) return;
@@ -847,20 +929,39 @@ function RecentThreadRow({
 
     const renameSession = async () => {
         setMenuOpen(false);
-        const title = window.prompt("Rename chat", session.title);
-        const nextTitle = title?.trim();
-        if (!nextTitle || nextTitle === session.title) return;
+        setEditing(true);
+    };
 
+    const commitRename = async () => {
+        const nextTitle = draftTitle.trim();
+        if (!nextTitle) {
+            cancelRename();
+            return;
+        }
+        if (nextTitle === session.title) {
+            setEditing(false);
+            return;
+        }
+
+        setSavingTitle(true);
         try {
             if (isGuest) {
                 renameLocalChatSession(session.session_id, nextTitle);
             } else {
                 await api.renameChatSession(session.session_id, nextTitle);
             }
+            setEditing(false);
             onSessionsChanged();
         } catch (error) {
             window.alert(error instanceof Error ? error.message : "Unable to rename this chat.");
+        } finally {
+            setSavingTitle(false);
         }
+    };
+
+    const cancelRename = () => {
+        setDraftTitle(session.title);
+        setEditing(false);
     };
 
     const deleteSession = async () => {
@@ -880,19 +981,52 @@ function RecentThreadRow({
     };
 
     return (
-        <div ref={rowRef} className="group/thread relative">
-            <Link
-                href={`/?session=${encodeURIComponent(session.session_id)}`}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                    "flex items-center rounded-xl text-sm outline-none transition-all duration-200 hover:bg-white/[0.05] hover:text-white focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
-                    "pr-10",
-                    compact ? "h-9 px-3 text-white/48" : "h-10 px-3 text-white/62",
-                    active && "bg-white/[0.07] text-white"
-                )}
-            >
-                <span className="truncate">{session.title}</span>
-            </Link>
+        <motion.div
+            ref={rowRef}
+            layout
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="group/thread relative"
+        >
+            {editing ? (
+                <input
+                    ref={titleInputRef}
+                    value={draftTitle}
+                    disabled={savingTitle}
+                    aria-label={`Rename ${session.title}`}
+                    onChange={(event) => setDraftTitle(event.target.value)}
+                    onBlur={() => void commitRename()}
+                    onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                            event.preventDefault();
+                            event.currentTarget.blur();
+                        }
+                        if (event.key === "Escape") {
+                            event.preventDefault();
+                            cancelRename();
+                        }
+                    }}
+                    className={cn(
+                        "w-full rounded-xl border border-indigo-primary/40 bg-white/[0.075] pr-10 text-sm text-white outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus:ring-2 focus:ring-indigo-primary/45",
+                        compact ? "h-9 px-3" : "h-10 px-3"
+                    )}
+                />
+            ) : (
+                <Link
+                    href={`/?session=${encodeURIComponent(session.session_id)}`}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                        "flex items-center rounded-xl text-sm outline-none transition-all duration-200 hover:bg-white/[0.05] hover:text-white focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                        "pr-10",
+                        compact ? "h-9 px-3 text-white/48" : "h-10 px-3 text-white/62",
+                        active && "bg-white/[0.07] text-white"
+                    )}
+                >
+                    <span className="truncate">{session.title}</span>
+                </Link>
+            )}
             <button
                 ref={triggerRef}
                 type="button"
@@ -911,7 +1045,7 @@ function RecentThreadRow({
                 }}
                 className={cn(
                     "absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg bg-transparent text-white/40 opacity-0 transition-colors hover:bg-transparent hover:text-white group-hover/thread:opacity-100 focus:bg-transparent focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
-                    menuOpen && "bg-transparent text-white opacity-100"
+                    (menuOpen || editing) && "bg-transparent text-white opacity-100"
                 )}
             >
                 <MoreHorizontal className="h-4 w-4" />
@@ -938,7 +1072,7 @@ function RecentThreadRow({
                 </AnimatePresence>,
                 document.body
             )}
-        </div>
+        </motion.div>
     );
 }
 

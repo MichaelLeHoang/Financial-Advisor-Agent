@@ -24,7 +24,7 @@ from src.agent.agent import FinancialAdvisorAgent
 from src.config import settings
 from src.data.market_data_service import market_data_service
 from src.data.vector_db import get_qdrant_client
-from src.auth.supabase import get_current_or_guest_user
+from src.auth.supabase import get_current_or_guest_user, get_current_user
 from src.saas.entitlements import FeatureKey, enforce_feature
 from src.saas.models import AuthenticatedUser
 from src.saas.routes import router as saas_router
@@ -131,6 +131,10 @@ class AgentChatRequest(BaseModel):
 
 class AgentSessionRenameRequest(BaseModel):
     title: str
+
+class AgentSessionCreateRequest(BaseModel):
+    session_id: str
+    title: str = "New chat"
 
 class AgentJobCreateResponse(BaseModel):
     job_id: str
@@ -987,15 +991,12 @@ async def agent_consensus(req: AgentChatRequest, user: AuthenticatedUser = Depen
 @app.post("/api/v1/agent/reset")
 async def agent_reset(
     session_id: str = "default",
-    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
     Clear the agent's conversation history to start a fresh session.
     """
     from src.agent.history import clear_history
-
-    if user.is_guest:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to reset saved chat history.")
 
     if not clear_history(session_id, str(user.id)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message())
@@ -1004,26 +1005,32 @@ async def agent_reset(
     return {"status": "ok", "session_id": session_id}
 
 @app.get("/api/v1/agent/sessions")
-async def list_agent_sessions(user: AuthenticatedUser = Depends(get_current_or_guest_user)):
+async def list_agent_sessions(user: AuthenticatedUser = Depends(get_current_user)):
     """List all conversation sessions."""
     from src.agent.history import list_sessions
 
-    if user.is_guest:
-        return []
-
     return list_sessions(str(user.id))
+
+
+@app.post("/api/v1/agent/sessions")
+async def create_agent_session(
+    req: AgentSessionCreateRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Create an empty saved conversation session for the current user."""
+    from src.agent.history import create_session
+
+    _ensure_chat_session_available(req.session_id, user)
+    return create_session(req.session_id, str(user.id), req.title)
 
 
 @app.get("/api/v1/agent/sessions/{session_id}/messages")
 async def get_agent_session_messages(
     session_id: str,
-    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     """Load all messages for a conversation session."""
     from src.agent.history import load_history
-
-    if user.is_guest:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to load saved chat history.")
 
     _ensure_chat_session_available(session_id, user)
     return {"session_id": session_id, "messages": load_history(session_id, str(user.id))}
@@ -1033,13 +1040,10 @@ async def get_agent_session_messages(
 async def rename_agent_session(
     session_id: str,
     req: AgentSessionRenameRequest,
-    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     """Rename a conversation session."""
     from src.agent.history import rename_session
-
-    if user.is_guest:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to save and rename chat history.")
 
     _ensure_chat_session_owned(session_id, user)
     try:
@@ -1051,13 +1055,10 @@ async def rename_agent_session(
 @app.delete("/api/v1/agent/sessions/{session_id}")
 async def delete_agent_session(
     session_id: str,
-    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     """Delete a conversation session."""
     from src.agent.history import clear_history
-
-    if user.is_guest:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to delete saved chat history.")
 
     if not clear_history(session_id, str(user.id)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message())
@@ -1165,7 +1166,7 @@ async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Qu
             if is_new_session and not user.is_guest:
                 try:
                     title_prompt = (
-                        "Summarize the following user prompt in 2 to 5 words for a chat session title. "
+                        "Summarize the following user prompt in 3 to 5 words for a chat session title. "
                         "Do not include quotes, periods, or punctuation. Make it concise and descriptive.\n\n"
                         f"User Prompt: {message}"
                     )

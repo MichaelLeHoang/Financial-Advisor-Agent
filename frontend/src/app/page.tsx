@@ -185,6 +185,16 @@ export default function ChatPage() {
     return () => window.removeEventListener("chat-privacy:reset", handlePrivacyReset);
   }, [router]);
 
+  useEffect(() => {
+    const handleFocusInput = () => {
+      setIsActive(true);
+      window.requestAnimationFrame(() => textareaRef.current?.focus());
+    };
+
+    window.addEventListener("chat-input:focus", handleFocusInput);
+    return () => window.removeEventListener("chat-input:focus", handleFocusInput);
+  }, []);
+
   const handleInput = (e: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     e.target.style.height = "auto";
@@ -228,6 +238,11 @@ export default function ChatPage() {
       setUpgradeMessage(null);
 
       try {
+        if (activeSessionId === "default") {
+          if (!cancelled) setMessages([GREETING]);
+          return;
+        }
+
         if (user.is_guest) {
           const localMessages = loadLocalChatMessages(activeSessionId).map((message) => ({
             id: String(message.id),
@@ -249,13 +264,16 @@ export default function ChatPage() {
         setMessages(loadedMessages.length > 0 ? loadedMessages : [GREETING]);
       } catch (err: any) {
         if (cancelled) return;
-        setMessages([
-          {
-            id: "history-error",
-            role: "assistant",
-            content: `Unable to load this chat history: ${err.message}`,
-          },
-        ]);
+        if (err?.status === 404 || err?.status === 401) {
+          setMessages([GREETING]);
+          router.replace("/");
+          return;
+        }
+        setMessages([{
+          id: "history-error",
+          role: "assistant",
+          content: `Unable to load this chat history: ${err.message}`,
+        }]);
       } finally {
         if (!cancelled) setIsHistoryLoading(false);
       }
@@ -267,7 +285,7 @@ export default function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeSessionId, authLoading, user.id, user.is_guest]);
+  }, [activeSessionId, authLoading, router, user.id, user.is_guest]);
 
   useEffect(() => {
     if (authLoading || !user.is_guest || isHistoryLoading) return;

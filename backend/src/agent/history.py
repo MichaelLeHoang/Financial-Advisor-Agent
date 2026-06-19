@@ -5,9 +5,42 @@ Each session_id gets its own message thread.
 import sqlite3
 from pathlib import Path
 from datetime import UTC, datetime
+import re
 
 DB_PATH = Path(__file__).parent.parent.parent / "data" / "conversations.db"
 GUEST_USER_ID = "00000000-0000-0000-0000-000000000001"
+TITLE_STOP_WORDS = {
+    "a",
+    "about",
+    "and",
+    "are",
+    "based",
+    "can",
+    "could",
+    "do",
+    "does",
+    "for",
+    "from",
+    "give",
+    "how",
+    "i",
+    "in",
+    "is",
+    "it",
+    "latest",
+    "me",
+    "my",
+    "of",
+    "on",
+    "please",
+    "should",
+    "the",
+    "to",
+    "using",
+    "what",
+    "with",
+    "you",
+}
 
 
 def _is_guest_user(user_id: str) -> bool:
@@ -50,11 +83,35 @@ def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
-def _default_title(content: str) -> str:
+def _clean_title(content: str) -> str:
     title = " ".join(content.strip().split())
     if not title:
         return "New analysis"
     return title[:64]
+
+
+def _default_title(content: str) -> str:
+    clean = _clean_title(content)
+    if clean == "New analysis":
+        return clean
+
+    words = re.findall(r"[A-Za-z][A-Za-z0-9.$'-]*|\$?[A-Z]{1,5}(?:\.[A-Z]{1,3})?", clean)
+    keywords: list[str] = []
+    for word in words:
+        normalized = word.strip(".,?!:;\"'()[]{}")
+        if not normalized:
+            continue
+        if normalized.lower() in TITLE_STOP_WORDS:
+            continue
+        keywords.append(normalized.upper() if normalized.startswith("$") else normalized)
+        if len(keywords) >= 5:
+            break
+
+    if len(keywords) >= 3:
+        return " ".join(keywords)
+
+    fallback = [word.strip(".,?!:;\"'()[]{}") for word in clean.split() if word.strip(".,?!:;\"'()[]{}")]
+    return " ".join(fallback[:5]) if fallback else "New analysis"
 
 
 def _touch_session(conn: sqlite3.Connection, user_id: str, session_id: str, title: str | None = None) -> None:
@@ -69,7 +126,7 @@ def _touch_session(conn: sqlite3.Connection, user_id: str, session_id: str, titl
             UPDATE sessions
             SET updated_at=?,
                 title=CASE
-                    WHEN ? IS NOT NULL AND title='New analysis' THEN ?
+                    WHEN ? IS NOT NULL AND title IN ('New analysis', 'New chat') THEN ?
                     ELSE title
                 END
             WHERE user_id=? AND session=?
@@ -82,6 +139,36 @@ def _touch_session(conn: sqlite3.Connection, user_id: str, session_id: str, titl
         "INSERT INTO sessions (user_id, session, title, created_at, updated_at) VALUES (?,?,?,?,?)",
         (user_id, session_id, title or "New analysis", now, now),
     )
+
+
+def create_session(
+    session_id: str,
+    user_id: str = "00000000-0000-0000-0000-000000000001",
+    title: str = "New chat",
+) -> dict:
+    """Create an empty saved chat session owned by the given user."""
+    if _is_guest_user(user_id):
+        raise PermissionError("Guest users cannot create saved chat sessions.")
+    conn = _get_connection()
+    _touch_session(conn, user_id, session_id, _clean_title(title))
+    row = conn.execute(
+        """
+        SELECT s.session, s.title, COUNT(m.id) as msg_count, s.updated_at
+        FROM sessions s
+        LEFT JOIN messages m ON m.user_id=s.user_id AND m.session=s.session
+        WHERE s.user_id=? AND s.session=?
+        GROUP BY s.session, s.title, s.updated_at
+        """,
+        (user_id, session_id),
+    ).fetchone()
+    conn.commit()
+    conn.close()
+    return {
+        "session_id": row[0],
+        "title": row[1],
+        "message_count": row[2],
+        "last_active": row[3],
+    }
 
 
 def session_owner(session_id: str) -> str | None:
@@ -186,7 +273,7 @@ def rename_session(
     """Rename a session and return its metadata."""
     if _is_guest_user(user_id):
         raise PermissionError("Guest users cannot rename saved chat sessions.")
-    clean_title = _default_title(title)
+    clean_title = _clean_title(title)
     conn = _get_connection()
     existing = conn.execute(
         "SELECT 1 FROM sessions WHERE user_id=? AND session=?",
@@ -245,7 +332,6 @@ def list_sessions(user_id: str = "00000000-0000-0000-0000-000000000001") -> list
         LEFT JOIN messages m ON m.user_id=s.user_id AND m.session=s.session
         WHERE s.user_id=?
         GROUP BY s.session, s.title, s.updated_at
-        HAVING msg_count > 0
         ORDER BY s.updated_at DESC
     """, (user_id,)).fetchall()
     conn.commit()
