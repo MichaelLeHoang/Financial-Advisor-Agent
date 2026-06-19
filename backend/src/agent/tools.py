@@ -255,7 +255,15 @@ def search_financial_news(ticker: str) -> str:
             output += "\n"
             headlines.append(title)
 
+        source_quality = snapshot.source_quality or {}
+        primary_sources = source_quality.get("primary_sources") or []
+        enrichment_sources = source_quality.get("enrichment_sources") or []
+        limitations = source_quality.get("limitations") or []
         output += f"\nData Sources: {', '.join(snapshot.data_sources)}\n"
+        output += f"Primary Sources: {', '.join(primary_sources) if primary_sources else 'Unavailable'}\n"
+        output += f"Enrichment Sources: {', '.join(enrichment_sources) if enrichment_sources else 'None configured or available'}\n"
+        if limitations:
+            output += f"Source Notes: {'; '.join(str(item) for item in limitations)}\n"
         output += f"Sentiment Signal: {snapshot.sentiment_summary.get('signal', 'limited')} ({snapshot.sentiment_summary.get('score', 0)})\n"
         output += "\nHeadlines for sentiment analysis:\n"
         for h in headlines:

@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Brain, ClipboardList, Image, Loader2, Paperclip, PieChart, Send, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
+import type { EquityResearchEvent, EquityResearchRunDetail } from "@/lib/api";
 import { loadLocalChatMessages, saveLocalChatMessages } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -63,6 +64,35 @@ function extractResearchCommand(message: string) {
   };
 }
 
+const TICKER_STOP_WORDS = new Set([
+  "A",
+  "AI",
+  "API",
+  "BUY",
+  "CEO",
+  "CFO",
+  "EPS",
+  "ETF",
+  "GDP",
+  "HOLD",
+  "I",
+  "IPO",
+  "LLM",
+  "PE",
+  "RISK",
+  "SEC",
+  "SELL",
+  "US",
+  "USA",
+]);
+
+function normalizeTickerCandidate(candidate: string | undefined) {
+  const normalized = candidate?.replace(/^\$/, "").toUpperCase() ?? "";
+  if (!normalized || TICKER_STOP_WORDS.has(normalized)) return null;
+  if (!/^[A-Z][A-Z0-9.-]{0,14}$/.test(normalized)) return null;
+  return normalized;
+}
+
 function extractInvestmentTicker(message: string) {
   const lower = message.toLowerCase();
   const hasIntent = lower.includes("should i buy")
@@ -72,8 +102,16 @@ function extractInvestmentTicker(message: string) {
     || lower.includes("investment thesis")
     || lower.includes("invest in");
   if (!hasIntent) return null;
-  const match = message.match(/\b[A-Z]{1,5}(?:\.[A-Z]{1,3})?\b/);
-  return match?.[0] ?? null;
+  const explicitTicker = message.match(/\$([A-Za-z][A-Za-z0-9.-]{0,14})\b/);
+  const explicitMatch = normalizeTickerCandidate(explicitTicker?.[1]);
+  if (explicitMatch) return explicitMatch;
+
+  const phraseTicker = message.match(/\b(?:analyze|research|buy|invest in|should i buy|should i invest in)\s+([A-Z][A-Z0-9.-]{1,14})\b/i);
+  const phraseMatch = normalizeTickerCandidate(phraseTicker?.[1]);
+  if (phraseMatch) return phraseMatch;
+
+  const candidates = message.match(/\b[A-Z][A-Z0-9.-]{1,14}\b/g) ?? [];
+  return candidates.map(normalizeTickerCandidate).find(Boolean) ?? null;
 }
 
 function extractTickerForResearch(message: string) {
@@ -81,8 +119,43 @@ function extractTickerForResearch(message: string) {
   if (command) return command.ticker;
   const intentTicker = extractInvestmentTicker(message);
   if (intentTicker) return intentTicker.toUpperCase();
-  const match = message.match(/\b[A-Z]{1,5}(?:\.[A-Z]{1,3})?\b/);
-  return match?.[0]?.toUpperCase() ?? null;
+  const explicitTicker = message.match(/\$([A-Za-z][A-Za-z0-9.-]{0,14})\b/);
+  if (explicitTicker) return normalizeTickerCandidate(explicitTicker[1]);
+  return null;
+}
+
+const RESEARCH_EVENT_TOOL_BY_AGENT: Record<string, string> = {
+  market: "market",
+  social: "social",
+  news: "news",
+  fundamentals: "fundamentals",
+  bull: "bull",
+  bear: "bear",
+  evaluator: "evaluator",
+  trader: "trader",
+  risky: "risky",
+  neutral: "neutral",
+  safe: "safe",
+  pm: "pm",
+};
+
+function toolKeyFromResearchEvent(event: EquityResearchEvent) {
+  if (event.agent_key && RESEARCH_EVENT_TOOL_BY_AGENT[event.agent_key]) {
+    return RESEARCH_EVENT_TOOL_BY_AGENT[event.agent_key];
+  }
+  if (event.tool_name === "build_data_snapshot") return "equity_snapshot";
+  if (event.label === "Snapshot ready") return "equity_snapshot";
+  return null;
+}
+
+function finalResearchMarkdown(detail: EquityResearchRunDetail) {
+  return detail.reports.find((report) => report.agent_key === "pm")?.markdown
+    ?? detail.reports.find((report) => report.title.toLowerCase().includes("final"))?.markdown
+    ?? "";
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 const WORKFLOW_STEPS = [
@@ -350,6 +423,9 @@ export default function ChatPage() {
       }
       setMessages((prev) => [...prev, userMsg, { id: getUniqueId(), role: "assistant", content: "Creating QuanAd 2.1 research run...", status: "fetching" }]);
       setIsLoading(true);
+      setUpgradeMessage(null);
+      setActiveTool("resolve_ticker");
+      setCompletedTools([]);
       const loadingStartedAt = Date.now();
       try {
         const run = await api.createEquityResearchRun({
@@ -357,19 +433,83 @@ export default function ChatPage() {
           research_depth: researchCommand?.depth ?? "shallow",
           source_surface: "ai_advisor",
         });
-        const elapsedBeforeRunCard = Date.now() - loadingStartedAt;
-        if (elapsedBeforeRunCard < 2200) {
-          await new Promise((resolve) => window.setTimeout(resolve, 2200 - elapsedBeforeRunCard));
+        let cursor = 0;
+        let latestDetail: EquityResearchRunDetail | null = null;
+        const completed = new Set<string>();
+
+        while (true) {
+          const [detail, eventList] = await Promise.all([
+            api.equityResearchRun(run.run_id),
+            api.equityResearchEvents(run.run_id, cursor),
+          ]);
+          latestDetail = detail;
+          cursor = eventList.cursor;
+
+          const newestReasoning = [...eventList.events].reverse().find((event) => event.event_type === "reasoning" && event.agent_name);
+          for (const event of eventList.events) {
+            const toolKey = toolKeyFromResearchEvent(event);
+            if (!toolKey) continue;
+
+            if (event.event_type === "tool" || event.event_type === "reasoning") {
+              setActiveTool(toolKey);
+            }
+            if (event.event_type === "status" && event.label === "Snapshot ready") {
+              completed.add(toolKey);
+              setCompletedTools(Array.from(completed));
+              setActiveTool(null);
+            }
+            if (event.event_type === "report" || event.event_type === "final") {
+              completed.add(toolKey);
+              setCompletedTools(Array.from(completed));
+              setActiveTool(null);
+            }
+          }
+
+          if (newestReasoning?.agent_name) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.status === "fetching"
+                  ? { ...m, content: `${newestReasoning.agent_name} is working...` }
+                  : m
+              )
+            );
+          }
+
+          if (["completed", "failed", "cancelled"].includes(detail.run.status)) {
+            break;
+          }
+
+          await delay(900);
+        }
+
+        if (!latestDetail || latestDetail.run.status !== "completed") {
+          throw new Error(latestDetail?.run.error_message || `Research run ${latestDetail?.run.status ?? "failed"}`);
+        }
+
+        const finalMarkdown = finalResearchMarkdown(latestDetail);
+        if (!finalMarkdown) {
+          throw new Error("The research run completed but the final decision report was unavailable.");
+        }
+
+        const elapsedBeforeAnswer = Date.now() - loadingStartedAt;
+        if (elapsedBeforeAnswer < 2200) {
+          await delay(2200 - elapsedBeforeAnswer);
+        }
+
+        if (!user.is_guest) {
+          await api.appendChatSessionMessage(targetSessionId, "user", text);
+          await api.appendChatSessionMessage(targetSessionId, "assistant", finalMarkdown);
         }
         setMessages((prev) =>
           prev.filter((m) => m.status !== "fetching").concat({
             id: getUniqueId(),
             role: "assistant",
-            content: `QuanAd 2.1 research run created for ${run.ticker}. Open the full workspace: /research/${run.run_id}`,
-            researchTicker: run.ticker,
-            researchRunId: run.run_id,
+            content: finalMarkdown,
+            researchTicker: latestDetail.run.ticker,
+            researchRunId: latestDetail.run.run_id,
           })
         );
+        window.dispatchEvent(new Event("chat-sessions:changed"));
       } catch (err: any) {
         setMessages((prev) =>
           prev.filter((m) => m.status !== "fetching").concat({
@@ -381,6 +521,8 @@ export default function ChatPage() {
       } finally {
         setIsLoading(false);
         isStreamingRef.current = false;
+        setActiveTool(null);
+        setCompletedTools([]);
       }
       return;
     }
@@ -575,11 +717,11 @@ export default function ChatPage() {
                         <Markdown content={msg.content} />
                         <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
                           <p className="text-sm font-semibold text-white">
-                            {msg.researchRunId ? "QuanAd 2.1 Research Report" : "Generate a full QuanAd 2.1 Research Report?"}
+                            {msg.researchRunId ? "QuanAd 2.1 Agent Reports" : "Generate a full QuanAd 2.1 Research Report?"}
                           </p>
                           <p className="mt-1 text-xs leading-5 text-white/55">
                             {msg.researchRunId
-                              ? `The Equity Research Desk run for ${msg.researchTicker} is ready to open.`
+                              ? `Open the full workspace to review each analyst report, tool event, and the shared data snapshot for ${msg.researchTicker}.`
                               : `Run market, news, sentiment, fundamentals, trading, and risk-management agents for ${msg.researchTicker}.`}
                           </p>
                           <div className="mt-3 flex flex-wrap gap-2">
@@ -587,7 +729,7 @@ export default function ChatPage() {
                               href={msg.researchRunId ? `/research/${msg.researchRunId}?from=ai_advisor` : `/research?ticker=${encodeURIComponent(msg.researchTicker)}&source=ai_advisor`}
                               className="inline-flex h-9 items-center rounded-lg bg-indigo-primary px-3 text-xs font-semibold text-white hover:bg-indigo-primary/90"
                             >
-                              {msg.researchRunId ? "Open Full Report" : "Generate Full Report"}
+                              {msg.researchRunId ? "View full agent reports" : "Generate Full Report"}
                             </Link>
                             {!msg.researchRunId && (
                               <button

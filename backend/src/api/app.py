@@ -136,6 +136,10 @@ class AgentSessionCreateRequest(BaseModel):
     session_id: str
     title: str = "New chat"
 
+class AgentSessionMessageAppendRequest(BaseModel):
+    role: str = Field(pattern="^(user|assistant)$")
+    content: str = Field(min_length=1)
+
 class AgentJobCreateResponse(BaseModel):
     job_id: str
     status: str
@@ -1075,6 +1079,20 @@ async def get_agent_session_messages(
 
     _ensure_chat_session_available(session_id, user)
     return {"session_id": session_id, "messages": load_history(session_id, str(user.id))}
+
+
+@app.post("/api/v1/agent/sessions/{session_id}/messages")
+async def append_agent_session_message(
+    session_id: str,
+    req: AgentSessionMessageAppendRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Append a generated message to a saved conversation session owned by the current user."""
+    from src.agent.history import append_message
+
+    _ensure_chat_session_available(session_id, user)
+    append_message(session_id, req.role, req.content, str(user.id))
+    return {"status": "ok", "session_id": session_id}
 
 
 @app.patch("/api/v1/agent/sessions/{session_id}")

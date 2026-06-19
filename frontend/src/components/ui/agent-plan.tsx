@@ -124,9 +124,10 @@ function getResearchDeskTasks(): Task[] {
       title: "Analyst Team",
       status: "pending",
       subtasks: [
-        { id: "2.1", title: "Market Analyst", status: "pending", tools: ["market_report"] },
-        { id: "2.2", title: "News and Sentiment Analysts", status: "pending", tools: ["news_report", "sentiment_report"] },
-        { id: "2.3", title: "Fundamentals Analyst", status: "pending", tools: ["fundamentals_report"] },
+        { id: "2.1", title: "Market Analyst", status: "pending", tools: ["market", "market_report", "market_report.md"] },
+        { id: "2.2", title: "Social Media Analyst", status: "pending", tools: ["social", "sentiment_report", "sentiment_report.md"] },
+        { id: "2.3", title: "News Analyst", status: "pending", tools: ["news", "news_report", "news_report.md"] },
+        { id: "2.4", title: "Fundamentals Analyst", status: "pending", tools: ["fundamentals", "fundamentals_report", "fundamentals_report.md"] },
       ],
     },
     {
@@ -134,8 +135,9 @@ function getResearchDeskTasks(): Task[] {
       title: "Research Debate",
       status: "pending",
       subtasks: [
-        { id: "3.1", title: "Bull and bear cases", status: "pending", tools: ["bull_case", "bear_case"] },
-        { id: "3.2", title: "Research evaluation", status: "pending", tools: ["research_evaluation"] },
+        { id: "3.1", title: "Bull Researcher", status: "pending", tools: ["bull", "bull_case", "bull_case.md"] },
+        { id: "3.2", title: "Bear Researcher", status: "pending", tools: ["bear", "bear_case", "bear_case.md"] },
+        { id: "3.3", title: "Research Evaluator", status: "pending", tools: ["evaluator", "research_evaluation", "research_evaluation.md"] },
       ],
     },
     {
@@ -143,9 +145,11 @@ function getResearchDeskTasks(): Task[] {
       title: "Trade and Risk Review",
       status: "pending",
       subtasks: [
-        { id: "4.1", title: "Trader plan", status: "pending", tools: ["trader_plan"] },
-        { id: "4.2", title: "Risk management review", status: "pending", tools: ["risk_review"] },
-        { id: "4.3", title: "Portfolio manager verdict", status: "pending", tools: ["final_trade_decision"] },
+        { id: "4.1", title: "Trader", status: "pending", tools: ["trader", "trader_plan", "trader_plan.md"] },
+        { id: "4.2", title: "Risky Analyst", status: "pending", tools: ["risky", "risk_opportunity", "risk_opportunity.md"] },
+        { id: "4.3", title: "Neutral Analyst", status: "pending", tools: ["neutral", "risk_review", "risk_review.md"] },
+        { id: "4.4", title: "Safe Analyst", status: "pending", tools: ["safe", "safe_risk_controls", "safe_risk_controls.md"] },
+        { id: "4.5", title: "Portfolio Manager", status: "pending", tools: ["pm", "final_trade_decision", "final_trade_decision.md"] },
       ],
     },
   ];

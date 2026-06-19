@@ -1055,6 +1055,9 @@ export const api = {
   chatSessionMessages: (sessionId = "default") =>
     get<ChatSessionMessages>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`),
 
+  appendChatSessionMessage: (sessionId: string, role: "user" | "assistant", content: string) =>
+    post<{ status: string; session_id: string }>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`, { role, content }),
+
   renameChatSession: (sessionId: string, title: string) =>
     patch<ChatSession>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}`, { title }),
 
