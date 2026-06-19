@@ -389,9 +389,30 @@ async def service_status():
     }
 
 def _fetch_market_quote_response(normalized: str, period: str, interval: str) -> MarketQuoteResponse:
-    snapshot = market_data_service.fetch_snapshot(normalized, period=period, interval=interval, include_news=False, include_sec=False)
+    snapshot = market_data_service.fetch_snapshot(
+        normalized,
+        period=period,
+        interval=interval,
+        include_news=False,
+        include_sec=False,
+        include_fundamentals=False,
+    )
     if snapshot.latest_price is None and not snapshot.history:
         raise HTTPException(status_code=404, detail=f"No market data found for {normalized}")
+
+    history_points = [
+        MarketQuotePoint(
+            label=point.label,
+            price=point.price,
+            volume=point.volume,
+            open=_round_optional(point.open),
+            high=_round_optional(point.high),
+            low=_round_optional(point.low),
+        )
+        for point in snapshot.history
+    ]
+    if not history_points:
+        history_points = _fallback_quote_history(snapshot, period)
 
     return MarketQuoteResponse(
         ticker=normalized,
@@ -412,17 +433,7 @@ def _fetch_market_quote_response(normalized: str, period: str, interval: str) ->
         dividend_yield=_round_optional(snapshot.dividend_yield),
         dividend_rate=_round_optional(snapshot.dividend_rate),
         quarterly_dividend_amount=_round_optional((snapshot.dividend_rate / 4) if snapshot.dividend_rate else None),
-        history=[
-            MarketQuotePoint(
-                label=point.label,
-                price=point.price,
-                volume=point.volume,
-                open=_round_optional(point.open),
-                high=_round_optional(point.high),
-                low=_round_optional(point.low),
-            )
-            for point in snapshot.history
-        ],
+        history=history_points,
         data_sources=snapshot.data_sources,
         source_quality=snapshot.source_quality,
         provider_status=[status.__dict__ for status in snapshot.provider_status],
@@ -609,6 +620,36 @@ def _fetch_market_quote_response(normalized: str, period: str, interval: str) ->
         raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Unable to fetch market data for {normalized}: {exc}")
+
+
+def _fallback_quote_history(snapshot, period: str) -> list[MarketQuotePoint]:
+    latest = _round_optional(snapshot.latest_price)
+    if latest is None:
+        return []
+    baseline = _round_optional(snapshot.open_price if period == "1d" else snapshot.previous_close)
+    if baseline is None:
+        baseline = _round_optional(snapshot.previous_close) or latest
+    volume = int(snapshot.volume or 0)
+    high = _round_optional(snapshot.day_high)
+    low = _round_optional(snapshot.day_low)
+    return [
+        MarketQuotePoint(
+            label="Open" if period == "1d" else "Previous",
+            price=baseline,
+            volume=volume,
+            open=baseline,
+            high=high,
+            low=low,
+        ),
+        MarketQuotePoint(
+            label="Now",
+            price=latest,
+            volume=volume,
+            open=baseline,
+            high=high,
+            low=low,
+        ),
+    ]
 
 
 @app.get("/api/v1/market/quote/{ticker}", response_model=MarketQuoteResponse)

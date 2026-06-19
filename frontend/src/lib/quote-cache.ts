@@ -1,7 +1,8 @@
 import { api } from "@/lib/api";
 import type { MarketQuote } from "@/lib/api";
 
-const TTL_MS = 120_000; // Fresh enough for portfolio hydration without feeling stale.
+const DEFAULT_TTL_MS = 120_000; // Fresh enough for portfolio hydration without feeling stale.
+const INTRADAY_TTL_MS = 20_000;
 const STORAGE_KEY = "market.quoteCache.v1";
 
 interface Entry {
@@ -18,6 +19,18 @@ function cacheKey(ticker: string, period: string, interval: string): string {
   return `${ticker.toUpperCase()}:${period}:${interval}`;
 }
 
+function ttlFor(period: string, interval: string): number {
+  if (period === "1d" || interval.endsWith("m")) return INTRADAY_TTL_MS;
+  return DEFAULT_TTL_MS;
+}
+
+function periodAndIntervalFromKey(key: string): [string, string] {
+  const parts = key.split(":");
+  const interval = parts.pop() ?? "";
+  const period = parts.pop() ?? "";
+  return [period, interval];
+}
+
 function canUseStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
@@ -32,7 +45,8 @@ function hydrateFromStorage() {
     const entries = JSON.parse(raw) as Array<[string, Entry]>;
     const now = Date.now();
     entries.forEach(([key, entry]) => {
-      if (entry?.data && now - entry.fetchedAt <= TTL_MS) cache.set(key, entry);
+      const [period, interval] = periodAndIntervalFromKey(key);
+      if (entry?.data && now - entry.fetchedAt <= ttlFor(period ?? "", interval ?? "")) cache.set(key, entry);
     });
   } catch {
     // Persistent cache is an optimization only.
@@ -44,7 +58,10 @@ function persistToStorage() {
 
   try {
     const now = Date.now();
-    const entries = Array.from(cache.entries()).filter(([, entry]) => now - entry.fetchedAt <= TTL_MS);
+    const entries = Array.from(cache.entries()).filter(([key, entry]) => {
+      const [period, interval] = periodAndIntervalFromKey(key);
+      return now - entry.fetchedAt <= ttlFor(period ?? "", interval ?? "");
+    });
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
   } catch {
     // Ignore quota/private-mode failures.
@@ -55,7 +72,7 @@ function get(ticker: string, period: string, interval: string): MarketQuote | nu
   hydrateFromStorage();
   const entry = cache.get(cacheKey(ticker, period, interval));
   if (!entry) return null;
-  if (Date.now() - entry.fetchedAt > TTL_MS) {
+  if (Date.now() - entry.fetchedAt > ttlFor(period, interval)) {
     cache.delete(cacheKey(ticker, period, interval));
     persistToStorage();
     return null;

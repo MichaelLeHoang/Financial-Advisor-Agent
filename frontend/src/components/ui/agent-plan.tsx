@@ -172,7 +172,7 @@ function useLiveProgress(
     () => tasksForMode(mode).reduce((sum, task) => sum + task.subtasks.length, 0),
     [mode]
   );
-  const useSyntheticProgress = isActive && !activeTool && completedTools.length === 0;
+  const useSyntheticProgress = isActive && !activeTool;
 
   // Reset only when mode actually changes
   useEffect(() => {
@@ -192,7 +192,7 @@ function useLiveProgress(
     if (!useSyntheticProgress) return;
     const interval = setInterval(() => {
       setSyntheticStep((current) => Math.min(current + 1, Math.max(totalSubtasks - 1, 0)));
-    }, mode === "consensus" || mode === "research" ? 2200 : 1800);
+    }, mode === "consensus" || mode === "research" ? 900 : 700);
     return () => clearInterval(interval);
   }, [mode, totalSubtasks, useSyntheticProgress]);
 
@@ -316,8 +316,13 @@ export default function Plan({ mode = "single", isActive = true, activeTool = nu
     );
   };
 
-  const completedSubtasks = tasks.flatMap((t) => t.subtasks).filter((s) => s.status === "completed").length;
+  const allSubtasks = tasks.flatMap((t) => t.subtasks);
+  const completedSubtasks = allSubtasks.filter((s) => s.status === "completed").length;
+  const inProgressSubtasks = allSubtasks.filter((s) => s.status === "in-progress").length;
   const totalSubtasks = tasks.flatMap((t) => t.subtasks).length;
+  const visualProgress = totalSubtasks > 0
+    ? ((completedSubtasks + (inProgressSubtasks > 0 ? 0.45 : 0)) / totalSubtasks) * 100
+    : 0;
 
   return (
     <div className="w-full overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.03]">
@@ -351,7 +356,7 @@ export default function Plan({ mode = "single", isActive = true, activeTool = nu
         <motion.div
           className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400"
           initial={{ width: "0%" }}
-          animate={{ width: `${totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0}%` }}
+          animate={{ width: `${visualProgress}%` }}
           transition={{ duration: 0.4, ease: "easeOut" }}
         />
       </div>

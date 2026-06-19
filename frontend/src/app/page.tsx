@@ -350,12 +350,17 @@ export default function ChatPage() {
       }
       setMessages((prev) => [...prev, userMsg, { id: getUniqueId(), role: "assistant", content: "Creating QuanAd 2.1 research run...", status: "fetching" }]);
       setIsLoading(true);
+      const loadingStartedAt = Date.now();
       try {
         const run = await api.createEquityResearchRun({
           ticker,
           research_depth: researchCommand?.depth ?? "shallow",
           source_surface: "ai_advisor",
         });
+        const elapsedBeforeRunCard = Date.now() - loadingStartedAt;
+        if (elapsedBeforeRunCard < 2200) {
+          await new Promise((resolve) => window.setTimeout(resolve, 2200 - elapsedBeforeRunCard));
+        }
         setMessages((prev) =>
           prev.filter((m) => m.status !== "fetching").concat({
             id: getUniqueId(),
@@ -387,6 +392,7 @@ export default function ChatPage() {
 
     setMessages((prev) => [...prev, userMsg, fetchingMsg]);
     setIsLoading(true);
+    const loadingStartedAt = Date.now();
     setUpgradeMessage(null);
     setActiveTool(null);
     setCompletedTools([]);
@@ -430,6 +436,12 @@ export default function ChatPage() {
           )
         );
         res = await api.chat(text, targetSessionId, remember, mode);
+      }
+
+      const minimumPlanDuration = mode === "consensus" ? 3200 : 1800;
+      const elapsedBeforeAnswer = Date.now() - loadingStartedAt;
+      if (elapsedBeforeAnswer < minimumPlanDuration) {
+        await new Promise((resolve) => window.setTimeout(resolve, minimumPlanDuration - elapsedBeforeAnswer));
       }
 
       setMessages((prev) =>

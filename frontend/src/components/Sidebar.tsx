@@ -984,10 +984,10 @@ function RecentThreadRow({
         <motion.div
             ref={rowRef}
             layout
-            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -8 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
             className="group/thread relative"
         >
             {editing ? (
@@ -1024,7 +1024,7 @@ function RecentThreadRow({
                         active && "bg-white/[0.07] text-white"
                     )}
                 >
-                    <span className="truncate">{session.title}</span>
+                    <AnimatedChatTitle title={session.title} />
                 </Link>
             )}
             <button
@@ -1073,6 +1073,45 @@ function RecentThreadRow({
                 document.body
             )}
         </motion.div>
+    );
+}
+
+function AnimatedChatTitle({ title }: { title: string }) {
+    return (
+        <motion.span
+            key={title}
+            className="block min-w-0 truncate"
+            aria-label={title}
+            initial="hidden"
+            animate="visible"
+            variants={{
+                hidden: {},
+                visible: {
+                    transition: {
+                        staggerChildren: 0.018,
+                        delayChildren: 0.03,
+                    },
+                },
+            }}
+        >
+            {Array.from(title).map((char, index) => (
+                <motion.span
+                    key={`${char}-${index}`}
+                    aria-hidden="true"
+                    className="inline-block"
+                    variants={{
+                        hidden: { opacity: 0, x: -4 },
+                        visible: {
+                            opacity: 1,
+                            x: 0,
+                            transition: { duration: 0.16, ease: [0.16, 1, 0.3, 1] },
+                        },
+                    }}
+                >
+                    {char === " " ? "\u00a0" : char}
+                </motion.span>
+            ))}
+        </motion.span>
     );
 }
 

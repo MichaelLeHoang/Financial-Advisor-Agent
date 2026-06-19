@@ -215,7 +215,7 @@ async def execute_research_run(run_id: UUID) -> None:
 
             started_at = datetime.now(timezone.utc)
             store.add_event(EquityResearchEvent(run_id=run_id, agent_key=agent.key, agent_name=agent.name, event_type=ResearchEventType.REASONING, label="Agent started", content=f"{agent.name} is reviewing the shared snapshot."))
-            await asyncio.sleep(0.18)
+            await asyncio.sleep(0.55)
             report = _build_report(run, snapshot, agent, outputs, started_at)
             outputs[agent.key] = report
             store.add_report(report)
