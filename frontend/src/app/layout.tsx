@@ -13,18 +13,27 @@ import { ModelProvider } from "@/components/ModelSelector";
 
 const SETTINGS_STORAGE_KEY = "financial-advisor.settings";
 const COVER_SEEN_STORAGE_KEY = "financial-advisor.coverSeen";
+const STANDALONE_PUBLIC_PATHS = [
+  "/introduction",
+  "/login",
+  "/news",
+  "/blog",
+  "/pricing",
+  "/docs",
+  "/terms",
+  "/privacy",
+  "/research",
+  "/r/",
+];
+
+function isStandalonePublicPath(pathname: string) {
+  return STANDALONE_PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(path));
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const isStandalonePage = pathname.startsWith("/introduction")
-    || pathname.startsWith("/login")
-    || pathname.startsWith("/news")
-    || pathname.startsWith("/blog")
-    || pathname.startsWith("/pricing")
-    || pathname.startsWith("/docs")
-    || pathname.startsWith("/research")
-    || pathname.startsWith("/r/");
+  const isStandalonePage = isStandalonePublicPath(pathname);
 
   const [entryChecked, setEntryChecked] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -150,7 +159,7 @@ function MainWorkspace({
 }) {
   const pathname = usePathname();
   const { user, loading } = useAuth();
-  const isPublicAppPath = pathname === "/" || pathname.startsWith("/market");
+  const isPublicAppPath = pathname === "/" || pathname.startsWith("/market") || isStandalonePublicPath(pathname);
   const shouldGate = !loading && Boolean(user.is_guest) && !isPublicAppPath;
 
   return (

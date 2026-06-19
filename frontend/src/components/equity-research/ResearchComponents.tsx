@@ -286,26 +286,42 @@ function DecisionFact({ icon, label, value }: { icon: React.ReactNode; label: st
 export function AgentProgressSidebar({
   reports,
   status,
+  events = [],
   selectedAgent,
   onSelectAgent,
   compact = false,
 }: {
   reports: EquityResearchReport[];
   status: ResearchRunStatus;
+  events?: EquityResearchEvent[];
   selectedAgent?: string;
   onSelectAgent?: (agentKey: string) => void;
   compact?: boolean;
 }) {
   const reportByAgent = useMemo(() => new Map(reports.map((report) => [report.agent_key, report])), [reports]);
+  const statusByAgent = useMemo(() => {
+    const statuses = new Map<string, string>();
+    for (const event of events) {
+      if (!event.agent_key) continue;
+      const label = event.label.toLowerCase();
+      if (event.event_type === "error") statuses.set(event.agent_key, "failed");
+      else if (label.includes("skipped")) statuses.set(event.agent_key, "skipped");
+      else if (event.event_type === "report" || event.event_type === "final") statuses.set(event.agent_key, "completed");
+      else if (event.event_type === "reasoning" || label.includes("started")) statuses.set(event.agent_key, "running");
+    }
+    return statuses;
+  }, [events]);
   const [expandedGroups, setExpandedGroups] = useState(() => new Set(AGENT_GROUPS.map((group) => group.title)));
   const runningAgentKey = useMemo(() => {
     if (status !== "running") return null;
+    const visibleRunning = [...statusByAgent.entries()].find(([, agentStatus]) => agentStatus === "running");
+    if (visibleRunning) return visibleRunning[0];
     for (const group of AGENT_GROUPS) {
       const pending = group.agents.find(([key]) => !reportByAgent.has(key));
       if (pending) return pending[0];
     }
     return null;
-  }, [reportByAgent, status]);
+  }, [reportByAgent, status, statusByAgent]);
 
   return (
     <div className={cn("space-y-4", compact && "space-y-3")}>
@@ -333,7 +349,7 @@ export function AgentProgressSidebar({
               <div className="space-y-1">
                 {group.agents.map(([key, name]) => {
                   const report = reportByAgent.get(key);
-                  let agentStatus = report?.status ?? "pending";
+                  let agentStatus = statusByAgent.get(key) ?? report?.status ?? "pending";
                   if (!report && runningAgentKey === key) {
                     agentStatus = "running";
                   }
@@ -370,6 +386,40 @@ function StatusIcon({ status }: { status: string }) {
   if (status === "failed") return <AlertTriangle className="size-4 text-amber-warning" aria-label="failed" />;
   if (status === "skipped") return <Circle className="size-4 text-white/25" aria-label="skipped" />;
   return <Circle className="size-4 text-white/20" aria-label="pending" />;
+}
+
+function useSequentialEvents(events: EquityResearchEvent[]) {
+  const [visibleEvents, setVisibleEvents] = useState<EquityResearchEvent[]>([]);
+
+  useEffect(() => {
+    setVisibleEvents((current) => {
+      const currentIds = current.map((event) => event.event_id).join("|");
+      const nextPrefixIds = events.slice(0, current.length).map((event) => event.event_id).join("|");
+      return currentIds === nextPrefixIds ? current : [];
+    });
+  }, [events]);
+
+  useEffect(() => {
+    if (visibleEvents.length >= events.length) return;
+    const timer = window.setTimeout(() => {
+      setVisibleEvents(events.slice(0, visibleEvents.length + 1));
+    }, visibleEvents.length === 0 ? 80 : 520);
+    return () => window.clearTimeout(timer);
+  }, [events, visibleEvents.length]);
+
+  return visibleEvents;
+}
+
+function visibleReportKeys(events: EquityResearchEvent[]) {
+  const keys = new Set<string>();
+  for (const event of events) {
+    if (!event.agent_key) continue;
+    const label = event.label.toLowerCase();
+    if (event.event_type === "report" || event.event_type === "final" || label.includes("skipped")) {
+      keys.add(event.agent_key);
+    }
+  }
+  return keys;
 }
 
 export function MessagesToolsFeed({ events }: { events: EquityResearchEvent[] }) {
@@ -463,6 +513,12 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
   const [events, setEvents] = useState<EquityResearchEvent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const visibleEvents = useSequentialEvents(events);
+  const visibleKeys = useMemo(() => visibleReportKeys(visibleEvents), [visibleEvents]);
+  const visibleReports = useMemo(
+    () => detail?.reports.filter((report) => visibleKeys.has(report.agent_key)) ?? [],
+    [detail?.reports, visibleKeys]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -473,9 +529,6 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
         if (cancelled) return;
         setDetail(next);
         setEvents((current) => mergeEvents(current, next.latest_events));
-        if (!selectedAgent && next.reports.length > 0) {
-          setSelectedAgent(next.reports[next.reports.length - 1].agent_key);
-        }
         const listed = await api.equityResearchEvents(runId, eventCursor);
         if (!cancelled) {
           eventCursor = listed.cursor;
@@ -491,22 +544,27 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [runId, selectedAgent]);
+  }, [runId]);
+
+  useEffect(() => {
+    if (selectedAgent && visibleReports.some((report) => report.agent_key === selectedAgent)) return;
+    if (visibleReports.length > 0) setSelectedAgent(visibleReports[visibleReports.length - 1].agent_key);
+  }, [selectedAgent, visibleReports]);
 
   if (error) return <div className="rounded-2xl border border-red-negative/30 bg-red-negative/10 p-5 text-red-negative">{error}</div>;
   if (!detail) return <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-8 text-white/45">Loading QuanAd 2.1 workspace...</div>;
 
-  const selectedReport = detail.reports.find((report) => report.agent_key === selectedAgent) ?? detail.reports.find((report) => report.agent_key === "pm") ?? detail.reports[0];
-  const hasFinalDecision = detail.reports.some((report) => report.agent_key === "pm");
+  const selectedReport = visibleReports.find((report) => report.agent_key === selectedAgent) ?? visibleReports.find((report) => report.agent_key === "pm") ?? visibleReports[0];
+  const hasFinalDecision = visibleReports.some((report) => report.agent_key === "pm");
 
   return (
     <div className="grid min-h-[calc(100vh-5rem)] gap-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
       <aside className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
-        <AgentProgressSidebar reports={detail.reports} status={detail.run.status} selectedAgent={selectedAgent ?? undefined} onSelectAgent={setSelectedAgent} />
+        <AgentProgressSidebar reports={visibleReports} events={visibleEvents} status={detail.run.status} selectedAgent={selectedAgent ?? undefined} onSelectAgent={setSelectedAgent} />
       </aside>
       <main className="min-w-0 space-y-4">
         <FinalDecisionCard run={detail.run} />
-        <ReportFileList reports={detail.reports} selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} />
+        <ReportFileList reports={visibleReports} selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} />
         <article className="min-h-[30rem] rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
           {selectedReport ? (
             <>
@@ -543,7 +601,7 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
         </div>
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
           <h3 className="mb-3 text-sm font-semibold text-indigo-primary">Messages & Tools</h3>
-          <MessagesToolsFeed events={events} />
+          <MessagesToolsFeed events={visibleEvents} />
         </div>
       </aside>
     </div>

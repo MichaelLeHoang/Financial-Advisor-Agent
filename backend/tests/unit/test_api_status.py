@@ -133,6 +133,55 @@ def test_agent_chat_job_endpoints_use_queue(monkeypatch):
     assert status.json()["status"] == "queued"
 
 
+def test_agent_chat_job_status_is_scoped_to_current_user(monkeypatch):
+    from src.api import app as api_app
+    from src.auth import supabase
+    import src.agent.llm_queue as queue_module
+
+    monkeypatch.setattr(supabase.settings, "supabase_jwt_secret", SecretStr("test-secret"))
+
+    class FakeQueue:
+        def __init__(self):
+            self.record = None
+
+        def enqueue(self, payload, kind):
+            self.record = {
+                "job_id": "job-user-a",
+                "kind": kind,
+                "status": "queued",
+                "payload": payload,
+                "created_at": 1.0,
+            }
+            return self.record
+
+        def queue_position(self, job_id, kind):
+            return 1
+
+        def get(self, job_id):
+            return self.record
+
+    fake_queue = FakeQueue()
+    monkeypatch.setattr(queue_module, "get_llm_job_queue", lambda: fake_queue)
+
+    user_a = uuid4()
+    user_b = uuid4()
+    client = TestClient(api_app.app)
+
+    create = client.post(
+        "/api/v1/agent/chat/jobs",
+        json={"message": "What is AAPL?", "session_id": "user-a-session", "mode": "single"},
+        headers=_auth_headers(user_a),
+    )
+
+    assert create.status_code == 200
+    assert fake_queue.record["payload"]["user_id"] == str(user_a)
+    assert client.get("/api/v1/agent/chat/jobs/job-user-a", headers=_auth_headers(user_b)).status_code == 404
+
+    own_status = client.get("/api/v1/agent/chat/jobs/job-user-a", headers=_auth_headers(user_a))
+    assert own_status.status_code == 200
+    assert own_status.json()["status"] == "queued"
+
+
 def test_agent_session_endpoints_scope_to_current_user(tmp_path, monkeypatch):
     from src.api import app as api_app
     from src.agent import history
@@ -149,9 +198,18 @@ def test_agent_session_endpoints_scope_to_current_user(tmp_path, monkeypatch):
 
     client = TestClient(api_app.app)
 
+    created = client.post(
+        "/api/v1/agent/sessions",
+        headers=_auth_headers(user_a),
+        json={"session_id": "empty-session", "title": "New chat"},
+    )
+    assert created.status_code == 200
+    assert created.json()["title"] == "New chat"
+    assert created.json()["message_count"] == 0
+
     sessions_a = client.get("/api/v1/agent/sessions", headers=_auth_headers(user_a))
     assert sessions_a.status_code == 200
-    assert [row["session_id"] for row in sessions_a.json()] == ["session-a"]
+    assert {row["session_id"] for row in sessions_a.json()} == {"session-a", "empty-session"}
 
     own_messages = client.get("/api/v1/agent/sessions/session-a/messages", headers=_auth_headers(user_a))
     assert own_messages.status_code == 200
@@ -179,8 +237,8 @@ def test_guest_cannot_load_or_mutate_saved_chat_sessions(tmp_path, monkeypatch):
     monkeypatch.setattr(history, "DB_PATH", tmp_path / "conversations.db")
 
     client = TestClient(api_app.app)
-    assert client.get("/api/v1/agent/sessions").status_code == 200
-    assert client.get("/api/v1/agent/sessions").json() == []
+    assert client.post("/api/v1/agent/sessions", json={"session_id": "any", "title": "New chat"}).status_code == 401
+    assert client.get("/api/v1/agent/sessions").status_code == 401
     assert client.get("/api/v1/agent/sessions/any/messages").status_code == 401
     assert client.patch("/api/v1/agent/sessions/any", json={"title": "x"}).status_code == 401
     assert client.delete("/api/v1/agent/sessions/any").status_code == 401

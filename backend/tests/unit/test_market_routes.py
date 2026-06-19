@@ -1,4 +1,5 @@
 import time
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -32,3 +33,22 @@ def test_market_search_times_out_without_blocking(monkeypatch):
 
     assert response.status_code == 504
     assert "timed out" in response.json()["detail"]
+
+
+def test_market_quote_fallback_history_uses_live_quote_when_history_missing():
+    from src.api import app as api_app
+
+    snapshot = SimpleNamespace(
+        latest_price=105.0,
+        previous_close=100.0,
+        open_price=101.0,
+        day_high=106.0,
+        day_low=99.5,
+        volume=12345,
+    )
+
+    points = api_app._fallback_quote_history(snapshot, "1d")
+
+    assert [point.label for point in points] == ["Open", "Now"]
+    assert [point.price for point in points] == [101.0, 105.0]
+    assert points[-1].volume == 12345

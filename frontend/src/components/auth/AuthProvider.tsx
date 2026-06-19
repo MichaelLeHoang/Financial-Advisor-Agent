@@ -212,6 +212,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       provider,
       options: {
         redirectTo: `${window.location.origin}/login?next=${encodeURIComponent(safeNext)}`,
+        queryParams: provider === "google" ? { prompt: "select_account" } : undefined,
       },
     });
     if (oauthError) {

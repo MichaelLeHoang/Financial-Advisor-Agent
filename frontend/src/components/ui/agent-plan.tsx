@@ -124,9 +124,10 @@ function getResearchDeskTasks(): Task[] {
       title: "Analyst Team",
       status: "pending",
       subtasks: [
-        { id: "2.1", title: "Market Analyst", status: "pending", tools: ["market_report"] },
-        { id: "2.2", title: "News and Sentiment Analysts", status: "pending", tools: ["news_report", "sentiment_report"] },
-        { id: "2.3", title: "Fundamentals Analyst", status: "pending", tools: ["fundamentals_report"] },
+        { id: "2.1", title: "Market Analyst", status: "pending", tools: ["market", "market_report", "market_report.md"] },
+        { id: "2.2", title: "Social Media Analyst", status: "pending", tools: ["social", "sentiment_report", "sentiment_report.md"] },
+        { id: "2.3", title: "News Analyst", status: "pending", tools: ["news", "news_report", "news_report.md"] },
+        { id: "2.4", title: "Fundamentals Analyst", status: "pending", tools: ["fundamentals", "fundamentals_report", "fundamentals_report.md"] },
       ],
     },
     {
@@ -134,8 +135,9 @@ function getResearchDeskTasks(): Task[] {
       title: "Research Debate",
       status: "pending",
       subtasks: [
-        { id: "3.1", title: "Bull and bear cases", status: "pending", tools: ["bull_case", "bear_case"] },
-        { id: "3.2", title: "Research evaluation", status: "pending", tools: ["research_evaluation"] },
+        { id: "3.1", title: "Bull Researcher", status: "pending", tools: ["bull", "bull_case", "bull_case.md"] },
+        { id: "3.2", title: "Bear Researcher", status: "pending", tools: ["bear", "bear_case", "bear_case.md"] },
+        { id: "3.3", title: "Research Evaluator", status: "pending", tools: ["evaluator", "research_evaluation", "research_evaluation.md"] },
       ],
     },
     {
@@ -143,9 +145,11 @@ function getResearchDeskTasks(): Task[] {
       title: "Trade and Risk Review",
       status: "pending",
       subtasks: [
-        { id: "4.1", title: "Trader plan", status: "pending", tools: ["trader_plan"] },
-        { id: "4.2", title: "Risk management review", status: "pending", tools: ["risk_review"] },
-        { id: "4.3", title: "Portfolio manager verdict", status: "pending", tools: ["final_trade_decision"] },
+        { id: "4.1", title: "Trader", status: "pending", tools: ["trader", "trader_plan", "trader_plan.md"] },
+        { id: "4.2", title: "Risky Analyst", status: "pending", tools: ["risky", "risk_opportunity", "risk_opportunity.md"] },
+        { id: "4.3", title: "Neutral Analyst", status: "pending", tools: ["neutral", "risk_review", "risk_review.md"] },
+        { id: "4.4", title: "Safe Analyst", status: "pending", tools: ["safe", "safe_risk_controls", "safe_risk_controls.md"] },
+        { id: "4.5", title: "Portfolio Manager", status: "pending", tools: ["pm", "final_trade_decision", "final_trade_decision.md"] },
       ],
     },
   ];
@@ -172,7 +176,7 @@ function useLiveProgress(
     () => tasksForMode(mode).reduce((sum, task) => sum + task.subtasks.length, 0),
     [mode]
   );
-  const useSyntheticProgress = isActive && !activeTool && completedTools.length === 0;
+  const useSyntheticProgress = isActive && !activeTool;
 
   // Reset only when mode actually changes
   useEffect(() => {
@@ -192,7 +196,7 @@ function useLiveProgress(
     if (!useSyntheticProgress) return;
     const interval = setInterval(() => {
       setSyntheticStep((current) => Math.min(current + 1, Math.max(totalSubtasks - 1, 0)));
-    }, mode === "consensus" || mode === "research" ? 2200 : 1800);
+    }, mode === "consensus" || mode === "research" ? 900 : 700);
     return () => clearInterval(interval);
   }, [mode, totalSubtasks, useSyntheticProgress]);
 
@@ -316,8 +320,13 @@ export default function Plan({ mode = "single", isActive = true, activeTool = nu
     );
   };
 
-  const completedSubtasks = tasks.flatMap((t) => t.subtasks).filter((s) => s.status === "completed").length;
+  const allSubtasks = tasks.flatMap((t) => t.subtasks);
+  const completedSubtasks = allSubtasks.filter((s) => s.status === "completed").length;
+  const inProgressSubtasks = allSubtasks.filter((s) => s.status === "in-progress").length;
   const totalSubtasks = tasks.flatMap((t) => t.subtasks).length;
+  const visualProgress = totalSubtasks > 0
+    ? ((completedSubtasks + (inProgressSubtasks > 0 ? 0.45 : 0)) / totalSubtasks) * 100
+    : 0;
 
   return (
     <div className="w-full overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.03]">
@@ -351,7 +360,7 @@ export default function Plan({ mode = "single", isActive = true, activeTool = nu
         <motion.div
           className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400"
           initial={{ width: "0%" }}
-          animate={{ width: `${totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0}%` }}
+          animate={{ width: `${visualProgress}%` }}
           transition={{ duration: 0.4, ease: "easeOut" }}
         />
       </div>

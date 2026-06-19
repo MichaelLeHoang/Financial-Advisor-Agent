@@ -5,6 +5,7 @@ import { usePlotArea, useXAxisScale, useYAxisScale } from "recharts";
 
 export interface FinanceOhlcPoint {
   label: string;
+  chartIndex?: number;
   price: number;
   open?: number;
   high?: number;
@@ -60,7 +61,7 @@ export default function FinanceOhlcLayer({
         const positive = close >= open;
         const color = positive ? positiveColor : negativeColor;
 
-        const scaledX = xScale?.(point.label, { position: "middle" });
+        const scaledX = xScale?.(point.chartIndex ?? point.label, { position: "middle" });
         const cx = Number.isFinite(scaledX) ? Number(scaledX) : fallbackCenter(index, data.length, plotArea);
         const openY = pointY(yScale, open);
         const closeY = pointY(yScale, close);

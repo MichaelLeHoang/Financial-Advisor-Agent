@@ -2,6 +2,7 @@
 
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
     ArrowDown,
     ArrowDownRight,
@@ -32,6 +33,7 @@ import {
     CartesianGrid,
     ComposedChart,
     Line,
+    ReferenceDot,
     ReferenceLine,
     ResponsiveContainer,
     Tooltip,
@@ -39,7 +41,7 @@ import {
     YAxis,
 } from "recharts";
 import { cn } from "@/lib/utils";
-import { api, type EarningsPoint, type EquityResearchRunDetail, type MarketQuote, type QuarterlyFinancial, type ResearchDepth } from "@/lib/api";
+import { api, type EarningsPoint, type MarketQuote, type QuarterlyFinancial, type ResearchDepth } from "@/lib/api";
 import { fetchQuote as fetchCachedQuote, fetchQuotes as fetchCachedQuotes, invalidate as invalidateQuote } from "@/lib/quote-cache";
 import {
     CHART_RANGES,
@@ -73,11 +75,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-    AgentProgressSidebar,
-    ResearchDepthSelector,
-    ResearchRunCompactResult,
-} from "@/components/equity-research/ResearchComponents";
+import { ResearchDepthSelector } from "@/components/equity-research/ResearchComponents";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 interface StockInfo extends MarketSymbol {
@@ -103,6 +101,7 @@ type DetailChartStyle = "area" | "line" | "candle" | "bar";
 type MarketChartRange = ChartRange | "MAX";
 
 interface DetailChartPoint extends MarketPoint {
+    chartIndex?: number;
     primaryPerformance: number;
     open?: number;
     high?: number;
@@ -115,6 +114,7 @@ interface DetailChartPoint extends MarketPoint {
 
 const MARKET_STOCKS_STORAGE_KEY = "market.savedStocks";
 const CHART_DETAIL_RANGES: MarketChartRange[] = ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "MAX"];
+const DEFAULT_MARKET_RANGE: ChartRange = "1M";
 const COMPARE_COLORS = ["#34d399", "#818cf8", "#22d3ee", "#fbbf24", "#f472b6"];
 const CHART_STYLE_LABELS: Record<DetailChartStyle, string> = {
     area: "Area",
@@ -127,18 +127,19 @@ function createStock(ticker: string): StockInfo {
     const symbol = createMarketSymbol(ticker);
     return {
         ...symbol,
-        data: createMarketSeries(symbol, "1M"),
+        data: createMarketSeries(symbol, DEFAULT_MARKET_RANGE),
     };
 }
 
 function quoteToStock(quote: MarketQuote, fallback?: StockInfo): StockInfo {
+    const history = quote.history.length > 0 ? quote.history : fallback?.data ?? createMarketSeries(createMarketSymbol(quote.ticker), DEFAULT_MARKET_RANGE);
     return {
         ticker: quote.ticker,
         name: quote.name || fallback?.name || quote.ticker,
         exchange: quote.exchange || fallback?.exchange || "Market",
         sector: quote.sector || fallback?.sector || "Instrument",
         price: quote.price,
-        change: quote.change,
+        change: calculateSeriesChange(history, quote.change),
         currency: quote.currency,
         openPrice: quote.open_price,
         dayHigh: quote.day_high,
@@ -151,7 +152,7 @@ function quoteToStock(quote: MarketQuote, fallback?: StockInfo): StockInfo {
         dividendYield: quote.dividend_yield,
         dividendRate: quote.dividend_rate,
         quarterlyDividendAmount: quote.quarterly_dividend_amount,
-        data: quote.history.length > 0 ? quote.history : fallback?.data ?? createMarketSeries(createMarketSymbol(quote.ticker), "1M"),
+        data: history,
         earnings: quote.earnings,
         quarterlyFinancials: quote.quarterly_financials,
     };
@@ -225,6 +226,14 @@ function performanceFrom(start: number, current: number): number {
     return ((current - start) / Math.abs(start)) * 100;
 }
 
+function calculateSeriesChange(series: MarketPoint[], fallbackChange = 0): number {
+    if (series.length < 2) return fallbackChange;
+    const first = series[0]?.price;
+    const last = series[series.length - 1]?.price;
+    if (!Number.isFinite(first) || !Number.isFinite(last) || first === 0) return fallbackChange;
+    return performanceFrom(first, last);
+}
+
 function domainWithPadding(values: number[]): [number, number] {
     const finite = values.filter((value) => Number.isFinite(value));
     if (finite.length === 0) return [0, 1];
@@ -236,12 +245,6 @@ function domainWithPadding(values: number[]): [number, number] {
 
 function compareKey(symbol: string, suffix: "price" | "performance"): string {
     return `compare_${symbol.replace(/[^A-Z0-9]/gi, "_")}_${suffix}`;
-}
-
-function estimateAbsoluteChange(stock: StockInfo): number {
-    const percent = stock.change / 100;
-    if (!Number.isFinite(percent) || percent === -1) return 0;
-    return stock.price - stock.price / (1 + percent);
 }
 
 function formatAxisPrice(value: number) {
@@ -310,6 +313,7 @@ function DetailChartTooltip({
 
 export default function MarketPage() {
     const { user } = useAuth();
+    const router = useRouter();
     const searchInputRef = useRef<HTMLInputElement>(null);
     const marketTopRef = useRef<HTMLDivElement>(null);
     const [stocks, setStocks] = useState<StockInfo[]>(() => DEFAULT_MARKET_TICKERS.map(createStock));
@@ -321,7 +325,7 @@ export default function MarketPage() {
     const [mounted, setMounted] = useState(false);
     const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
     const [selectedStock, setSelectedStock] = useState<StockInfo | null>(null);
-    const [selectedRange, setSelectedRange] = useState<MarketChartRange>("1M");
+    const [selectedRange, setSelectedRange] = useState<MarketChartRange>(DEFAULT_MARKET_RANGE);
     const [chartStyle, setChartStyle] = useState<DetailChartStyle>("area");
     const [comparisonSymbols, setComparisonSymbols] = useState<string[]>([]);
     const [pendingRemoval, setPendingRemoval] = useState<StockInfo | null>(null);
@@ -329,7 +333,6 @@ export default function MarketPage() {
     const [skipRemoveConfirmDraft, setSkipRemoveConfirmDraft] = useState(false);
     const [researchStock, setResearchStock] = useState<StockInfo | null>(null);
     const [researchDepth, setResearchDepth] = useState<ResearchDepth>("shallow");
-    const [researchDetail, setResearchDetail] = useState<EquityResearchRunDetail | null>(null);
     const [researchStarting, setResearchStarting] = useState(false);
     const [researchError, setResearchError] = useState<string | null>(null);
 
@@ -418,7 +421,7 @@ export default function MarketPage() {
         return () => window.removeEventListener("market-search:focus", focusSearch);
     }, []);
 
-    const fetchQuote = async (ticker: string, fallback?: StockInfo, range: MarketChartRange = "1M") => {
+    const fetchQuote = async (ticker: string, fallback?: StockInfo, range: MarketChartRange = DEFAULT_MARKET_RANGE) => {
         const [period, interval] = quotePeriod(range);
         const quote = await fetchCachedQuote(ticker, period, interval);
         return quoteToStock(quote, fallback);
@@ -484,7 +487,7 @@ export default function MarketPage() {
         const existing = stocks.find((stock) => stock.ticker === normalized);
         const next = existing ?? createStock(normalized);
         setSelectedStock(next);
-        setSelectedRange("1M");
+        setSelectedRange(DEFAULT_MARKET_RANGE);
         setChartStyle("area");
         setComparisonSymbols([]);
 
@@ -516,7 +519,6 @@ export default function MarketPage() {
     const openResearchDrawer = (stock: StockInfo) => {
         setResearchStock(stock);
         setResearchError(null);
-        setResearchDetail(null);
     };
 
     const startResearchRun = async () => {
@@ -529,8 +531,8 @@ export default function MarketPage() {
                 source_surface: "market",
                 research_depth: researchDepth,
             });
-            const detail = await api.equityResearchRun(run.run_id);
-            setResearchDetail(detail);
+            setResearchStock(null);
+            router.push(`/research/${run.run_id}?from=market`);
         } catch (err: any) {
             setResearchError(err.message ?? "Could not start research run.");
         } finally {
@@ -538,22 +540,12 @@ export default function MarketPage() {
         }
     };
 
-    useEffect(() => {
-        if (!researchDetail || researchDetail.run.status === "completed" || researchDetail.run.status === "failed" || researchDetail.run.status === "cancelled") return;
-        const timer = window.setInterval(() => {
-            api.equityResearchRun(researchDetail.run.run_id)
-                .then(setResearchDetail)
-                .catch(() => undefined);
-        }, 1500);
-        return () => window.clearInterval(timer);
-    }, [researchDetail]);
-
     const refresh = async () => {
         if (stocks.length === 0) return;
         setLoading(true);
         setUpgradeMessage(null);
         setStocks((current) => current.map((stock) => ({ ...stock, loading: true })));
-        const [period, interval] = quotePeriod("1M");
+        const [period, interval] = quotePeriod(DEFAULT_MARKET_RANGE);
         const quoteMap = await fetchCachedQuotes(stocks.map((stock) => stock.ticker), period, interval);
         const updated = stocks.map((stock) => {
             const quote = quoteMap.get(stock.ticker.toUpperCase());
@@ -690,7 +682,6 @@ export default function MarketPage() {
                 stock={researchStock}
                 depth={researchDepth}
                 onDepthChange={setResearchDepth}
-                detail={researchDetail}
                 starting={researchStarting}
                 error={researchError}
                 onStart={startResearchRun}
@@ -956,7 +947,6 @@ function MarketResearchDrawer({
     stock,
     depth,
     onDepthChange,
-    detail,
     starting,
     error,
     onStart,
@@ -965,14 +955,12 @@ function MarketResearchDrawer({
     stock: StockInfo | null;
     depth: ResearchDepth;
     onDepthChange: (depth: ResearchDepth) => void;
-    detail: EquityResearchRunDetail | null;
     starting: boolean;
     error: string | null;
     onStart: () => void;
     onClose: () => void;
 }) {
     if (!stock) return null;
-    const isComplete = detail?.run.status === "completed";
     return (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm" onClick={onClose}>
             <aside
@@ -995,59 +983,31 @@ function MarketResearchDrawer({
                     </button>
                 </div>
 
-                {!detail ? (
-                    <div className="space-y-4">
-                        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
-                            <p className="text-xs font-semibold uppercase tracking-widest text-white/35">Analysis Date</p>
-                            <p className="mt-1 text-sm font-semibold text-white">{new Date().toLocaleDateString()}</p>
-                        </div>
-                        <div>
-                            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-white/35">Research Depth</p>
-                            <ResearchDepthSelector value={depth} onChange={onDepthChange} />
-                        </div>
-                        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
-                            <p className="text-sm font-semibold text-white">Analyst team</p>
-                            <p className="mt-2 text-sm leading-6 text-white/55">
-                                Market, sentiment, news, fundamentals, bull/bear debate, trader, risk analysts, and portfolio manager.
-                            </p>
-                        </div>
-                        {error && <p className="text-sm text-red-negative">{error}</p>}
-                        <Button onClick={onStart} disabled={starting} className="on-accent accent-gradient-surface w-full rounded-xl">
-                            {starting ? <Loader2 className="size-4 animate-spin" /> : "Start Research Run"}
-                        </Button>
+                <div className="space-y-4">
+                    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
+                        <p className="text-xs font-semibold uppercase tracking-widest text-white/35">Analysis Date</p>
+                        <p className="mt-1 text-sm font-semibold text-white">{new Date().toLocaleDateString()}</p>
                     </div>
-                ) : (
-                    <div className="space-y-4">
-                        <Link
-                            href={`/research/${detail.run.run_id}?from=market`}
-                            className="inline-flex h-9 w-full items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.035] px-3 text-sm font-semibold text-white hover:bg-white/[0.06]"
-                        >
-                            Open Full Report
-                        </Link>
-                        {isComplete ? (
-                            <ResearchRunCompactResult run={detail.run} from="market" showOpenLink={false} />
-                        ) : (
-                            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
-                                <div className="mb-3 flex items-center justify-between">
-                                    <p className="text-sm font-semibold text-white">Live progress</p>
-                                    <span className="text-xs capitalize text-white/42">{detail.run.status}</span>
-                                </div>
-                                <AgentProgressSidebar reports={detail.reports} status={detail.run.status} compact />
-                            </div>
-                        )}
-                        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
-                            <p className="text-sm font-semibold text-white">Recent activity</p>
-                            <div className="mt-3 space-y-2">
-                                {detail.latest_events.slice(-4).reverse().map((event) => (
-                                    <div key={event.event_id} className="rounded-xl bg-black/20 p-3">
-                                        <p className="text-xs font-semibold text-white/68">{event.label}</p>
-                                        <p className="mt-1 text-xs text-white/42">{event.content}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                    <div>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-white/35">Research Depth</p>
+                        <ResearchDepthSelector value={depth} onChange={onDepthChange} />
                     </div>
-                )}
+                    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
+                        <p className="text-sm font-semibold text-white">Analyst team</p>
+                        <p className="mt-2 text-sm leading-6 text-white/55">
+                            Market, sentiment, news, fundamentals, bull/bear debate, trader, risk analysts, and portfolio manager.
+                        </p>
+                    </div>
+                    {error && <p className="text-sm text-red-negative">{error}</p>}
+                    <Button onClick={onStart} disabled={starting} className="on-accent accent-gradient-surface w-full rounded-xl">
+                        {starting ? (
+                            <>
+                                <Loader2 className="size-4 animate-spin" />
+                                Opening research workspace...
+                            </>
+                        ) : "Start Research Run"}
+                    </Button>
+                </div>
             </aside>
         </div>
     );
@@ -1265,7 +1225,10 @@ function MarketChartDialog({
         return detailStock.data.length > 0 ? detailStock.data : createMarketSeries(detailStock, range === "MAX" ? "5Y" : range);
     }, [detailStock, range]);
     const chartData = useMemo(() => {
-        return series.map((point, index, history) => pointToDetail(point, history[index - 1]?.price));
+        return series.map((point, index, history) => ({
+            ...pointToDetail(point, history[index - 1]?.price),
+            chartIndex: index,
+        }));
     }, [series]);
     const displayedChartData = useMemo(() => {
         if (chartData.length === 0) return [];
@@ -1289,8 +1252,6 @@ function MarketChartDialog({
         });
     }, [chartData, compareQuotes]);
 
-    const up = (detailStock?.change ?? 0) >= 0;
-    const color = compareMode ? COMPARE_COLORS[0] : up ? "#34d399" : "#f87171";
     const stats = useMemo(() => createStats(detailStock, series), [detailStock, series]);
     const chartValues = compareMode
         ? displayedChartData.flatMap((point) => [
@@ -1309,8 +1270,11 @@ function MarketChartDialog({
     const yDomain = domainWithPadding(chartValues);
     const activePoint = hoverPoint ?? displayedChartData[displayedChartData.length - 1] ?? null;
     const activePrice = activePoint?.price ?? detailStock?.price ?? 0;
-    const activePercentChange = detailStock ? performanceFrom(detailStock.price - estimateAbsoluteChange(detailStock), activePrice) : 0;
-    const activeAbsoluteChange = detailStock ? activePrice - (detailStock.price - estimateAbsoluteChange(detailStock)) : 0;
+    const rangeBaseline = displayedChartData[0]?.price ?? activePrice;
+    const activePercentChange = performanceFrom(rangeBaseline, activePrice);
+    const activeAbsoluteChange = activePrice - rangeBaseline;
+    const up = activePercentChange >= 0;
+    const color = compareMode ? COMPARE_COLORS[0] : up ? "#34d399" : "#f87171";
     const filteredCompareMatches = useMemo(() => {
         const excluded = new Set([stock?.ticker, ...activeComparisonSymbols]);
         return searchMarketSymbols(compareQuery, 8).filter((match) => !excluded.has(match.ticker));
@@ -1490,12 +1454,15 @@ function MarketChartDialog({
                                                         </defs>
                                                         <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                                                         <XAxis
-                                                            dataKey="label"
+                                                            dataKey="chartIndex"
                                                             tickLine={false}
                                                             axisLine={false}
                                                             tick={{ fill: "var(--chart-axis)", fontSize: 11 }}
                                                             minTickGap={range === "1D" ? 16 : 24}
-                                                            tickFormatter={(value) => range === "1D" ? formatIntradayLabel(String(value)) : String(value)}
+                                                            tickFormatter={(value) => {
+                                                                const label = displayedChartData[Number(value)]?.label ?? String(value);
+                                                                return range === "1D" ? formatIntradayLabel(label) : label;
+                                                            }}
                                                         />
                                                         <YAxis
                                                             yAxisId="price"
@@ -1549,6 +1516,35 @@ function MarketChartDialog({
                                                                 dot={false}
                                                             />
                                                         ))}
+                                                        {hoverPoint && (
+                                                            <ReferenceDot
+                                                                yAxisId="price"
+                                                                x={hoverPoint.chartIndex}
+                                                                y={compareMode ? hoverPoint.primaryPerformance : hoverPoint.price}
+                                                                r={4.5}
+                                                                fill={color}
+                                                                stroke="#0b0f17"
+                                                                strokeWidth={2}
+                                                                ifOverflow="visible"
+                                                            />
+                                                        )}
+                                                        {compareMode && hoverPoint && compareQuotes.map((compareQuote, index) => {
+                                                            const performance = hoverPoint[compareKey(compareQuote.ticker, "performance")];
+                                                            if (typeof performance !== "number") return null;
+                                                            return (
+                                                                <ReferenceDot
+                                                                    key={`${compareQuote.ticker}-active-dot`}
+                                                                    yAxisId="price"
+                                                                    x={hoverPoint.chartIndex}
+                                                                    y={performance}
+                                                                    r={4}
+                                                                    fill={COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length]}
+                                                                    stroke="#0b0f17"
+                                                                    strokeWidth={2}
+                                                                    ifOverflow="visible"
+                                                                />
+                                                            );
+                                                        })}
                                                         {loading && (
                                                             <ReferenceLine yAxisId="price" y={yDomain[1]} label={{ value: "Refreshing...", fill: "rgba(255,255,255,0.42)", fontSize: 11 }} stroke="transparent" />
                                                         )}

@@ -247,12 +247,13 @@ class MarketDataService:
         *,
         include_news: bool = True,
         include_sec: bool = True,
+        include_fundamentals: bool = True,
     ) -> NormalizedMarketSnapshot:
         symbol = ticker.strip().upper()
         snapshot = NormalizedMarketSnapshot(ticker=symbol)
-        self._apply_yfinance(snapshot, period, interval)
-        self._apply_alpha_vantage(snapshot, period, interval)
-        self._apply_finnhub(snapshot, include_news=include_news)
+        self._apply_yfinance(snapshot, period, interval, include_news=include_news)
+        self._apply_alpha_vantage(snapshot, period, interval, include_news=include_news, include_fundamentals=include_fundamentals)
+        self._apply_finnhub(snapshot, include_news=include_news, include_fundamentals=include_fundamentals)
         if include_sec:
             self._apply_sec(snapshot)
         else:
@@ -293,7 +294,7 @@ class MarketDataService:
             if row.get("symbol")
         ][:limit]
 
-    def _apply_finnhub(self, snapshot: NormalizedMarketSnapshot, *, include_news: bool) -> None:
+    def _apply_finnhub(self, snapshot: NormalizedMarketSnapshot, *, include_news: bool, include_fundamentals: bool) -> None:
         key = settings.secret_value("finnhub_api_key")
         if not key:
             snapshot.provider_status.append(ProviderStatus("finnhub", "missing_config"))
@@ -301,40 +302,42 @@ class MarketDataService:
         try:
             quote = _get_json("https://finnhub.io/api/v1/quote", {"symbol": snapshot.ticker, "token": key})
             if isinstance(quote, dict) and quote.get("c"):
-                snapshot.latest_price = _clean_number(quote.get("c")) or snapshot.latest_price
-                snapshot.previous_close = _clean_number(quote.get("pc")) or snapshot.previous_close
-                snapshot.open_price = _clean_number(quote.get("o")) or snapshot.open_price
-                snapshot.day_high = _clean_number(quote.get("h")) or snapshot.day_high
-                snapshot.day_low = _clean_number(quote.get("l")) or snapshot.day_low
+                snapshot.latest_price = snapshot.latest_price or _clean_number(quote.get("c"))
+                snapshot.previous_close = snapshot.previous_close or _clean_number(quote.get("pc"))
+                snapshot.open_price = snapshot.open_price or _clean_number(quote.get("o"))
+                snapshot.day_high = snapshot.day_high or _clean_number(quote.get("h"))
+                snapshot.day_low = snapshot.day_low or _clean_number(quote.get("l"))
                 snapshot.daily_change = _safe_pct(snapshot.latest_price, snapshot.previous_close)
                 snapshot.data_sources.append("finnhub_quote")
                 snapshot.evidence_items.append(EvidenceItem("Latest quote", "Finnhub", f"{snapshot.latest_price}", importance="high"))
-            profile = _get_json("https://finnhub.io/api/v1/stock/profile2", {"symbol": snapshot.ticker, "token": key})
-            if isinstance(profile, dict) and profile:
-                snapshot.company_name = profile.get("name") or snapshot.company_name
-                snapshot.exchange = profile.get("exchange") or snapshot.exchange
-                snapshot.currency = profile.get("currency") or snapshot.currency
-                snapshot.market_cap = (_clean_number(profile.get("marketCapitalization")) * 1_000_000) if profile.get("marketCapitalization") else snapshot.market_cap
-                snapshot.fundamentals.setdefault("country", profile.get("country"))
-                snapshot.fundamentals.setdefault("ipo", profile.get("ipo"))
-                snapshot.data_sources.append("finnhub_profile")
-            metrics = _get_json("https://finnhub.io/api/v1/stock/metric", {"symbol": snapshot.ticker, "metric": "all", "token": key})
-            metric = metrics.get("metric", {}) if isinstance(metrics, dict) else {}
-            if metric:
-                snapshot.fundamentals.update({
-                    "gross_margin_ttm": _clean_number(metric.get("grossMarginTTM")),
-                    "net_margin_ttm": _clean_number(metric.get("netProfitMarginTTM")),
-                    "revenue_growth_ttm_yoy": _clean_number(metric.get("revenueGrowthTTMYoy")),
-                    "eps_growth_ttm_yoy": _clean_number(metric.get("epsGrowthTTMYoy")),
-                    "current_ratio_annual": _clean_number(metric.get("currentRatioAnnual")),
-                })
-                snapshot.analyst_context.update({
-                    "target_mean": _clean_number(metric.get("targetMean")),
-                    "target_high": _clean_number(metric.get("targetHigh")),
-                    "target_low": _clean_number(metric.get("targetLow")),
-                    "recommendation_mean": _clean_number(metric.get("recommendationMean")),
-                })
-                snapshot.data_sources.append("finnhub_metrics")
+            if include_fundamentals:
+                profile = _get_json("https://finnhub.io/api/v1/stock/profile2", {"symbol": snapshot.ticker, "token": key})
+                if isinstance(profile, dict) and profile:
+                    snapshot.company_name = snapshot.company_name or profile.get("name")
+                    snapshot.exchange = snapshot.exchange or profile.get("exchange")
+                    snapshot.currency = snapshot.currency or profile.get("currency")
+                    finnhub_market_cap = _clean_number(profile.get("marketCapitalization"))
+                    snapshot.market_cap = snapshot.market_cap or (finnhub_market_cap * 1_000_000 if finnhub_market_cap is not None else None)
+                    snapshot.fundamentals.setdefault("country", profile.get("country"))
+                    snapshot.fundamentals.setdefault("ipo", profile.get("ipo"))
+                    snapshot.data_sources.append("finnhub_profile")
+                metrics = _get_json("https://finnhub.io/api/v1/stock/metric", {"symbol": snapshot.ticker, "metric": "all", "token": key})
+                metric = metrics.get("metric", {}) if isinstance(metrics, dict) else {}
+                if metric:
+                    snapshot.fundamentals.update({
+                        "gross_margin_ttm": _clean_number(metric.get("grossMarginTTM")),
+                        "net_margin_ttm": _clean_number(metric.get("netProfitMarginTTM")),
+                        "revenue_growth_ttm_yoy": _clean_number(metric.get("revenueGrowthTTMYoy")),
+                        "eps_growth_ttm_yoy": _clean_number(metric.get("epsGrowthTTMYoy")),
+                        "current_ratio_annual": _clean_number(metric.get("currentRatioAnnual")),
+                    })
+                    snapshot.analyst_context.update({
+                        "target_mean": _clean_number(metric.get("targetMean")),
+                        "target_high": _clean_number(metric.get("targetHigh")),
+                        "target_low": _clean_number(metric.get("targetLow")),
+                        "recommendation_mean": _clean_number(metric.get("recommendationMean")),
+                    })
+                    snapshot.data_sources.append("finnhub_metrics")
             if include_news:
                 end = date.today()
                 start = end - timedelta(days=14)
@@ -360,44 +363,45 @@ class MarketDataService:
         except Exception as exc:
             snapshot.provider_status.append(ProviderStatus("finnhub", "error", str(exc)[:160]))
 
-    def _apply_alpha_vantage(self, snapshot: NormalizedMarketSnapshot, period: str, interval: str) -> None:
+    def _apply_alpha_vantage(self, snapshot: NormalizedMarketSnapshot, period: str, interval: str, *, include_news: bool, include_fundamentals: bool) -> None:
         key = settings.secret_value("alpha_vantage_api_key")
         if not key:
             snapshot.provider_status.append(ProviderStatus("alpha_vantage", "missing_config"))
             return
         try:
-            overview = _get_json("https://www.alphavantage.co/query", {"function": "OVERVIEW", "symbol": snapshot.ticker, "apikey": key})
-            if isinstance(overview, dict) and overview.get("Symbol"):
-                snapshot.company_name = overview.get("Name") or snapshot.company_name
-                snapshot.exchange = overview.get("Exchange") or snapshot.exchange
-                snapshot.currency = overview.get("Currency") or snapshot.currency
-                snapshot.sector = overview.get("Sector") or snapshot.sector
-                snapshot.industry = overview.get("Industry") or snapshot.industry
-                snapshot.market_cap = _clean_number(overview.get("MarketCapitalization")) or snapshot.market_cap
-                snapshot.pe_ratio = _clean_number(overview.get("PERatio")) or snapshot.pe_ratio
-                snapshot.dividend_yield = _clean_number(overview.get("DividendYield")) or snapshot.dividend_yield
-                snapshot.fundamentals.update({
-                    "trailing_pe": _clean_number(overview.get("PERatio")),
-                    "forward_pe": _clean_number(overview.get("ForwardPE")),
-                    "price_to_book": _clean_number(overview.get("PriceToBookRatio")),
-                    "profit_margins": _clean_number(overview.get("ProfitMargin")),
-                    "revenue_ttm": _clean_number(overview.get("RevenueTTM")),
-                    "gross_profit_ttm": _clean_number(overview.get("GrossProfitTTM")),
-                    "eps_ttm": _clean_number(overview.get("EPS")),
-                    "ebitda": _clean_number(overview.get("EBITDA")),
-                    "return_on_equity_ttm": _clean_number(overview.get("ReturnOnEquityTTM")),
-                    "quarterly_revenue_growth_yoy": _clean_number(overview.get("QuarterlyRevenueGrowthYOY")),
-                    "quarterly_earnings_growth_yoy": _clean_number(overview.get("QuarterlyEarningsGrowthYOY")),
-                    "beta": _clean_number(overview.get("Beta")),
-                })
-                snapshot.analyst_context.update({
-                    "analyst_target_price": _clean_number(overview.get("AnalystTargetPrice")),
-                    "analyst_rating_buy": _clean_number(overview.get("AnalystRatingBuy")),
-                    "analyst_rating_hold": _clean_number(overview.get("AnalystRatingHold")),
-                    "analyst_rating_sell": _clean_number(overview.get("AnalystRatingSell")),
-                })
-                snapshot.data_sources.append("alpha_vantage_overview")
-                snapshot.evidence_items.append(EvidenceItem("Company overview", "Alpha Vantage", overview.get("Description"), importance="high"))
+            if include_fundamentals:
+                overview = _get_json("https://www.alphavantage.co/query", {"function": "OVERVIEW", "symbol": snapshot.ticker, "apikey": key})
+                if isinstance(overview, dict) and overview.get("Symbol"):
+                    snapshot.company_name = snapshot.company_name or overview.get("Name")
+                    snapshot.exchange = snapshot.exchange or overview.get("Exchange")
+                    snapshot.currency = snapshot.currency or overview.get("Currency")
+                    snapshot.sector = snapshot.sector or overview.get("Sector")
+                    snapshot.industry = snapshot.industry or overview.get("Industry")
+                    snapshot.market_cap = snapshot.market_cap or _clean_number(overview.get("MarketCapitalization"))
+                    snapshot.pe_ratio = snapshot.pe_ratio or _clean_number(overview.get("PERatio"))
+                    snapshot.dividend_yield = snapshot.dividend_yield or _clean_number(overview.get("DividendYield"))
+                    snapshot.fundamentals.update({
+                        "trailing_pe": _clean_number(overview.get("PERatio")),
+                        "forward_pe": _clean_number(overview.get("ForwardPE")),
+                        "price_to_book": _clean_number(overview.get("PriceToBookRatio")),
+                        "profit_margins": _clean_number(overview.get("ProfitMargin")),
+                        "revenue_ttm": _clean_number(overview.get("RevenueTTM")),
+                        "gross_profit_ttm": _clean_number(overview.get("GrossProfitTTM")),
+                        "eps_ttm": _clean_number(overview.get("EPS")),
+                        "ebitda": _clean_number(overview.get("EBITDA")),
+                        "return_on_equity_ttm": _clean_number(overview.get("ReturnOnEquityTTM")),
+                        "quarterly_revenue_growth_yoy": _clean_number(overview.get("QuarterlyRevenueGrowthYOY")),
+                        "quarterly_earnings_growth_yoy": _clean_number(overview.get("QuarterlyEarningsGrowthYOY")),
+                        "beta": _clean_number(overview.get("Beta")),
+                    })
+                    snapshot.analyst_context.update({
+                        "analyst_target_price": _clean_number(overview.get("AnalystTargetPrice")),
+                        "analyst_rating_buy": _clean_number(overview.get("AnalystRatingBuy")),
+                        "analyst_rating_hold": _clean_number(overview.get("AnalystRatingHold")),
+                        "analyst_rating_sell": _clean_number(overview.get("AnalystRatingSell")),
+                    })
+                    snapshot.data_sources.append("alpha_vantage_overview")
+                    snapshot.evidence_items.append(EvidenceItem("Company overview", "Alpha Vantage", overview.get("Description"), importance="high"))
             if interval == "1d":
                 function = "TIME_SERIES_DAILY_ADJUSTED"
                 raw = _get_json("https://www.alphavantage.co/query", {"function": function, "symbol": snapshot.ticker, "outputsize": "compact", "apikey": key})
@@ -414,27 +418,28 @@ class MarketDataService:
                             "Volume": _clean_number(values.get("6. volume")),
                         })
                     frame = pd.DataFrame(rows).dropna(subset=["Close"]).sort_values("Date").set_index("Date")
-                    if not frame.empty:
+                    if not frame.empty and (snapshot.history_frame is None or snapshot.history_frame.empty):
                         cutoff = _period_start(period).replace(tzinfo=None)
                         snapshot.history_frame = frame[frame.index >= cutoff] if period != "max" else frame
                         snapshot.data_sources.append("alpha_vantage_daily_adjusted")
-            news = _get_json("https://www.alphavantage.co/query", {"function": "NEWS_SENTIMENT", "tickers": snapshot.ticker, "limit": 12, "apikey": key})
-            feed = news.get("feed", []) if isinstance(news, dict) else []
-            for item in feed[:8]:
-                title = item.get("title")
-                if title:
-                    snapshot.news_items.append(NormalizedNewsItem(
-                        title=title,
-                        publisher=item.get("source"),
-                        url=item.get("url"),
-                        published_at=item.get("time_published"),
-                        source="Alpha Vantage",
-                        summary=item.get("summary"),
-                        sentiment=item.get("overall_sentiment_label"),
-                        sentiment_score=_clean_number(item.get("overall_sentiment_score")),
-                    ))
-            if feed:
-                snapshot.data_sources.append("alpha_vantage_news_sentiment")
+            if include_news:
+                news = _get_json("https://www.alphavantage.co/query", {"function": "NEWS_SENTIMENT", "tickers": snapshot.ticker, "limit": 12, "apikey": key})
+                feed = news.get("feed", []) if isinstance(news, dict) else []
+                for item in feed[:8]:
+                    title = item.get("title")
+                    if title:
+                        snapshot.news_items.append(NormalizedNewsItem(
+                            title=title,
+                            publisher=item.get("source"),
+                            url=item.get("url"),
+                            published_at=item.get("time_published"),
+                            source="Alpha Vantage",
+                            summary=item.get("summary"),
+                            sentiment=item.get("overall_sentiment_label"),
+                            sentiment_score=_clean_number(item.get("overall_sentiment_score")),
+                        ))
+                if feed:
+                    snapshot.data_sources.append("alpha_vantage_news_sentiment")
             snapshot.provider_status.append(ProviderStatus("alpha_vantage", "ok"))
         except Exception as exc:
             snapshot.provider_status.append(ProviderStatus("alpha_vantage", "error", str(exc)[:160]))
@@ -475,7 +480,7 @@ class MarketDataService:
         except Exception as exc:
             snapshot.provider_status.append(ProviderStatus("sec", "error", str(exc)[:160]))
 
-    def _apply_yfinance(self, snapshot: NormalizedMarketSnapshot, period: str, interval: str) -> None:
+    def _apply_yfinance(self, snapshot: NormalizedMarketSnapshot, period: str, interval: str, *, include_news: bool) -> None:
         try:
             ticker = yf.Ticker(snapshot.ticker)
             info = ticker.info or {}
@@ -519,6 +524,32 @@ class MarketDataService:
                             snapshot.previous_close = _clean_number(close.iloc[-2])
                 if "Volume" in history and snapshot.volume is None:
                     snapshot.volume = int(_clean_number(history["Volume"].dropna().iloc[-1]) or 0)
+            if include_news:
+                for item in (ticker.news or [])[:10]:
+                    if not isinstance(item, dict):
+                        continue
+                    content = item.get("content") if isinstance(item.get("content"), dict) else {}
+                    title = item.get("title") or content.get("title")
+                    if not title:
+                        continue
+                    provider_data = content.get("provider") if isinstance(content.get("provider"), dict) else {}
+                    canonical_url = content.get("canonicalUrl") if isinstance(content.get("canonicalUrl"), dict) else {}
+                    click_url = content.get("clickThroughUrl") if isinstance(content.get("clickThroughUrl"), dict) else {}
+                    provider = item.get("publisher") or provider_data.get("displayName") or "Yahoo Finance"
+                    link = item.get("link") or canonical_url.get("url") or click_url.get("url")
+                    published = item.get("providerPublishTime") or content.get("pubDate")
+                    if isinstance(published, (int, float)):
+                        published = datetime.fromtimestamp(published, UTC).isoformat()
+                    snapshot.news_items.append(NormalizedNewsItem(
+                        title=title,
+                        publisher=provider,
+                        url=link,
+                        published_at=str(published) if published else None,
+                        source="Yahoo Finance",
+                        summary=item.get("summary") or content.get("summary"),
+                    ))
+                if snapshot.news_items:
+                    snapshot.data_sources.append("yfinance_news")
             snapshot.data_sources.append("yfinance_fallback")
             snapshot.provider_status.append(ProviderStatus("yfinance", "ok"))
         except Exception as exc:
@@ -531,7 +562,11 @@ class MarketDataService:
             for index, row in frame.iterrows():
                 if pd.isna(row.get("Close")):
                     continue
-                label = index.strftime("%H:%M") if hasattr(index, "strftime") and len(frame) <= 2 else index.strftime("%b %d") if hasattr(index, "strftime") else str(index)
+                if hasattr(index, "strftime"):
+                    is_intraday = any(getattr(index, part, 0) for part in ("hour", "minute", "second"))
+                    label = index.strftime("%H:%M") if is_intraday else index.strftime("%b %d")
+                else:
+                    label = str(index)
                 snapshot.history.append(NormalizedMarketPoint(
                     label=label,
                     price=round(float(row["Close"]), 2),
@@ -546,17 +581,19 @@ class MarketDataService:
         snapshot.sentiment_summary = _news_sentiment(_dedupe_news(snapshot.news_items))
         snapshot.news_items = _dedupe_news(snapshot.news_items)[:12]
         snapshot.data_sources = list(dict.fromkeys(snapshot.data_sources))
-        primary = [src for src in snapshot.data_sources if not src.startswith("yfinance")]
+        primary = [src for src in snapshot.data_sources if src.startswith("yfinance")]
+        enrichment = [src for src in snapshot.data_sources if not src.startswith("yfinance")]
         limitations = []
-        if not primary:
-            limitations.append("Only fallback yfinance data was available.")
+        if not enrichment:
+            limitations.append("Only Yahoo Finance/yfinance primary data was available.")
         if not settings.secret_value("finnhub_api_key"):
             limitations.append("Finnhub is not configured.")
         if not settings.secret_value("alpha_vantage_api_key"):
             limitations.append("Alpha Vantage is not configured.")
         snapshot.source_quality = {
             "primary_sources": primary,
-            "fallback_sources": [src for src in snapshot.data_sources if src.startswith("yfinance")],
+            "enrichment_sources": enrichment,
+            "fallback_sources": enrichment,
             "provider_count": len({status.provider for status in snapshot.provider_status if status.status == "ok"}),
             "limitations": limitations,
             "generated_at": datetime.now(UTC).isoformat(),

@@ -18,6 +18,13 @@ wheels/
 # OS files
 .DS_Store
 
+# Runtime databases and user-generated local data
+*.db
+*.db-shm
+*.db-wal
+backend/data/*
+!backend/data/.gitkeep
+
 # Agent skills
 .agent/
 

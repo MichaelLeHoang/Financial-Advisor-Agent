@@ -794,7 +794,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await request(`${BASE}${path}`, { headers: requestHeaders(false) });
+  const res = await request(`${BASE}${path}`, { headers: requestHeaders(false), cache: "no-store" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new ApiError(res.status, err.detail ?? err);
@@ -1049,8 +1049,14 @@ export const api = {
   /** Conversation sessions */
   chatSessions: () => get<ChatSession[]>("/api/v1/agent/sessions"),
 
+  createChatSession: (sessionId: string, title = "New chat") =>
+    post<ChatSession>("/api/v1/agent/sessions", { session_id: sessionId, title }),
+
   chatSessionMessages: (sessionId = "default") =>
     get<ChatSessionMessages>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`),
+
+  appendChatSessionMessage: (sessionId: string, role: "user" | "assistant", content: string) =>
+    post<{ status: string; session_id: string }>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`, { role, content }),
 
   renameChatSession: (sessionId: string, title: string) =>
     patch<ChatSession>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}`, { title }),

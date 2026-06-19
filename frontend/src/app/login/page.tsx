@@ -18,7 +18,10 @@ import { useAuth } from "@/components/auth/AuthProvider";
 function getSafeNextTarget() {
   if (typeof window === "undefined") return "/";
   const next = new URLSearchParams(window.location.search).get("next");
-  return next?.startsWith("/") && !next.startsWith("//") ? next : "/";
+  if (!next?.startsWith("/") || next.startsWith("//")) return "/";
+  const target = new URL(next, window.location.origin);
+  if (target.pathname === "/" && target.searchParams.has("session")) return "/";
+  return `${target.pathname}${target.search}${target.hash}`;
 }
 
 export default function LoginPage() {

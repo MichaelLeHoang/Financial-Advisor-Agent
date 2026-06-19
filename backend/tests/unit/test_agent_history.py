@@ -33,6 +33,31 @@ def test_chat_history_lists_loads_renames_and_scopes_by_user(tmp_path, monkeypat
     assert history.load_history("session-a", "user-2")[0]["content"] == "Other user's chat"
 
 
+def test_chat_history_auto_title_summarizes_long_first_prompt(tmp_path, monkeypatch):
+    monkeypatch.setattr(history, "DB_PATH", tmp_path / "conversations.db")
+
+    created = history.create_session("long-session", "user-1")
+    assert created["title"] == "New chat"
+    assert created["message_count"] == 0
+
+    history.append_message(
+        "long-session",
+        "user",
+        "Can you optimize my portfolio with AAPL, MSFT, and GOOGL and explain the tradeoffs?",
+        "user-1",
+    )
+    history.append_message(
+        "long-session",
+        "user",
+        "This later message should not rename the existing history item",
+        "user-1",
+    )
+
+    title = history.list_sessions("user-1")[0]["title"]
+    assert title == "optimize portfolio AAPL MSFT GOOGL"
+    assert 3 <= len(title.split()) <= 5
+
+
 def test_chat_history_detects_cross_user_session_ids(tmp_path, monkeypatch):
     monkeypatch.setattr(history, "DB_PATH", tmp_path / "conversations.db")
 

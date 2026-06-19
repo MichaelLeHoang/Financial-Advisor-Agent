@@ -42,13 +42,19 @@ function writeSessions(sessions: StoredSession[]) {
 
 function defaultTitle(messages: ChatMessage[]) {
   const firstUserMessage = messages.find((message) => message.role === "user")?.content.trim();
-  if (!firstUserMessage) return "New analysis";
-  return firstUserMessage.replace(/\s+/g, " ").slice(0, 64);
+  if (!firstUserMessage) return "New chat";
+  const clean = firstUserMessage.replace(/\s+/g, " ");
+  const stopWords = new Set(["a", "about", "and", "are", "can", "for", "from", "how", "i", "in", "is", "it", "me", "my", "of", "on", "please", "should", "the", "to", "what", "with", "you"]);
+  const words = clean.match(/[A-Za-z][A-Za-z0-9.$'-]*|\$?[A-Z]{1,5}(?:\.[A-Z]{1,3})?/g) ?? [];
+  const keywords = words
+    .map((word) => word.replace(/[.,?!:;"'()[\]{}]/g, ""))
+    .filter((word) => word && !stopWords.has(word.toLowerCase()))
+    .slice(0, 5);
+  return keywords.length >= 3 ? keywords.join(" ") : clean.split(/\s+/).slice(0, 5).join(" ");
 }
 
 export function listLocalChatSessions(): ChatSession[] {
   return readSessions()
-    .filter((session) => session.messages.some((message) => message.role === "user"))
     .map(({ messages: _messages, ...session }) => session)
     .sort((a, b) => Date.parse(b.last_active) - Date.parse(a.last_active));
 }
@@ -66,7 +72,9 @@ export function saveLocalChatMessages(sessionId: string, messages: ChatMessage[]
   const now = new Date().toISOString();
   const nextSession: StoredSession = {
     session_id: sessionId,
-    title: existingIndex >= 0 ? sessions[existingIndex].title : defaultTitle(meaningfulMessages),
+    title: existingIndex >= 0 && !["New chat", "New analysis"].includes(sessions[existingIndex].title)
+      ? sessions[existingIndex].title
+      : defaultTitle(meaningfulMessages),
     message_count: meaningfulMessages.length,
     last_active: now,
     messages: meaningfulMessages,
@@ -78,6 +86,20 @@ export function saveLocalChatMessages(sessionId: string, messages: ChatMessage[]
     sessions.push(nextSession);
   }
 
+  writeSessions(sessions);
+}
+
+export function createLocalChatSession(sessionId: string, title = "New chat") {
+  const sessions = readSessions();
+  if (sessions.some((session) => session.session_id === sessionId)) return;
+  const now = new Date().toISOString();
+  sessions.unshift({
+    session_id: sessionId,
+    title,
+    message_count: 0,
+    last_active: now,
+    messages: [],
+  });
   writeSessions(sessions);
 }
 
