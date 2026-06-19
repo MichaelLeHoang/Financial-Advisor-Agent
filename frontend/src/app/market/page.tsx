@@ -101,7 +101,7 @@ type DetailChartStyle = "area" | "line" | "candle" | "bar";
 type MarketChartRange = ChartRange | "MAX";
 
 interface DetailChartPoint extends MarketPoint {
-    chartIndex: number;
+    chartIndex?: number;
     primaryPerformance: number;
     open?: number;
     high?: number;
@@ -1526,7 +1526,6 @@ function MarketChartDialog({
                                                                 stroke="#0b0f17"
                                                                 strokeWidth={2}
                                                                 ifOverflow="visible"
-                                                                isFront
                                                             />
                                                         )}
                                                         {compareMode && hoverPoint && compareQuotes.map((compareQuote, index) => {
@@ -1543,7 +1542,6 @@ function MarketChartDialog({
                                                                     stroke="#0b0f17"
                                                                     strokeWidth={2}
                                                                     ifOverflow="visible"
-                                                                    isFront
                                                                 />
                                                             );
                                                         })}
