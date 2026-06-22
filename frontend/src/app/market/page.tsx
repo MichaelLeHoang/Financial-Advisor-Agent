@@ -97,6 +97,18 @@ interface StockInfo extends MarketSymbol {
     quarterlyFinancials?: QuarterlyFinancial[];
 }
 
+function uniqueMarketSymbols(symbols: MarketSymbol[]): MarketSymbol[] {
+    const seen = new Set<string>();
+    const unique: MarketSymbol[] = [];
+    for (const symbol of symbols) {
+        const key = normalizeTicker(symbol.ticker);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        unique.push(symbol);
+    }
+    return unique;
+}
+
 type DetailChartStyle = "area" | "line" | "candle" | "bar";
 type MarketChartRange = ChartRange | "MAX";
 
@@ -337,7 +349,10 @@ export default function MarketPage() {
     const [researchError, setResearchError] = useState<string | null>(null);
 
     const localMatches = useMemo(() => searchMarketSymbols(query), [query]);
-    const matches = symbolMatches.length > 0 ? symbolMatches : localMatches;
+    const matches = useMemo(
+        () => uniqueMarketSymbols(symbolMatches.length > 0 ? symbolMatches : localMatches),
+        [localMatches, symbolMatches]
+    );
     const isGuest = Boolean(user?.is_guest);
 
     const requireSignInForMarketSave = () => {
@@ -383,14 +398,14 @@ export default function MarketPage() {
             api.marketSearch(normalized)
                 .then((results) => {
                     if (cancelled) return;
-                    setSymbolMatches(results.map((result) => ({
+                    setSymbolMatches(uniqueMarketSymbols(results.map((result) => ({
                         ticker: result.ticker,
                         name: result.name,
                         exchange: result.exchange || "Market",
                         sector: result.sector || result.quote_type || "Instrument",
                         price: 0,
                         change: 0,
-                    })));
+                    }))));
                 })
                 .catch(() => {
                     if (cancelled) return;
@@ -767,7 +782,7 @@ function MarketSearch({
                         <CardContent className="flex max-h-80 flex-col gap-1 overflow-y-auto px-2 py-0">
                             {matches.map((match, index) => (
                                 <motion.div
-                                    key={match.ticker}
+                                    key={`${match.ticker}-${match.exchange}-${index}`}
                                     initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
                                     animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
                                     transition={{ duration: 0.24, delay: Math.min(index * 0.035, 0.18), ease: [0.16, 1, 0.3, 1] }}
@@ -1277,7 +1292,7 @@ function MarketChartDialog({
     const color = compareMode ? COMPARE_COLORS[0] : up ? "#34d399" : "#f87171";
     const filteredCompareMatches = useMemo(() => {
         const excluded = new Set([stock?.ticker, ...activeComparisonSymbols]);
-        return searchMarketSymbols(compareQuery, 8).filter((match) => !excluded.has(match.ticker));
+        return uniqueMarketSymbols(searchMarketSymbols(compareQuery, 8)).filter((match) => !excluded.has(match.ticker));
     }, [activeComparisonSymbols, compareQuery, stock?.ticker]);
 
     const addCompareSymbol = (symbol: string) => {
@@ -1381,9 +1396,9 @@ function MarketChartDialog({
                                 {compareQuery && (
                                     <Card className="absolute left-0 right-0 top-10 z-30 rounded-2xl border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
                                         <CardContent className="flex max-h-56 flex-col gap-1 overflow-y-auto px-2 py-0">
-                                            {(filteredCompareMatches.length > 0 ? filteredCompareMatches : [createMarketSymbol(compareQuery)]).map((match) => (
+                                            {(filteredCompareMatches.length > 0 ? filteredCompareMatches : [createMarketSymbol(compareQuery)]).map((match, index) => (
                                                 <button
-                                                    key={match.ticker}
+                                                    key={`${match.ticker}-${match.exchange}-${index}`}
                                                     type="button"
                                                     onClick={() => addCompareSymbol(match.ticker)}
                                                     className="flex items-center justify-between rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/[0.08]"

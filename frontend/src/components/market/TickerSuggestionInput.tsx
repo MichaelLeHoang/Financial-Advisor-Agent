@@ -23,6 +23,18 @@ interface DropdownRect {
   width: number;
 }
 
+function uniqueSymbolMatches(matches: SymbolMatch[]): SymbolMatch[] {
+    const seen = new Set<string>();
+    const unique: SymbolMatch[] = [];
+    for (const match of matches) {
+        const key = normalizeTicker(match.ticker);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        unique.push(match);
+    }
+    return unique;
+}
+
 export default function TickerSuggestionInput({
     value,
     onValueChange,
@@ -60,9 +72,11 @@ export default function TickerSuggestionInput({
 
     const localMatches = useMemo<SymbolMatch[]>(
         () =>
-            searchMarketSymbols(value)
-                .filter((m) => !existing.has(m.ticker))
-                .map((m) => ({ ticker: m.ticker, name: m.name, exchange: m.exchange })),
+            uniqueSymbolMatches(
+                searchMarketSymbols(value)
+                    .filter((m) => !existing.has(m.ticker))
+                    .map((m) => ({ ticker: m.ticker, name: m.name, exchange: m.exchange }))
+            ),
         [existing, value]
     );
 
@@ -82,13 +96,13 @@ export default function TickerSuggestionInput({
                 .then((results) => {
                     if (cancelled) return;
                     setApiMatches(
-                        results
+                        uniqueSymbolMatches(results
                             .filter((r) => !existing.has(normalizeTicker(r.ticker)))
                             .map((r) => ({
                                 ticker: r.ticker,
                                 name: r.name,
                                 exchange: r.exchange ?? "Market",
-                            }))
+                            })))
                     );
                 })
                 .catch(() => { if (!cancelled) setApiMatches([]); })
@@ -174,7 +188,7 @@ export default function TickerSuggestionInput({
                     <div className="flex max-h-72 flex-col gap-1 overflow-y-auto px-2 py-0">
                         {matches.map((match, index) => (
                             <motion.div
-                                key={match.ticker}
+                                key={`${match.ticker}-${match.exchange}-${index}`}
                                 initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
                                 animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
                                 transition={{ duration: 0.24, delay: Math.min(index * 0.035, 0.18), ease: [0.16, 1, 0.3, 1] }}
