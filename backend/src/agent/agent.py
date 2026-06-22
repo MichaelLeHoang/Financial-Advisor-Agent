@@ -12,7 +12,11 @@ The API defaults to single-agent for speed; consensus mode is opt-in via
 `mode="consensus"` or auto-detected for complex investment queries.
 """
 
+import asyncio
+from typing import Any, Callable
+
 from langgraph.prebuilt import create_react_agent
+
 from src.agent.tools import ALL_TOOLS
 from src.llm.gateway import LLMGateway, RoutedChatModel, llm_gateway
 from src.llm.routing_policy import LLMMode
@@ -42,6 +46,8 @@ RULES:
 11. For prediction requests, call predict_stock_price with model="ensemble" unless the user explicitly asks for Random Forest or LSTM only
 12. When reporting prediction output, include RF, LSTM, weighted ensemble, confidence, validation metrics when returned, and the tool's caveats. Do not invent metrics.
 """
+
+ProgressCallback = Callable[[dict[str, Any]], None]
 
 
 # Keywords that suggest a complex investment query (triggers consensus mode).
@@ -140,7 +146,13 @@ class FinancialAdvisorAgent:
             )
         return self._orchestrator
 
-    def chat(self, message: str, remember: bool = True, mode: str = "single") -> str:
+    def chat(
+        self,
+        message: str,
+        remember: bool = True,
+        mode: str = "single",
+        progress_callback: ProgressCallback | None = None,
+    ) -> str:
         """
         Send a message and get the agent's response.
 
@@ -156,17 +168,91 @@ class FinancialAdvisorAgent:
         )
 
         if use_consensus:
-            return self._chat_consensus(message, remember)
-        return self._chat_single(message, remember)
+            return self._chat_consensus(
+                message,
+                remember,
+                progress_callback=progress_callback,
+            )
+        return self._chat_single(message, remember, progress_callback=progress_callback)
 
-    def _chat_single(self, message: str, remember: bool) -> str:
+    def _chat_single(
+        self,
+        message: str,
+        remember: bool,
+        progress_callback: ProgressCallback | None = None,
+    ) -> str:
         """Single-agent ReAct path (fast, original behavior)."""
         print(f"\n Agent processing: '{message[:60]}...'")
+        if progress_callback:
+            progress_callback({
+                "active_tool": "single_scope",
+                "completed_tools": [],
+                "active_label": "Identify Market Scope",
+                "message": "Identifying market scope...",
+            })
 
         # Build message list: history + new user message
         messages = self._history + [{"role": "user", "content": message}]
 
-        result = self._agent.invoke({"messages": messages})
+        completed_tools: list[str] = []
+        result = None
+
+        if progress_callback:
+            async def collect_events() -> None:
+                nonlocal result
+                async for event in self._agent.astream_events({"messages": messages}, version="v2"):
+                    kind = event.get("event")
+                    name = event.get("name")
+
+                    if kind == "on_tool_start" and name:
+                        if "single_scope" not in completed_tools:
+                            completed_tools.append("single_scope")
+                        progress_callback({
+                            "active_tool": name,
+                            "completed_tools": list(completed_tools),
+                            "active_label": str(name).replace("_", " ").title(),
+                            "message": f"{str(name).replace('_', ' ').title()} is running...",
+                        })
+
+                    elif kind == "on_tool_end" and name:
+                        if name not in completed_tools:
+                            completed_tools.append(name)
+                        progress_callback({
+                            "active_tool": None,
+                            "completed_tools": list(completed_tools),
+                            "active_label": str(name).replace("_", " ").title(),
+                            "message": f"{str(name).replace('_', ' ').title()} completed.",
+                        })
+
+                    elif kind == "on_chat_model_start" and any(tool != "single_scope" for tool in completed_tools):
+                        progress_callback({
+                            "active_tool": "single_synthesis",
+                            "completed_tools": list(completed_tools),
+                            "active_label": "Synthesize Findings",
+                            "message": "Synthesizing findings...",
+                        })
+
+                    elif kind == "on_chain_end":
+                        output = event.get("data", {}).get("output")
+                        if isinstance(output, dict) and "messages" in output:
+                            result = output
+
+            asyncio.run(collect_events())
+
+            for tool in ("single_synthesis", "single_final"):
+                if tool not in completed_tools:
+                    completed_tools.append(tool)
+            progress_callback({
+                "active_tool": None,
+                "completed_tools": list(completed_tools),
+                "active_label": "Agent Execution",
+                "message": "Agent response completed.",
+            })
+        else:
+            result = self._agent.invoke({"messages": messages})
+
+        if result is None:
+            result = self._agent.invoke({"messages": messages})
 
         # Extract final assistant reply
         final_message = result["messages"][-1]
@@ -194,10 +280,15 @@ class FinancialAdvisorAgent:
 
         return response_text
 
-    def _chat_consensus(self, message: str, remember: bool) -> str:
+    def _chat_consensus(
+        self,
+        message: str,
+        remember: bool,
+        progress_callback: ProgressCallback | None = None,
+    ) -> str:
         """QuanAd 2.0 multi-agent consensus path."""
         orchestrator = self._get_orchestrator()
-        response_text = orchestrator.chat(message, remember=remember)
+        response_text = orchestrator.chat(message, remember=remember, progress_callback=progress_callback)
 
         if remember:
             self._history.append({"role": "user", "content": message})

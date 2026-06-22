@@ -29,30 +29,30 @@ function getSingleAgentTasks(): Task[] {
   return [
     {
       id: "1",
-      title: "Fetching market data",
+      title: "Gather Context",
       status: "pending",
       subtasks: [
-        { id: "1.1", title: "Querying stock prices & fundamentals", status: "pending", tools: ["get_stock_info"] },
-        { id: "1.2", title: "Scanning market indices", status: "pending", tools: ["research_market"] },
-        { id: "1.3", title: "Searching recent news", status: "pending", tools: ["search_financial_news"] },
+        { id: "1.1", title: "Identify market scope", status: "pending", tools: ["single_scope"] },
+        { id: "1.2", title: "Fetch prices and fundamentals", status: "pending", tools: ["get_stock_info", "research_market"] },
+        { id: "1.3", title: "Collect recent news", status: "pending", tools: ["search_financial_news"] },
       ],
     },
     {
       id: "2",
-      title: "Running analysis tools",
+      title: "Run Analysis",
       status: "pending",
       subtasks: [
-        { id: "2.1", title: "Sentiment analysis via FinBERT", status: "pending", tools: ["analyze_sentiment"] },
-        { id: "2.2", title: "ML direction prediction", status: "pending", tools: ["predict_stock_price"] },
+        { id: "2.1", title: "Evaluate sentiment and catalysts", status: "pending", tools: ["analyze_sentiment"] },
+        { id: "2.2", title: "Check forecasts or portfolio impact", status: "pending", tools: ["predict_stock_price", "optimize_portfolio_tool"] },
       ],
     },
     {
       id: "3",
-      title: "Composing response",
+      title: "Compose Answer",
       status: "pending",
       subtasks: [
-        { id: "3.1", title: "Synthesizing findings", status: "pending", tools: [] },
-        { id: "3.2", title: "Formatting final answer", status: "pending", tools: [] },
+        { id: "3.1", title: "Synthesize findings", status: "pending", tools: ["single_synthesis"] },
+        { id: "3.2", title: "Format final response", status: "pending", tools: ["single_final"] },
       ],
     },
   ];
@@ -65,8 +65,7 @@ function getConsensusTasks(): Task[] {
       title: "Quant Researcher",
       status: "pending",
       subtasks: [
-        { id: "1.1", title: "Gathering fundamental metrics", status: "pending", tools: ["get_stock_info"] },
-        { id: "1.2", title: "Searching financial news", status: "pending", tools: ["search_financial_news"] },
+        { id: "1.1", title: "Gather price, fundamentals, sentiment, and catalysts", status: "pending", tools: ["quant_researcher"] },
       ],
     },
     {
@@ -74,8 +73,7 @@ function getConsensusTasks(): Task[] {
       title: "Quant Analyst",
       status: "pending",
       subtasks: [
-        { id: "2.1", title: "Running technical indicators", status: "pending", tools: ["predict_stock_price"] },
-        { id: "2.2", title: "Identifying price patterns", status: "pending", tools: ["predict_stock_price"] },
+        { id: "2.1", title: "Rank momentum, trend, and strategy signals", status: "pending", tools: ["quant_analyst"] },
       ],
     },
     {
@@ -83,8 +81,7 @@ function getConsensusTasks(): Task[] {
       title: "Financial Data Scientist",
       status: "pending",
       subtasks: [
-        { id: "3.1", title: "Training ML prediction model", status: "pending", tools: ["predict_stock_price"] },
-        { id: "3.2", title: "Running sentiment analysis", status: "pending", tools: ["analyze_sentiment"] },
+        { id: "3.1", title: "Run prediction and statistical risk checks", status: "pending", tools: ["data_scientist"] },
       ],
     },
     {
@@ -92,17 +89,23 @@ function getConsensusTasks(): Task[] {
       title: "Risk Analyst",
       status: "pending",
       subtasks: [
-        { id: "4.1", title: "Evaluating downside scenarios", status: "pending", tools: ["optimize_portfolio_tool"] },
-        { id: "4.2", title: "Checking volatility metrics", status: "pending", tools: ["get_stock_info"] },
+        { id: "4.1", title: "Assess downside, volatility, concentration, and correlation", status: "pending", tools: ["risk_analyst"] },
       ],
     },
     {
       id: "5",
-      title: "Portfolio Strategist",
+      title: "Portfolio Analytics",
       status: "pending",
       subtasks: [
-        { id: "5.1", title: "Optimizing allocation weights", status: "pending", tools: ["optimize_portfolio_tool"] },
-        { id: "5.2", title: "Building consensus verdict", status: "pending", tools: [] },
+        { id: "5.1", title: "Optimize allocation and portfolio impact", status: "pending", tools: ["portfolio_analytics"] },
+      ],
+    },
+    {
+      id: "6",
+      title: "Consensus Synthesis",
+      status: "pending",
+      subtasks: [
+        { id: "6.1", title: "Build weighted consensus verdict", status: "pending", tools: ["consensus_synthesis"] },
       ],
     },
   ];
@@ -115,8 +118,7 @@ function getResearchDeskTasks(): Task[] {
       title: "Snapshot",
       status: "pending",
       subtasks: [
-        { id: "1.1", title: "Resolving ticker identity", status: "pending", tools: ["resolve_ticker"] },
-        { id: "1.2", title: "Collecting price, fundamentals, and news", status: "pending", tools: ["equity_snapshot"] },
+        { id: "1.1", title: "Collecting price, fundamentals, and news", status: "pending", tools: ["equity_snapshot"] },
       ],
     },
     {
@@ -124,20 +126,20 @@ function getResearchDeskTasks(): Task[] {
       title: "Analyst Team",
       status: "pending",
       subtasks: [
-        { id: "2.1", title: "Market Analyst", status: "pending", tools: ["market", "market_report", "market_report.md"] },
-        { id: "2.2", title: "Social Media Analyst", status: "pending", tools: ["social", "sentiment_report", "sentiment_report.md"] },
-        { id: "2.3", title: "News Analyst", status: "pending", tools: ["news", "news_report", "news_report.md"] },
-        { id: "2.4", title: "Fundamentals Analyst", status: "pending", tools: ["fundamentals", "fundamentals_report", "fundamentals_report.md"] },
+        { id: "2.1", title: "Market Analyst", status: "pending", tools: ["market"] },
+        { id: "2.2", title: "Social Media Analyst", status: "pending", tools: ["social"] },
+        { id: "2.3", title: "News Analyst", status: "pending", tools: ["news"] },
+        { id: "2.4", title: "Fundamentals Analyst", status: "pending", tools: ["fundamentals"] },
       ],
     },
     {
       id: "3",
-      title: "Research Debate",
+      title: "Thesis Review",
       status: "pending",
       subtasks: [
-        { id: "3.1", title: "Bull Researcher", status: "pending", tools: ["bull", "bull_case", "bull_case.md"] },
-        { id: "3.2", title: "Bear Researcher", status: "pending", tools: ["bear", "bear_case", "bear_case.md"] },
-        { id: "3.3", title: "Research Evaluator", status: "pending", tools: ["evaluator", "research_evaluation", "research_evaluation.md"] },
+        { id: "3.1", title: "Bull Researcher", status: "pending", tools: ["bull"] },
+        { id: "3.2", title: "Bear Researcher", status: "pending", tools: ["bear"] },
+        { id: "3.3", title: "Research Evaluator", status: "pending", tools: ["evaluator"] },
       ],
     },
     {
@@ -145,11 +147,11 @@ function getResearchDeskTasks(): Task[] {
       title: "Trade and Risk Review",
       status: "pending",
       subtasks: [
-        { id: "4.1", title: "Trader", status: "pending", tools: ["trader", "trader_plan", "trader_plan.md"] },
-        { id: "4.2", title: "Risky Analyst", status: "pending", tools: ["risky", "risk_opportunity", "risk_opportunity.md"] },
-        { id: "4.3", title: "Neutral Analyst", status: "pending", tools: ["neutral", "risk_review", "risk_review.md"] },
-        { id: "4.4", title: "Safe Analyst", status: "pending", tools: ["safe", "safe_risk_controls", "safe_risk_controls.md"] },
-        { id: "4.5", title: "Portfolio Manager", status: "pending", tools: ["pm", "final_trade_decision", "final_trade_decision.md"] },
+        { id: "4.1", title: "Trader", status: "pending", tools: ["trader"] },
+        { id: "4.2", title: "Risky Analyst", status: "pending", tools: ["risky"] },
+        { id: "4.3", title: "Neutral Analyst", status: "pending", tools: ["neutral"] },
+        { id: "4.4", title: "Safe Analyst", status: "pending", tools: ["safe"] },
+        { id: "4.5", title: "Portfolio Manager", status: "pending", tools: ["pm"] },
       ],
     },
   ];
@@ -163,11 +165,23 @@ function tasksForMode(mode: PlanMode) {
 
 // ─── Live progress engine ───────────────────────────────────────────
 
+function syntheticStepFor(mode: PlanMode, totalSubtasks: number, runStartedAt: number | null | undefined) {
+  if (!runStartedAt) return 0;
+  const stepMs = mode === "consensus" ? 1500 : 900;
+  return Math.min(
+    Math.floor((Date.now() - runStartedAt) / stepMs),
+    Math.max(totalSubtasks - 1, 0)
+  );
+}
+
 function useLiveProgress(
   mode: PlanMode,
   isActive: boolean,
   activeTool: string | null,
   completedTools: string[],
+  runState: PlanRunState,
+  runStartedAt: number | null | undefined,
+  useSyntheticFallback: boolean,
 ): Task[] {
   const [tasks, setTasks] = useState<Task[]>(() => tasksForMode(mode));
   const [syntheticStep, setSyntheticStep] = useState(0);
@@ -176,7 +190,8 @@ function useLiveProgress(
     () => tasksForMode(mode).reduce((sum, task) => sum + task.subtasks.length, 0),
     [mode]
   );
-  const useSyntheticProgress = isActive && !activeTool;
+  const hasCompletedTools = completedTools.length > 0;
+  const useSyntheticProgress = useSyntheticFallback && isActive && runState === "running" && !activeTool && mode !== "research" && !hasCompletedTools;
 
   // Reset only when mode actually changes
   useEffect(() => {
@@ -189,16 +204,20 @@ function useLiveProgress(
 
   useEffect(() => {
     if (!isActive) return;
-    setSyntheticStep(0);
-  }, [isActive, mode]);
+    setSyntheticStep(syntheticStepFor(mode, totalSubtasks, runStartedAt));
+  }, [isActive, mode, runStartedAt, totalSubtasks]);
 
   useEffect(() => {
     if (!useSyntheticProgress) return;
+    const updateSyntheticStep = () => {
+      setSyntheticStep(syntheticStepFor(mode, totalSubtasks, runStartedAt));
+    };
+    updateSyntheticStep();
     const interval = setInterval(() => {
-      setSyntheticStep((current) => Math.min(current + 1, Math.max(totalSubtasks - 1, 0)));
-    }, mode === "consensus" || mode === "research" ? 900 : 700);
+      updateSyntheticStep();
+    }, 350);
     return () => clearInterval(interval);
-  }, [mode, totalSubtasks, useSyntheticProgress]);
+  }, [mode, runStartedAt, totalSubtasks, useSyntheticProgress]);
 
   useEffect(() => {
     let subtaskIndex = 0;
@@ -206,24 +225,33 @@ function useLiveProgress(
       prev.map((task) => {
         const subtasks = task.subtasks.map((sub) => {
           const currentIndex = subtaskIndex++;
+          const isCompleted = sub.tools && sub.tools.length > 0 && sub.tools.some((t) => completedTools.includes(t));
+          const isActiveTool = activeTool && sub.tools && sub.tools.length > 0 && sub.tools.includes(activeTool);
+
+          if (runState === "queued") {
+            if (isCompleted) return { ...sub, status: "completed" as const };
+            if (isActiveTool) return { ...sub, status: "in-progress" as const };
+            return { ...sub, status: "pending" as const };
+          }
           if (useSyntheticProgress) {
             if (currentIndex < syntheticStep) return { ...sub, status: "completed" as const };
             if (currentIndex === syntheticStep) return { ...sub, status: "in-progress" as const };
             return { ...sub, status: "pending" as const };
           }
+
           // When agent finishes, mark everything completed
           if (!isActive && completedTools.length > 0) {
             return { ...sub, status: "completed" as const };
           }
-          // Tool currently running
-          if (activeTool && sub.tools && sub.tools.length > 0 && sub.tools.includes(activeTool)) {
-            return { ...sub, status: "in-progress" as const };
-          }
           // Tool already finished
-          if (sub.tools && sub.tools.length > 0 && sub.tools.some((t) => completedTools.includes(t))) {
+          if (isCompleted) {
             return { ...sub, status: "completed" as const };
           }
-          return sub;
+          // Tool currently running
+          if (isActiveTool) {
+            return { ...sub, status: "in-progress" as const };
+          }
+          return { ...sub, status: "pending" as const };
         });
 
         const allCompleted = subtasks.length > 0 && subtasks.every((s) => s.status === "completed");
@@ -236,7 +264,7 @@ function useLiveProgress(
         return { ...task, status: taskStatus, subtasks };
       })
     );
-  }, [isActive, activeTool, completedTools, syntheticStep, useSyntheticProgress]);
+  }, [isActive, activeTool, completedTools, runState, syntheticStep, useSyntheticProgress]);
 
   return tasks;
 }
@@ -269,16 +297,20 @@ function StatusIcon({ status, size = "sm" }: { status: string; size?: "sm" | "md
 // ─── Main Plan component ────────────────────────────────────────────
 
 type PlanMode = "single" | "consensus" | "research";
+type PlanRunState = "queued" | "running";
 
 interface PlanProps {
   mode?: PlanMode;
   isActive?: boolean;
   activeTool?: string | null;
   completedTools?: string[];
+  runState?: PlanRunState;
+  runStartedAt?: number | null;
+  useSyntheticFallback?: boolean;
 }
 
-export default function Plan({ mode = "single", isActive = true, activeTool = null, completedTools = [] }: PlanProps) {
-  const tasks = useLiveProgress(mode, isActive, activeTool, completedTools);
+export default function Plan({ mode = "single", isActive = true, activeTool = null, completedTools = [], runState = "running", runStartedAt = null, useSyntheticFallback = true }: PlanProps) {
+  const tasks = useLiveProgress(mode, isActive, activeTool, completedTools, runState, runStartedAt, useSyntheticFallback);
   const [expandedTasks, setExpandedTasks] = useState<string[]>(["1"]);
   const lastActiveTaskRef = useRef<string | null>(null);
 
@@ -289,7 +321,8 @@ export default function Plan({ mode = "single", isActive = true, activeTool = nu
 
   useEffect(() => {
     if (isActive) {
-      if (!startTimeRef.current) startTimeRef.current = Date.now();
+      if (runStartedAt) startTimeRef.current = runStartedAt;
+      else if (!startTimeRef.current) startTimeRef.current = Date.now();
       timerRef.current = setInterval(() => {
         setElapsed((Date.now() - (startTimeRef.current ?? Date.now())) / 1000);
       }, 100);
@@ -299,7 +332,7 @@ export default function Plan({ mode = "single", isActive = true, activeTool = nu
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isActive]);
+  }, [isActive, runStartedAt]);
 
   // Auto-expand the currently in-progress task
   const activeTask = tasks.find((t) => t.status === "in-progress");
@@ -346,6 +379,9 @@ export default function Plan({ mode = "single", isActive = true, activeTool = nu
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {isActive && runState === "queued" && (
+            <span className="text-[10px] font-medium uppercase tracking-wide text-white/30">Queued</span>
+          )}
           <span className="text-[10px] font-mono font-medium text-white/25">
             {elapsed.toFixed(1)}s
           </span>
@@ -426,18 +462,6 @@ export default function Plan({ mode = "single", isActive = true, activeTool = nu
                               >
                                 {sub.title}
                               </span>
-                              {sub.tools && sub.tools.length > 0 && sub.status === "in-progress" && (
-                                <div className="flex gap-1">
-                                  {sub.tools.map((tool) => (
-                                    <span
-                                      key={tool}
-                                      className="rounded bg-indigo-500/15 px-1 py-px text-[9px] font-medium text-indigo-300/70"
-                                    >
-                                      {tool}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
                             </motion.li>
                           ))}
                         </ul>

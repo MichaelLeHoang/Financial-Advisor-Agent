@@ -59,6 +59,35 @@ class LLMJobQueue:
         self._write_job(job_id, record)
         return record
 
+    def update_progress(
+        self,
+        job_id: str,
+        *,
+        mode: JobKind,
+        active_tool: str | None = None,
+        completed_tools: list[str] | None = None,
+        active_label: str | None = None,
+        message: str | None = None,
+    ) -> dict[str, Any] | None:
+        record = self.get(job_id)
+        if record is None:
+            return None
+        previous = record.get("progress") or {}
+        progress = {
+            "mode": mode,
+            "active_tool": active_tool,
+            "completed_tools": completed_tools or [],
+            "active_label": active_label,
+            "message": message,
+            "sequence": int(previous.get("sequence") or 0) + 1,
+            "updated_at": time.time(),
+        }
+        record["progress"] = progress
+        record["progress_events"] = [*(record.get("progress_events") or []), progress][-80:]
+        record["updated_at"] = time.time()
+        self._write_job(job_id, record)
+        return record
+
     def queue_position(self, job_id: str, kind: JobKind) -> int | None:
         items = self._call(self.client.lrange, self._queue_key(kind), 0, -1)
         try:

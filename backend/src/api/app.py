@@ -145,10 +145,23 @@ class AgentJobCreateResponse(BaseModel):
     status: str
     queue_position: int | None = None
 
+
+class AgentJobProgress(BaseModel):
+    mode: str
+    active_tool: str | None = None
+    completed_tools: list[str] = Field(default_factory=list)
+    active_label: str | None = None
+    message: str | None = None
+    sequence: int = 0
+    updated_at: float | None = None
+
+
 class AgentJobStatusResponse(BaseModel):
     job_id: str
     status: str
     queue_position: int | None = None
+    progress: AgentJobProgress | None = None
+    progress_events: list[AgentJobProgress] = Field(default_factory=list)
     result: dict | None = None
     error: dict | None = None
     created_at: float | None = None
@@ -909,6 +922,8 @@ def _public_agent_job(record: dict, queue_position: int | None = None) -> dict:
         "job_id": record["job_id"],
         "status": record["status"],
         "queue_position": queue_position,
+        "progress": record.get("progress"),
+        "progress_events": record.get("progress_events") or [],
         "result": record.get("result"),
         "error": record.get("error"),
         "created_at": record.get("created_at"),

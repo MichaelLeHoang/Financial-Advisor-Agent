@@ -17,7 +17,19 @@ export interface ChatJobCreateResponse {
   queue_position?: number | null;
 }
 
+export interface ChatJobProgress {
+  mode: "single" | "consensus";
+  active_tool?: string | null;
+  completed_tools: string[];
+  active_label?: string | null;
+  message?: string | null;
+  sequence: number;
+  updated_at?: number | null;
+}
+
 export interface ChatJobStatusResponse extends ChatJobCreateResponse {
+  progress?: ChatJobProgress | null;
+  progress_events?: ChatJobProgress[];
   result?: ChatResponse | null;
   error?: { type?: string; message?: string } | null;
   created_at?: number | null;

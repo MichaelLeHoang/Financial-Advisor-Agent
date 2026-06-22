@@ -12,6 +12,7 @@ Top-level agent that:
 from __future__ import annotations
 
 import time
+from typing import Any, Callable
 
 from src.agent.consensus import AgentOpinion, ConsensusEngine, ConsensusResult, Verdict
 from src.agent.specialists import (
@@ -21,6 +22,8 @@ from src.agent.specialists import (
 from src.llm.gateway import LLMGateway, llm_gateway
 from src.llm.routing_policy import LLMMode
 from src.saas.models import Plan
+
+ProgressCallback = Callable[[dict[str, Any]], None]
 
 
 class QuanAdOrchestrator:
@@ -60,7 +63,7 @@ class QuanAdOrchestrator:
             for cls in ALL_SPECIALISTS
         ]
 
-    def analyze(self, query: str) -> ConsensusResult:
+    def analyze(self, query: str, progress_callback: ProgressCallback | None = None) -> ConsensusResult:
         """
         Run all specialists on the query and return a consensus result.
 
@@ -69,6 +72,7 @@ class QuanAdOrchestrator:
         """
         specialists = self._create_specialists()
         opinions: list[AgentOpinion] = []
+        completed_tools: list[str] = []
 
         print(f"\n{'='*60}")
         print("  QuanAd 2.0 — Multi-Agent Consensus Analysis")
@@ -79,11 +83,26 @@ class QuanAdOrchestrator:
         # Run specialists sequentially with a delay between each to stay
         # within Gemini free-tier rate limits (~15 RPM).
         for i, specialist in enumerate(specialists):
+            if progress_callback:
+                progress_callback({
+                    "active_tool": specialist.name,
+                    "completed_tools": list(completed_tools),
+                    "active_label": specialist.display_name,
+                    "message": f"{specialist.display_name} is working...",
+                })
             if i > 0:
                 time.sleep(5)  # 5s delay between specialists to avoid rate limit
             try:
                 opinion = self._run_specialist(specialist, query)
                 opinions.append(opinion)
+                completed_tools.append(specialist.name)
+                if progress_callback:
+                    progress_callback({
+                        "active_tool": None,
+                        "completed_tools": list(completed_tools),
+                        "active_label": specialist.display_name,
+                        "message": f"{specialist.display_name} completed analysis.",
+                    })
                 print(f"  ✓ {specialist.display_name}: {opinion.verdict.value} (confidence: {opinion.confidence:.0%})")
             except Exception as exc:
                 print(f"  ✗ {specialist.display_name}: failed — {exc}")
@@ -96,6 +115,14 @@ class QuanAdOrchestrator:
                         risk_flags=[f"{specialist.display_name} analysis failed"],
                     )
                 )
+                completed_tools.append(specialist.name)
+                if progress_callback:
+                    progress_callback({
+                        "active_tool": None,
+                        "completed_tools": list(completed_tools),
+                        "active_label": specialist.display_name,
+                        "message": f"{specialist.display_name} completed with fallback analysis.",
+                    })
 
         result = self.consensus_engine.aggregate(opinions)
         print(f"\n{'─'*60}")
@@ -109,7 +136,7 @@ class QuanAdOrchestrator:
         """Execute a single specialist analysis (runs in thread)."""
         return specialist.analyze(query)
 
-    def chat(self, message: str, remember: bool = True) -> str:
+    def chat(self, message: str, remember: bool = True, progress_callback: ProgressCallback | None = None) -> str:
         """
         Full QuanAd 2.0 consensus chat.
 
@@ -117,8 +144,23 @@ class QuanAdOrchestrator:
         2. Collect opinions + run consensus
         3. Synthesize a final human-readable response via LLM
         """
-        result = self.analyze(message)
+        result = self.analyze(message, progress_callback=progress_callback)
+        completed_tools = [opinion.agent_name for opinion in result.opinions]
+        if progress_callback:
+            progress_callback({
+                "active_tool": "consensus_synthesis",
+                "completed_tools": completed_tools,
+                "active_label": "Consensus Synthesis",
+                "message": "Building weighted consensus verdict...",
+            })
         final_response = self._synthesize_response(message, result)
+        if progress_callback:
+            progress_callback({
+                "active_tool": None,
+                "completed_tools": [*completed_tools, "consensus_synthesis"],
+                "active_label": "Consensus Synthesis",
+                "message": "Consensus response completed.",
+            })
 
         if remember:
             self._history.append({"role": "user", "content": message})
