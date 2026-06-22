@@ -8,6 +8,63 @@ from src.quantum.portfolio import optimize_portfolio, quantum_optimize_portfolio
 from src.core.cache import cached_value
 from src.data.market_data_service import market_data_service
 
+
+@tool
+def market_search(query: str, limit: int = 8) -> str:
+    """Search live market symbols for a company name or natural-language entity before deciding whether it is public."""
+    clean_query = query.strip()
+    if not clean_query:
+        return "Error: Please provide a company name or ticker search query."
+    safe_limit = max(1, min(int(limit or 8), 12))
+    try:
+        results = market_data_service.search_symbols(clean_query, safe_limit)
+    except Exception as e:
+        return f"Error searching market symbols for {clean_query}: {str(e)}"
+    if not results:
+        return f"No public market symbol candidates found for {clean_query}."
+    lines = [f"Market symbol candidates for {clean_query}:"]
+    for row in results:
+        lines.append(
+            f"- {row.get('ticker')}: {row.get('name') or row.get('ticker')}"
+            + (f" | Exchange: {row.get('exchange')}" if row.get("exchange") else "")
+            + (f" | Type: {row.get('quote_type')}" if row.get("quote_type") else "")
+        )
+    lines.append("Data Source/Tool: market_search")
+    return "\n".join(lines)
+
+
+@tool
+def market_quote(ticker: str) -> str:
+    """Fetch the latest live quote for a resolved market ticker. Use this before answering stock price or public-trading status questions."""
+    symbol = ticker.upper().strip()
+    if not symbol:
+        return "Error: Please provide a valid ticker symbol."
+    try:
+        snapshot = market_data_service.fetch_snapshot(
+            symbol,
+            period="5d",
+            interval="1d",
+            include_news=False,
+            include_sec=False,
+            include_fundamentals=False,
+        )
+    except Exception as e:
+        return f"Error fetching quote for {symbol}: {str(e)}"
+    price = snapshot.latest_price or (snapshot.history[-1].price if snapshot.history else None)
+    if price is None:
+        return f"No market quote found for ticker {symbol}."
+    latest_trade = snapshot.history[-1].label if snapshot.history else "Unavailable"
+    lines = [
+        f"Ticker: {symbol}",
+        f"Company: {snapshot.company_name or symbol}",
+        f"Latest Price: {price:.2f}",
+        f"Currency: {snapshot.currency or 'Unavailable'}",
+        f"Latest Trade: {latest_trade}",
+        f"Market Status: latest available",
+        f"Data Source/Tool: market_quote; {', '.join(snapshot.data_sources) or 'market_data_service'}",
+    ]
+    return "\n".join(lines)
+
 @tool 
 def get_stock_info(ticker: str) -> str: 
     """Get current stock price, daily change, volume, and basic info for a stock ticker"""
@@ -370,6 +427,8 @@ def optimize_portfolio_tool(
         return f"Error optimizing: {str(e)}"
     
 ALL_TOOLS = [
+    market_search,
+    market_quote,
     get_stock_info, 
     analyze_sentiment,
     search_financial_news,

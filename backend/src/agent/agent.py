@@ -17,6 +17,7 @@ from typing import Any, Callable
 
 from langgraph.prebuilt import create_react_agent
 
+from src.agent.market_grounding import ground_market_query, is_market_quote_query
 from src.agent.tools import ALL_TOOLS
 from src.llm.gateway import LLMGateway, RoutedChatModel, llm_gateway
 from src.llm.routing_policy import LLMMode
@@ -45,6 +46,7 @@ RULES:
 10. Always use ticker symbols (e.g. AAPL, not Apple) when calling tools
 11. For prediction requests, call predict_stock_price with model="ensemble" unless the user explicitly asks for Random Forest or LSTM only
 12. When reporting prediction output, include RF, LSTM, weighted ensemble, confidence, validation metrics when returned, and the tool's caveats. Do not invent metrics.
+13. For stock price, ticker lookup, public/private, or "how is [company/ticker] doing today" questions, call market_search and/or market_quote before answering. Never answer those questions from model memory.
 """
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -72,6 +74,11 @@ def _is_consensus_query(message: str) -> bool:
     """Heuristic: detect if the query warrants multi-agent consensus analysis."""
     lower = message.lower()
     return any(kw in lower for kw in _CONSENSUS_KEYWORDS)
+
+
+def _is_deep_market_analysis_query(message: str) -> bool:
+    """Quote/public-status prompts are fast-path unless the user asks for analysis."""
+    return _is_consensus_query(message)
 
 
 class FinancialAdvisorAgent:
@@ -162,6 +169,14 @@ class FinancialAdvisorAgent:
             mode: "single" (default ReAct agent), "consensus" (QuanAd 2.0),
                   or "auto" (auto-detect based on query complexity).
         """
+        if is_market_quote_query(message) and not _is_deep_market_analysis_query(message):
+            grounded = ground_market_query(message, progress_callback=progress_callback)
+            if grounded.handled and grounded.response:
+                if remember:
+                    self._history.append({"role": "user", "content": message})
+                    self._history.append({"role": "assistant", "content": grounded.response})
+                return grounded.response
+
         use_consensus = (
             mode == "consensus"
             or (mode == "auto" and _is_consensus_query(message))
