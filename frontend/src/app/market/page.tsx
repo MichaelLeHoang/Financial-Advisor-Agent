@@ -75,6 +75,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { showToast } from "@/components/ui/toast";
 import { ResearchDepthSelector } from "@/components/equity-research/ResearchComponents";
 import { useAuth } from "@/components/auth/AuthProvider";
 
@@ -452,19 +453,41 @@ export default function MarketPage() {
         const ticker = normalizeTicker(value);
         if (!ticker) return;
 
-        setStocks((current) => {
-            if (current.some((stock) => stock.ticker === ticker)) return current;
-            return [{ ...createStock(ticker), loading: true }, ...current];
-        });
+        if (stocks.some((stock) => stock.ticker === ticker)) {
+            setQuery("");
+            setSearchOpen(false);
+            showToast({
+                title: "Already in Market",
+                message: `${ticker} is already in your Market list.`,
+            });
+            return;
+        }
+
+        setStocks((current) => [{ ...createStock(ticker), loading: true }, ...current]);
         setQuery("");
         setSearchOpen(false);
+
+        showToast({
+            title: "Adding stock",
+            message: `Adding ${ticker} to Market.`,
+        });
 
         fetchQuote(ticker)
             .then((fresh) => {
                 setStocks((current) => current.map((stock) => stock.ticker === ticker ? fresh : stock));
+                showToast({
+                    title: "Stock added",
+                    message: `${fresh.ticker} was added to Market.`,
+                    variant: "success",
+                });
             })
             .catch(() => {
                 setStocks((current) => current.map((stock) => stock.ticker === ticker ? { ...stock, loading: false } : stock));
+                showToast({
+                    title: "Stock added",
+                    message: `${ticker} was added, but the live quote could not be loaded.`,
+                    variant: "warning",
+                });
             });
     };
 

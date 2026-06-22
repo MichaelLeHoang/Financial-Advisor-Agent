@@ -8,6 +8,7 @@ import { ArrowRight, Brain, Check, ChevronDown, ClipboardList, Image, Loader2, P
 import { motion, AnimatePresence } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
 import type { ChatJobProgress, ChatJobStatusResponse, EquityResearchEvent, EquityResearchRunDetail, ResearchDepth } from "@/lib/api";
+import { notifyCompletion, requestCompletionNotification } from "@/lib/completion-notifications";
 import { loadLocalChatMessages, saveLocalChatMessages } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -18,6 +19,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import Plan from "@/components/ui/agent-plan";
 import Markdown from "@/components/ui/markdown";
+import { showToast } from "@/components/ui/toast";
 
 interface Message {
   id: string;
@@ -304,7 +306,46 @@ export default function ChatPage() {
   const progressEventQueueRef = useRef<ChatJobProgress[]>([]);
   const progressDrainActiveRef = useRef(false);
   const progressDrainPromiseRef = useRef<Promise<void> | null>(null);
+  const notifyWhenCompleteRef = useRef(false);
   const firstName = getFirstName(user?.display_name || user?.email || "");
+
+  const showLongRunningToast = (message: string) => {
+    notifyWhenCompleteRef.current = false;
+    showToast({
+      title: "Analysis running",
+      message,
+      duration: 9000,
+      actions: {
+        label: "Notify me",
+        variant: "outline",
+        onClick: () => {
+          void requestCompletionNotification().then((enabled) => {
+            notifyWhenCompleteRef.current = enabled;
+            showToast({
+              title: enabled ? "Notifications on" : "Notifications unavailable",
+              message: enabled
+                ? "I will notify you when this analysis is done."
+                : "Browser notifications are not available or permission was denied.",
+              variant: enabled ? "success" : "warning",
+            });
+          });
+        },
+      },
+    });
+  };
+
+  const finishLongRunningToast = (success: boolean, title: string, message: string) => {
+    showToast({
+      title,
+      message,
+      variant: success ? "success" : "error",
+      duration: 6000,
+    });
+    if (notifyWhenCompleteRef.current) {
+      notifyCompletion(title, message);
+      notifyWhenCompleteRef.current = false;
+    }
+  };
 
   useEffect(() => {
     setResearchDepth((current) => bestResearchModeForPlan(user.plan, current));
@@ -562,6 +603,7 @@ export default function ChatPage() {
       setUseAgentSyntheticProgress(false);
       setActiveTool("equity_snapshot");
       setCompletedTools([]);
+      showLongRunningToast("QuanAd 2.1 research may take a little while.");
       const loadingStartedAt = Date.now();
       try {
         const run = await api.createEquityResearchRun({
@@ -640,6 +682,11 @@ export default function ChatPage() {
             researchRunId: latestDetail.run.run_id,
           })
         );
+        finishLongRunningToast(
+          true,
+          "Analysis complete",
+          `${latestDetail.run.ticker} QuanAd 2.1 research is ready.`
+        );
         window.dispatchEvent(new Event("chat-sessions:changed"));
       } catch (err: any) {
         setMessages((prev) =>
@@ -648,6 +695,11 @@ export default function ChatPage() {
             role: "assistant",
             content: `Error: ${err.message}`,
           })
+        );
+        finishLongRunningToast(
+          false,
+          "Analysis failed",
+          err instanceof Error ? err.message : "QuanAd 2.1 research could not be completed."
         );
       } finally {
         setIsLoading(false);
@@ -665,6 +717,7 @@ export default function ChatPage() {
       ? "Running multi-agent consensus analysis..."
       : "Analyzing market context...";
     const mode = apiModeFromVersion(version);
+    const shouldNotifyLongRun = mode === "consensus";
     const fetchingMsg: Message = { id: getUniqueId(), role: "assistant", content: fetchingLabel, status: "fetching" };
 
     setMessages((prev) => [...prev, userMsg, fetchingMsg]);
@@ -680,6 +733,11 @@ export default function ChatPage() {
     progressEventQueueRef.current = [];
     progressDrainActiveRef.current = false;
     progressDrainPromiseRef.current = null;
+    if (shouldNotifyLongRun) {
+      showLongRunningToast("QuanAd 2.0 consensus analysis may take a little while.");
+    } else {
+      notifyWhenCompleteRef.current = false;
+    }
 
     const assistantMsgId = getUniqueId();
 
@@ -747,6 +805,9 @@ export default function ChatPage() {
           researchTicker: investmentTicker,
         }] : [])
       );
+      if (shouldNotifyLongRun) {
+        finishLongRunningToast(true, "Analysis complete", "QuanAd 2.0 consensus response is ready.");
+      }
       window.dispatchEvent(new Event("chat-sessions:changed"));
     } catch (err: any) {
       if (isUpgradeRequiredError(err)) {
@@ -759,6 +820,13 @@ export default function ChatPage() {
           content: isUpgradeRequiredError(err) ? err.detail.message : `Error: ${err.message}`,
         })
       );
+      if (shouldNotifyLongRun) {
+        finishLongRunningToast(
+          false,
+          "Analysis failed",
+          isUpgradeRequiredError(err) ? err.detail.message : err instanceof Error ? err.message : "QuanAd 2.0 analysis could not be completed."
+        );
+      }
     } finally {
       setIsLoading(false);
       isStreamingRef.current = false;
