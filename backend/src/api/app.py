@@ -17,6 +17,7 @@ from src.services.ingestion import ingest_news
 from src.ml.preprocessing import prepare_training_data
 from src.ml.models import RandomForestPredictor, LSTMPredictor, evaluate_model
 from src.ml.ensemble import EnsemblePredictionService, PredictionDataError
+from src.ml.valuation import build_valuation_payload, combine_ml_and_valuation_signal
 from src.ml.sentiment import SentimentAnalyzer
 
 from src.quantum.portfolio import optimize_portfolio, quantum_optimize_portfolio
@@ -740,6 +741,12 @@ def _safe_float(val) -> float | None:
     except (TypeError, ValueError):
         return None
 
+def _scaled_close_to_price(scaler, close_value: float) -> float:
+    n_features = int(getattr(scaler, "n_features_in_", 1) or 1)
+    row = [[0.0 for _ in range(n_features)]]
+    row[0][0] = float(close_value)
+    return float(scaler.inverse_transform(row)[0][0])
+
 def _yoy_pct(current: float | None, previous: float | None) -> float | None:
     if current is None or previous is None or previous == 0:
         return None
@@ -834,12 +841,31 @@ async def predict_stock(req: PredictRequest, user: AuthenticatedUser = Depends(g
         
         train_metrics = model.train(data["X_train"], data["y_train"])
         test_metrics = evaluate_model(model, data["X_test"], data["y_test"], data["scaler"])
+        last_pred = float(model.predict(data["X_test"][-1:])[0])
+        last_actual = float(data["y_test"][-1])
+        current_price = _scaled_close_to_price(data["scaler"], last_actual)
+        predicted_price = _scaled_close_to_price(data["scaler"], last_pred)
+        predicted_return = ((predicted_price - current_price) / current_price) if current_price else 0.0
+        ml_prediction = "UP" if predicted_return > 0.0005 else "DOWN" if predicted_return < -0.0005 else "NEUTRAL"
+        valuation_payload = build_valuation_payload(current_price=current_price, fundamentals={})
         
         return {
             "ticker": ticker,
             "model_type": selected_model,
             "train_metrics": train_metrics,
             "test_metrics": test_metrics,
+            "current_price": round(current_price, 4),
+            "currentPrice": round(current_price, 4),
+            "ml_prediction": ml_prediction,
+            "valuation_status": valuation_payload["valuation_status"],
+            "valuation_target": valuation_payload["valuation_target"],
+            "target_price": valuation_payload["target_price"],
+            "implied_upside": valuation_payload["implied_upside"],
+            "valuation_signal": valuation_payload["valuation_signal"],
+            "final_signal": combine_ml_and_valuation_signal(ml_prediction, valuation_payload.get("valuation_signal")),
+            "confidence": "low",
+            "mae": test_metrics.get("test_mae"),
+            "rmse": test_metrics.get("test_rmse"),
         }
     except HTTPException:
         raise

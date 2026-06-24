@@ -20,4 +20,4 @@ Route handlers should validate and translate requests only. Business logic belon
 Use FastAPI `TestClient` with mocked dependencies for route contracts, authorization, provider timeouts, status rollups, and error responses.
 
 ## Latest Change
-- Added progress callbacks and event reporting for agent execution so clients can display queued, tool-running, synthesis, and completion states.
+- Expanded prediction responses with current price, ML direction, valuation metadata, combined signals, confidence, and model error metrics.

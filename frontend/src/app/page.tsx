@@ -66,6 +66,39 @@ function extractResearchCommand(message: string) {
   };
 }
 
+type PredictionSummary = {
+  mlDirection: string;
+  valuationTarget: string;
+  impliedUpside: string;
+  finalSignal: string;
+  modelPerformance: string;
+  disclaimer: string;
+};
+
+function parsePredictionSummary(content: string): PredictionSummary | null {
+  if (!content.includes("ML Direction:") || !content.includes("Final Signal:")) return null;
+
+  const lines = content.split("\n").map((line) => line.trim()).filter(Boolean);
+  const findValue = (label: string) => {
+    const line = lines.find((item) => item.startsWith(label) || item.startsWith(`- ${label}`));
+    return line?.replace(/^- /, "").replace(label, "").trim() || "Unavailable";
+  };
+  const performanceLine = lines.find((line) => line.startsWith("- Weighted Ensemble:")) || lines.find((line) => line.startsWith("- Random Forest:")) || "";
+  const confidenceLine = lines.find((line) => line.startsWith("Confidence:"))?.replace(/\.$/, "") || "";
+  const disclaimer =
+    lines.find((line) => line.includes("not professional financial advice") || line.includes("not financial advice")) ||
+    "This is educational analysis, not financial advice.";
+
+  return {
+    mlDirection: findValue("ML Direction:"),
+    valuationTarget: findValue("Valuation Target:"),
+    impliedUpside: findValue("Implied Upside/Downside:"),
+    finalSignal: findValue("Final Signal:"),
+    modelPerformance: [confidenceLine, performanceLine.replace(/^- /, "")].filter(Boolean).join(" | ") || "Unavailable",
+    disclaimer,
+  };
+}
+
 const TICKER_STOP_WORDS = new Set([
   "A",
   "AI",
@@ -968,7 +1001,7 @@ export default function ChatPage() {
                         </div>
                       </div>
                     ) : (
-                      <Markdown content={msg.content} />
+                      <AssistantMessageContent content={msg.content} />
                     )
                   ) : (
                     msg.content
@@ -1193,6 +1226,41 @@ function ResearchModeSelector({
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function AssistantMessageContent({ content }: { content: string }) {
+  const prediction = parsePredictionSummary(content);
+
+  if (!prediction) {
+    return <Markdown content={content} />;
+  }
+
+  const rows = [
+    ["ML Direction", prediction.mlDirection],
+    ["Valuation Target", prediction.valuationTarget],
+    ["Implied Upside/Downside", prediction.impliedUpside],
+    ["Final Signal", prediction.finalSignal],
+    ["Model Performance", prediction.modelPerformance],
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-white/[0.10] bg-white/[0.04] p-3">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {rows.map(([label, value]) => (
+            <div key={label} className={cn(label === "Model Performance" ? "sm:col-span-2" : "", "min-w-0")}>
+              <div className="text-[11px] font-medium uppercase tracking-normal text-white/45">{label}</div>
+              <div className="mt-1 break-words text-sm font-semibold text-white/90">{value}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 border-t border-white/[0.08] pt-3 text-xs leading-5 text-white/55">
+          {prediction.disclaimer}
+        </div>
+      </div>
+      <Markdown content={content} />
     </div>
   );
 }

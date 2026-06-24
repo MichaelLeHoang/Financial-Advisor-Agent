@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 QuanAd backend code lives in `backend/src/`, with FastAPI routes in `api/`, agent logic in `agent/`, domain modules such as `risk/`, `backtesting/`, `billing/`, and `saas/`, and shared schemas in `models/`. Backend tests are under `backend/tests/unit/` and `backend/tests/integration/`.
 
-The main web app is `frontend/`, a Next.js app with routes in `frontend/src/app/`, components in `frontend/src/components/`, hooks in `frontend/src/hooks/`, utilities in `frontend/src/lib/`, and assets in `frontend/public/`. `quantum-finance-ai/` is a separate Vite/React prototype. Supabase migrations are in `supabase/migrations/`; implementation notes are in `doc/`.
+The main web app is `frontend/`, a Next.js app with routes in `frontend/src/app/`, components in `frontend/src/components/`, hooks in `frontend/src/hooks/`, utilities in `frontend/src/lib/`, and assets in `frontend/public/`. Supabase migrations are in `supabase/migrations/`; implementation notes are in `doc/`.
 
 ## Build, Test, and Development Commands
 Run commands from the repository root unless noted.
@@ -17,7 +17,6 @@ Run commands from the repository root unless noted.
 - `make test-integration`: run integration tests; may download embedding models.
 - `make docker-up-d`: build and start Docker services in the background.
 - `cd frontend && npm run build`: verify the production Next.js build.
-- `cd quantum-finance-ai && npm run lint`: type-check the Vite prototype.
 
 ## Coding Style & Naming Conventions
 Python targets 3.13 and uses `uv`. Keep modules snake_case, classes PascalCase, and tests named `test_*.py`. Use 4-space indentation and typed Pydantic models. `black` and `ruff` are available in backend dev dependencies.

@@ -54,7 +54,6 @@ import {
     type MarketPoint,
     type MarketSymbol,
 } from "@/lib/market-data";
-import UpgradePrompt from "@/components/common/UpgradePrompt";
 import FinanceOhlcLayer from "@/components/market/FinanceOhlcLayer";
 import {
     AlertDialog,
@@ -77,7 +76,6 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { showToast } from "@/components/ui/toast";
 import { ResearchDepthSelector } from "@/components/equity-research/ResearchComponents";
-import { useAuth } from "@/components/auth/AuthProvider";
 
 interface StockInfo extends MarketSymbol {
     data: MarketPoint[];
@@ -193,15 +191,15 @@ function rangeRefreshMs(range: MarketChartRange): number | null {
     return null;
 }
 
-function readSavedMarketStocks(): string[] {
+function readSavedMarketStocks(): string[] | null {
     try {
         const raw = window.localStorage.getItem(MARKET_STOCKS_STORAGE_KEY);
-        if (!raw) return [];
+        if (raw === null) return null;
         const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return [];
+        if (!Array.isArray(parsed)) return null;
         return normalizeSymbolList(parsed.filter((item): item is string => typeof item === "string"));
     } catch {
-        return [];
+        return null;
     }
 }
 
@@ -325,7 +323,6 @@ function DetailChartTooltip({
 }
 
 export default function MarketPage() {
-    const { user } = useAuth();
     const router = useRouter();
     const searchInputRef = useRef<HTMLInputElement>(null);
     const marketTopRef = useRef<HTMLDivElement>(null);
@@ -336,7 +333,6 @@ export default function MarketPage() {
     const [searchingSymbols, setSearchingSymbols] = useState(false);
     const [loading, setLoading] = useState(false);
     const [mounted, setMounted] = useState(false);
-    const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
     const [selectedStock, setSelectedStock] = useState<StockInfo | null>(null);
     const [selectedRange, setSelectedRange] = useState<MarketChartRange>(DEFAULT_MARKET_RANGE);
     const [chartStyle, setChartStyle] = useState<DetailChartStyle>("area");
@@ -354,25 +350,14 @@ export default function MarketPage() {
         () => uniqueMarketSymbols(symbolMatches.length > 0 ? symbolMatches : localMatches),
         [localMatches, symbolMatches]
     );
-    const isGuest = Boolean(user?.is_guest);
-
-    const requireSignInForMarketSave = () => {
-        setUpgradeMessage("Sign in to add, remove, or save stocks in your Market workspace. Public users can still search tickers and preview charts.");
-    };
-
     useEffect(() => {
-        if (isGuest) {
-            setMounted(true);
-            return;
-        }
-
         const saved = readSavedMarketStocks();
-        if (saved.length > 0) {
+        if (saved !== null) {
             setStocks(saved.map(createStock));
         }
         setSkipRemoveConfirm(window.localStorage.getItem("market.skipRemoveConfirm") === "true");
         setMounted(true);
-    }, [isGuest]);
+    }, []);
 
     useEffect(() => {
         if (!mounted) return;
@@ -381,9 +366,9 @@ export default function MarketPage() {
     }, [mounted]);
 
     useEffect(() => {
-        if (!mounted || isGuest) return;
+        if (!mounted) return;
         window.localStorage.setItem(MARKET_STOCKS_STORAGE_KEY, JSON.stringify(stocks.map((stock) => stock.ticker)));
-    }, [isGuest, mounted, stocks]);
+    }, [mounted, stocks]);
 
     useEffect(() => {
         const normalized = query.trim();
@@ -444,12 +429,6 @@ export default function MarketPage() {
     };
 
     const addTicker = (value: string) => {
-        if (isGuest) {
-            requireSignInForMarketSave();
-            setSearchOpen(false);
-            return;
-        }
-
         const ticker = normalizeTicker(value);
         if (!ticker) return;
 
@@ -492,11 +471,6 @@ export default function MarketPage() {
     };
 
     const removeTicker = (ticker: string) => {
-        if (isGuest) {
-            requireSignInForMarketSave();
-            return;
-        }
-
         setStocks((current) => current.filter((stock) => stock.ticker !== ticker));
         setSelectedStock((current) => current?.ticker === ticker ? null : current);
     };
@@ -581,7 +555,6 @@ export default function MarketPage() {
     const refresh = async () => {
         if (stocks.length === 0) return;
         setLoading(true);
-        setUpgradeMessage(null);
         setStocks((current) => current.map((stock) => ({ ...stock, loading: true })));
         const [period, interval] = quotePeriod(DEFAULT_MARKET_RANGE);
         const quoteMap = await fetchCachedQuotes(stocks.map((stock) => stock.ticker), period, interval);
@@ -633,10 +606,6 @@ export default function MarketPage() {
                             variant="outline"
                             className="rounded-xl"
                             onClick={() => {
-                                if (isGuest) {
-                                    requireSignInForMarketSave();
-                                    return;
-                                }
                                 setStocks(DEFAULT_MARKET_TICKERS.map(createStock));
                             }}
                         >
@@ -648,10 +617,6 @@ export default function MarketPage() {
                             variant="outline"
                             className="rounded-xl"
                             onClick={() => {
-                                if (isGuest) {
-                                    requireSignInForMarketSave();
-                                    return;
-                                }
                                 setStocks([]);
                             }}
                             disabled={stocks.length === 0}
@@ -670,8 +635,6 @@ export default function MarketPage() {
                     </div>
                 </div>
             </div>
-
-            {upgradeMessage && <div className="mb-8"><UpgradePrompt message={upgradeMessage} /></div>}
 
             {stocks.length === 0 ? (
                 <Empty className="min-h-[24rem]">

@@ -12,6 +12,7 @@ from sklearn.preprocessing import MinMaxScaler
 from src.data.fetch import fetch_stock_history
 from src.ml.models import LSTMPredictor, RandomForestPredictor, StockPredictor
 from src.ml.preprocessing import compute_features
+from src.ml.valuation import build_valuation_payload, combine_ml_and_valuation_signal
 
 
 MODEL_RANDOM_FOREST = "random_forest"
@@ -214,6 +215,7 @@ class EnsemblePredictionService:
         history_fetcher: Callable[[list[str], str], pd.DataFrame] | None = None,
         rf_factory: Callable[[], StockPredictor] | None = None,
         lstm_factory: Callable[[], StockPredictor] | None = None,
+        fundamentals_fetcher: Callable[[str], Mapping[str, object]] | None = None,
         min_train_size: int = 160,
         validation_window: int = 20,
         max_validation_windows: int = 4,
@@ -221,6 +223,7 @@ class EnsemblePredictionService:
         self.history_fetcher = history_fetcher or (lambda tickers, period: fetch_stock_history(tickers, period=period))
         self.rf_factory = rf_factory or (lambda: RandomForestPredictor(n_estimators=100, max_depth=12))
         self.lstm_factory = lstm_factory or (lambda: LSTMPredictor(epochs=8, hidden_size=64, batch_size=32))
+        self.fundamentals_fetcher = fundamentals_fetcher or _fetch_prediction_fundamentals
         self.min_train_size = min_train_size
         self.validation_window = validation_window
         self.max_validation_windows = max_validation_windows
@@ -277,6 +280,10 @@ class EnsemblePredictionService:
         current_price = round(float(supervised.current_price), 4)
         final_prediction = predictions[MODEL_WEIGHTED_ENSEMBLE]
         validation_payload = _validation_to_dict(validation)
+        ml_prediction = _direction_from_return(final_prediction.predicted_return)
+        performance = validation_payload.get(MODEL_WEIGHTED_ENSEMBLE, {})
+        valuation_payload = self._build_valuation_payload(normalized, current_price)
+        final_signal = combine_ml_and_valuation_signal(ml_prediction, valuation_payload.get("valuation_signal"))
         summary = _build_prediction_summary(normalized, final_prediction, horizon_days)
         caveat = (
             "This is AI-generated analysis based on historical market data and walk-forward validation. "
@@ -288,6 +295,15 @@ class EnsemblePredictionService:
             "summary": summary,
             "current_price": current_price,
             "currentPrice": current_price,
+            "ml_prediction": ml_prediction,
+            "valuation_status": valuation_payload["valuation_status"],
+            "valuation_target": valuation_payload["valuation_target"],
+            "target_price": valuation_payload["target_price"],
+            "implied_upside": valuation_payload["implied_upside"],
+            "valuation_signal": valuation_payload["valuation_signal"],
+            "final_signal": final_signal,
+            "mae": performance.get("mae"),
+            "rmse": performance.get("rmse"),
             "horizon_days": horizon_days,
             "target": target,
             "predictions": {name: prediction.as_dict() for name, prediction in predictions.items()},
@@ -302,6 +318,13 @@ class EnsemblePredictionService:
             "risk_notes": DEFAULT_RISK_NOTES,
             "caveat": caveat,
         }
+
+    def _build_valuation_payload(self, ticker: str, current_price: float) -> dict[str, float | str | None]:
+        try:
+            fundamentals = self.fundamentals_fetcher(ticker)
+        except Exception:
+            fundamentals = {}
+        return build_valuation_payload(current_price=current_price, fundamentals=fundamentals)
 
     def walk_forward_validate(self, supervised: SupervisedData, sequence_length: int) -> dict[str, ValidationMetric]:
         splits = generate_walk_forward_splits(
@@ -560,6 +583,21 @@ def _agreement_to_public_dict(agreement: Mapping[str, float | str]) -> dict[str,
         "status": public_status,
         "spread": float(agreement.get("spread", 0.0) or 0.0),
         "explanation": str(agreement.get("message", "")),
+    }
+
+
+def _fetch_prediction_fundamentals(ticker: str) -> dict[str, object]:
+    try:
+        import yfinance as yf
+
+        info = yf.Ticker(ticker).info or {}
+    except Exception:
+        return {}
+
+    return {
+        "forward_eps": info.get("forwardEps"),
+        "forward_pe": info.get("forwardPE"),
+        "fair_pe_multiple": info.get("fairPeMultiple") or info.get("forwardPE"),
     }
 
 

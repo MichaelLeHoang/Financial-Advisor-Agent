@@ -134,6 +134,7 @@ def test_service_returns_partial_results_when_one_model_fails():
         history_fetcher=lambda tickers, period: _history(),
         rf_factory=lambda: ConstantPredictor(0.001),
         lstm_factory=lambda: FailingPredictor(),
+        fundamentals_fetcher=lambda ticker: {"forward_eps": 8, "fair_pe_multiple": 20},
         min_train_size=60,
         validation_window=10,
         max_validation_windows=2,
@@ -151,6 +152,10 @@ def test_service_returns_partial_results_when_one_model_fails():
     assert result["caveat"]
     assert result["warnings"]
     assert result["weights"]["random_forest"] == pytest.approx(1.0)
+    assert result["valuation_status"] == "available"
+    assert result["valuation_target"] == pytest.approx(160)
+    assert result["valuation_signal"] == "Undervalued"
+    assert result["final_signal"] in {"Strong Bullish", "Neutral"}
 
 
 def test_predict_endpoint_returns_ensemble_response(monkeypatch):
@@ -163,6 +168,15 @@ def test_predict_endpoint_returns_ensemble_response(monkeypatch):
                 "summary": "The ensemble model predicts an UP ↑ direction for AAPL over the next trading period.",
                 "current_price": 123.45,
                 "currentPrice": 123.45,
+                "ml_prediction": "UP",
+                "valuation_status": "available",
+                "valuation_target": 148.14,
+                "target_price": 148.14,
+                "implied_upside": 0.2,
+                "valuation_signal": "Undervalued",
+                "final_signal": "Strong Bullish",
+                "mae": 0.017,
+                "rmse": 0.025,
                 "horizon_days": 1,
                 "target": "return",
                 "predictions": {
@@ -216,5 +230,13 @@ def test_predict_endpoint_returns_ensemble_response(monkeypatch):
     assert payload["modelBreakdown"]["weightedEnsemble"]["predictedReturn"] == 0.014
     assert payload["agreementDisplay"]["status"] == "moderate"
     assert payload["confidence"] == "medium"
+    assert payload["current_price"] == 123.45
+    assert payload["ml_prediction"] == "UP"
+    assert payload["valuation_target"] == 148.14
+    assert payload["implied_upside"] == 0.2
+    assert payload["valuation_signal"] == "Undervalued"
+    assert payload["final_signal"] == "Strong Bullish"
+    assert payload["mae"] == 0.017
+    assert payload["rmse"] == 0.025
     assert payload["risk_notes"]
     assert "not professional financial advice" in payload["caveat"]

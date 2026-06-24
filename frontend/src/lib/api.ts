@@ -228,12 +228,21 @@ export interface OptimizeResult {
 
 export interface PredictResult {
   ticker: string;
-  model_type: string;
-  train_metrics: Record<string, number>;
-  test_metrics: Record<string, number>;
+  model_type?: string;
+  train_metrics?: Record<string, number>;
+  test_metrics?: Record<string, number>;
   summary?: string;
   current_price?: number;
   currentPrice?: number;
+  ml_prediction?: "UP" | "DOWN" | "NEUTRAL" | string;
+  valuation_status?: "available" | "unavailable" | string;
+  valuation_target?: number | null;
+  target_price?: number | null;
+  implied_upside?: number | null;
+  valuation_signal?: "Undervalued" | "Fairly Valued" | "Overvalued" | string | null;
+  final_signal?: "Strong Bullish" | "Bullish" | "Bearish" | "Mixed / Hold" | "Neutral" | string;
+  mae?: number | null;
+  rmse?: number | null;
   finalPrediction?: {
     direction: "UP" | "DOWN" | "NEUTRAL";
     predictedPrice?: number;

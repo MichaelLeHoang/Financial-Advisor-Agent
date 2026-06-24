@@ -201,6 +201,10 @@ def _format_ensemble_prediction_for_agent(result: dict) -> str:
     current_price = float(result.get("current_price") or result.get("currentPrice") or 0)
     predicted_price = _prediction_value(final_prediction, "predicted_price", "predictedPrice")
     predicted_return = _prediction_value(final_prediction, "predicted_return", "predictedReturn")
+    valuation_target = _prediction_value(result, "valuation_target", "targetPrice")
+    implied_upside = result.get("implied_upside")
+    valuation_signal = result.get("valuation_signal")
+    final_signal = result.get("final_signal", "Neutral")
 
     lines = [
         result.get("summary") or f"The ensemble model generated a prediction for {result.get('ticker')}.",
@@ -212,6 +216,18 @@ def _format_ensemble_prediction_for_agent(result: dict) -> str:
             f"Weighted ensemble prediction: ${predicted_price:.2f}",
             f"Expected move: {predicted_return:+.2%}",
         ])
+    lines.append(f"ML Direction: {result.get('ml_prediction') or final_prediction.get('direction', 'NEUTRAL')}")
+
+    lines.extend(["", "Valuation:"])
+    if result.get("valuation_status") == "available" and valuation_target is not None and isinstance(implied_upside, (int, float)):
+        lines.extend([
+            f"- Valuation Target: ${valuation_target:.2f}",
+            f"- Implied Upside/Downside: {float(implied_upside):+.2%}",
+            f"- Valuation Signal: {valuation_signal}",
+        ])
+    else:
+        lines.append("- Valuation Target: Unavailable")
+    lines.append(f"- Final Signal: {final_signal}")
 
     labels = {
         "random_forest": "Random Forest",
@@ -249,7 +265,7 @@ def _format_ensemble_prediction_for_agent(result: dict) -> str:
             f"Directional Accuracy {float(metric['directional_accuracy']):.0%}"
         )
     if validation_lines:
-        lines.extend(["", "Validation summary:"])
+        lines.extend(["", "Model Performance (Validation summary):"])
         lines.extend(validation_lines)
 
     if agreement:
