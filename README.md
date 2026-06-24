@@ -545,7 +545,7 @@ Financial-Advisor-Agent/       ← project root
 │   │   ├── jobs/                   # LLM worker and scheduled job integrations
 │   │   ├── journal/
 │   │   ├── llm/                    # Multi-provider LLM gateway
-│   │   ├── ml/                     # FinBERT, RF, LSTM
+│   │   ├── ml/                     # FinBERT, RF, LSTM, valuation
 │   │   ├── models/                 # Pydantic schemas
 │   │   ├── notifications/
 │   │   ├── quant/                  # Strategy toolkit
@@ -565,7 +565,6 @@ Financial-Advisor-Agent/       ← project root
 │   ├── src/app/                    # App routes
 │   ├── src/components/             # Auth, chat, market, research, backtest, and UI components
 │   └── src/lib/                    # API client, Supabase client
-├── quantum-finance-ai/        ← Vite prototype
 ├── supabase/
 │   └── migrations/                 # Supabase schema and feature migrations
 ├── docker-compose.yml              # Backend, worker, Redis, and Qdrant services

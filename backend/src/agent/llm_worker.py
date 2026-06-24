@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 import traceback
-from typing import Any
+from typing import Any, Callable
 
 from src.agent.agent import FinancialAdvisorAgent
 from src.agent.history import append_message, load_history, session_claimed_by_another_user
@@ -12,8 +12,31 @@ from src.core.cache import cached_value
 from src.core.redis_client import RedisUnavailable
 from src.saas.models import Plan
 
+ProgressCallback = Callable[[dict[str, Any]], None]
 
-def execute_llm_job(job: QueuedJob) -> dict[str, Any]:
+SINGLE_COMPLETED_TOOLS = [
+    "single_scope",
+    "get_stock_info",
+    "research_market",
+    "search_financial_news",
+    "analyze_sentiment",
+    "predict_stock_price",
+    "optimize_portfolio_tool",
+    "single_synthesis",
+    "single_final",
+]
+
+CONSENSUS_COMPLETED_TOOLS = [
+    "quant_researcher",
+    "quant_analyst",
+    "data_scientist",
+    "risk_analyst",
+    "portfolio_analytics",
+    "consensus_synthesis",
+]
+
+
+def execute_llm_job(job: QueuedJob, progress_callback: ProgressCallback | None = None) -> dict[str, Any]:
     payload = job.payload
     user_id = str(payload["user_id"])
     plan = Plan(payload.get("plan", Plan.FREE.value))
@@ -36,7 +59,7 @@ def execute_llm_job(job: QueuedJob) -> dict[str, Any]:
     agent._history = [{"role": item["role"], "content": item["content"]} for item in history]
 
     def compute_response() -> str:
-        return agent.chat(message, remember=False, mode=mode)
+        return agent.chat(message, remember=False, mode=mode, progress_callback=progress_callback)
 
     if history:
         response = compute_response()
@@ -83,11 +106,54 @@ class LLMWorker:
             slot_acquired = True
 
             self.queue.update(job.job_id, status="running", started_at=time.time())
+            self.queue.update_progress(
+                job.job_id,
+                mode=job.kind,
+                active_tool="single_scope" if job.kind == "single" else "quant_researcher",
+                completed_tools=[],
+                active_label="Identify Market Scope" if job.kind == "single" else "Quant Researcher",
+                message=(
+                    "Identifying market scope..."
+                    if job.kind == "single"
+                    else "Quant Researcher is working..."
+                ),
+            )
+
+            def record_progress(update: dict[str, Any]) -> None:
+                self.queue.update_progress(
+                    job.job_id,
+                    mode=job.kind,
+                    active_tool=update.get("active_tool"),
+                    completed_tools=list(update.get("completed_tools") or []),
+                    active_label=update.get("active_label"),
+                    message=update.get("message"),
+                )
+
             try:
-                result = execute_llm_job(job)
+                result = execute_llm_job(job, progress_callback=record_progress)
+                self.queue.update_progress(
+                    job.job_id,
+                    mode=job.kind,
+                    active_tool=None,
+                    completed_tools=(
+                        SINGLE_COMPLETED_TOOLS
+                        if job.kind == "single"
+                        else CONSENSUS_COMPLETED_TOOLS
+                    ),
+                    active_label="Completed",
+                    message="Agent response completed.",
+                )
                 self.queue.update(job.job_id, status="succeeded", result=result)
                 return True
             except Exception as exc:
+                self.queue.update_progress(
+                    job.job_id,
+                    mode=job.kind,
+                    active_tool=None,
+                    completed_tools=[],
+                    active_label="Failed",
+                    message=str(exc),
+                )
                 self.queue.update(
                     job.job_id,
                     status="failed",

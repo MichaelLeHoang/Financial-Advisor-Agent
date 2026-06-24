@@ -50,6 +50,21 @@ class FailingPredictor(ConstantPredictor):
         raise RuntimeError("model failed")
 
 
+class IdentityScaler:
+    n_features_in_ = 1
+
+    def inverse_transform(self, values):
+        return np.asarray(values, dtype=float)
+
+
+class FixedPredictor:
+    def train(self, X_train, y_train):
+        return {"train_mae": 0.01, "train_rmse": 0.02}
+
+    def predict(self, X):
+        return np.full(len(X), 110.0)
+
+
 def test_simple_average_calculation_is_correct():
     from src.ml.ensemble import calculate_simple_average
 
@@ -134,6 +149,7 @@ def test_service_returns_partial_results_when_one_model_fails():
         history_fetcher=lambda tickers, period: _history(),
         rf_factory=lambda: ConstantPredictor(0.001),
         lstm_factory=lambda: FailingPredictor(),
+        fundamentals_fetcher=lambda ticker: {"forward_eps": 8, "fair_pe_multiple": 20},
         min_train_size=60,
         validation_window=10,
         max_validation_windows=2,
@@ -151,6 +167,36 @@ def test_service_returns_partial_results_when_one_model_fails():
     assert result["caveat"]
     assert result["warnings"]
     assert result["weights"]["random_forest"] == pytest.approx(1.0)
+    assert result["valuation_status"] == "available"
+    assert result["valuation_target"] == pytest.approx(160)
+    assert result["valuation_signal"] == "Undervalued"
+    assert result["final_signal"] in {"Strong Bullish", "Neutral"}
+
+
+def test_service_keeps_prediction_available_when_fundamentals_fetch_fails():
+    from src.ml.ensemble import EnsemblePredictionService
+
+    def failing_fundamentals_fetcher(ticker):
+        raise TimeoutError(f"fundamentals unavailable for {ticker}")
+
+    service = EnsemblePredictionService(
+        history_fetcher=lambda tickers, period: _history(),
+        rf_factory=lambda: ConstantPredictor(0.001),
+        lstm_factory=lambda: FailingPredictor(),
+        fundamentals_fetcher=failing_fundamentals_fetcher,
+        min_train_size=60,
+        validation_window=10,
+        max_validation_windows=2,
+    )
+
+    result = service.predict_with_models("AAPL", sequence_length=5)
+
+    assert result["predictions"]["weighted_ensemble"]
+    assert result["valuation_status"] == "unavailable"
+    assert result["valuation_target"] is None
+    assert result["implied_upside"] is None
+    assert result["valuation_signal"] is None
+    assert result["final_signal"] == "Neutral"
 
 
 def test_predict_endpoint_returns_ensemble_response(monkeypatch):
@@ -163,6 +209,15 @@ def test_predict_endpoint_returns_ensemble_response(monkeypatch):
                 "summary": "The ensemble model predicts an UP ↑ direction for AAPL over the next trading period.",
                 "current_price": 123.45,
                 "currentPrice": 123.45,
+                "ml_prediction": "UP",
+                "valuation_status": "available",
+                "valuation_target": 148.14,
+                "target_price": 148.14,
+                "implied_upside": 0.2,
+                "valuation_signal": "Undervalued",
+                "final_signal": "Strong Bullish",
+                "mae": 0.017,
+                "rmse": 0.025,
                 "horizon_days": 1,
                 "target": "return",
                 "predictions": {
@@ -216,5 +271,67 @@ def test_predict_endpoint_returns_ensemble_response(monkeypatch):
     assert payload["modelBreakdown"]["weightedEnsemble"]["predictedReturn"] == 0.014
     assert payload["agreementDisplay"]["status"] == "moderate"
     assert payload["confidence"] == "medium"
+    assert payload["current_price"] == 123.45
+    assert payload["ml_prediction"] == "UP"
+    assert payload["valuation_target"] == 148.14
+    assert payload["implied_upside"] == 0.2
+    assert payload["valuation_signal"] == "Undervalued"
+    assert payload["final_signal"] == "Strong Bullish"
+    assert payload["mae"] == 0.017
+    assert payload["rmse"] == 0.025
     assert payload["risk_notes"]
     assert "not professional financial advice" in payload["caveat"]
+
+
+def test_predict_endpoint_returns_single_model_contract_with_unavailable_valuation(monkeypatch):
+    from src.api import app as api_app
+
+    async def user():
+        return AuthenticatedUser(id=uuid4(), email="trader@example.com", plan=Plan.TRADER, is_guest=False)
+
+    monkeypatch.setattr(
+        api_app,
+        "prepare_training_data",
+        lambda *args, **kwargs: {
+            "X_train": np.array([[90.0], [95.0], [100.0]]),
+            "y_train": np.array([90.0, 95.0, 100.0]),
+            "X_test": np.array([[100.0]]),
+            "y_test": np.array([100.0]),
+            "scaler": IdentityScaler(),
+        },
+    )
+    monkeypatch.setattr(api_app, "RandomForestPredictor", lambda **kwargs: FixedPredictor())
+    monkeypatch.setattr(
+        api_app,
+        "evaluate_model",
+        lambda *args, **kwargs: {
+            "test_mae": 0.1,
+            "test_rmse": 0.2,
+            "test_mae_dollars": 10.0,
+            "test_rmse_dollars": 20.0,
+        },
+    )
+    api_app.app.dependency_overrides[get_current_or_guest_user] = user
+
+    try:
+        response = TestClient(api_app.app).post(
+            "/api/v1/predict",
+            json={"ticker": " aapl ", "model": "random_forest"},
+        )
+    finally:
+        api_app.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ticker"] == "AAPL"
+    assert payload["model_type"] == "random_forest"
+    assert payload["current_price"] == 100.0
+    assert payload["ml_prediction"] == "UP"
+    assert payload["valuation_status"] == "unavailable"
+    assert payload["valuation_target"] is None
+    assert payload["implied_upside"] is None
+    assert payload["valuation_signal"] is None
+    assert payload["final_signal"] == "Neutral"
+    assert payload["confidence"] == "low"
+    assert payload["mae"] == 0.1
+    assert payload["rmse"] == 0.2

@@ -56,6 +56,41 @@ def test_llm_queue_enqueues_and_reports_position():
     assert queue.queue_position(second["job_id"], "single") == 2
 
 
+def test_llm_queue_persists_progress_updates():
+    from src.agent.llm_queue import LLMJobQueue
+
+    queue = LLMJobQueue(client=FakeRedis())
+    record = queue.enqueue({"user_id": "u1"}, "consensus")
+
+    queue.update_progress(
+        record["job_id"],
+        mode="consensus",
+        active_tool="quant_researcher",
+        completed_tools=[],
+        active_label="Quant Researcher",
+        message="Quant Researcher is working...",
+    )
+    queue.update_progress(
+        record["job_id"],
+        mode="consensus",
+        active_tool="quant_analyst",
+        completed_tools=["quant_researcher"],
+        active_label="Quant Analyst",
+        message="Quant Analyst is working...",
+    )
+
+    updated = queue.get(record["job_id"])
+
+    assert updated["progress"]["mode"] == "consensus"
+    assert updated["progress"]["active_tool"] == "quant_analyst"
+    assert updated["progress"]["completed_tools"] == ["quant_researcher"]
+    assert updated["progress"]["sequence"] == 2
+    assert [event["active_tool"] for event in updated["progress_events"]] == [
+        "quant_researcher",
+        "quant_analyst",
+    ]
+
+
 def test_llm_worker_processes_successful_job(monkeypatch):
     from src.agent import llm_worker as worker_module
     from src.agent.llm_queue import LLMJobQueue
@@ -73,7 +108,15 @@ def test_llm_worker_processes_successful_job(monkeypatch):
         },
         "single",
     )
-    monkeypatch.setattr(worker_module, "execute_llm_job", lambda job: {"response": "ok", "session_id": "s1", "mode": "single"})
+    monkeypatch.setattr(
+        worker_module,
+        "execute_llm_job",
+        lambda job, progress_callback=None: {
+            "response": "ok",
+            "session_id": "s1",
+            "mode": "single",
+        },
+    )
 
     processed = worker_module.LLMWorker(queue=queue).process_once()
     updated = queue.get(record["job_id"])
@@ -81,6 +124,57 @@ def test_llm_worker_processes_successful_job(monkeypatch):
     assert processed is True
     assert updated["status"] == "succeeded"
     assert updated["result"]["response"] == "ok"
+    assert updated["progress"]["active_tool"] is None
+    assert "single_final" in updated["progress"]["completed_tools"]
+    assert updated["progress"]["message"] == "Agent response completed."
+
+
+def test_llm_worker_records_callback_progress(monkeypatch):
+    from src.agent import llm_worker as worker_module
+    from src.agent.llm_queue import LLMJobQueue
+
+    queue = LLMJobQueue(client=FakeRedis())
+    record = queue.enqueue(
+        {
+            "user_id": "u1",
+            "plan": "free",
+            "session_id": "s1",
+            "message": "hello",
+            "remember": False,
+            "mode": "consensus",
+            "preferred_mode": None,
+        },
+        "consensus",
+    )
+    seen_progress = []
+
+    def fake_execute(job, progress_callback=None):
+        progress_callback({
+            "active_tool": "quant_researcher",
+            "completed_tools": [],
+            "active_label": "Quant Researcher",
+            "message": "Quant Researcher is working...",
+        })
+        seen_progress.append(queue.get(job.job_id)["progress"])
+        progress_callback({
+            "active_tool": "quant_analyst",
+            "completed_tools": ["quant_researcher"],
+            "active_label": "Quant Analyst",
+            "message": "Quant Analyst is working...",
+        })
+        seen_progress.append(queue.get(job.job_id)["progress"])
+        return {"response": "ok", "session_id": "s1", "mode": "consensus"}
+
+    monkeypatch.setattr(worker_module, "execute_llm_job", fake_execute)
+
+    processed = worker_module.LLMWorker(queue=queue).process_once()
+    updated = queue.get(record["job_id"])
+
+    assert processed is True
+    assert seen_progress[0]["active_tool"] == "quant_researcher"
+    assert seen_progress[1]["active_tool"] == "quant_analyst"
+    assert seen_progress[1]["completed_tools"] == ["quant_researcher"]
+    assert updated["progress"]["completed_tools"][-1] == "consensus_synthesis"
 
 
 def test_llm_worker_requeues_when_concurrency_slots_unavailable(monkeypatch):

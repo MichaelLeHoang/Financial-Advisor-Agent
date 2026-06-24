@@ -4,10 +4,11 @@ import { useRef, useEffect, useState } from "react";
 import type { ChangeEvent, ComponentType, MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Brain, ClipboardList, Image, Loader2, Paperclip, PieChart, Send, TableProperties, TrendingUp } from "lucide-react";
+import { ArrowRight, Brain, Check, ChevronDown, ClipboardList, Image, Loader2, Paperclip, PieChart, Send, SlidersHorizontal, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
-import type { EquityResearchEvent, EquityResearchRunDetail } from "@/lib/api";
+import type { ChatJobProgress, ChatJobStatusResponse, EquityResearchEvent, EquityResearchRunDetail, ResearchDepth } from "@/lib/api";
+import { notifyCompletion, requestCompletionNotification } from "@/lib/completion-notifications";
 import { loadLocalChatMessages, saveLocalChatMessages } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -18,6 +19,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import Plan from "@/components/ui/agent-plan";
 import Markdown from "@/components/ui/markdown";
+import { showToast } from "@/components/ui/toast";
 
 interface Message {
   id: string;
@@ -61,6 +63,39 @@ function extractResearchCommand(message: string) {
   return {
     ticker: match[1].toUpperCase(),
     depth: (match[2]?.toLowerCase() || "shallow") as "shallow" | "medium" | "deep",
+  };
+}
+
+type PredictionSummary = {
+  mlDirection: string;
+  valuationTarget: string;
+  impliedUpside: string;
+  finalSignal: string;
+  modelPerformance: string;
+  disclaimer: string;
+};
+
+function parsePredictionSummary(content: string): PredictionSummary | null {
+  if (!content.includes("ML Direction:") || !content.includes("Final Signal:")) return null;
+
+  const lines = content.split("\n").map((line) => line.trim()).filter(Boolean);
+  const findValue = (label: string) => {
+    const line = lines.find((item) => item.startsWith(label) || item.startsWith(`- ${label}`));
+    return line?.replace(/^- /, "").replace(label, "").trim() || "Unavailable";
+  };
+  const performanceLine = lines.find((line) => line.startsWith("- Weighted Ensemble:")) || lines.find((line) => line.startsWith("- Random Forest:")) || "";
+  const confidenceLine = lines.find((line) => line.startsWith("Confidence:"))?.replace(/\.$/, "") || "";
+  const disclaimer =
+    lines.find((line) => line.includes("not professional financial advice") || line.includes("not financial advice")) ||
+    "This is educational analysis, not financial advice.";
+
+  return {
+    mlDirection: findValue("ML Direction:"),
+    valuationTarget: findValue("Valuation Target:"),
+    impliedUpside: findValue("Implied Upside/Downside:"),
+    finalSignal: findValue("Final Signal:"),
+    modelPerformance: [confidenceLine, performanceLine.replace(/^- /, "")].filter(Boolean).join(" | ") || "Unavailable",
+    disclaimer,
   };
 }
 
@@ -144,8 +179,18 @@ function toolKeyFromResearchEvent(event: EquityResearchEvent) {
     return RESEARCH_EVENT_TOOL_BY_AGENT[event.agent_key];
   }
   if (event.tool_name === "build_data_snapshot") return "equity_snapshot";
-  if (event.label === "Snapshot ready") return "equity_snapshot";
+  if (event.label === "Snapshot ready" || event.label === "Snapshot") return "equity_snapshot";
   return null;
+}
+
+function isResearchStepStarting(event: EquityResearchEvent) {
+  return event.event_type === "tool" || event.event_type === "reasoning";
+}
+
+function isResearchStepComplete(event: EquityResearchEvent) {
+  return event.event_type === "report"
+    || event.event_type === "final"
+    || (event.event_type === "status" && (event.label === "Snapshot ready" || event.label === "Skipped"));
 }
 
 function finalResearchMarkdown(detail: EquityResearchRunDetail) {
@@ -197,6 +242,54 @@ const PLACEHOLDERS = [
   "What are the risks of holding SMCI right now?",
 ];
 
+function firstChatProgressTool(mode: "single" | "consensus") {
+  return mode === "consensus" ? "quant_researcher" : "single_scope";
+}
+
+const RESEARCH_MODES: {
+  depth: ResearchDepth;
+  label: string;
+  tagline: string;
+  minPlan: "free" | "pro" | "trader";
+}[] = [
+  {
+    depth: "shallow",
+    label: "Shallow",
+    tagline: "Fast ticker snapshot and compact verdict.",
+    minPlan: "free",
+  },
+  {
+    depth: "medium",
+    label: "Medium",
+    tagline: "Broader analyst coverage for signed-in research.",
+    minPlan: "pro",
+  },
+  {
+    depth: "deep",
+    label: "Deep",
+    tagline: "Full research pass for active trading decisions.",
+    minPlan: "trader",
+  },
+];
+
+const PLAN_RANK = {
+  free: 0,
+  pro: 1,
+  trader: 2,
+  quant: 3,
+  execution_addon: 4,
+} as const;
+
+function canUseResearchMode(plan: keyof typeof PLAN_RANK, depth: ResearchDepth) {
+  const mode = RESEARCH_MODES.find((item) => item.depth === depth);
+  return mode ? PLAN_RANK[plan] >= PLAN_RANK[mode.minPlan] : false;
+}
+
+function bestResearchModeForPlan(plan: keyof typeof PLAN_RANK, requested: ResearchDepth) {
+  if (canUseResearchMode(plan, requested)) return requested;
+  return [...RESEARCH_MODES].reverse().find((mode) => canUseResearchMode(plan, mode.depth))?.depth ?? "shallow";
+}
+
 const placeholderContainerVariants = {
   initial: {},
   animate: { transition: { staggerChildren: 0.015 } },
@@ -238,7 +331,58 @@ export default function ChatPage() {
   const [isActive, setIsActive] = useState(false);
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [completedTools, setCompletedTools] = useState<string[]>([]);
+  const [agentRunState, setAgentRunState] = useState<"queued" | "running">("running");
+  const [agentRunStartedAt, setAgentRunStartedAt] = useState<number | null>(null);
+  const [useAgentSyntheticProgress, setUseAgentSyntheticProgress] = useState(false);
+  const [researchDepth, setResearchDepth] = useState<ResearchDepth>("shallow");
+  const lastJobProgressSequenceRef = useRef(0);
+  const progressEventQueueRef = useRef<ChatJobProgress[]>([]);
+  const progressDrainActiveRef = useRef(false);
+  const progressDrainPromiseRef = useRef<Promise<void> | null>(null);
+  const notifyWhenCompleteRef = useRef(false);
   const firstName = getFirstName(user?.display_name || user?.email || "");
+
+  const showLongRunningToast = (message: string) => {
+    notifyWhenCompleteRef.current = false;
+    showToast({
+      title: "Analysis running",
+      message,
+      duration: 9000,
+      actions: {
+        label: "Notify me",
+        variant: "outline",
+        onClick: () => {
+          void requestCompletionNotification().then((enabled) => {
+            notifyWhenCompleteRef.current = enabled;
+            showToast({
+              title: enabled ? "Notifications on" : "Notifications unavailable",
+              message: enabled
+                ? "I will notify you when this analysis is done."
+                : "Browser notifications are not available or permission was denied.",
+              variant: enabled ? "success" : "warning",
+            });
+          });
+        },
+      },
+    });
+  };
+
+  const finishLongRunningToast = (success: boolean, title: string, message: string) => {
+    showToast({
+      title,
+      message,
+      variant: success ? "success" : "error",
+      duration: 6000,
+    });
+    if (notifyWhenCompleteRef.current) {
+      notifyCompletion(title, message);
+      notifyWhenCompleteRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    setResearchDepth((current) => bestResearchModeForPlan(user.plan, current));
+  }, [user.plan]);
 
   useEffect(() => {
     const handlePrivacyReset = () => {
@@ -250,6 +394,13 @@ export default function ChatPage() {
       setUpgradeMessage(null);
       setActiveTool(null);
       setCompletedTools([]);
+      setAgentRunState("running");
+      setAgentRunStartedAt(null);
+      setUseAgentSyntheticProgress(false);
+      lastJobProgressSequenceRef.current = 0;
+      progressEventQueueRef.current = [];
+      progressDrainActiveRef.current = false;
+      progressDrainPromiseRef.current = null;
       appliedPromptRef.current = null;
       router.replace("/");
     };
@@ -388,6 +539,62 @@ export default function ChatPage() {
 
   const isStreamingRef = useRef(false);
 
+  const applyProgressEvent = (progress: ChatJobProgress, job: ChatJobStatusResponse, fallbackLabel: string) => {
+    setAgentRunState(job.status === "queued" ? "queued" : "running");
+    setAgentRunStartedAt((current) => current ?? (job.started_at ? job.started_at * 1000 : Date.now()));
+    setActiveTool(progress.active_tool ?? null);
+    setCompletedTools(progress.completed_tools ?? []);
+
+    const content = progress.message || progress.active_label || fallbackLabel;
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.status === "fetching"
+          ? { ...m, content }
+          : m
+      )
+    );
+  };
+
+  const drainProgressEvents = (job: ChatJobStatusResponse, fallbackLabel: string) => {
+    if (progressDrainActiveRef.current) return;
+    progressDrainActiveRef.current = true;
+
+    progressDrainPromiseRef.current = (async () => {
+      while (progressEventQueueRef.current.length > 0) {
+        const event = progressEventQueueRef.current.shift();
+        if (event) {
+          applyProgressEvent(event, job, fallbackLabel);
+          await delay(420);
+        }
+      }
+      progressDrainActiveRef.current = false;
+      progressDrainPromiseRef.current = null;
+    })();
+  };
+
+  const enqueueJobProgress = (job: ChatJobStatusResponse, fallbackLabel: string) => {
+    const rawEvents = job.progress_events?.length ? job.progress_events : job.progress ? [job.progress] : [];
+    const newEvents = rawEvents
+      .filter((event) => event.sequence > lastJobProgressSequenceRef.current)
+      .sort((a, b) => a.sequence - b.sequence);
+    if (newEvents.length === 0) return Boolean(job.progress);
+
+    lastJobProgressSequenceRef.current = newEvents[newEvents.length - 1].sequence;
+    progressEventQueueRef.current = [...progressEventQueueRef.current, ...newEvents];
+    drainProgressEvents(job, fallbackLabel);
+    return true;
+  };
+
+  const waitForProgressEvents = async () => {
+    while (progressDrainPromiseRef.current || progressEventQueueRef.current.length > 0) {
+      if (progressDrainPromiseRef.current) {
+        await progressDrainPromiseRef.current;
+      } else {
+        await delay(80);
+      }
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
     const text = input.trim();
@@ -424,13 +631,17 @@ export default function ChatPage() {
       setMessages((prev) => [...prev, userMsg, { id: getUniqueId(), role: "assistant", content: "Creating QuanAd 2.1 research run...", status: "fetching" }]);
       setIsLoading(true);
       setUpgradeMessage(null);
-      setActiveTool("resolve_ticker");
+      setAgentRunState("running");
+      setAgentRunStartedAt(Date.now());
+      setUseAgentSyntheticProgress(false);
+      setActiveTool("equity_snapshot");
       setCompletedTools([]);
+      showLongRunningToast("QuanAd 2.1 research may take a little while.");
       const loadingStartedAt = Date.now();
       try {
         const run = await api.createEquityResearchRun({
           ticker,
-          research_depth: researchCommand?.depth ?? "shallow",
+          research_depth: researchCommand?.depth ?? bestResearchModeForPlan(user.plan, researchDepth),
           source_surface: "ai_advisor",
         });
         let cursor = 0;
@@ -450,15 +661,10 @@ export default function ChatPage() {
             const toolKey = toolKeyFromResearchEvent(event);
             if (!toolKey) continue;
 
-            if (event.event_type === "tool" || event.event_type === "reasoning") {
+            if (isResearchStepStarting(event)) {
               setActiveTool(toolKey);
             }
-            if (event.event_type === "status" && event.label === "Snapshot ready") {
-              completed.add(toolKey);
-              setCompletedTools(Array.from(completed));
-              setActiveTool(null);
-            }
-            if (event.event_type === "report" || event.event_type === "final") {
+            if (isResearchStepComplete(event)) {
               completed.add(toolKey);
               setCompletedTools(Array.from(completed));
               setActiveTool(null);
@@ -509,6 +715,11 @@ export default function ChatPage() {
             researchRunId: latestDetail.run.run_id,
           })
         );
+        finishLongRunningToast(
+          true,
+          "Analysis complete",
+          `${latestDetail.run.ticker} QuanAd 2.1 research is ready.`
+        );
         window.dispatchEvent(new Event("chat-sessions:changed"));
       } catch (err: any) {
         setMessages((prev) =>
@@ -518,11 +729,19 @@ export default function ChatPage() {
             content: `Error: ${err.message}`,
           })
         );
+        finishLongRunningToast(
+          false,
+          "Analysis failed",
+          err instanceof Error ? err.message : "QuanAd 2.1 research could not be completed."
+        );
       } finally {
         setIsLoading(false);
         isStreamingRef.current = false;
         setActiveTool(null);
         setCompletedTools([]);
+        setAgentRunState("running");
+        setAgentRunStartedAt(null);
+        setUseAgentSyntheticProgress(false);
       }
       return;
     }
@@ -530,26 +749,41 @@ export default function ChatPage() {
     const fetchingLabel = version === "2.0"
       ? "Running multi-agent consensus analysis..."
       : "Analyzing market context...";
+    const mode = apiModeFromVersion(version);
+    const shouldNotifyLongRun = mode === "consensus";
     const fetchingMsg: Message = { id: getUniqueId(), role: "assistant", content: fetchingLabel, status: "fetching" };
 
     setMessages((prev) => [...prev, userMsg, fetchingMsg]);
     setIsLoading(true);
     const loadingStartedAt = Date.now();
     setUpgradeMessage(null);
-    setActiveTool(null);
+    setActiveTool(firstChatProgressTool(mode));
     setCompletedTools([]);
+    setAgentRunState("queued");
+    setAgentRunStartedAt(null);
+    setUseAgentSyntheticProgress(false);
+    lastJobProgressSequenceRef.current = 0;
+    progressEventQueueRef.current = [];
+    progressDrainActiveRef.current = false;
+    progressDrainPromiseRef.current = null;
+    if (shouldNotifyLongRun) {
+      showLongRunningToast("QuanAd 2.0 consensus analysis may take a little while.");
+    } else {
+      notifyWhenCompleteRef.current = false;
+    }
 
     const assistantMsgId = getUniqueId();
 
     try {
-      const mode = apiModeFromVersion(version);
       const remember = !user.is_guest;
       let res;
       try {
         const queued = await api.chatJob(text, targetSessionId, remember, mode);
 
         res = await api.waitForChatJob(queued.job_id, (job) => {
+          const appliedProgress = enqueueJobProgress(job, fetchingLabel);
           if (job.status === "queued") {
+            setAgentRunState((current) => current === "running" ? "running" : "queued");
             const positionText = job.queue_position ? ` Position ${job.queue_position}.` : "";
             setMessages((prev) =>
               prev.map((m) =>
@@ -558,7 +792,9 @@ export default function ChatPage() {
                   : m
               )
             );
-          } else if (job.status === "running") {
+          } else if (job.status === "running" && !appliedProgress) {
+            setAgentRunState("running");
+            setAgentRunStartedAt((current) => current ?? Date.now());
             setMessages((prev) =>
               prev.map((m) =>
                 m.status === "fetching"
@@ -570,6 +806,9 @@ export default function ChatPage() {
         });
       } catch (queueError) {
         if (!isRedisUnavailableError(queueError)) throw queueError;
+        setAgentRunState("running");
+        setAgentRunStartedAt(Date.now());
+        setUseAgentSyntheticProgress(true);
         setMessages((prev) =>
           prev.map((m) =>
             m.status === "fetching"
@@ -585,6 +824,7 @@ export default function ChatPage() {
       if (elapsedBeforeAnswer < minimumPlanDuration) {
         await new Promise((resolve) => window.setTimeout(resolve, minimumPlanDuration - elapsedBeforeAnswer));
       }
+      await waitForProgressEvents();
 
       setMessages((prev) =>
         prev.filter((m) => m.status !== "fetching").concat({
@@ -598,6 +838,9 @@ export default function ChatPage() {
           researchTicker: investmentTicker,
         }] : [])
       );
+      if (shouldNotifyLongRun) {
+        finishLongRunningToast(true, "Analysis complete", "QuanAd 2.0 consensus response is ready.");
+      }
       window.dispatchEvent(new Event("chat-sessions:changed"));
     } catch (err: any) {
       if (isUpgradeRequiredError(err)) {
@@ -610,10 +853,21 @@ export default function ChatPage() {
           content: isUpgradeRequiredError(err) ? err.detail.message : `Error: ${err.message}`,
         })
       );
+      if (shouldNotifyLongRun) {
+        finishLongRunningToast(
+          false,
+          "Analysis failed",
+          isUpgradeRequiredError(err) ? err.detail.message : err instanceof Error ? err.message : "QuanAd 2.0 analysis could not be completed."
+        );
+      }
     } finally {
       setIsLoading(false);
       isStreamingRef.current = false;
       setActiveTool(null);
+      setCompletedTools([]);
+      setAgentRunState("running");
+      setAgentRunStartedAt(null);
+      setUseAgentSyntheticProgress(false);
     }
   };
 
@@ -700,6 +954,9 @@ export default function ChatPage() {
                     isActive={true}
                     activeTool={activeTool}
                     completedTools={completedTools}
+                    runState={version === "2.1" ? "running" : agentRunState}
+                    runStartedAt={version === "2.1" ? null : agentRunStartedAt}
+                    useSyntheticFallback={useAgentSyntheticProgress}
                   />
                 </div>
               ) : (
@@ -744,7 +1001,7 @@ export default function ChatPage() {
                         </div>
                       </div>
                     ) : (
-                      <Markdown content={msg.content} />
+                      <AssistantMessageContent content={msg.content} />
                     )
                   ) : (
                     msg.content
@@ -838,6 +1095,12 @@ export default function ChatPage() {
                   </div>
 
                   <div className="ml-auto flex shrink-0 items-center gap-2">
+                    <ResearchModeSelector
+                      plan={user.plan}
+                      value={researchDepth}
+                      onChange={setResearchDepth}
+                      visible={version === "2.1"}
+                    />
                     <ModelSelector placement="top" compact />
                     <Button
                       onClick={handleSend}
@@ -858,6 +1121,146 @@ export default function ChatPage() {
           AI-generated analysis only. Not professional financial advice.
         </p>
       </div>
+    </div>
+  );
+}
+
+function ResearchModeSelector({
+  plan,
+  value,
+  onChange,
+  visible,
+}: {
+  plan: keyof typeof PLAN_RANK;
+  value: ResearchDepth;
+  onChange: (value: ResearchDepth) => void;
+  visible: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const activeDepth = bestResearchModeForPlan(plan, value);
+  const active = RESEARCH_MODES.find((mode) => mode.depth === activeDepth) ?? RESEARCH_MODES[0];
+  const isUpperTier = PLAN_RANK[plan] >= PLAN_RANK.pro;
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open]);
+
+  if (!visible || !isUpperTier) return null;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Research mode: ${active.label}`}
+        title={`Research mode: ${active.label}`}
+        onClick={() => setOpen((current) => !current)}
+        className="flex h-10 items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--surface-control)] px-3 text-sm font-semibold text-[var(--text-primary)] shadow-[var(--shadow-control)] transition-colors hover:bg-[var(--surface-control-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/45"
+      >
+        <SlidersHorizontal className="size-4 text-cyan-300" />
+        <span className="hidden md:inline">Research</span>
+        <span className="hidden sm:inline text-[var(--text-subtle)]">{active.label}</span>
+        <ChevronDown className="size-4 text-[var(--text-subtle)]" />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            role="menu"
+            initial={{ opacity: 0, y: 8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute bottom-12 right-0 z-30 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
+          >
+            <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-subtle)]">
+              Research Mode
+            </div>
+            {RESEARCH_MODES.map((mode) => {
+              const isActive = mode.depth === activeDepth;
+              const isAllowed = canUseResearchMode(plan, mode.depth);
+              return (
+                <button
+                  key={mode.depth}
+                  type="button"
+                  role="menuitem"
+                  disabled={!isAllowed}
+                  onClick={() => {
+                    if (!isAllowed) return;
+                    onChange(mode.depth);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all",
+                    isActive
+                      ? "bg-[var(--surface-selected)] text-[var(--text-primary)] shadow-[var(--shadow-control)]"
+                      : "text-[var(--text-secondary)] hover:bg-[var(--surface-selected)]/50",
+                    !isAllowed && "cursor-not-allowed opacity-45 hover:bg-transparent"
+                  )}
+                >
+                  <div className="flex size-9 items-center justify-center rounded-xl bg-cyan-300/12 text-cyan-200 ring-1 ring-cyan-300/20">
+                    <SlidersHorizontal className="size-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+                      {mode.label}
+                      {!isAllowed && (
+                        <span className="rounded-md bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)] ring-1 ring-white/[0.06]">
+                          {mode.minPlan}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-[var(--text-muted)]">{mode.tagline}</div>
+                  </div>
+                  {isActive && <Check className="size-4 shrink-0 text-green-positive" />}
+                </button>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function AssistantMessageContent({ content }: { content: string }) {
+  const prediction = parsePredictionSummary(content);
+
+  if (!prediction) {
+    return <Markdown content={content} />;
+  }
+
+  const rows = [
+    ["ML Direction", prediction.mlDirection],
+    ["Valuation Target", prediction.valuationTarget],
+    ["Implied Upside/Downside", prediction.impliedUpside],
+    ["Final Signal", prediction.finalSignal],
+    ["Model Performance", prediction.modelPerformance],
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-white/[0.10] bg-white/[0.04] p-3">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {rows.map(([label, value]) => (
+            <div key={label} className={cn(label === "Model Performance" ? "sm:col-span-2" : "", "min-w-0")}>
+              <div className="text-[11px] font-medium uppercase tracking-normal text-white/45">{label}</div>
+              <div className="mt-1 break-words text-sm font-semibold text-white/90">{value}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 border-t border-white/[0.08] pt-3 text-xs leading-5 text-white/55">
+          {prediction.disclaimer}
+        </div>
+      </div>
+      <Markdown content={content} />
     </div>
   );
 }

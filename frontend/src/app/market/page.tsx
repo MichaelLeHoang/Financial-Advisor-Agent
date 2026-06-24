@@ -54,7 +54,6 @@ import {
     type MarketPoint,
     type MarketSymbol,
 } from "@/lib/market-data";
-import UpgradePrompt from "@/components/common/UpgradePrompt";
 import FinanceOhlcLayer from "@/components/market/FinanceOhlcLayer";
 import {
     AlertDialog,
@@ -75,8 +74,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { showToast } from "@/components/ui/toast";
 import { ResearchDepthSelector } from "@/components/equity-research/ResearchComponents";
-import { useAuth } from "@/components/auth/AuthProvider";
 
 interface StockInfo extends MarketSymbol {
     data: MarketPoint[];
@@ -95,6 +94,18 @@ interface StockInfo extends MarketSymbol {
     quarterlyDividendAmount?: number | null;
     earnings?: EarningsPoint[];
     quarterlyFinancials?: QuarterlyFinancial[];
+}
+
+function uniqueMarketSymbols(symbols: MarketSymbol[]): MarketSymbol[] {
+    const seen = new Set<string>();
+    const unique: MarketSymbol[] = [];
+    for (const symbol of symbols) {
+        const key = normalizeTicker(symbol.ticker);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        unique.push(symbol);
+    }
+    return unique;
 }
 
 type DetailChartStyle = "area" | "line" | "candle" | "bar";
@@ -180,15 +191,15 @@ function rangeRefreshMs(range: MarketChartRange): number | null {
     return null;
 }
 
-function readSavedMarketStocks(): string[] {
+function readSavedMarketStocks(): string[] | null {
     try {
         const raw = window.localStorage.getItem(MARKET_STOCKS_STORAGE_KEY);
-        if (!raw) return [];
+        if (raw === null) return null;
         const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return [];
+        if (!Array.isArray(parsed)) return null;
         return normalizeSymbolList(parsed.filter((item): item is string => typeof item === "string"));
     } catch {
-        return [];
+        return null;
     }
 }
 
@@ -312,7 +323,6 @@ function DetailChartTooltip({
 }
 
 export default function MarketPage() {
-    const { user } = useAuth();
     const router = useRouter();
     const searchInputRef = useRef<HTMLInputElement>(null);
     const marketTopRef = useRef<HTMLDivElement>(null);
@@ -323,7 +333,6 @@ export default function MarketPage() {
     const [searchingSymbols, setSearchingSymbols] = useState(false);
     const [loading, setLoading] = useState(false);
     const [mounted, setMounted] = useState(false);
-    const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
     const [selectedStock, setSelectedStock] = useState<StockInfo | null>(null);
     const [selectedRange, setSelectedRange] = useState<MarketChartRange>(DEFAULT_MARKET_RANGE);
     const [chartStyle, setChartStyle] = useState<DetailChartStyle>("area");
@@ -337,26 +346,18 @@ export default function MarketPage() {
     const [researchError, setResearchError] = useState<string | null>(null);
 
     const localMatches = useMemo(() => searchMarketSymbols(query), [query]);
-    const matches = symbolMatches.length > 0 ? symbolMatches : localMatches;
-    const isGuest = Boolean(user?.is_guest);
-
-    const requireSignInForMarketSave = () => {
-        setUpgradeMessage("Sign in to add, remove, or save stocks in your Market workspace. Public users can still search tickers and preview charts.");
-    };
-
+    const matches = useMemo(
+        () => uniqueMarketSymbols(symbolMatches.length > 0 ? symbolMatches : localMatches),
+        [localMatches, symbolMatches]
+    );
     useEffect(() => {
-        if (isGuest) {
-            setMounted(true);
-            return;
-        }
-
         const saved = readSavedMarketStocks();
-        if (saved.length > 0) {
+        if (saved !== null) {
             setStocks(saved.map(createStock));
         }
         setSkipRemoveConfirm(window.localStorage.getItem("market.skipRemoveConfirm") === "true");
         setMounted(true);
-    }, [isGuest]);
+    }, []);
 
     useEffect(() => {
         if (!mounted) return;
@@ -365,9 +366,9 @@ export default function MarketPage() {
     }, [mounted]);
 
     useEffect(() => {
-        if (!mounted || isGuest) return;
+        if (!mounted) return;
         window.localStorage.setItem(MARKET_STOCKS_STORAGE_KEY, JSON.stringify(stocks.map((stock) => stock.ticker)));
-    }, [isGuest, mounted, stocks]);
+    }, [mounted, stocks]);
 
     useEffect(() => {
         const normalized = query.trim();
@@ -383,14 +384,14 @@ export default function MarketPage() {
             api.marketSearch(normalized)
                 .then((results) => {
                     if (cancelled) return;
-                    setSymbolMatches(results.map((result) => ({
+                    setSymbolMatches(uniqueMarketSymbols(results.map((result) => ({
                         ticker: result.ticker,
                         name: result.name,
                         exchange: result.exchange || "Market",
                         sector: result.sector || result.quote_type || "Instrument",
                         price: 0,
                         change: 0,
-                    })));
+                    }))));
                 })
                 .catch(() => {
                     if (cancelled) return;
@@ -428,37 +429,48 @@ export default function MarketPage() {
     };
 
     const addTicker = (value: string) => {
-        if (isGuest) {
-            requireSignInForMarketSave();
-            setSearchOpen(false);
-            return;
-        }
-
         const ticker = normalizeTicker(value);
         if (!ticker) return;
 
-        setStocks((current) => {
-            if (current.some((stock) => stock.ticker === ticker)) return current;
-            return [{ ...createStock(ticker), loading: true }, ...current];
-        });
+        if (stocks.some((stock) => stock.ticker === ticker)) {
+            setQuery("");
+            setSearchOpen(false);
+            showToast({
+                title: "Already in Market",
+                message: `${ticker} is already in your Market list.`,
+            });
+            return;
+        }
+
+        setStocks((current) => [{ ...createStock(ticker), loading: true }, ...current]);
         setQuery("");
         setSearchOpen(false);
+
+        showToast({
+            title: "Adding stock",
+            message: `Adding ${ticker} to Market.`,
+        });
 
         fetchQuote(ticker)
             .then((fresh) => {
                 setStocks((current) => current.map((stock) => stock.ticker === ticker ? fresh : stock));
+                showToast({
+                    title: "Stock added",
+                    message: `${fresh.ticker} was added to Market.`,
+                    variant: "success",
+                });
             })
             .catch(() => {
                 setStocks((current) => current.map((stock) => stock.ticker === ticker ? { ...stock, loading: false } : stock));
+                showToast({
+                    title: "Stock added",
+                    message: `${ticker} was added, but the live quote could not be loaded.`,
+                    variant: "warning",
+                });
             });
     };
 
     const removeTicker = (ticker: string) => {
-        if (isGuest) {
-            requireSignInForMarketSave();
-            return;
-        }
-
         setStocks((current) => current.filter((stock) => stock.ticker !== ticker));
         setSelectedStock((current) => current?.ticker === ticker ? null : current);
     };
@@ -543,7 +555,6 @@ export default function MarketPage() {
     const refresh = async () => {
         if (stocks.length === 0) return;
         setLoading(true);
-        setUpgradeMessage(null);
         setStocks((current) => current.map((stock) => ({ ...stock, loading: true })));
         const [period, interval] = quotePeriod(DEFAULT_MARKET_RANGE);
         const quoteMap = await fetchCachedQuotes(stocks.map((stock) => stock.ticker), period, interval);
@@ -595,10 +606,6 @@ export default function MarketPage() {
                             variant="outline"
                             className="rounded-xl"
                             onClick={() => {
-                                if (isGuest) {
-                                    requireSignInForMarketSave();
-                                    return;
-                                }
                                 setStocks(DEFAULT_MARKET_TICKERS.map(createStock));
                             }}
                         >
@@ -610,10 +617,6 @@ export default function MarketPage() {
                             variant="outline"
                             className="rounded-xl"
                             onClick={() => {
-                                if (isGuest) {
-                                    requireSignInForMarketSave();
-                                    return;
-                                }
                                 setStocks([]);
                             }}
                             disabled={stocks.length === 0}
@@ -632,8 +635,6 @@ export default function MarketPage() {
                     </div>
                 </div>
             </div>
-
-            {upgradeMessage && <div className="mb-8"><UpgradePrompt message={upgradeMessage} /></div>}
 
             {stocks.length === 0 ? (
                 <Empty className="min-h-[24rem]">
@@ -767,7 +768,7 @@ function MarketSearch({
                         <CardContent className="flex max-h-80 flex-col gap-1 overflow-y-auto px-2 py-0">
                             {matches.map((match, index) => (
                                 <motion.div
-                                    key={match.ticker}
+                                    key={`${match.ticker}-${match.exchange}-${index}`}
                                     initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
                                     animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
                                     transition={{ duration: 0.24, delay: Math.min(index * 0.035, 0.18), ease: [0.16, 1, 0.3, 1] }}
@@ -1277,7 +1278,7 @@ function MarketChartDialog({
     const color = compareMode ? COMPARE_COLORS[0] : up ? "#34d399" : "#f87171";
     const filteredCompareMatches = useMemo(() => {
         const excluded = new Set([stock?.ticker, ...activeComparisonSymbols]);
-        return searchMarketSymbols(compareQuery, 8).filter((match) => !excluded.has(match.ticker));
+        return uniqueMarketSymbols(searchMarketSymbols(compareQuery, 8)).filter((match) => !excluded.has(match.ticker));
     }, [activeComparisonSymbols, compareQuery, stock?.ticker]);
 
     const addCompareSymbol = (symbol: string) => {
@@ -1381,9 +1382,9 @@ function MarketChartDialog({
                                 {compareQuery && (
                                     <Card className="absolute left-0 right-0 top-10 z-30 rounded-2xl border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
                                         <CardContent className="flex max-h-56 flex-col gap-1 overflow-y-auto px-2 py-0">
-                                            {(filteredCompareMatches.length > 0 ? filteredCompareMatches : [createMarketSymbol(compareQuery)]).map((match) => (
+                                            {(filteredCompareMatches.length > 0 ? filteredCompareMatches : [createMarketSymbol(compareQuery)]).map((match, index) => (
                                                 <button
-                                                    key={match.ticker}
+                                                    key={`${match.ticker}-${match.exchange}-${index}`}
                                                     type="button"
                                                     onClick={() => addCompareSymbol(match.ticker)}
                                                     className="flex items-center justify-between rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/[0.08]"

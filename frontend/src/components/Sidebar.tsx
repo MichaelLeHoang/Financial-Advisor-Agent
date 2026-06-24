@@ -39,6 +39,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import type { Plan } from "@/components/auth/AuthProvider";
 import ChatSearchDialog from "@/components/ChatSearchDialog";
 import ProfileMenu from "@/components/ProfileMenu";
+import { showToast } from "@/components/ui/toast";
 
 type NavItem = {
     href: string;
@@ -952,8 +953,17 @@ function RecentThreadRow({
             }
             setEditing(false);
             onSessionsChanged();
+            showToast({
+                title: "Chat renamed",
+                message: `Renamed to ${nextTitle}.`,
+                variant: "success",
+            });
         } catch (error) {
-            window.alert(error instanceof Error ? error.message : "Unable to rename this chat.");
+            showToast({
+                title: "Unable to rename chat",
+                message: error instanceof Error ? error.message : "Unable to rename this chat.",
+                variant: "error",
+            });
         } finally {
             setSavingTitle(false);
         }
@@ -975,8 +985,17 @@ function RecentThreadRow({
                 await api.deleteChatSession(session.session_id);
             }
             onSessionDeleted(session.session_id);
+            showToast({
+                title: "Chat deleted",
+                message: `${session.title} was removed.`,
+                variant: "success",
+            });
         } catch (error) {
-            window.alert(error instanceof Error ? error.message : "Unable to delete this chat.");
+            showToast({
+                title: "Unable to delete chat",
+                message: error instanceof Error ? error.message : "Unable to delete this chat.",
+                variant: "error",
+            });
         }
     };
 

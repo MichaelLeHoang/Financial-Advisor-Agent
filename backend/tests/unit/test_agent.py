@@ -164,6 +164,12 @@ class TestPredictStockPriceTool:
                     "agreement": {"status": "moderate_agreement", "message": "aligned"},
                     "agreementDisplay": {"status": "moderate", "spread": 0.01, "explanation": "aligned"},
                     "confidence": "medium",
+                    "ml_prediction": "UP",
+                    "valuation_status": "available",
+                    "valuation_target": 120.0,
+                    "implied_upside": 0.2,
+                    "valuation_signal": "Undervalued",
+                    "final_signal": "Strong Bullish",
                     "warnings": [],
                     "risk_notes": ["This is educational analysis, not financial advice."],
                     "caveat": "This is AI-generated analysis based on historical market data and walk-forward validation. It is not professional financial advice.",
@@ -181,7 +187,40 @@ class TestPredictStockPriceTool:
         assert "Validation summary" in result
         assert "Model agreement" in result
         assert "Confidence: Medium" in result
+        assert "ML Direction: UP" in result
+        assert "Valuation Target: $120.00" in result
+        assert "Implied Upside/Downside: +20.00%" in result
+        assert "Valuation Signal: Undervalued" in result
+        assert "Final Signal: Strong Bullish" in result
         assert "not professional financial advice" in result.lower()
+
+    def test_returns_explicit_unavailable_valuation_when_fundamentals_are_missing(self):
+        from src.agent.tools import _format_ensemble_prediction_for_agent
+
+        result = _format_ensemble_prediction_for_agent(
+            {
+                "ticker": "NVDA",
+                "current_price": 100.0,
+                "ml_prediction": "NEUTRAL",
+                "valuation_status": "unavailable",
+                "valuation_target": None,
+                "implied_upside": None,
+                "valuation_signal": None,
+                "final_signal": "Neutral",
+                "predictions": {
+                    "weighted_ensemble": {
+                        "predicted_return": 0.0,
+                        "predicted_price": 100.0,
+                        "direction": "NEUTRAL",
+                    },
+                },
+                "confidence": "low",
+            }
+        )
+
+        assert "Valuation Target: Unavailable" in result
+        assert "Final Signal: Neutral" in result
+        assert "None" not in result
 
     def test_returns_random_forest_prediction_string_when_requested(self):
         from src.agent.tools import predict_stock_price

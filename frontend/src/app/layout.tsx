@@ -10,6 +10,7 @@ import AlertsModal from "@/components/AlertsModal";
 import { AuthProvider, useAuth } from "@/components/auth/AuthProvider";
 import PublicAccessGate from "@/components/auth/PublicAccessGate";
 import { ModelProvider } from "@/components/ModelSelector";
+import Toaster from "@/components/ui/toast";
 
 const SETTINGS_STORAGE_KEY = "financial-advisor.settings";
 const COVER_SEEN_STORAGE_KEY = "financial-advisor.coverSeen";
@@ -86,6 +87,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AuthProvider>
             <ModelProvider>
               {children}
+              <Toaster />
             </ModelProvider>
           </AuthProvider>
         </body>
@@ -135,6 +137,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               isOpen={isAlertsOpen}
               onClose={() => setIsAlertsOpen(false)}
             />
+            <Toaster />
           </ModelProvider>
         </AuthProvider>
       </body>

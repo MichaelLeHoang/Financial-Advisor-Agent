@@ -17,7 +17,19 @@ export interface ChatJobCreateResponse {
   queue_position?: number | null;
 }
 
+export interface ChatJobProgress {
+  mode: "single" | "consensus";
+  active_tool?: string | null;
+  completed_tools: string[];
+  active_label?: string | null;
+  message?: string | null;
+  sequence: number;
+  updated_at?: number | null;
+}
+
 export interface ChatJobStatusResponse extends ChatJobCreateResponse {
+  progress?: ChatJobProgress | null;
+  progress_events?: ChatJobProgress[];
   result?: ChatResponse | null;
   error?: { type?: string; message?: string } | null;
   created_at?: number | null;
@@ -216,12 +228,21 @@ export interface OptimizeResult {
 
 export interface PredictResult {
   ticker: string;
-  model_type: string;
-  train_metrics: Record<string, number>;
-  test_metrics: Record<string, number>;
+  model_type?: string;
+  train_metrics?: Record<string, number>;
+  test_metrics?: Record<string, number>;
   summary?: string;
   current_price?: number;
   currentPrice?: number;
+  ml_prediction?: "UP" | "DOWN" | "NEUTRAL" | string;
+  valuation_status?: "available" | "unavailable" | string;
+  valuation_target?: number | null;
+  target_price?: number | null;
+  implied_upside?: number | null;
+  valuation_signal?: "Undervalued" | "Fairly Valued" | "Overvalued" | string | null;
+  final_signal?: "Strong Bullish" | "Bullish" | "Bearish" | "Mixed / Hold" | "Neutral" | string;
+  mae?: number | null;
+  rmse?: number | null;
   finalPrediction?: {
     direction: "UP" | "DOWN" | "NEUTRAL";
     predictedPrice?: number;

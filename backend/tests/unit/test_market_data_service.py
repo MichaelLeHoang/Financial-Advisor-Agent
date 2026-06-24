@@ -3,6 +3,7 @@ import pandas as pd
 from src.data.market_data_service import (
     NormalizedMarketSnapshot,
     NormalizedNewsItem,
+    _dedupe_symbol_results,
     _dedupe_news,
     _risk_metrics,
     _technical_indicators,
@@ -55,3 +56,33 @@ def test_snapshot_source_quality_shape_is_extensible():
 
     assert snapshot.ticker == "AAPL"
     assert snapshot.data_sources[0] == "finnhub_quote"
+
+
+def test_symbol_search_dedupes_by_ticker_and_prefers_exchange_metadata():
+    results = _dedupe_symbol_results(
+        [
+            {"ticker": "SAND.ST", "name": "SANDVIK AB", "exchange": None, "sector": None, "quote_type": "Common Stock"},
+            {"ticker": "SAND.ST", "name": "Sandvik AB", "exchange": "Stockholm", "sector": "Industrials", "quote_type": "Equity"},
+        ],
+        12,
+    )
+
+    assert results == [
+        {
+            "ticker": "SAND.ST",
+            "name": "SANDVIK AB",
+            "exchange": "Stockholm",
+            "sector": "Industrials",
+            "quote_type": "Common Stock",
+        }
+    ]
+
+
+def test_symbol_search_does_not_treat_common_stock_as_exchange():
+    results = _dedupe_symbol_results(
+        [{"ticker": "SNDK", "name": "SANDISK CORP", "exchange": "Common Stock", "sector": None, "quote_type": "Common Stock"}],
+        12,
+    )
+
+    assert results[0]["exchange"] is None
+    assert results[0]["quote_type"] == "Common Stock"

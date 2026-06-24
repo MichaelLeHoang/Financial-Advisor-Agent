@@ -238,6 +238,46 @@ def _news_sentiment(news_items: list[NormalizedNewsItem]) -> dict[str, Any]:
     }
 
 
+def _dedupe_symbol_results(rows: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    for row in rows:
+        ticker = str(row.get("ticker") or "").strip().upper()
+        if not ticker:
+            continue
+        normalized = {
+            "ticker": ticker,
+            "name": row.get("name") or ticker,
+            "exchange": _clean_exchange_label(row.get("exchange")),
+            "sector": row.get("sector"),
+            "quote_type": row.get("quote_type"),
+        }
+        if ticker not in merged:
+            merged[ticker] = normalized
+            order.append(ticker)
+            continue
+        existing = merged[ticker]
+        for key in ("name", "exchange", "sector", "quote_type"):
+            if not existing.get(key) and normalized.get(key):
+                existing[key] = normalized[key]
+    return [merged[ticker] for ticker in order[:limit]]
+
+
+def _clean_exchange_label(value: Any) -> str | None:
+    if value is None:
+        return None
+    label = str(value).strip()
+    if not label:
+        return None
+    if _normalize_label(label) in {"commonstock", "stock", "equity", "etf", "mutualfund", "fund"}:
+        return None
+    return label
+
+
+def _normalize_label(value: str) -> str:
+    return "".join(ch for ch in value.lower() if ch.isalnum())
+
+
 class MarketDataService:
     def fetch_snapshot(
         self,
@@ -262,37 +302,39 @@ class MarketDataService:
         return snapshot
 
     def search_symbols(self, query: str, limit: int = 12) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
         key = settings.secret_value("finnhub_api_key")
         if key:
             try:
                 data = _get_json("https://finnhub.io/api/v1/search", {"q": query, "token": key})
-                results = []
                 for row in data.get("result", [])[:limit] if isinstance(data, dict) else []:
                     symbol = str(row.get("symbol") or "").strip().upper()
                     if symbol:
                         results.append({
                             "ticker": symbol,
                             "name": row.get("description") or symbol,
-                            "exchange": row.get("primaryExchange") or row.get("type"),
-                            "sector": row.get("type"),
+                            "exchange": row.get("primaryExchange"),
+                            "sector": None,
                             "quote_type": row.get("type"),
                         })
-                if results:
-                    return results
             except Exception:
                 pass
-        search = yf.Search(query, max_results=limit, news_count=0, lists_count=0, include_research=False, include_cultural_assets=False, enable_fuzzy_query=True)
-        return [
-            {
-                "ticker": str(row.get("symbol") or "").strip().upper(),
-                "name": row.get("longname") or row.get("shortname") or row.get("symbol"),
-                "exchange": row.get("exchDisp") or row.get("exchange"),
-                "sector": row.get("sectorDisp") or row.get("sector") or row.get("quoteType"),
-                "quote_type": row.get("typeDisp") or row.get("quoteType"),
-            }
-            for row in (search.quotes or [])
-            if row.get("symbol")
-        ][:limit]
+        try:
+            search = yf.Search(query, max_results=limit, news_count=0, lists_count=0, include_research=False, include_cultural_assets=False, enable_fuzzy_query=True)
+            results.extend(
+                {
+                    "ticker": str(row.get("symbol") or "").strip().upper(),
+                    "name": row.get("longname") or row.get("shortname") or row.get("symbol"),
+                    "exchange": row.get("exchDisp") or row.get("exchange"),
+                    "sector": row.get("sectorDisp") or row.get("sector"),
+                    "quote_type": row.get("typeDisp") or row.get("quoteType"),
+                }
+                for row in (search.quotes or [])
+                if row.get("symbol")
+            )
+        except Exception:
+            pass
+        return _dedupe_symbol_results(results, limit)
 
     def _apply_finnhub(self, snapshot: NormalizedMarketSnapshot, *, include_news: bool, include_fundamentals: bool) -> None:
         key = settings.secret_value("finnhub_api_key")
