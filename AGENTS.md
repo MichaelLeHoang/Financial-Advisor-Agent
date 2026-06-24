@@ -96,5 +96,53 @@ Do not claim tests were run unless they were actually run. If tests were skipped
 
 Pull requests should describe the behavior change, explain why the change was needed, list test commands run, link related issues, and include screenshots or recordings for visible frontend changes. PR notes should also mention any reused existing functionality, intentional behavior changes, migrations, new environment variables, or follow-up tasks.
 
+## Merge Guidelines
+Do not merge changes into the main branch until the branch is up to date, relevant tests have passed, and the pull request clearly describes the behavior change.
+
+Before merging, verify:
+
+- The branch has no unresolved merge conflicts.
+- The change reuses existing modules, services, schemas, and tests where appropriate.
+- Relevant unit, integration, or full test commands have been run and documented.
+- Any failing tests are either fixed or clearly identified as pre-existing.
+- Frontend-visible changes include screenshots or recordings when useful.
+- Database migrations, environment variables, breaking changes, and follow-up tasks are documented.
+
+Use a clear merge title that summarizes the final behavior change, not the temporary branch name. Prefer an imperative conventional-style title, such as:
+
+- `feat(agent): add consensus response validation`
+- `fix(billing): handle duplicate Stripe webhook events`
+- `test(risk): add regression coverage for portfolio edge cases`
+- `docs(repo): update testing and merge guidelines`
+
+Use the merge description to summarize:
+
+- Why the change was needed.
+- What changed.
+- What existing functionality was reused or extended.
+- What tests were run.
+- Any migrations, environment variables, breaking changes, known limitations, or follow-up tasks.
+
+A good merge description format is:
+
+```text
+Summary:
+- <High-level behavior change>
+- <Important implementation detail>
+- <Existing modules/services/schemas reused or extended>
+
+Testing:
+- <Command run>
+- <Command run>
+- <Not run, with reason if applicable>
+
+Notes:
+- <Migration, env var, breaking change, limitation, or follow-up task>
+```
+
+Prefer squash merges for feature branches to keep `main` history clean, especially when the branch contains many small work-in-progress commits. Use regular merge commits only when preserving the full branch history is important. Do not force-push or rewrite the main branch.
+
+After resolving merge conflicts, rerun the affected tests because conflict resolution can accidentally change behavior. If a conflict touches existing behavior, check both the old behavior and the new behavior before merging.
+
 ## Security & Configuration Tips
 Copy `.env.example` files instead of committing secrets. Keep API keys, Supabase credentials, Stripe secrets, and ngrok domains out of Git. For database changes, create a new numbered file in `supabase/migrations/` and document required variables in `.env.example`.

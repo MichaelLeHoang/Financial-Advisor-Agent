@@ -24,4 +24,4 @@ Historical data should come through existing data helpers. Agent formatting belo
 Mock data and model providers. Cover leakage prevention, partial model failures, weighting, agreement, insufficient history, valuation edge cases, and stable output contracts.
 
 ## Latest Change
-- Expanded prediction results with deterministic valuation targets, implied upside, valuation classification, combined ML/valuation signals, and graceful fallback when fundamentals are unavailable.
+- Expanded valuation regression coverage for invalid numeric inputs, provider failures, unavailable-data fallbacks, and normalized combined signals; fixed whitespace handling in signal inputs.

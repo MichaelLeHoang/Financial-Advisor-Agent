@@ -82,8 +82,8 @@ def classify_valuation_signal(implied_upside: object) -> str | None:
 
 
 def combine_ml_and_valuation_signal(ml_direction: object, valuation_signal: object) -> str:
-    direction = str(ml_direction or "").upper()
-    signal = str(valuation_signal or "")
+    direction = str(ml_direction or "").strip().upper()
+    signal = str(valuation_signal or "").strip()
     if direction == "UP" and signal == "Undervalued":
         return "Strong Bullish"
     if direction == "UP" and signal == "Fairly Valued":

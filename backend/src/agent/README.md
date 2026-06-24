@@ -23,4 +23,4 @@ Reuse `data.market_data_service`, `llm.gateway`, `risk`, `quant`, and `saas` rat
 Cover routing, grounding, consensus, queue state, history ownership, and tool failure behavior with mocked providers.
 
 ## Latest Change
-- Expanded ensemble prediction tool output with ML direction, valuation target, implied upside, valuation signal, final signal, and validation performance labels for structured advisor rendering.
+- Expanded ensemble prediction tool output and regression coverage for available and unavailable valuation summaries, combined signals, and validation performance labels.

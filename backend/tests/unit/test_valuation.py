@@ -14,6 +14,40 @@ def test_valuation_target_and_upside_are_calculated():
 
 
 @pytest.mark.parametrize(
+    ("current_price", "forward_eps", "fair_pe_multiple"),
+    [
+        (0, 6, 20),
+        (-100, 6, 20),
+        (100, 0, 20),
+        (100, 6, -20),
+        (float("nan"), 6, 20),
+        (100, float("inf"), 20),
+        ("not-a-number", 6, 20),
+    ],
+)
+def test_valuation_target_rejects_non_positive_or_non_finite_inputs(
+    current_price,
+    forward_eps,
+    fair_pe_multiple,
+):
+    from src.ml.valuation import calculate_valuation_target
+
+    result = calculate_valuation_target(
+        current_price=current_price,
+        forward_eps=forward_eps,
+        fair_pe_multiple=fair_pe_multiple,
+    )
+
+    assert result == {
+        "valuation_status": "unavailable",
+        "valuation_target": None,
+        "target_price": None,
+        "implied_upside": None,
+        "valuation_signal": None,
+    }
+
+
+@pytest.mark.parametrize(
     ("implied_upside", "signal"),
     [
         (0.151, "Undervalued"),
@@ -77,3 +111,9 @@ def test_final_signal_combinations(ml_direction, valuation_signal, final_signal)
     from src.ml.valuation import combine_ml_and_valuation_signal
 
     assert combine_ml_and_valuation_signal(ml_direction, valuation_signal) == final_signal
+
+
+def test_final_signal_normalizes_ml_direction_case():
+    from src.ml.valuation import combine_ml_and_valuation_signal
+
+    assert combine_ml_and_valuation_signal(" up ", "Undervalued") == "Strong Bullish"
