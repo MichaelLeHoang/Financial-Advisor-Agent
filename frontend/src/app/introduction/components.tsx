@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion } from "motion/react";
-import { BookOpen, HelpCircle, LogOut, Newspaper, Search, User, Zap } from "lucide-react";
+import { BookOpen, LogOut, Menu, Moon, Newspaper, Search, Sun, User, X } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -27,72 +26,150 @@ import {
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
 
+const SETTINGS_STORAGE_KEY = "financial-advisor.settings";
+const NAV_LINKS = [
+  { href: "/#features", label: "Home" },
+  { href: "/#samples", label: "Samples" },
+  { href: "/#pricing", label: "Pricing" },
+  { href: "/docs", label: "Doc" },
+  { href: "/introduction/help", label: "Help" },
+];
+
 export function IntroductionNav() {
   const router = useRouter();
   const { user, loading, signOut } = useAuth();
-  const isSignedIn = !loading && !user?.is_guest;
+  const isSignedIn = Boolean(user && !user.is_guest);
+  const showSignedOutActions = !loading && !isSignedIn;
   const displayName = user?.display_name || user?.email?.split("@")[0] || "Researcher";
   const initials = getAvatarInitials(user?.display_name, user?.email);
   const avatarColor = getAvatarColor(user?.id || user?.email);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [theme, setTheme] = useState<"Deep Space" | "White">("Deep Space");
+  const [isScrolled, setIsScrolled] = useState(false);
 
-  // Cmd/Ctrl+K shortcut
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(SETTINGS_STORAGE_KEY) || "{}");
+      setTheme(stored.theme === "White" ? "White" : "Deep Space");
+    } catch {
+      setTheme("Deep Space");
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         setSearchOpen(true);
       }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+
+    const handleScroll = () => setIsScrolled(window.scrollY > 16);
+
+    handleScroll();
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", handleScroll);
+    };
   }, []);
 
   const handleSignOut = async () => {
     await signOut();
-    router.push("/introduction");
+    router.push("/");
   };
 
   const handleOpenApp = () => {
     window.localStorage.setItem("financial-advisor.coverSeen", "true");
-    router.push("/");
+    router.push("/session");
+  };
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "White" ? "Deep Space" : "White";
+    let settings: Record<string, unknown> = {};
+
+    try {
+      settings = JSON.parse(window.localStorage.getItem(SETTINGS_STORAGE_KEY) || "{}");
+    } catch {
+      settings = {};
+    }
+
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ ...settings, theme: nextTheme })
+    );
+    document.body.dataset.theme = nextTheme;
+    setTheme(nextTheme);
+    window.dispatchEvent(new CustomEvent("financial-advisor:theme-change", { detail: nextTheme }));
   };
 
   return (
-    <motion.nav
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.1 }}
-      className="fixed left-0 right-0 top-0 z-50 px-6 py-4 sm:px-10"
-    >
-      <div className="mx-auto flex max-w-6xl items-center justify-between rounded-2xl border border-white/[0.06] bg-white/[0.03] px-5 py-2.5 backdrop-blur-xl">
-        <Link href="/introduction" className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400 shadow-[0_0_0_1px_rgba(255,255,255,0.14),0_6px_16px_rgba(99,102,241,0.25)]">
-            <Zap className="h-4 w-4 text-white" />
-          </div>
-          <span className="text-sm font-semibold text-white/80">Quantum Advisor</span>
+    <header className="introduction-nav fixed inset-x-0 top-0 z-50 px-4 py-3 sm:px-8 sm:py-4">
+      <div
+        className={`mx-auto flex max-w-6xl items-center justify-between rounded-2xl px-4 py-2.5 transition-[background-color,box-shadow,backdrop-filter] duration-200 sm:px-5 ${
+          isScrolled || mobileOpen
+            ? theme === "White"
+              ? "bg-[#e9e6e0]/80 shadow-[0_10px_30px_rgba(18,26,44,0.10)] backdrop-blur-xl"
+              : "bg-black/70 shadow-[0_12px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl"
+            : "bg-transparent shadow-none backdrop-blur-none"
+        }`}
+        style={
+          {
+            "--intro-nav-primary": isScrolled || mobileOpen
+              ? theme === "White"
+                ? "var(--text-primary)"
+                : "rgba(255,255,255,0.92)"
+              : "var(--text-primary)",
+            "--intro-nav-muted": isScrolled || mobileOpen
+              ? theme === "White"
+                ? "var(--text-muted)"
+                : "rgba(255,255,255,0.55)"
+              : "var(--text-muted)",
+            "--intro-nav-hover": isScrolled || mobileOpen
+              ? theme === "White"
+                ? "rgba(18,26,44,0.05)"
+                : "rgba(255,255,255,0.08)"
+              : "var(--surface-card-hover)",
+            "--intro-nav-action-bg": theme === "White"
+              ? "#4f46e5"
+              : isScrolled || mobileOpen
+                ? "rgba(255,255,255,0.96)"
+                : "rgba(255,255,255,0.96)",
+            "--intro-nav-action-text": theme === "White"
+              ? "rgb(255,255,255)"
+              : isScrolled || mobileOpen
+                ? "rgb(0,0,0)"
+                : "rgb(0,0,0)",
+          } as CSSProperties
+        }
+      >
+        <Link
+          href="/"
+          aria-label="Quantum Advisor home"
+          className="flex shrink-0 items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.svg" alt="" className="size-8 object-contain" />
+          <span className="hidden text-sm font-semibold text-[var(--intro-nav-primary)] sm:block">
+            QuanAd
+          </span>
         </Link>
-        <div className="hidden items-center lg:flex">
+
+        <nav className="hidden items-center lg:flex" aria-label="Primary navigation">
           <NavigationMenu viewport={false}>
             <NavigationMenuList className="gap-1">
+              {NAV_LINKS.slice(0, 3).map((item) => (
+                <NavigationMenuItem key={item.href}>
+                  <NavigationMenuLink
+                    asChild
+                    className={`${navigationMenuTriggerStyle()} text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[active=true]:bg-transparent`}
+                  >
+                    <Link href={item.href}>{item.label}</Link>
+                  </NavigationMenuLink>
+                </NavigationMenuItem>
+              ))}
               <NavigationMenuItem>
-                <NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
-                  <Link href="/introduction#features">Home</Link>
-                </NavigationMenuLink>
-              </NavigationMenuItem>
-              <NavigationMenuItem>
-                <NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
-                  <Link href="/introduction#samples">Samples</Link>
-                </NavigationMenuLink>
-              </NavigationMenuItem>
-              <NavigationMenuItem>
-                <NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
-                  <Link href="/introduction#pricing">Pricing</Link>
-                </NavigationMenuLink>
-              </NavigationMenuItem>
-              
-              <NavigationMenuItem>
-                <NavigationMenuTrigger className="bg-transparent text-white/40 hover:text-white data-[state=open]:text-white">
+                <NavigationMenuTrigger className="text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[state=open]:bg-transparent data-[state=open]:text-[var(--intro-nav-primary)]">
                   Resources
                 </NavigationMenuTrigger>
                 <NavigationMenuContent>
@@ -101,8 +178,8 @@ export function IntroductionNav() {
                       <li>
                         <NavigationMenuLink asChild>
                           <Link href="/news" className="flex flex-row items-center gap-3">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-400">
-                              <Newspaper className="h-4 w-4" />
+                            <div className="flex size-8 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-400">
+                              <Newspaper className="size-4" />
                             </div>
                             <div className="flex flex-col">
                               <span className="text-sm font-medium text-white/90">News</span>
@@ -115,8 +192,8 @@ export function IntroductionNav() {
                     <li>
                       <NavigationMenuLink asChild>
                         <Link href="/blog" className="flex flex-row items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-white/5 text-white/70">
-                            <BookOpen className="h-4 w-4" />
+                          <div className="flex size-8 items-center justify-center rounded-md bg-white/5 text-white/70">
+                            <BookOpen className="size-4" />
                           </div>
                           <div className="flex flex-col">
                             <span className="text-sm font-medium text-white/90">Blog</span>
@@ -128,28 +205,37 @@ export function IntroductionNav() {
                   </ul>
                 </NavigationMenuContent>
               </NavigationMenuItem>
-
-              <NavigationMenuItem>
-                <NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
-                  <Link href="/docs">Doc</Link>
-                </NavigationMenuLink>
-              </NavigationMenuItem>
-              <NavigationMenuItem>
-                <NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
-                  <Link href="/introduction/help">Help</Link>
-                </NavigationMenuLink>
-              </NavigationMenuItem>
+              {NAV_LINKS.slice(3).map((item) => (
+                <NavigationMenuItem key={item.href}>
+                  <NavigationMenuLink
+                    asChild
+                    className={`${navigationMenuTriggerStyle()} text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[active=true]:bg-transparent`}
+                  >
+                    <Link href={item.href}>{item.label}</Link>
+                  </NavigationMenuLink>
+                </NavigationMenuItem>
+              ))}
             </NavigationMenuList>
           </NavigationMenu>
-        </div>
-        <div className="flex items-center gap-3">
+        </nav>
+
+        <div className="flex items-center gap-2">
           <button
             type="button"
             aria-label="Search (⌘K)"
             onClick={() => setSearchOpen(true)}
-            className="flex size-9 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.03] text-white/40 transition-colors hover:bg-white/[0.08] hover:text-white/70"
+            className="flex size-9 items-center justify-center rounded-lg text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
           >
             <Search className="size-4" />
+          </button>
+          <button
+            type="button"
+            aria-label={theme === "White" ? "Switch to dark theme" : "Switch to light theme"}
+            aria-pressed={theme === "White"}
+            onClick={toggleTheme}
+            className="flex size-9 items-center justify-center rounded-lg text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+          >
+            {theme === "White" ? <Moon className="size-4" /> : <Sun className="size-4" />}
           </button>
           {isSignedIn ? (
             <>
@@ -165,7 +251,7 @@ export function IntroductionNav() {
                     </AvatarFallback>
                   </Avatar>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent side="bottom" align="center" sideOffset={10} className="w-64">
+                <DropdownMenuContent side="bottom" align="end" sideOffset={10} className="w-64">
                   <DropdownMenuGroup>
                     <DropdownMenuItem closeOnClick={false} className="h-auto cursor-default py-3">
                       <User className="h-4 w-4 text-white/48" />
@@ -187,38 +273,135 @@ export function IntroductionNav() {
               <button
                 type="button"
                 onClick={handleOpenApp}
-                className="inline-flex h-9 items-center rounded-lg bg-indigo-500 px-4 text-sm font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4),0_4px_12px_rgba(99,102,241,0.25)] transition-all hover:bg-indigo-400"
+                className="on-accent hidden h-9 items-center rounded-lg bg-indigo-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 sm:inline-flex"
               >
                 Open App
               </button>
             </>
-          ) : (
+          ) : showSignedOutActions ? (
             <>
-              <Link href="/login" className="hidden text-sm text-white/50 transition-colors hover:text-white sm:block">Log in</Link>
+              <a
+                href="mailto:sales@quantumadvisor.app?subject=QuanAd%20sales%20inquiry"
+                className="hidden h-9 items-center rounded-full border border-white/[0.14] px-4 text-sm font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:inline-flex"
+              >
+                Contact Sales
+              </a>
+              <Link
+                href="/login"
+                className="hidden h-9 items-center rounded-full bg-[var(--intro-nav-action-bg)] px-4 text-sm font-semibold text-[var(--intro-nav-action-text)] transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 sm:inline-flex"
+              >
+                Log in
+              </Link>
+            </>
+          ) : null}
+          <button
+            type="button"
+            aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen((open) => !open)}
+            className="flex size-9 items-center justify-center rounded-lg text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 lg:hidden"
+          >
+            {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+          </button>
+        </div>
+      </div>
+
+      {mobileOpen && (
+        <div
+          className={`mx-auto mt-2 max-w-6xl rounded-2xl p-3 backdrop-blur-xl lg:hidden ${
+            theme === "White"
+              ? "bg-[#f1efeb]/95 text-[#121a2c] shadow-[0_12px_36px_rgba(18,26,44,0.12)]"
+              : "on-accent bg-black/80 shadow-[0_12px_40px_rgba(0,0,0,0.28)]"
+          }`}
+        >
+          <nav className="grid gap-1" aria-label="Mobile navigation">
+            {NAV_LINKS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  theme === "White"
+                    ? "text-[#667085] hover:bg-black/[0.04] hover:text-[#121a2c]"
+                    : "text-white/70 hover:bg-white/[0.08] hover:text-white"
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
+            <div className={`my-2 border-t pt-2 ${theme === "White" ? "border-black/[0.08]" : "border-white/[0.08]"}`}>
+              <div className={`px-3 pb-1 text-[11px] font-semibold uppercase ${theme === "White" ? "text-[#98a2b3]" : "text-white/40"}`}>
+                Resources
+              </div>
+              {isSignedIn && (
+                <Link
+                  href="/news"
+                  onClick={() => setMobileOpen(false)}
+                  className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    theme === "White"
+                      ? "text-[#667085] hover:bg-black/[0.04] hover:text-[#121a2c]"
+                      : "text-white/70 hover:bg-white/[0.08] hover:text-white"
+                  }`}
+                >
+                  News
+                </Link>
+              )}
+              <Link
+                href="/blog"
+                onClick={() => setMobileOpen(false)}
+                className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  theme === "White"
+                    ? "text-[#667085] hover:bg-black/[0.04] hover:text-[#121a2c]"
+                    : "text-white/70 hover:bg-white/[0.08] hover:text-white"
+                }`}
+              >
+                Blog
+              </Link>
+            </div>
+            {isSignedIn ? (
               <button
                 type="button"
                 onClick={handleOpenApp}
-                className="inline-flex h-9 items-center rounded-lg bg-indigo-500 px-4 text-sm font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4),0_4px_12px_rgba(99,102,241,0.25)] transition-all hover:bg-indigo-400"
+                className="on-accent mt-3 h-10 rounded-full bg-indigo-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-indigo-500"
               >
                 Open App
               </button>
-            </>
-          )}
+            ) : showSignedOutActions ? (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <a
+                  href="mailto:sales@quantumadvisor.app?subject=QuanAd%20sales%20inquiry"
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-white/[0.14] px-4 text-sm font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  Contact Sales
+                </a>
+                <Link
+                  href="/login"
+                  onClick={() => setMobileOpen(false)}
+                  className={`inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 ${
+                    theme === "White"
+                      ? "bg-[#4f46e5] text-white focus-visible:ring-[#4f46e5]"
+                      : "bg-white text-black focus-visible:ring-white"
+                  }`}
+                >
+                  Log in
+                </Link>
+              </div>
+            ) : null}
+          </nav>
         </div>
-      </div>
+      )}
       <SearchModal open={searchOpen} onOpenChange={setSearchOpen} />
-    </motion.nav>
+    </header>
   );
 }
 
 export function IntroductionFooter() {
   return (
-    <footer className="relative z-10 border-t border-white/[0.06] px-6 py-10">
+    <footer className="introduction-footer relative z-10 border-t border-white/[0.06] px-6 py-10">
       <div className="mx-auto grid max-w-6xl gap-8 md:grid-cols-[1.1fr_1fr]">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400">
-            <Zap className="h-3.5 w-3.5 text-white" />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.svg" alt="" className="size-8 object-contain" />
           <div>
             <div className="text-sm text-white/50">Quantum Financial Advisor</div>
             <p className="mt-1 max-w-md text-xs leading-5 text-white/25">
@@ -230,16 +413,16 @@ export function IntroductionFooter() {
           <div>
             <h2 className="text-xs font-semibold uppercase tracking-widest text-white/35">Support</h2>
             <div className="mt-3 grid gap-2 text-white/36">
-              <Link href="/introduction/help" className="transition-colors hover:text-white/70">Help center</Link>
-              <Link href="/pricing" className="transition-colors hover:text-white/70">Pricing</Link>
+              <Link href="/introduction/help" className="footer-link transition-colors hover:text-white/70">Help center</Link>
+              <Link href="/pricing" className="footer-link transition-colors hover:text-white/70">Pricing</Link>
             </div>
           </div>
           <div>
             <h2 className="text-xs font-semibold uppercase tracking-widest text-white/35">Terms & Policies</h2>
             <div className="mt-3 grid gap-2 text-white/36">
-              <Link href="/terms" className="transition-colors hover:text-white/70">Terms of Service</Link>
-              <Link href="/privacy" className="transition-colors hover:text-white/70">Privacy Policy</Link>
-              <Link href="/introduction/help#other-policies" className="transition-colors hover:text-white/70">Other Policies</Link>
+              <Link href="/terms" className="footer-link transition-colors hover:text-white/70">Terms of Service</Link>
+              <Link href="/privacy" className="footer-link transition-colors hover:text-white/70">Privacy Policy</Link>
+              <Link href="/introduction/help#other-policies" className="footer-link transition-colors hover:text-white/70">Other Policies</Link>
             </div>
           </div>
         </div>

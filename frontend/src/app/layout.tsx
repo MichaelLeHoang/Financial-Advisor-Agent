@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Geist, Hanken_Grotesk, Inter } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import SettingsModal from "@/components/SettingsModal";
@@ -12,9 +13,27 @@ import PublicAccessGate from "@/components/auth/PublicAccessGate";
 import { ModelProvider } from "@/components/ModelSelector";
 import Toaster from "@/components/ui/toast";
 
+const hankenGrotesk = Hanken_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-hanken-grotesk",
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+});
+
+const geist = Geist({
+  subsets: ["latin"],
+  variable: "--font-geist",
+});
+
+const rootFontClasses = `${geist.variable} ${hankenGrotesk.variable} ${inter.variable}`;
+
 const SETTINGS_STORAGE_KEY = "financial-advisor.settings";
 const COVER_SEEN_STORAGE_KEY = "financial-advisor.coverSeen";
 const STANDALONE_PUBLIC_PATHS = [
+  "/",
   "/introduction",
   "/login",
   "/news",
@@ -28,7 +47,11 @@ const STANDALONE_PUBLIC_PATHS = [
 ];
 
 function isStandalonePublicPath(pathname: string) {
-  return STANDALONE_PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(path));
+  return STANDALONE_PUBLIC_PATHS.some((path) => {
+    if (path === "/") return pathname === "/";
+    if (path.endsWith("/")) return pathname.startsWith(path);
+    return pathname === path || pathname.startsWith(`${path}/`);
+  });
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -61,6 +84,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   }, []);
 
   useEffect(() => {
+    const handleThemeChange = (event: Event) => {
+      const nextTheme = (event as CustomEvent<string>).detail;
+      if (!nextTheme) return;
+      setSettings((current) => ({ ...current, theme: nextTheme }));
+    };
+
+    window.addEventListener("financial-advisor:theme-change", handleThemeChange);
+    return () => window.removeEventListener("financial-advisor:theme-change", handleThemeChange);
+  }, []);
+
+  useEffect(() => {
     if (isStandalonePage) {
       setEntryChecked(true);
       return;
@@ -68,7 +102,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
     const hasSeenCover = window.localStorage.getItem(COVER_SEEN_STORAGE_KEY) === "true";
     if (!hasSeenCover) {
-      router.replace("/introduction");
+      router.replace("/");
       return;
     }
 
@@ -82,8 +116,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   if (isStandalonePage) {
     return (
-      <html lang="en" className="dark">
-      <body className="bg-[#050507] text-white font-sans antialiased overflow-x-hidden">
+      <html lang="en" className={`${rootFontClasses} dark`}>
+      <body data-theme={settings.theme} className="bg-space-black text-white font-sans antialiased overflow-x-hidden">
           <AuthProvider>
             <ModelProvider>
               {children}
@@ -97,14 +131,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   if (!entryChecked) {
     return (
-      <html lang="en" className="dark">
+      <html lang="en" className={`${rootFontClasses} dark`}>
         <body data-theme={settings.theme} className="flex h-screen overflow-hidden relative" />
       </html>
     );
   }
 
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className={`${rootFontClasses} dark`}>
       <body data-theme={settings.theme} className="flex h-screen overflow-hidden relative">
         <AuthProvider>
           <ModelProvider>
@@ -162,7 +196,7 @@ function MainWorkspace({
 }) {
   const pathname = usePathname();
   const { user, loading } = useAuth();
-  const isPublicAppPath = pathname === "/" || pathname.startsWith("/market") || isStandalonePublicPath(pathname);
+  const isPublicAppPath = pathname.startsWith("/session") || pathname.startsWith("/market") || isStandalonePublicPath(pathname);
   const shouldGate = !loading && Boolean(user.is_guest) && !isPublicAppPath;
 
   return (

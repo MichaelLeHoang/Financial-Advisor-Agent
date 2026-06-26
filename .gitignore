@@ -33,3 +33,5 @@ doc/
 *.pages
 
 .claude/
+
+.DS_Store

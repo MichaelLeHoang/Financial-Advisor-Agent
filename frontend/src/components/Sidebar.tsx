@@ -50,7 +50,7 @@ type NavItem = {
 
 const NAV: NavItem[] = [
     { href: "/dashboard", icon: Sparkles, label: "Dashboard" },
-    { href: "/", icon: MessageSquare, label: "AI Advisor" },
+    { href: "/session", icon: MessageSquare, label: "AI Advisor" },
     { href: "/market", icon: TrendingUp, label: "Market" },
     { href: "/sentiment", icon: Brain, label: "Sentiment" },
     { href: "/watchlist", icon: Pin, label: "Watchlist" },
@@ -67,6 +67,10 @@ const MORE_NAV: NavItem[] = [
     { href: "/signals", icon: Signal, label: "Signals", minPlan: "quant" },
     { href: "/export", icon: Code2, label: "Export", minPlan: "quant" },
 ];
+
+function isNavItemActive(path: string, href: string) {
+    return path === href || (href === "/session" && path.startsWith("/session/"));
+}
 
 export default function Sidebar({
     isOpen,
@@ -91,10 +95,12 @@ export default function Sidebar({
     const [sessionsLoading, setSessionsLoading] = useState(true);
     const isGuest = Boolean(user?.is_guest);
     const visibleNav = isGuest
-        ? NAV.filter((item) => item.href === "/" || item.href === "/market")
+        ? NAV.filter((item) => item.href === "/session" || item.href === "/market")
         : getVisibleNav(user?.plan ?? "free");
     const visibleMoreNav = isGuest ? [] : getVisibleMoreNav(user?.plan ?? "free");
-    const activeSessionId = path === "/" ? searchParams.get("session") || "default" : null;
+    const isSessionPath = path === "/session" || path.startsWith("/session/");
+    const routeSessionId = isSessionPath && path !== "/session" ? decodeURIComponent(path.split("/")[2] || "") : null;
+    const activeSessionId = isSessionPath ? routeSessionId || searchParams.get("session") || "default" : null;
     const displaySessions = useMemo(() => sessions, [sessions]);
 
     const openSearch = useCallback(() => {
@@ -131,7 +137,7 @@ export default function Sidebar({
         };
 
         setSessions((current) => [optimisticSession, ...current.filter((session) => session.session_id !== nextSessionId)]);
-        router.push(`/?session=${encodeURIComponent(nextSessionId)}`);
+        router.push(`/session/${encodeURIComponent(nextSessionId)}`);
         setMobileOpen(false);
         window.setTimeout(() => window.dispatchEvent(new Event("chat-input:focus")), 80);
 
@@ -146,14 +152,14 @@ export default function Sidebar({
             })
             .catch(() => {
                 setSessions((current) => current.filter((session) => session.session_id !== nextSessionId));
-                router.replace("/");
+                router.replace("/session");
             });
     }, [router, user?.is_guest]);
 
     const handleSessionDeleted = useCallback((sessionId: string) => {
         refreshSessions();
         if (activeSessionId === sessionId) {
-            router.push("/");
+            router.push("/session");
         }
     }, [activeSessionId, refreshSessions, router]);
 
@@ -445,7 +451,7 @@ function MiniSidebar({
 
             <nav className="flex flex-col items-center gap-1" aria-label="Primary navigation">
                 {nav.map(({ href, icon: Icon, label }) => {
-                    const active = path === href;
+                    const active = isNavItemActive(path, href);
 
                     return (
                         <Link
@@ -490,7 +496,7 @@ function MiniSidebar({
                                 className="absolute left-12 top-0 w-48 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
                             >
                                 {moreNav.map(({ href, icon: Icon, label }) => {
-                                    const active = path === href;
+                                    const active = isNavItemActive(path, href);
                                     return (
                                         <Link
                                             key={href}
@@ -617,7 +623,7 @@ function SidebarSurface({
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
                 <div className="mb-3 flex h-10 items-center justify-between">
                     <Link
-                        href="/"
+                        href="/session"
                         aria-label="Quantum Advisor home"
                         className="accent-gradient-surface on-accent flex h-10 w-10 items-center justify-center rounded-xl shadow-[var(--shadow-brand-mark-strong)] outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
@@ -666,7 +672,7 @@ function SidebarSurface({
                         </div>
                         <nav className="space-y-1" aria-label="Primary navigation">
                             {nav.map(({ href, icon: Icon, label }) => {
-                                const active = path === href;
+                                const active = isNavItemActive(path, href);
 
                                 return (
                                     <Link
@@ -729,7 +735,7 @@ function SidebarSurface({
                                         >
                                             <div className="mt-1 space-y-1 pl-3">
                                                 {moreNav.map(({ href, icon: Icon, label }) => {
-                                                    const active = path === href;
+                                                    const active = isNavItemActive(path, href);
                                                     return (
                                                         <Link
                                                             key={href}
@@ -1034,7 +1040,7 @@ function RecentThreadRow({
                 />
             ) : (
                 <Link
-                    href={`/?session=${encodeURIComponent(session.session_id)}`}
+                    href={`/session/${encodeURIComponent(session.session_id)}`}
                     aria-current={active ? "page" : undefined}
                     className={cn(
                         "flex items-center rounded-xl text-sm outline-none transition-all duration-200 hover:bg-white/[0.05] hover:text-white focus-visible:ring-2 focus-visible:ring-indigo-primary/50",

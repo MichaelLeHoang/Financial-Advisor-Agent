@@ -204,10 +204,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api.setAuthToken(null);
   };
 
-  const signInWithOAuth = async (provider: Provider, nextPath = "/") => {
+  const signInWithOAuth = async (provider: Provider, nextPath = "/session") => {
     setError(null);
     const supabase = getSupabaseBrowserClient();
-    const safeNext = nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/";
+    const safeNext = nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/session";
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {

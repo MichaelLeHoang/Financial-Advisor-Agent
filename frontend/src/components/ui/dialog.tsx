@@ -31,7 +31,7 @@ function DialogClose({
     <DialogPrimitive.Close
       data-slot="dialog-close"
       className={cn(
-        "group inline-flex size-9 items-center justify-center rounded-xl border border-transparent bg-transparent text-white/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+        "group inline-flex size-9 items-center justify-center rounded-xl border border-transparent bg-transparent text-[var(--text-subtle)] hover:text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
         className
       )}
       {...props}
@@ -56,7 +56,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed left-1/2 top-1/2 z-[230] flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--surface-dialog)] text-white shadow-[var(--shadow-dialog)] outline-none sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)]",
+          "fixed left-1/2 top-1/2 z-[230] flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--surface-dialog)] text-[var(--text-primary)] shadow-[var(--shadow-dialog)] outline-none sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)]",
           className
         )}
         {...props}
@@ -96,7 +96,7 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-xl font-semibold text-white", className)}
+      className={cn("text-xl font-semibold text-[var(--text-primary)]", className)}
       {...props}
     />
   )
@@ -109,7 +109,7 @@ function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn("text-sm text-white/42", className)}
+      className={cn("text-sm text-[var(--text-subtle)]", className)}
       {...props}
     />
   )

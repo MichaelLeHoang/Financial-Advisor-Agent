@@ -1149,7 +1149,7 @@ function QuoteDetailPanel({
             size="sm"
             onClick={() => {
               const prompt = `Dive deeper on ${displayName} (${instrument.symbol}). Use live market data, recent trend, relative performance, important risks, and the next catalysts to watch.`;
-              router.push(`/?session=${encodeURIComponent(`quote-${instrument.symbol}`)}&prompt=${encodeURIComponent(prompt)}`);
+              router.push(`/session/${encodeURIComponent(`quote-${instrument.symbol}`)}?prompt=${encodeURIComponent(prompt)}`);
             }}
             className="rounded-xl"
           >

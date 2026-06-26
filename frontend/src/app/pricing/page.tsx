@@ -56,7 +56,7 @@ export default function PricingPage() {
     setError(null);
 
     if (planId === "free") {
-      router.push(user.is_guest ? "/login?next=/" : "/");
+      router.push(user.is_guest ? "/login?next=/session" : "/session");
       return;
     }
 
@@ -120,7 +120,7 @@ export default function PricingPage() {
           if (isSameOrigin) {
             router.back();
           } else {
-            router.push("/");
+            router.push("/session");
           }
         }}
         aria-label="Close pricing"

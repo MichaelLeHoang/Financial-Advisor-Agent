@@ -71,12 +71,18 @@ export function TickerAnalyzeInput({
   initialTicker = "",
   newTab = false,
   onCreated,
+  frameClassName,
+  inputClassName,
+  buttonClassName,
 }: {
   source: ResearchSourceSurface;
   compact?: boolean;
   initialTicker?: string;
   newTab?: boolean;
   onCreated?: (run: EquityResearchRun) => void;
+  frameClassName?: string;
+  inputClassName?: string;
+  buttonClassName?: string;
 }) {
   const router = useRouter();
   const [ticker, setTicker] = useState(initialTicker);
@@ -109,7 +115,7 @@ export function TickerAnalyzeInput({
 
   return (
     <div className={cn("w-full", compact ? "max-w-xl" : "max-w-3xl")}>
-      <div className="flex items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.045] p-1.5 shadow-[0_18px_60px_rgba(0,0,0,0.20)] focus-within:border-indigo-primary/55">
+      <div className={cn("flex items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.045] p-1.5 shadow-[0_18px_60px_rgba(0,0,0,0.20)] focus-within:border-indigo-primary/55", frameClassName)}>
         <TickerSuggestionInput
           value={ticker}
           onValueChange={(value) => setTicker(normalizeResearchTicker(value))}
@@ -120,13 +126,13 @@ export function TickerAnalyzeInput({
           existingTickers={[]}
           placeholder="Enter a ticker: AAPL, MSFT, NVDA..."
           className="min-w-0 flex-1"
-          inputClassName="h-11 rounded-full border-0 bg-transparent pl-10 pr-9 text-base font-semibold text-white placeholder:text-white/30 focus-visible:ring-0"
+          inputClassName={cn("research-ticker-input h-11 rounded-full border-0 bg-transparent pl-10 pr-9 text-base font-semibold text-white placeholder:text-white/30 focus-visible:ring-0", inputClassName)}
         />
         <button
           type="button"
           onClick={() => submit()}
           disabled={loading || !ticker.trim()}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-primary text-white transition-colors hover:bg-indigo-primary/90 disabled:cursor-not-allowed disabled:opacity-45"
+          className={cn("on-accent flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-primary text-white transition-colors hover:bg-indigo-primary/90 disabled:cursor-not-allowed disabled:opacity-45", buttonClassName)}
           aria-label="Generate research report"
         >
           {loading ? <CircleDotDashed className="size-5 animate-spin" /> : <ArrowRight className="size-5" />}
@@ -139,13 +145,13 @@ export function TickerAnalyzeInput({
 
 export function EquityResearchIntroDemo() {
   return (
-    <section id="equity-research-demo" className="relative mx-auto mt-10 max-w-6xl scroll-mt-24 overflow-hidden rounded-3xl border border-white/[0.08] bg-[#090b12] px-5 py-7 shadow-[0_24px_90px_rgba(0,0,0,0.32)] sm:px-8 sm:py-9">
+    <section id="equity-research-demo" className="research-intro-demo relative mx-auto mt-10 max-w-6xl scroll-mt-24 overflow-hidden rounded-3xl border border-white/[0.08] bg-[#090b12] px-5 py-7 shadow-[0_24px_90px_rgba(0,0,0,0.32)] sm:px-8 sm:py-9">
       <div className="grid gap-7 lg:grid-cols-[1fr_0.8fr] lg:items-center">
         <div>
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-indigo-primary/25 bg-indigo-primary/10 px-3 py-1 text-xs font-semibold text-indigo-200">
             <Radio className="size-3.5" /> QuanAd 2.1 Equity Research Desk
           </div>
-          <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">What stock would you like to analyze?</h2>
+          <h2 className="font-heading text-2xl font-semibold tracking-tight text-white sm:text-3xl">What stock would you like to analyze?</h2>
           <div className="mt-6">
             <TickerAnalyzeInput source="introduction" />
           </div>
@@ -173,7 +179,7 @@ export function EquityResearchIntroDemo() {
           <p className="mt-4 text-xs text-white/38">Not investment advice. For educational and informational use only.</p>
           
         </div>
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
+        <div className="research-demo-progress rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
           <ResearchDemoProgressLoop />
         </div>
       </div>
@@ -181,7 +187,7 @@ export function EquityResearchIntroDemo() {
   );
 }
 
-function ResearchDemoProgressLoop() {
+export function ResearchDemoProgressLoop({ surface = "dark" }: { surface?: "dark" | "light" }) {
   const steps = [
     "Market Analyst",
     "News Analyst",
@@ -202,12 +208,14 @@ function ResearchDemoProgressLoop() {
     return () => window.clearInterval(timer);
   }, [steps.length]);
 
+  const isLight = surface === "light";
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-widest text-white/35">Workflow</p>
+        <p className={cn("text-xs font-semibold uppercase tracking-widest", isLight ? "text-slate-400" : "text-white/35")}>Workflow</p>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+      <div className={cn("h-1.5 overflow-hidden rounded-full", isLight ? "bg-slate-200" : "bg-white/[0.06]")}>
         <div
           className="h-full rounded-full bg-gradient-to-r from-indigo-primary via-cyan-secondary to-emerald-300 transition-[width] duration-500"
           style={{ width: `${((active + 1) / steps.length) * 100}%` }}
@@ -222,18 +230,28 @@ function ResearchDemoProgressLoop() {
               key={step}
               className={cn(
                 "flex items-center gap-2 rounded-lg px-2 py-2 transition-colors",
-                running ? "bg-indigo-primary/14 text-white" : completed ? "text-white/38" : "text-white/28"
+                isLight
+                  ? running
+                    ? "bg-indigo-primary/12 text-slate-950"
+                    : completed
+                      ? "text-slate-500"
+                      : "text-slate-300"
+                  : running
+                    ? "bg-indigo-primary/14 text-white"
+                    : completed
+                      ? "text-white/38"
+                      : "text-white/28"
               )}
             >
               {running ? (
-                <CircleDotDashed className="size-4 animate-spin text-indigo-200" />
+                <CircleDotDashed className={cn("size-4 animate-spin", isLight ? "text-indigo-primary" : "text-indigo-200")} />
               ) : completed ? (
                 <CheckCircle2 className="size-4 text-emerald-300" />
               ) : (
                 <Circle className="size-4" />
               )}
               <span className="text-sm font-medium">{step}</span>
-              {running && <span className="ml-auto text-[10px] uppercase tracking-wider text-indigo-100/70">processing</span>}
+              {running && <span className={cn("ml-auto text-[10px] uppercase tracking-wider", isLight ? "text-indigo-primary" : "text-indigo-100/70")}>processing</span>}
             </div>
           );
         })}

@@ -16,11 +16,14 @@ import {
 import { useAuth } from "@/components/auth/AuthProvider";
 
 function getSafeNextTarget() {
-  if (typeof window === "undefined") return "/";
+  if (typeof window === "undefined") return "/session";
   const next = new URLSearchParams(window.location.search).get("next");
-  if (!next?.startsWith("/") || next.startsWith("//")) return "/";
+  if (!next?.startsWith("/") || next.startsWith("//")) return "/session";
   const target = new URL(next, window.location.origin);
-  if (target.pathname === "/" && target.searchParams.has("session")) return "/";
+  if (target.pathname === "/" && target.searchParams.has("session")) {
+    const sessionId = target.searchParams.get("session");
+    return sessionId ? `/session/${encodeURIComponent(sessionId)}` : "/session";
+  }
   return `${target.pathname}${target.search}${target.hash}`;
 }
 
@@ -68,7 +71,7 @@ export default function LoginPage() {
     if (isSameOrigin) {
       router.back();
     } else {
-      router.push("/introduction");
+      router.push("/");
     }
   };
 
