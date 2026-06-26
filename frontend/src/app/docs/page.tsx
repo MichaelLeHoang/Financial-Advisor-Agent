@@ -799,7 +799,7 @@ export default function DocsPage() {
       `}</style>
       <header className="fixed left-0 right-0 top-0 z-50 border-b border-[var(--docs-border)] bg-[var(--docs-header)] backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-4 px-4 sm:px-6">
-          <Link href="/introduction" className="flex items-center gap-2.5">
+          <Link href="/" className="flex items-center gap-2.5">
             <span className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400">
               <Zap className="docs-logo-icon size-3.5 text-white" />
             </span>
@@ -849,7 +849,7 @@ export default function DocsPage() {
             {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
 
-          <Link href="/introduction" className="hidden text-sm text-[var(--docs-text-muted)] transition-colors hover:text-[var(--docs-text-secondary)] sm:block">
+          <Link href="/" className="hidden text-sm text-[var(--docs-text-muted)] transition-colors hover:text-[var(--docs-text-secondary)] sm:block">
             Back
           </Link>
 

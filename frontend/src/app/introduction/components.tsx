@@ -32,7 +32,7 @@ const NAV_LINKS = [
   { href: "/#samples", label: "Samples" },
   { href: "/#pricing", label: "Pricing" },
   { href: "/docs", label: "Doc" },
-  { href: "/introduction/help", label: "Help" },
+  { href: "/help", label: "Help" },
 ];
 
 export function IntroductionNav() {
@@ -413,7 +413,7 @@ export function IntroductionFooter() {
           <div>
             <h2 className="text-xs font-semibold uppercase tracking-widest text-white/35">Support</h2>
             <div className="mt-3 grid gap-2 text-white/36">
-              <Link href="/introduction/help" className="footer-link transition-colors hover:text-white/70">Help center</Link>
+              <Link href="/help" className="footer-link transition-colors hover:text-white/70">Help center</Link>
               <Link href="/pricing" className="footer-link transition-colors hover:text-white/70">Pricing</Link>
             </div>
           </div>
@@ -422,7 +422,7 @@ export function IntroductionFooter() {
             <div className="mt-3 grid gap-2 text-white/36">
               <Link href="/terms" className="footer-link transition-colors hover:text-white/70">Terms of Service</Link>
               <Link href="/privacy" className="footer-link transition-colors hover:text-white/70">Privacy Policy</Link>
-              <Link href="/introduction/help#other-policies" className="footer-link transition-colors hover:text-white/70">Other Policies</Link>
+              <Link href="/help#other-policies" className="footer-link transition-colors hover:text-white/70">Other Policies</Link>
             </div>
           </div>
         </div>

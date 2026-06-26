@@ -182,7 +182,7 @@ export default function BlogPostPage({
             Experience the features discussed in this article. Start your free research session today.
           </p>
           <Link
-            href="/introduction"
+            href="/"
             className="mt-5 inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-400 px-6 text-sm font-semibold text-white shadow-[0_0_24px_rgba(99,102,241,0.25)] transition-all hover:shadow-[0_0_36px_rgba(99,102,241,0.35)]"
           >
             Get started

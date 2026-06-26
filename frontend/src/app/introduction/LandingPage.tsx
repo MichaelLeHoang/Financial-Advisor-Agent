@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, animate as motionAnimate, motion, useDragControls, useMotionValue } from "motion/react";
 import {
-  ArrowRight, Brain, Atom, TrendingUp, PieChart, MessageSquare,
+  ArrowLeft, ArrowRight, Brain, Atom, TrendingUp, PieChart, MessageSquare,
   Shield, ExternalLink, Check, Lock, Search, Radio, Circle,
-  CircleDotDashed, CheckCircle2, FileText,
+  CircleDotDashed, CheckCircle2, FileText, RefreshCw, RotateCcw,
+  Sidebar, Terminal,
 } from "lucide-react";
 import { PLANS, COMPARISON_TABLE, type PlanId, type CheckState } from "@/config/plans";
 import { IntroductionFooter, IntroductionNav } from "./components";
@@ -125,12 +126,202 @@ export default function IntroductionPage() {
         </div>
       </section>
 
+      <ScreenshotShowcase />
       <ResearchWorkflowShowcase />
       <SamplesSection />
       <FeaturesSection />
       <PricingSection />
       <IntroductionFooter />
     </div>
+  );
+}
+
+/* ── Screenshot Showcase ── */
+function ScreenshotShowcase() {
+  const INITIAL_TERMINAL_X = 320;
+  const INITIAL_TERMINAL_Y = 170;
+  const stageRef = useRef<HTMLDivElement>(null);
+  const dragBoundsRef = useRef<HTMLDivElement>(null);
+  const mainControls = useDragControls();
+  const terminalControls = useDragControls();
+  const mainX = useMotionValue(0);
+  const mainY = useMotionValue(0);
+  const terminalX = useMotionValue(INITIAL_TERMINAL_X);
+  const terminalY = useMotionValue(INITIAL_TERMINAL_Y);
+  const [activeWindow, setActiveWindow] = useState<"main" | "terminal">("terminal");
+  const [terminalPrompt, setTerminalPrompt] = useState("");
+
+  const resetWindows = () => {
+    const transition = { type: "spring" as const, stiffness: 320, damping: 32 };
+    motionAnimate(mainX, 0, transition);
+    motionAnimate(mainY, 0, transition);
+    motionAnimate(terminalX, INITIAL_TERMINAL_X, transition);
+    motionAnimate(terminalY, INITIAL_TERMINAL_Y, transition);
+    setActiveWindow("terminal");
+  };
+
+  return (
+    <section className="landing-fixed-demo relative z-10 p-4 sm:p-6">
+      <motion.div
+        initial={{ opacity: 0, y: 28 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-120px" }}
+        transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+        className="mx-auto max-w-[1360px]"
+      >
+        <div
+          ref={stageRef}
+          className="relative isolate h-[550px] overflow-hidden rounded-[1.45rem] bg-[#cfc6b7] shadow-[0_38px_120px_rgba(0,0,0,0.42)] sm:h-[650px] lg:h-[730px]"
+        >
+          <div className="sr-only" aria-live="polite">
+            Interactive demo showing draggable QuanAd desktop and terminal windows over a fixed macOS-style background.
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/art-background.webp"
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full object-cover opacity-90"
+          />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_8%,rgba(255,255,255,0.52),transparent_26%),linear-gradient(180deg,rgba(20,18,12,0.05),rgba(20,18,12,0.18))]" aria-hidden="true" />
+          <div ref={dragBoundsRef} className="pointer-events-none absolute inset-5 sm:inset-8" aria-hidden="true" />
+
+          <div className={`pointer-events-none absolute inset-0 flex items-center justify-center px-3 pb-10 pt-8 sm:px-8 ${activeWindow === "main" ? "z-50" : "z-20"}`}>
+            <motion.div
+              role="group"
+              aria-label="Draggable QuanAd app preview window"
+              drag
+              dragControls={mainControls}
+              dragConstraints={dragBoundsRef}
+              dragElastic={0.025}
+              dragListener={false}
+              dragMomentum={false}
+              style={{ x: mainX, y: mainY }}
+              onPointerDown={() => setActiveWindow("main")}
+              className={`pointer-events-auto relative flex w-[min(960px,calc(100vw-3rem))] select-none flex-col overflow-hidden rounded-[1.35rem] bg-[#050609] text-[#ffffff] shadow-[0_28px_70px_rgba(0,0,0,0.22),0_14px_32px_rgba(0,0,0,0.16),0_0_0_1px_rgba(255,255,255,0.08)] ${
+                activeWindow === "main" ? "z-40" : "z-20"
+              }`}
+            >
+              <div
+                className="relative flex h-9 cursor-grab items-center justify-between border-b border-[#ffffff14] px-8 active:cursor-grabbing"
+                onPointerDown={(event) => {
+                  setActiveWindow("main");
+                  mainControls.start(event);
+                }}
+              >
+                <div className="flex items-center gap-3" aria-hidden="true">
+                  <span className={`size-3 rounded-full ${activeWindow === "main" ? "bg-[#ff5f57]" : "bg-[#3b3a34]"}`} />
+                  <span className={`size-3 rounded-full ${activeWindow === "main" ? "bg-[#febc2e]" : "bg-[#3b3a34]"}`} />
+                  <span className={`size-3 rounded-full ${activeWindow === "main" ? "bg-[#28c840]" : "bg-[#3b3a34]"}`} />
+                </div>
+                <div className="pointer-events-none absolute left-1/2 top-1/2 max-w-[56%] -translate-x-1/2 -translate-y-1/2 truncate text-sm font-normal text-[#ffffff6b]">
+                  QuanAd Desktop
+                </div>
+                <div className="text-sm font-normal text-[#ffffff57]">Demo</div>
+              </div>
+
+              <div className="flex h-9 items-center gap-1.5 border-b border-[#d7d7d7]/14 bg-[#1b1b1d] px-3">
+                <button type="button" aria-label="Back" className="grid size-7 place-items-center rounded text-[#d7d7d7]/62 transition-colors hover:bg-[#d7d7d7]/10 hover:text-[#eeeeee]">
+                  <ArrowLeft className="size-4" />
+                </button>
+                <button type="button" aria-label="Forward" className="grid size-7 place-items-center rounded text-[#d7d7d7]/62 transition-colors hover:bg-[#d7d7d7]/10 hover:text-[#eeeeee]">
+                  <ArrowRight className="size-4" />
+                </button>
+                <button type="button" aria-label="Refresh" className="grid size-7 place-items-center rounded text-[#d7d7d7]/62 transition-colors hover:bg-[#d7d7d7]/10 hover:text-[#eeeeee]">
+                  <RefreshCw className="size-4" />
+                </button>
+                <div className="ml-2 flex h-6 min-w-0 flex-1 items-center rounded-md bg-[#d7d7d7]/10 px-3 text-sm text-[#d7d7d7]/78">
+                  http://localhost:3000/session
+                </div>
+                <button type="button" aria-label="Toggle sidebar" className="grid size-7 place-items-center rounded text-[#d7d7d7]/62 transition-colors hover:bg-[#d7d7d7]/10 hover:text-[#eeeeee]">
+                  <Sidebar className="size-4" />
+                </button>
+              </div>
+
+              <div className="relative h-[clamp(280px,39vw,500px)] overflow-hidden bg-[#07080b]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/cover-screenshot.png"
+                  alt="QuanAd application screenshot inside a macOS-style preview window"
+                  className="h-full w-full object-cover object-top"
+                  draggable={false}
+                />
+                <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-[#ffffff0a]" aria-hidden="true" />
+              </div>
+            </motion.div>
+          </div>
+
+          <div className={`pointer-events-none absolute inset-0 flex items-center justify-center ${activeWindow === "terminal" ? "z-50" : "z-30"}`}>
+            <motion.div
+              role="group"
+              aria-label="Draggable QuanAd CLI preview window"
+              drag
+              dragControls={terminalControls}
+              dragConstraints={dragBoundsRef}
+              dragElastic={0.03}
+              dragListener={false}
+              dragMomentum={false}
+              style={{ x: terminalX, y: terminalY }}
+              onPointerDown={() => setActiveWindow("terminal")}
+              className="pointer-events-auto hidden h-[280px] w-[min(460px,40vw)] select-none flex-col overflow-hidden rounded-[1.35rem] bg-[#050609] text-[#ffffff] shadow-[0_28px_70px_rgba(0,0,0,0.24),0_14px_32px_rgba(0,0,0,0.18),0_0_0_1px_rgba(255,255,255,0.08)] md:flex lg:h-[300px]"
+            >
+              <div
+                className="relative flex h-9 cursor-grab items-center justify-between border-b border-[#ffffff14] px-8 active:cursor-grabbing"
+                onPointerDown={(event) => {
+                  setActiveWindow("terminal");
+                  terminalControls.start(event);
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={`size-3 rounded-full ${activeWindow === "terminal" ? "bg-[#ff5f57]" : "bg-[#3b3a34]"}`} />
+                  <span className={`size-3 rounded-full ${activeWindow === "terminal" ? "bg-[#febc2e]" : "bg-[#3b3a34]"}`} />
+                  <span className={`size-3 rounded-full ${activeWindow === "terminal" ? "bg-[#28c840]" : "bg-[#3b3a34]"}`} />
+                </div>
+                <div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 truncate text-sm font-normal text-[#ffffff6b]">
+                  <Terminal className="size-3.5" />
+                  QuanAd CLI
+                </div>
+                <div className="text-sm font-normal text-[#ffffff57]">Live</div>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-hidden bg-[#101012] p-5 font-mono text-[13px] leading-6">
+                <button type="button" className="border border-[#d7d7d724] bg-[#d7d7d714] px-3 py-2 text-left text-[#d7d7d7c2] transition-colors hover:border-[#d7d7d742] hover:bg-[#d7d7d71f]">
+                  Review NVDA exposure and rebalance risk.
+                </button>
+                <div className="text-[#d7d7d7d1]">Computed allocation drift and sector concentration.</div>
+                <button type="button" className="border border-[#d7d7d724] bg-[#d7d7d714] px-3 py-2 text-left transition-colors hover:border-[#d7d7d742] hover:bg-[#d7d7d71f]">
+                  <span className="font-medium">risk_report.py</span>
+                  <span className="ml-2 text-emerald-400">+42</span>
+                  <span className="ml-1 text-red-400">-0</span>
+                </button>
+                <div className="text-[#d7d7d7d1]">Suggested staged rebalance with VaR guardrails.</div>
+                <form
+                  className="flex items-center gap-2 border border-[#d7d7d761] px-3 py-2 text-[#d7d7d799] transition-colors focus-within:border-[#d7d7d7b3]"
+                  onSubmit={(event) => event.preventDefault()}
+                >
+                  <span>→</span>
+                  <input
+                    value={terminalPrompt}
+                    onChange={(event) => setTerminalPrompt(event.target.value)}
+                    onFocus={() => setActiveWindow("terminal")}
+                    placeholder="Add a follow-up"
+                    className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[#d7d7d780]"
+                  />
+                </form>
+              </div>
+            </motion.div>
+          </div>
+
+          <button
+            type="button"
+            onClick={resetWindows}
+            aria-label="Reset demo windows"
+            className="absolute bottom-4 right-4 z-40 grid size-11 place-items-center rounded-full bg-[#15130f] text-[#edecec]/78 shadow-[0_14px_34px_rgba(0,0,0,0.32),0_0_0_1px_rgba(255,255,255,0.12)] transition-colors hover:bg-[#211f18] hover:text-[#edecec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#edecec]/70"
+          >
+            <RotateCcw className="size-5" />
+          </button>
+        </div>
+      </motion.div>
+    </section>
   );
 }
 
@@ -163,7 +354,7 @@ function ResearchWorkflowShowcase() {
   const tabs = ["Research", "Risk", "Narrative"];
 
   return (
-    <section id="equity-research-demo" className="relative z-10 px-4 py-12 sm:px-6 sm:py-14">
+    <section id="equity-research-demo" className="research-intro-demo relative z-10 px-4 py-12 sm:px-6 sm:py-14">
       <motion.div
         initial={{ opacity: 0, y: 28 }}
         whileInView={{ opacity: 1, y: 0 }}
@@ -172,39 +363,34 @@ function ResearchWorkflowShowcase() {
         className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.86fr_1.14fr] lg:items-center"
       >
         <div>
-          <p className="text-sm font-semibold text-white/34">For research desks</p>
+          <p className="text-sm font-semibold text-white/34">For investors</p>
           <h2 className="mt-5 font-heading text-4xl font-normal leading-[1.02] tracking-tight text-white sm:text-5xl lg:text-6xl">
             One research workflow.
             <br />
             <span className="text-white/45">Every market signal.</span>
           </h2>
           <p className="mt-7 max-w-xl text-base leading-8 text-white/44">
-            Run structured equity research across live market data, news, sentiment,
-            fundamentals, bull and bear cases, risk review, and final decision support.
+            Market data, news, sentiment, fundamentals, and risk. Unified into one equity research engine.
           </p>
           <div className="mt-9 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                window.localStorage.setItem("financial-advisor.coverSeen", "true");
-                window.location.href = "/session";
-              }}
-              className="inline-flex h-11 items-center justify-center rounded-full bg-white px-6 text-sm font-semibold text-black transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
-            >
-              Launch App
-            </button>
             <a
               href="/research?source=introduction"
               target="_blank"
               rel="noopener noreferrer"
+              className="inline-flex h-11 items-center justify-center rounded-full bg-white px-6 text-sm font-semibold text-black transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
+            >
+              Open demo
+            </a>
+            <a
+              href="/docs#research-guide"
               className="inline-flex h-11 items-center justify-center rounded-full border border-white/[0.14] px-6 text-sm font-semibold text-white/78 transition-colors hover:border-white/26 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
             >
-              Open full demo
+              View docs
             </a>
           </div>
           <div className="mt-10 flex flex-wrap gap-8 text-sm">
             <div>
-              <p className="font-semibold tabular-nums text-white/72">9</p>
+              <p className="font-semibold tabular-nums text-white/72">8+</p>
               <p className="mt-1 text-white/30">agent workflow</p>
             </div>
             <div>
@@ -248,6 +434,7 @@ function ResearchWorkflowShowcase() {
 }
 
 function ResearchWindowDemo() {
+  const searchPanelRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<DemoPhase>("search");
   const [query, setQuery] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -279,6 +466,19 @@ function ResearchWindowDemo() {
     return () => window.clearTimeout(stepTimer);
   }, [activeStep, phase]);
 
+  useEffect(() => {
+    if (!showSuggestions) return;
+
+    const closeSuggestions = (event: PointerEvent) => {
+      if (!searchPanelRef.current?.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeSuggestions);
+    return () => document.removeEventListener("pointerdown", closeSuggestions);
+  }, [showSuggestions]);
+
   const startWorkflow = (ticker = selectedTicker) => {
     setSelectedTicker(ticker);
     setQuery(ticker.ticker);
@@ -288,12 +488,17 @@ function ResearchWindowDemo() {
   };
 
   return (
-    <div className="relative mx-auto max-w-2xl overflow-hidden rounded-[1.35rem] border border-white/[0.09] bg-[#050609] text-white shadow-[0_24px_70px_rgba(0,0,0,0.45)]">
-      <div className="flex items-center gap-2 border-b border-white/[0.08] px-5 py-3">
-        <span className="size-2.5 rounded-full bg-[#ff5f57]" aria-hidden="true" />
-        <span className="size-2.5 rounded-full bg-[#febc2e]" aria-hidden="true" />
-        <span className="size-2.5 rounded-full bg-[#28c840]" aria-hidden="true" />
-        <span className="ml-auto text-xs font-medium text-white/38">QuanAd Live</span>
+    <div className="research-window-demo relative mx-auto max-w-2xl overflow-hidden rounded-[1.35rem] bg-[#050609] text-[#ffffff] shadow-[0_24px_70px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.08)]">
+      <div className="relative flex h-11 items-center justify-between border-b border-[#ffffff14] px-8">
+        <div className="flex items-center gap-3" aria-hidden="true">
+          <span className="size-3 rounded-full bg-[#ff5f57]" />
+          <span className="size-3 rounded-full bg-[#febc2e]" />
+          <span className="size-3 rounded-full bg-[#28c840]" />
+        </div>
+        <span className="pointer-events-none absolute left-1/2 top-1/2 max-w-[56%] -translate-x-1/2 -translate-y-1/2 truncate text-base font-semibold text-[#ffffff6b]">
+          QuanAd Live
+        </span>
+        <span className="text-sm font-semibold text-[#ffffff57]">Research</span>
       </div>
 
       <div className="relative h-[378px] overflow-hidden sm:h-[398px]">
@@ -315,70 +520,71 @@ function ResearchWindowDemo() {
                 What stock would you like to analyze?
               </h3>
 
-              <form
-                className="mt-6"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  startWorkflow(matches[0] ?? DEMO_TICKERS[0]);
-                }}
-              >
-                <div className="flex h-14 items-center gap-3 rounded-full border border-white/[0.14] bg-white px-4 text-slate-950 shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
-                  <Search className="h-5 w-5 shrink-0 text-slate-400" />
-                  <input
-                    value={query}
-                    onChange={(event) => {
-                      setQuery(event.target.value);
-                      setShowSuggestions(true);
-                    }}
-                    onFocus={() => setShowSuggestions(true)}
-                    className="min-w-0 flex-1 bg-transparent text-base font-semibold text-slate-950 outline-none placeholder:text-slate-400"
-                    placeholder="Enter a ticker: AAPL, MSFT, NVDA..."
-                    aria-label="Ticker symbol"
-                  />
-                  <button
-                    type="submit"
-                    aria-label="Analyze ticker"
-                    className="grid size-11 shrink-0 place-items-center rounded-full bg-indigo-primary text-white transition-colors hover:bg-indigo-primary/90"
-                  >
-                    <ArrowRight className="h-5 w-5" />
-                  </button>
-                </div>
-              </form>
+              <div ref={searchPanelRef} className="mt-6">
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    startWorkflow(matches[0] ?? DEMO_TICKERS[0]);
+                  }}
+                >
+                  <div className="research-search-shell flex h-14 items-center gap-3 rounded-full border border-[#ffffff24] bg-[#ffffff] px-4 text-[#020617] shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
+                    <Search className="h-5 w-5 shrink-0 text-slate-400" />
+                    <input
+                      value={query}
+                      onChange={(event) => {
+                        setQuery(event.target.value);
+                        setShowSuggestions(true);
+                      }}
+                      onFocus={() => setShowSuggestions(true)}
+                      className="research-ticker-input min-w-0 flex-1 bg-transparent text-base font-semibold text-[#0f172a] outline-none placeholder:text-[#94a3b8]"
+                      placeholder="Enter a ticker: AAPL, MSFT, NVDA..."
+                      aria-label="Ticker symbol"
+                    />
+                    <button
+                      type="submit"
+                      aria-label="Analyze ticker"
+                      className="grid size-11 shrink-0 place-items-center rounded-full bg-[#6366f1] text-[#ffffff] transition-colors hover:bg-[#5558e8]"
+                    >
+                      <ArrowRight className="h-5 w-5" />
+                    </button>
+                  </div>
+                </form>
 
-              <AnimatePresence>
-                {showSuggestions && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
-                    transition={{ duration: 0.18 }}
-                    className="mt-3 max-h-36 overflow-y-auto rounded-2xl border border-white/[0.08] bg-white/[0.04] p-1.5"
-                  >
-                    {(matches.length ? matches : DEMO_TICKERS).slice(0, 7).map((item) => (
-                      <button
-                        key={item.ticker}
-                        type="button"
-                        onClick={() => startWorkflow(item)}
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/[0.07]"
-                      >
-                        <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-indigo-primary/25 bg-indigo-primary/15 text-xs font-bold text-indigo-200">
-                          {item.ticker.slice(0, 2)}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-2">
-                            <span className="font-semibold text-white">{item.ticker}</span>
-                            <span className="rounded-full border border-white/[0.10] px-2 py-0.5 text-[10px] font-medium text-white/38">
-                              {item.exchange}
-                            </span>
+                <AnimatePresence>
+                  {showSuggestions && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 8 }}
+                      transition={{ duration: 0.18 }}
+                      className="mt-3 max-h-36 overflow-y-auto rounded-2xl border border-white/[0.08] bg-white/[0.04] p-1.5"
+                    >
+                      {(matches.length ? matches : DEMO_TICKERS).slice(0, 7).map((item) => (
+                        <button
+                          key={item.ticker}
+                          type="button"
+                          onClick={() => startWorkflow(item)}
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/[0.07]"
+                        >
+                          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-indigo-primary/25 bg-indigo-primary/15 text-xs font-bold text-indigo-200">
+                            {item.ticker.slice(0, 2)}
                           </span>
-                          <span className="block truncate text-sm text-white/45">{item.name}</span>
-                        </span>
-                        <ArrowRight className="h-4 w-4 text-white/28" />
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-2">
+                              <span className="font-semibold text-white">{item.ticker}</span>
+                              <span className="rounded-full border border-white/[0.10] px-2 py-0.5 text-[10px] font-medium text-white/38">
+                                {item.exchange}
+                              </span>
+                            </span>
+                            <span className="block truncate text-sm text-white/45">{item.name}</span>
+                          </span>
+                          <ArrowRight className="h-4 w-4 text-white/28" />
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </motion.div>
           )}
 

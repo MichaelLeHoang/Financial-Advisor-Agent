@@ -78,7 +78,7 @@ function ResearchLandingContent() {
   return (
     <main className="min-h-screen bg-[#06080d] px-4 py-6 text-white sm:px-8">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-        <Link href={source === "market" ? "/market" : source === "introduction" ? "/introduction#equity-research-demo" : "/"} className="inline-flex items-center gap-2 text-sm text-white/45 hover:text-white">
+        <Link href={source === "market" ? "/market" : source === "introduction" ? "/#equity-research-demo" : "/"} className="inline-flex items-center gap-2 text-sm text-white/45 hover:text-white">
           <ArrowLeft className="size-4" /> {source === "market" ? "Market" : source === "introduction" ? "Introduction Demo" : "AI Advisor"}
         </Link>
         {isGuest ? (

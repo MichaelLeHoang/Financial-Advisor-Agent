@@ -79,8 +79,8 @@ export default function PrivacyPage() {
   return (
     <main className="min-h-screen bg-[#06080d] px-6 py-8 text-white">
       <div className="mx-auto max-w-4xl">
-        <Link href="/introduction" className="inline-flex items-center gap-2 text-sm text-white/45 transition-colors hover:text-white">
-          <ArrowLeft className="size-4" /> Back to introduction
+        <Link href="/" className="inline-flex items-center gap-2 text-sm text-white/45 transition-colors hover:text-white">
+          <ArrowLeft className="size-4" /> Back to home
         </Link>
         <header className="mt-10 rounded-3xl border border-white/[0.08] bg-white/[0.035] p-8">
           <div className="flex size-12 items-center justify-center rounded-2xl bg-indigo-primary/14 text-indigo-200 ring-1 ring-indigo-primary/25">

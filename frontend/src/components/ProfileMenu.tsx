@@ -89,7 +89,7 @@ export default function ProfileMenu({
     const openHelpCenter = () => {
         setAccountSwitcherOpen(false);
         setSignInOpen(false);
-        router.push("/introduction/help");
+        router.push("/help");
     };
 
     const openAlerts = () => {

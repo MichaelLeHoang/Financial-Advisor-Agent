@@ -34,7 +34,7 @@ const SETTINGS_STORAGE_KEY = "financial-advisor.settings";
 const COVER_SEEN_STORAGE_KEY = "financial-advisor.coverSeen";
 const STANDALONE_PUBLIC_PATHS = [
   "/",
-  "/introduction",
+  "/help",
   "/login",
   "/news",
   "/blog",

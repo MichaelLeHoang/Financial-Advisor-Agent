@@ -9,7 +9,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 
 function returnTarget(from: string | null) {
   if (from === "market") return { href: "/market", label: "Market" };
-  if (from === "introduction" || from === "intro-demo") return { href: "/introduction#equity-research-demo", label: "Introduction Demo" };
+  if (from === "introduction" || from === "intro-demo") return { href: "/#equity-research-demo", label: "Introduction Demo" };
   if (from === "ai_advisor") return { href: "/", label: "AI Advisor" };
   return { href: "/research", label: "Research Desk" };
 }
