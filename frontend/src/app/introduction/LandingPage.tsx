@@ -6,21 +6,70 @@ import {
   ArrowLeft, ArrowRight, Brain, Atom, TrendingUp, PieChart, MessageSquare,
   Shield, ExternalLink, Check, Lock, Search, Radio, Circle,
   CircleDotDashed, CheckCircle2, FileText, RefreshCw, RotateCcw,
-  Sidebar, Terminal,
+  Sidebar, Terminal, X,
 } from "lucide-react";
 import { PLANS, COMPARISON_TABLE, type PlanId, type CheckState } from "@/config/plans";
 import { IntroductionFooter, IntroductionNav } from "./components";
 import Markdown from "@/components/ui/markdown";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 /* ───── data ───── */
 
 const FEATURES = [
-  { icon: MessageSquare, title: "Conversational AI Advisor", desc: "Ask anything about markets, stocks, or portfolios. Powered by a LangGraph ReAct agent with real-time tool access." },
-  { icon: Brain, title: "FinBERT Sentiment Analysis", desc: "Gauge market mood with state-of-the-art NLP, analyzing news headlines and social signals in seconds." },
-  { icon: PieChart, title: "Classical Portfolio Optimization", desc: "Markowitz mean-variance optimization for allocation, risk budgeting, and efficient frontier analysis." },
-  { icon: Atom, title: "Quantum Portfolio Optimization", desc: "QAOA-powered combinatorial selection on simulated quantum hardware for next-gen asset allocation." },
-  { icon: TrendingUp, title: "ML Stock Prediction", desc: "Random Forest and LSTM models for price direction forecasting, trained on real historical data." },
-  { icon: Shield, title: "RAG-Augmented Memory", desc: "Retrieval-augmented generation with Qdrant vector store for grounded, citation-backed financial insights." },
+  {
+    icon: MessageSquare,
+    title: "Conversational AI Advisor",
+    desc: "Ask anything about markets, stocks, or portfolios. Powered by a LangGraph ReAct agent with real-time tool access.",
+    details: [
+      "Ask market, portfolio, and research questions in natural language while the workspace keeps the thread tied to the evidence behind each answer.",
+      "The advisor is designed for decision support: it can summarize data, surface assumptions, and keep follow-up research attached to the same workflow.",
+    ],
+  },
+  {
+    icon: Brain,
+    title: "FinBERT Sentiment Analysis",
+    desc: "Gauge market mood with state-of-the-art NLP, analyzing news headlines and social signals in seconds.",
+    details: [
+      "Track whether the narrative around a ticker is improving, deteriorating, or staying neutral across recent headlines and market commentary.",
+      "Sentiment is treated as one research signal, not a standalone verdict, so it can be weighed beside fundamentals, risk, and portfolio context.",
+    ],
+  },
+  {
+    icon: PieChart,
+    title: "Classical Portfolio Optimization",
+    desc: "Markowitz mean-variance optimization for allocation, risk budgeting, and efficient frontier analysis.",
+    details: [
+      "Model allocations with familiar portfolio theory, including expected return, volatility, and risk-adjusted tradeoffs.",
+      "Use the output to compare current allocations against cleaner alternatives before committing capital.",
+    ],
+  },
+  {
+    icon: Atom,
+    title: "Quantum Portfolio Optimization",
+    desc: "QAOA-powered combinatorial selection on simulated quantum hardware for next-gen asset allocation.",
+    details: [
+      "Explore portfolio construction as a combinatorial optimization problem when the asset universe or constraints become harder to inspect manually.",
+      "Quantum workflows are presented as research tools, with transparent outputs that can be compared against classical optimization baselines.",
+    ],
+  },
+  {
+    icon: TrendingUp,
+    title: "ML Stock Prediction",
+    desc: "Random Forest and LSTM models for price direction forecasting, trained on real historical data.",
+    details: [
+      "Forecasting modules help identify directional signals from historical data, then frame those signals with uncertainty and risk context.",
+      "Outputs are meant to support a research trail rather than replace trader judgment or portfolio discipline.",
+    ],
+  },
+  {
+    icon: Shield,
+    title: "RAG-Augmented Memory",
+    desc: "Retrieval-augmented generation with Qdrant vector store for grounded, citation-backed financial insights.",
+    details: [
+      "Keep research grounded in prior notes, saved context, and relevant documents so answers do not float away from the source material.",
+      "Memory-backed retrieval helps repeated workflows stay consistent while preserving the ability to inspect what shaped an answer.",
+    ],
+  },
 ];
 
 const SAMPLES = [
@@ -76,7 +125,7 @@ export default function IntroductionPage() {
       <IntroductionNav />
 
       {/* hero */}
-      <section className="relative z-10 flex min-h-[72dvh] items-center justify-center px-6 pb-8 pt-24 text-center sm:px-8 sm:pb-12 sm:pt-28">
+      <section className="relative z-10 flex min-h-[58dvh] items-center justify-center px-6 pb-2 pt-24 text-center sm:px-8 sm:pb-4 sm:pt-28">
         <div className="mx-auto w-full max-w-5xl">
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             <span className="inline-flex items-center rounded-full border border-white/[0.12] px-4 py-1.5 text-xs font-medium text-white/55">
@@ -89,9 +138,7 @@ export default function IntroductionPage() {
             transition={{ duration: 0.6, delay: 0.08 }}
             className="mt-6 font-heading text-[2.5rem] font-normal leading-none text-white sm:text-5xl md:text-6xl lg:text-7xl"
           >
-            Quantum Financial
-            <br />
-            Advisor Platform
+            Quantum Financial Advisor Platform
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: 18 }}
@@ -99,7 +146,7 @@ export default function IntroductionPage() {
             transition={{ duration: 0.55, delay: 0.18 }}
             className="mx-auto mt-5 max-w-3xl text-base leading-7 text-white/50 sm:text-lg"
           >
-            Advanced, high-speed AI agents. Dynamically optimize your portfolio.
+            Structured AI research, risk analysis, and portfolio workflows for disciplined market decisions.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -127,6 +174,7 @@ export default function IntroductionPage() {
       </section>
 
       <ScreenshotShowcase />
+      <WhyQuantoraSection />
       <ResearchWorkflowShowcase />
       <SamplesSection />
       <FeaturesSection />
@@ -174,7 +222,7 @@ function ScreenshotShowcase() {
           className="relative isolate h-[550px] overflow-hidden rounded-[1.45rem] bg-[#cfc6b7] shadow-[0_38px_120px_rgba(0,0,0,0.42)] sm:h-[650px] lg:h-[730px]"
         >
           <div className="sr-only" aria-live="polite">
-            Interactive demo showing draggable QuanAd desktop and terminal windows over a fixed macOS-style background.
+            Interactive demo showing draggable Quantora desktop and terminal windows over a fixed macOS-style background.
           </div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -189,7 +237,7 @@ function ScreenshotShowcase() {
           <div className={`pointer-events-none absolute inset-0 flex items-center justify-center px-3 pb-10 pt-8 sm:px-8 ${activeWindow === "main" ? "z-50" : "z-20"}`}>
             <motion.div
               role="group"
-              aria-label="Draggable QuanAd app preview window"
+              aria-label="Draggable Quantora app preview window"
               drag
               dragControls={mainControls}
               dragConstraints={dragBoundsRef}
@@ -215,7 +263,7 @@ function ScreenshotShowcase() {
                   <span className={`size-3 rounded-full ${activeWindow === "main" ? "bg-[#28c840]" : "bg-[#3b3a34]"}`} />
                 </div>
                 <div className="pointer-events-none absolute left-1/2 top-1/2 max-w-[56%] -translate-x-1/2 -translate-y-1/2 truncate text-sm font-normal text-[#ffffff6b]">
-                  QuanAd Desktop
+                  Quantora Desktop
                 </div>
                 <div className="text-sm font-normal text-[#ffffff57]">Demo</div>
               </div>
@@ -242,7 +290,7 @@ function ScreenshotShowcase() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/cover-screenshot.png"
-                  alt="QuanAd application screenshot inside a macOS-style preview window"
+                  alt="Quantora application screenshot inside a macOS-style preview window"
                   className="h-full w-full object-cover object-top"
                   draggable={false}
                 />
@@ -254,7 +302,7 @@ function ScreenshotShowcase() {
           <div className={`pointer-events-none absolute inset-0 flex items-center justify-center ${activeWindow === "terminal" ? "z-50" : "z-30"}`}>
             <motion.div
               role="group"
-              aria-label="Draggable QuanAd CLI preview window"
+              aria-label="Draggable Quantora CLI preview window"
               drag
               dragControls={terminalControls}
               dragConstraints={dragBoundsRef}
@@ -279,7 +327,7 @@ function ScreenshotShowcase() {
                 </div>
                 <div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 truncate text-sm font-normal text-[#ffffff6b]">
                   <Terminal className="size-3.5" />
-                  QuanAd CLI
+                  Quantora CLI
                 </div>
                 <div className="text-sm font-normal text-[#ffffff57]">Live</div>
               </div>
@@ -325,6 +373,31 @@ function ScreenshotShowcase() {
   );
 }
 
+function WhyQuantoraSection() {
+  return (
+    <section className="relative z-10 px-6 py-14 sm:py-16">
+      <motion.div
+        initial={{ opacity: 0, y: 28 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-120px" }}
+        transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+        className="mx-auto max-w-4xl"
+      >
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/28">Why Quantora</p>
+        <h2 className="mt-7 max-w-3xl font-heading text-2xl font-normal leading-tight tracking-tight text-white sm:text-3xl ">
+          Built for active traders, investors, and builders managing their own capital with cleaner risk analysis, and better-documented decisions.
+        </h2>
+        <p className="mt-12 max-w-5xl text-2xl leading-[1.45] tracking-tight text-white/36 sm:text-3xl">
+          Turn market data, news, sentiment, fundamentals, backtests, and portfolio signals into one structured research workflow.
+        </p>
+        <p className="mt-12 max-w-3xl text-2xl leading-tight tracking-tight text-white sm:text-3xl">
+          No noise. No hype. All in one disciplined workspace.
+        </p>
+      </motion.div>
+    </section>
+  );
+}
+
 /* ── Research Workflow Showcase ── */
 type DemoPhase = "search" | "workflow" | "analysis";
 
@@ -363,7 +436,7 @@ function ResearchWorkflowShowcase() {
         className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.86fr_1.14fr] lg:items-center"
       >
         <div>
-          <p className="text-sm font-semibold text-white/34">For investors</p>
+          <p className="text-sm font-semibold text-white/34 uppercase">For investors, traders, and analysts</p>
           <h2 className="mt-5 font-heading text-4xl font-normal leading-[1.02] tracking-tight text-white sm:text-5xl lg:text-6xl">
             One research workflow.
             <br />
@@ -496,7 +569,7 @@ function ResearchWindowDemo() {
           <span className="size-3 rounded-full bg-[#28c840]" />
         </div>
         <span className="pointer-events-none absolute left-1/2 top-1/2 max-w-[56%] -translate-x-1/2 -translate-y-1/2 truncate text-base font-semibold text-[#ffffff6b]">
-          QuanAd Live
+          Quantora Live
         </span>
         <span className="text-sm font-semibold text-[#ffffff57]">Research</span>
       </div>
@@ -514,7 +587,7 @@ function ResearchWindowDemo() {
             >
               <div className="inline-flex items-center gap-2 rounded-full border border-indigo-primary/35 bg-indigo-primary/10 px-3 py-1 text-xs font-semibold text-indigo-200">
                 <Radio className="h-3.5 w-3.5" />
-                QuanAd 2.1 Equity Research Desk
+                Quantora 2.1 Equity Research Desk
               </div>
               <h3 className="mt-5 max-w-xl font-heading text-3xl font-normal leading-tight tracking-tight text-white sm:text-4xl">
                 What stock would you like to analyze?
@@ -782,7 +855,7 @@ function SamplesSection() {
               }`}
             >
               <div className="mb-1.5 text-sm font-bold text-white/50">
-                {msg.role === "user" ? "User" : "Quantum Advisor"}
+                {msg.role === "user" ? "User" : "Quantora"}
               </div>
               <Markdown
                 content={sampleMarkdown(msg.text)}
@@ -798,24 +871,117 @@ function SamplesSection() {
 
 /* ── Features ── */
 function FeaturesSection() {
+  const [selectedFeature, setSelectedFeature] = useState<(typeof FEATURES)[number] | null>(null);
+
+  useEffect(() => {
+    if (!selectedFeature) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedFeature(null);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedFeature]);
+
   return (
     <section id="features" className="relative z-10 px-6 py-20 sm:py-24">
-      <div className="mx-auto max-w-6xl">
-        <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-80px" }} transition={{ duration: 0.6 }} className="mb-16 text-center">
-          <span className="text-xs font-semibold uppercase tracking-widest text-indigo-400">Capabilities</span>
-          <h2 className="mt-4 font-heading text-4xl font-medium tracking-tight text-white sm:text-5xl">Built for intelligent investing</h2>
-          <p className="mx-auto mt-4 max-w-xl text-base text-white/40">Six core modules working together — from natural-language chat to quantum optimization — giving you a complete AI-powered financial workspace.</p>
+      <div className="mx-auto grid max-w-7xl gap-14 lg:grid-cols-[1.35fr_0.9fr] lg:items-center">
+        <motion.div
+          initial={{ opacity: 0, x: 36 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          className="text-center lg:order-2 lg:text-right"
+        >
+          <span className="text-xs font-semibold uppercase tracking-[0.34em] text-indigo-primary">Capabilities</span>
+          <h2 className="mt-6 font-heading text-4xl font-medium leading-tight tracking-tight text-white sm:text-5xl lg:text-6xl">
+            Built for intelligent investing
+          </h2>
+          <p className="ml-auto mt-8 max-w-md text-lg leading-8 text-white/42">
+            Six core modules working together from natural-language chat to quantum optimization, giving you a complete AI-powered financial workspace.
+          </p>
         </motion.div>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 lg:order-1">
           {FEATURES.map((f, i) => (
-            <motion.div key={f.title} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-60px" }} transition={{ duration: 0.5, delay: i * 0.07 }} className="group relative rounded-2xl border border-white/[0.06] bg-white/[0.025] p-6 transition-all duration-300 hover:border-white/[0.1] hover:bg-white/[0.04]">
-              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-indigo-400 transition-colors group-hover:bg-indigo-500/10 group-hover:text-indigo-300"><f.icon className="h-5 w-5" /></div>
-              <h3 className="text-base font-semibold text-white">{f.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-white/40">{f.desc}</p>
-            </motion.div>
+            <motion.button
+              key={f.title}
+              type="button"
+              layoutId={`feature-card-${f.title}`}
+              onClick={() => setSelectedFeature(f)}
+              initial={{ opacity: 0, y: 28 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.55, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] }}
+              className="group relative min-h-[230px] rounded-lg border border-indigo-primary/16 bg-white/[0.02] p-8 text-left transition-all duration-300 hover:border-indigo-primary/36 hover:bg-indigo-primary/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/60"
+            >
+              <motion.div
+                layoutId={`feature-icon-${f.title}`}
+                className="mb-8 flex h-12 w-12 items-center justify-center rounded-full border border-indigo-primary/18 bg-indigo-primary/[0.12] text-indigo-primary transition-colors group-hover:bg-indigo-primary/[0.18] group-hover:text-indigo-200"
+              >
+                <f.icon className="h-5 w-5" />
+              </motion.div>
+              <motion.h3 layoutId={`feature-title-${f.title}`} className="text-xl font-semibold leading-tight text-white">
+                {f.title}
+              </motion.h3>
+              <motion.p layoutId={`feature-desc-${f.title}`} className="mt-5 text-base leading-7 text-white/46">
+                {f.desc}
+              </motion.p>
+            </motion.button>
           ))}
         </div>
       </div>
+
+      <AnimatePresence>
+        {selectedFeature && (
+          <motion.div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedFeature(null)}
+          >
+            <motion.div
+              layoutId={`feature-card-${selectedFeature.title}`}
+              className="relative max-h-[90vh] w-full max-w-[520px] overflow-hidden rounded-xl border border-indigo-primary/22 bg-[#0b0c10] text-white shadow-[0_30px_90px_rgba(0,0,0,0.58),0_0_0_1px_rgba(99,102,241,0.10)]"
+              transition={{ type: "spring", stiffness: 200, damping: 24 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <ScrollArea className="max-h-[90vh]">
+                <div className="p-7">
+                  <motion.div
+                    layoutId={`feature-icon-${selectedFeature.title}`}
+                    className="flex h-14 w-14 items-center justify-center rounded-full border border-indigo-primary/22 bg-indigo-primary/[0.14] text-indigo-primary"
+                  >
+                    <selectedFeature.icon className="h-6 w-6" />
+                  </motion.div>
+                  <motion.h3 layoutId={`feature-title-${selectedFeature.title}`} className="mt-7 text-2xl font-semibold leading-tight text-white">
+                    {selectedFeature.title}
+                  </motion.h3>
+                  <motion.p layoutId={`feature-desc-${selectedFeature.title}`} className="mt-3 text-base leading-7 text-white/54">
+                    {selectedFeature.desc}
+                  </motion.p>
+                  <div className="mt-7 space-y-5 text-sm leading-7 text-white/66">
+                    {selectedFeature.details.map((detail) => (
+                      <p key={detail}>{detail}</p>
+                    ))}
+                  </div>
+                </div>
+              </ScrollArea>
+              <button
+                type="button"
+                aria-label="Close capability details"
+                onClick={() => setSelectedFeature(null)}
+                className="absolute right-4 top-4 grid size-8 place-items-center rounded-full text-white/48 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/60"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }
@@ -823,32 +989,53 @@ function FeaturesSection() {
 /* ── Pricing ── */
 function PricingSection() {
   return (
-    <section id="pricing" className="landing-pricing relative z-10 px-6 py-20 sm:py-24">
-      <div className="mx-auto max-w-7xl">
-        <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }} className="mb-16 text-center">
-          <span className="text-xs font-semibold uppercase tracking-widest text-indigo-400">Pricing</span>
-          <h2 className="mt-4 font-heading text-4xl font-medium tracking-tight text-white sm:text-5xl">Choose your plan</h2>
-          <p className="mx-auto mt-4 max-w-xl text-base text-white/40">Research, analytics, backtesting, journaling, and risk-management tools — pick the tier that fits your workflow.</p>
-        </motion.div>
-
-        {/* Plan cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {PLANS.filter((p) => p.id !== "execution").map((plan, i) => (
-            <PlanCard key={plan.id} plan={plan} index={i} />
-          ))}
-        </div>
-
-        {/* Execution add-on */}
-        {(() => { const exec = PLANS.find((p) => p.id === "execution")!; return (
-          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.3 }} className="landing-execution-card mx-auto mt-8 max-w-2xl rounded-2xl border border-white/[0.06] bg-white/[0.025] p-6 text-center">
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400"><Lock className="h-3 w-3" /> Invite Only</div>
-            <h3 className="text-lg font-bold text-white">{exec.name} <span className="text-white/40">— {exec.subtitle}</span></h3>
-            <p className="mt-2 text-sm text-white/40">{exec.description}</p>
-            <div className="mt-4 flex flex-wrap justify-center gap-3">{exec.features.map((f) => (<span key={f} className="rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-xs text-white/50">{f}</span>))}</div>
-            <button type="button" className="mt-6 inline-flex h-10 items-center rounded-xl border border-white/[0.08] bg-white/[0.04] px-6 text-sm font-medium text-white/60 transition-all hover:bg-white/[0.08] hover:text-white">{exec.ctaLabel}</button>
+    <section id="pricing" className="landing-pricing relative z-10 px-4 py-6 sm:px-6">
+      <div className="landing-pricing-frame relative mx-auto max-w-[1360px] overflow-hidden rounded-[1.45rem] px-6 py-20 shadow-[0_38px_120px_rgba(0,0,0,0.36)] sm:px-10 sm:py-24">
+        <motion.img
+          src="/pay-background.webp"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover"
+          animate={{ opacity: [0.72, 0.2, 0.72] }}
+          transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.img
+          src="/pay-background-2.webp"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover"
+          animate={{ opacity: [0.18, 0.72, 0.18] }}
+          transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,8,11,0.58),rgba(7,8,11,0.80)),radial-gradient(circle_at_50%_0%,rgba(99,102,241,0.18),transparent_42%)]" aria-hidden="true" />
+        <div className="relative mx-auto max-w-7xl">
+          <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }} className="mb-16 text-center">
+            <span className="text-xs font-semibold uppercase tracking-widest text-indigo-400">Pricing</span>
+            <h2 className="mt-4 font-heading text-4xl font-medium tracking-tight text-white sm:text-5xl">Choose your plan</h2>
+            <p className="mx-auto mt-4 max-w-xl text-base text-white/40">Research, analytics, backtesting, journaling, and risk-management tools — pick the tier that fits your workflow.</p>
           </motion.div>
-        ); })()}
 
+          {/* Plan cards */}
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {PLANS.filter((p) => p.id !== "execution").map((plan, i) => (
+              <PlanCard key={plan.id} plan={plan} index={i} />
+            ))}
+          </div>
+
+          {/* Execution add-on */}
+          {(() => { const exec = PLANS.find((p) => p.id === "execution")!; return (
+            <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.3 }} className="landing-execution-card mx-auto mt-8 max-w-2xl rounded-2xl border border-white/[0.10] bg-[#0f1117] p-6 text-center shadow-[0_20px_70px_rgba(0,0,0,0.28)]">
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400"><Lock className="h-3 w-3" /> Invite Only</div>
+              <h3 className="text-lg font-bold text-white">{exec.name} <span className="text-white/40">— {exec.subtitle}</span></h3>
+              <p className="mt-2 text-sm text-white/40">{exec.description}</p>
+              <div className="mt-4 flex flex-wrap justify-center gap-3">{exec.features.map((f) => (<span key={f} className="rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-xs text-white/50">{f}</span>))}</div>
+              <button type="button" className="mt-6 inline-flex h-10 items-center rounded-xl border border-white/[0.10] bg-[#171a23] px-6 text-sm font-medium text-white/70 transition-all hover:bg-[#202432] hover:text-white">{exec.ctaLabel}</button>
+            </motion.div>
+          ); })()}
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-7xl px-2 sm:px-4">
         {/* Comparison table */}
         <ComparisonTable />
 
@@ -867,8 +1054,8 @@ function PlanCard({ plan, index }: { plan: typeof PLANS[number]; index: number }
     <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: index * 0.08 }}
       className={`landing-plan-card relative flex flex-col rounded-2xl border p-6 transition-all duration-300 ${
         isRecommended
-          ? "border-indigo-500/40 bg-gradient-to-b from-indigo-500/[0.08] to-transparent shadow-[0_0_0_1px_rgba(99,102,241,0.2),0_20px_60px_rgba(99,102,241,0.12)] hover:shadow-[0_0_0_1px_rgba(99,102,241,0.3),0_24px_70px_rgba(99,102,241,0.16)]"
-          : "border-white/[0.06] bg-white/[0.025] hover:border-white/[0.1] hover:bg-white/[0.04]"
+          ? "border-indigo-500/55 bg-[#101225] shadow-[0_0_0_1px_rgba(99,102,241,0.24),0_20px_60px_rgba(99,102,241,0.16)] hover:shadow-[0_0_0_1px_rgba(99,102,241,0.36),0_24px_70px_rgba(99,102,241,0.22)]"
+          : "border-white/[0.10] bg-[#0f1117] shadow-[0_18px_58px_rgba(0,0,0,0.18)] hover:border-indigo-primary/30 hover:bg-[#121520]"
       }`}
     >
       {isRecommended && (
@@ -893,7 +1080,7 @@ function PlanCard({ plan, index }: { plan: typeof PLANS[number]; index: number }
       <button type="button" className={`landing-plan-cta h-11 w-full rounded-xl text-sm font-semibold transition-all active:scale-[0.98] ${
         isRecommended
           ? "on-accent bg-indigo-500 text-white shadow-[0_0_0_1px_rgba(99,102,241,0.5),0_6px_18px_rgba(99,102,241,0.3)] hover:bg-indigo-400"
-          : "border border-white/[0.08] bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"
+          : "border border-white/[0.10] bg-[#171a23] text-white/70 hover:bg-[#202432] hover:text-white"
       }`}>{plan.ctaLabel}</button>
     </motion.div>
   );

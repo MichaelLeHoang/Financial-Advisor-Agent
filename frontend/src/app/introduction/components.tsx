@@ -145,13 +145,13 @@ export function IntroductionNav() {
       >
         <Link
           href="/"
-          aria-label="Quantum Advisor home"
+          aria-label="Quantora home"
           className="flex shrink-0 items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.svg" alt="" className="size-8 object-contain" />
           <span className="hidden text-sm font-semibold text-[var(--intro-nav-primary)] sm:block">
-            QuanAd
+            Quantora
           </span>
         </Link>
 
@@ -281,7 +281,7 @@ export function IntroductionNav() {
           ) : showSignedOutActions ? (
             <>
               <a
-                href="mailto:sales@quantumadvisor.app?subject=QuanAd%20sales%20inquiry"
+                href="mailto:sales@quantumadvisor.app?subject=Quantora%20sales%20inquiry"
                 className="hidden h-9 items-center rounded-full border border-white/[0.14] px-4 text-sm font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:inline-flex"
               >
                 Contact Sales
@@ -369,7 +369,7 @@ export function IntroductionNav() {
             ) : showSignedOutActions ? (
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <a
-                  href="mailto:sales@quantumadvisor.app?subject=QuanAd%20sales%20inquiry"
+                  href="mailto:sales@quantumadvisor.app?subject=Quantora%20sales%20inquiry"
                   className="inline-flex h-10 items-center justify-center rounded-full border border-white/[0.14] px-4 text-sm font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 >
                   Contact Sales
@@ -403,7 +403,7 @@ export function IntroductionFooter() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.svg" alt="" className="size-8 object-contain" />
           <div>
-            <div className="text-sm text-white/50">Quantum Financial Advisor</div>
+            <div className="text-sm text-white/50">Quantora</div>
             <p className="mt-1 max-w-md text-xs leading-5 text-white/25">
               AI-generated analysis only. Not professional financial advice. © 2026 Michael Le.
             </p>

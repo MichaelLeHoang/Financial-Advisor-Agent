@@ -769,38 +769,74 @@ body[data-theme="White"] .research-demo-progress .text-white {
   color: var(--text-primary) !important;
 }
 
-body[data-theme="White"] .landing-plan-card,
-body[data-theme="White"] .landing-execution-card {
-  border-color: var(--theme-border) !important;
-  background: #fbfaf8 !important;
-  box-shadow: var(--shadow-card) !important;
+body[data-theme="White"] .landing-pricing-frame,
+body[data-theme="White"] .landing-pricing-frame * {
+  color-scheme: dark;
 }
 
-body[data-theme="White"] .landing-plan-card [class*="text-white"],
-body[data-theme="White"] .landing-execution-card [class*="text-white"] {
-  color: var(--text-muted) !important;
+body[data-theme="White"] .landing-pricing-frame [class~="text-white"],
+body[data-theme="White"] .landing-pricing-frame [class*="text-white/"] {
+  color: rgba(255, 255, 255, 0.62) !important;
 }
 
-body[data-theme="White"] .landing-plan-card h3,
-body[data-theme="White"] .landing-plan-card .text-4xl,
-body[data-theme="White"] .landing-execution-card h3 {
-  color: var(--text-primary) !important;
+body[data-theme="White"] .landing-pricing-frame h2,
+body[data-theme="White"] .landing-pricing-frame [class~="text-white"].text-4xl,
+body[data-theme="White"] .landing-pricing-frame [class~="text-white"].sm\:text-5xl {
+  color: rgba(255, 255, 255, 0.94) !important;
 }
 
-body[data-theme="White"] .landing-plan-card.border-indigo-500\/40 {
-  border-color: #a5b4fc !important;
-  background: linear-gradient(180deg, #f2f1ff 0%, #fbfaf8 72%) !important;
+body[data-theme="White"] .landing-pricing-frame .landing-plan-card,
+body[data-theme="White"] .landing-pricing-frame .landing-execution-card {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  background: #0f1117 !important;
+  box-shadow: 0 18px 58px rgba(0, 0, 0, 0.18) !important;
 }
 
-body[data-theme="White"] .landing-plan-card .on-accent,
-body[data-theme="White"] .landing-plan-card .on-accent * {
+body[data-theme="White"] .landing-pricing-frame .landing-plan-card.border-indigo-500\/55 {
+  border-color: rgba(99, 102, 241, 0.55) !important;
+  background: #101225 !important;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.24), 0 20px 60px rgba(99, 102, 241, 0.16) !important;
+}
+
+body[data-theme="White"] .landing-pricing-frame .landing-plan-card [class*="text-white"],
+body[data-theme="White"] .landing-pricing-frame .landing-execution-card [class*="text-white"] {
+  color: rgba(255, 255, 255, 0.62) !important;
+}
+
+body[data-theme="White"] .landing-pricing-frame .landing-plan-card h3,
+body[data-theme="White"] .landing-pricing-frame .landing-plan-card .text-4xl,
+body[data-theme="White"] .landing-pricing-frame .landing-execution-card h3 {
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+body[data-theme="White"] .landing-pricing-frame .landing-plan-card .on-accent,
+body[data-theme="White"] .landing-pricing-frame .landing-plan-card .on-accent * {
   color: #ffffff !important;
 }
 
-body[data-theme="White"] .landing-plan-cta:not(.on-accent) {
-  border-color: var(--theme-border) !important;
-  background-color: #ffffff !important;
-  color: var(--text-secondary) !important;
+body[data-theme="White"] .landing-pricing-frame .border-amber-500\/20 {
+  border-color: rgba(245, 158, 11, 0.22) !important;
+}
+
+body[data-theme="White"] .landing-pricing-frame .bg-amber-500\/10 {
+  background-color: rgba(245, 158, 11, 0.1) !important;
+}
+
+body[data-theme="White"] .landing-pricing-frame .text-amber-400 {
+  color: #fbbf24 !important;
+}
+
+body[data-theme="White"] .landing-pricing-frame .landing-execution-card span[class*="bg-white"] {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  background-color: #171a23 !important;
+  color: rgba(255, 255, 255, 0.62) !important;
+}
+
+body[data-theme="White"] .landing-pricing-frame .landing-plan-cta:not(.on-accent),
+body[data-theme="White"] .landing-pricing-frame .landing-execution-card button {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  background-color: #171a23 !important;
+  color: rgba(255, 255, 255, 0.7) !important;
 }
 
 body[data-theme="White"] .landing-comparison > h3 {
