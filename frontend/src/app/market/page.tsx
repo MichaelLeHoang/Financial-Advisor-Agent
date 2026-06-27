@@ -43,6 +43,7 @@ import {
 import { cn } from "@/lib/utils";
 import { api, type EarningsPoint, type MarketQuote, type QuarterlyFinancial, type ResearchDepth } from "@/lib/api";
 import { fetchQuote as fetchCachedQuote, fetchQuotes as fetchCachedQuotes, invalidate as invalidateQuote } from "@/lib/quote-cache";
+import { useAuth } from "@/components/auth/AuthProvider";
 import {
     CHART_RANGES,
     DEFAULT_MARKET_TICKERS,
@@ -124,6 +125,7 @@ interface DetailChartPoint extends MarketPoint {
 }
 
 const MARKET_STOCKS_STORAGE_KEY = "market.savedStocks";
+const MARKET_SKIP_REMOVE_CONFIRM_STORAGE_KEY = "market.skipRemoveConfirm";
 const CHART_DETAIL_RANGES: MarketChartRange[] = ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "MAX"];
 const DEFAULT_MARKET_RANGE: ChartRange = "1M";
 const COMPARE_COLORS = ["#34d399", "#818cf8", "#22d3ee", "#fbbf24", "#f472b6"];
@@ -191,9 +193,14 @@ function rangeRefreshMs(range: MarketChartRange): number | null {
     return null;
 }
 
-function readSavedMarketStocks(): string[] | null {
+function marketStorageKey(baseKey: string, scope: string): string {
+    return `${baseKey}.${scope.replace(/[^a-zA-Z0-9:_-]/g, "_")}`;
+}
+
+function readSavedMarketStocks(scope: string): string[] | null {
     try {
-        const raw = window.localStorage.getItem(MARKET_STOCKS_STORAGE_KEY);
+        window.localStorage.removeItem(MARKET_STOCKS_STORAGE_KEY);
+        const raw = window.localStorage.getItem(marketStorageKey(MARKET_STOCKS_STORAGE_KEY, scope));
         if (raw === null) return null;
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) return null;
@@ -324,6 +331,7 @@ function DetailChartTooltip({
 
 export default function MarketPage() {
     const router = useRouter();
+    const { user, loading: authLoading } = useAuth();
     const searchInputRef = useRef<HTMLInputElement>(null);
     const marketTopRef = useRef<HTMLDivElement>(null);
     const [stocks, setStocks] = useState<StockInfo[]>(() => DEFAULT_MARKET_TICKERS.map(createStock));
@@ -344,6 +352,10 @@ export default function MarketPage() {
     const [researchDepth, setResearchDepth] = useState<ResearchDepth>("shallow");
     const [researchStarting, setResearchStarting] = useState(false);
     const [researchError, setResearchError] = useState<string | null>(null);
+    const marketStorageScope = useMemo(() => {
+        if (authLoading) return null;
+        return user.is_guest ? "guest" : `user:${user.id}`;
+    }, [authLoading, user.id, user.is_guest]);
 
     const localMatches = useMemo(() => searchMarketSymbols(query), [query]);
     const matches = useMemo(
@@ -351,13 +363,18 @@ export default function MarketPage() {
         [localMatches, symbolMatches]
     );
     useEffect(() => {
-        const saved = readSavedMarketStocks();
+        if (!marketStorageScope) return;
+        setMounted(false);
+        const saved = readSavedMarketStocks(marketStorageScope);
         if (saved !== null) {
             setStocks(saved.map(createStock));
+        } else {
+            setStocks(DEFAULT_MARKET_TICKERS.map(createStock));
         }
-        setSkipRemoveConfirm(window.localStorage.getItem("market.skipRemoveConfirm") === "true");
+        window.localStorage.removeItem(MARKET_SKIP_REMOVE_CONFIRM_STORAGE_KEY);
+        setSkipRemoveConfirm(window.localStorage.getItem(marketStorageKey(MARKET_SKIP_REMOVE_CONFIRM_STORAGE_KEY, marketStorageScope)) === "true");
         setMounted(true);
-    }, []);
+    }, [marketStorageScope]);
 
     useEffect(() => {
         if (!mounted) return;
@@ -366,9 +383,12 @@ export default function MarketPage() {
     }, [mounted]);
 
     useEffect(() => {
-        if (!mounted) return;
-        window.localStorage.setItem(MARKET_STOCKS_STORAGE_KEY, JSON.stringify(stocks.map((stock) => stock.ticker)));
-    }, [mounted, stocks]);
+        if (!mounted || !marketStorageScope) return;
+        window.localStorage.setItem(
+            marketStorageKey(MARKET_STOCKS_STORAGE_KEY, marketStorageScope),
+            JSON.stringify(stocks.map((stock) => stock.ticker))
+        );
+    }, [marketStorageScope, mounted, stocks]);
 
     useEffect(() => {
         const normalized = query.trim();
@@ -487,7 +507,9 @@ export default function MarketPage() {
     const confirmRemoveTicker = () => {
         if (!pendingRemoval) return;
         if (skipRemoveConfirmDraft) {
-            window.localStorage.setItem("market.skipRemoveConfirm", "true");
+            if (marketStorageScope) {
+                window.localStorage.setItem(marketStorageKey(MARKET_SKIP_REMOVE_CONFIRM_STORAGE_KEY, marketStorageScope), "true");
+            }
             setSkipRemoveConfirm(true);
         }
         removeTicker(pendingRemoval.ticker);
@@ -557,13 +579,30 @@ export default function MarketPage() {
         setLoading(true);
         setStocks((current) => current.map((stock) => ({ ...stock, loading: true })));
         const [period, interval] = quotePeriod(DEFAULT_MARKET_RANGE);
-        const quoteMap = await fetchCachedQuotes(stocks.map((stock) => stock.ticker), period, interval);
-        const updated = stocks.map((stock) => {
-            const quote = quoteMap.get(stock.ticker.toUpperCase());
-            return quote ? quoteToStock(quote, stock) : { ...stock, loading: false };
-        });
-        setStocks(updated);
-        setLoading(false);
+        try {
+            const quoteMap = await fetchCachedQuotes(stocks.map((stock) => stock.ticker), period, interval);
+            const updated = stocks.map((stock) => {
+                const quote = quoteMap.get(stock.ticker.toUpperCase());
+                return quote ? quoteToStock(quote, stock) : { ...stock, loading: false };
+            });
+            setStocks(updated);
+            if (quoteMap.size === 0) {
+                showToast({
+                    title: "Market data unavailable",
+                    message: "The quote service did not return live market data. Showing the last local chart fallback.",
+                    variant: "warning",
+                });
+            }
+        } catch {
+            setStocks((current) => current.map((stock) => ({ ...stock, loading: false })));
+            showToast({
+                title: "Market data unavailable",
+                message: "The quote request timed out or failed. Try refreshing again in a moment.",
+                variant: "warning",
+            });
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -970,7 +1009,7 @@ function MarketResearchDrawer({
             >
                 <div className="mb-5 flex items-start justify-between gap-3">
                     <div>
-                        <p className="text-xs font-semibold uppercase tracking-widest text-indigo-200">QuanAd 2.1</p>
+                        <p className="text-xs font-semibold uppercase tracking-widest text-indigo-200">Quanfora 2.1</p>
                         <h2 className="mt-1 text-xl font-semibold text-white">Equity Research Desk</h2>
                         <p className="mt-1 text-sm text-white/48">{stock.ticker} · {stock.name}</p>
                     </div>

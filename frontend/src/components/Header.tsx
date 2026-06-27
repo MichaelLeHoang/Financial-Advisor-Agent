@@ -151,7 +151,7 @@ export default function Header({
                         }}
                         className="flex h-10 items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--surface-control)] px-4 text-sm font-semibold text-white/86 shadow-[var(--shadow-control)] transition-colors hover:bg-[var(--surface-control-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
-                        QuanAd 1.0
+                        Quanfora 1.0
                         <ChevronDown className="h-4 w-4 text-white/45" />
                     </button>
 
@@ -174,7 +174,7 @@ export default function Header({
                                         <Cpu className="h-4 w-4" />
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <div className="text-sm font-semibold text-white">QuanAd 1.0</div>
+                                        <div className="text-sm font-semibold text-white">Quanfora 1.0</div>
                                         <div className="text-xs text-white/38">Balanced advisor for market, portfolio, and sentiment work.</div>
                                     </div>
                                     <Check className="h-4 w-4 text-green-positive" />

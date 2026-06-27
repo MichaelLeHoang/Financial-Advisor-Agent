@@ -149,7 +149,7 @@ export function EquityResearchIntroDemo() {
       <div className="grid gap-7 lg:grid-cols-[1fr_0.8fr] lg:items-center">
         <div>
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-indigo-primary/25 bg-indigo-primary/10 px-3 py-1 text-xs font-semibold text-indigo-200">
-            <Radio className="size-3.5" /> QuanAd 2.1 Equity Research Desk
+            <Radio className="size-3.5" /> Quanfora 2.1 Equity Research Desk
           </div>
           <h2 className="font-heading text-2xl font-semibold tracking-tight text-white sm:text-3xl">What stock would you like to analyze?</h2>
           <div className="mt-6">
@@ -570,7 +570,7 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
   }, [selectedAgent, visibleReports]);
 
   if (error) return <div className="rounded-2xl border border-red-negative/30 bg-red-negative/10 p-5 text-red-negative">{error}</div>;
-  if (!detail) return <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-8 text-white/45">Loading QuanAd 2.1 workspace...</div>;
+  if (!detail) return <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-8 text-white/45">Loading Quanfora 2.1 workspace...</div>;
 
   const selectedReport = visibleReports.find((report) => report.agent_key === selectedAgent) ?? visibleReports.find((report) => report.agent_key === "pm") ?? visibleReports[0];
   const hasFinalDecision = visibleReports.some((report) => report.agent_key === "pm");
@@ -682,7 +682,7 @@ function downloadResearchMarkdown(detail: EquityResearchRunDetail) {
     return aIndex - bIndex;
   });
   const content = [
-    `# QuanAd 2.1 Equity Research Report: ${run.ticker}`,
+    `# Quanfora 2.1 Equity Research Report: ${run.ticker}`,
     "",
     `- Company: ${run.company_name ?? "Unknown"}`,
     `- Exchange: ${run.exchange ?? "Unknown"}`,

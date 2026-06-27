@@ -161,11 +161,17 @@ def get_research_store() -> EquityResearchStore:
     return _STORE
 
 
-async def create_research_run(payload: EquityResearchRunCreate, user: AuthenticatedUser) -> EquityResearchRun:
+async def create_research_run(
+    payload: EquityResearchRunCreate,
+    user: AuthenticatedUser,
+    *,
+    guest_owner_id: str | None = None,
+) -> EquityResearchRun:
     effective = apply_research_entitlements(payload, user)
     run = EquityResearchRun(
         run_id=uuid4(),
         user_id=user.id if not user.is_guest else None,
+        guest_owner_id=guest_owner_id if user.is_guest else None,
         ticker=effective.ticker,
         analysis_date=effective.analysis_date or date.today(),
         research_depth=effective.research_depth,

@@ -94,7 +94,7 @@ function ResearchLandingContent() {
 
       <section className="mx-auto flex min-h-[calc(100vh-8rem)] max-w-5xl flex-col items-center justify-center py-12 text-center">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-primary/25 bg-indigo-primary/10 px-3 py-1 text-xs font-semibold text-indigo-200">
-          <Radio className="size-3.5" /> QuanAd 2.1 Equity Research Desk
+          <Radio className="size-3.5" /> Quanfora 2.1 Equity Research Desk
         </div>
         <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-6xl">What equity would you like to analyze?</h1>
         <p className="mt-5 max-w-2xl text-base leading-7 text-white/58">

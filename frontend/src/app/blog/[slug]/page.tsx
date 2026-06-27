@@ -177,7 +177,7 @@ export default function BlogPostPage({
           transition={{ duration: 0.4, delay: 0.3 }}
           className="mt-14 rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-indigo-500/10 to-cyan-500/5 p-6 text-center sm:p-8"
         >
-          <h3 className="text-lg font-bold text-white/90">Try Quantum Advisor</h3>
+          <h3 className="text-lg font-bold text-white/90">Try Quanfora</h3>
           <p className="mt-2 text-sm text-white/40">
             Experience the features discussed in this article. Start your free research session today.
           </p>

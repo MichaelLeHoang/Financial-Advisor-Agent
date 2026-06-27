@@ -37,7 +37,7 @@ export const blogPosts: BlogPost[] = [
     category: "AI Agents",
     date: "2026-05-28",
     readTime: "7 min",
-    author: "Quantum Advisor Team",
+    author: "Quanfora Team",
     heroGradient: "from-indigo-600 via-violet-500 to-purple-600",
     content: `## TL;DR
 
@@ -51,7 +51,7 @@ The problem isn't that LLMs are bad at finance — it's that a single model coll
 
 ## How Multi-Agent Consensus Works
 
-The Quantum Advisor's QuanAd 2.0 system dispatches your query to five specialist agents simultaneously:
+The Quanfora's Quanfora 2.0 system dispatches your query to five specialist agents simultaneously:
 
 **1. Quant Researcher** — Scans market data, earnings, technicals, and macro indicators. Answers: "What does the data say?"
 
@@ -100,7 +100,7 @@ Not every question needs five agents. Quick lookups ("What's AAPL's P/E ratio?")
 
 ## Start Using Multi-Agent Analysis
 
-Quantum Advisor's consensus mode is available from the AI Advisor chat. Type your investment question and select **Consensus Mode** to see the full panel analysis. Every verdict comes with the data that produced it — because in finance, the reasoning matters more than the answer.`,
+Quanfora's consensus mode is available from the AI Advisor chat. Type your investment question and select **Consensus Mode** to see the full panel analysis. Every verdict comes with the data that produced it — because in finance, the reasoning matters more than the answer.`,
   },
 
   // ─── Article 2: Listicle + PAS Framework ──────────────────────────
@@ -112,7 +112,7 @@ Quantum Advisor's consensus mode is available from the AI Advisor chat. Type you
     category: "Portfolio",
     date: "2026-05-20",
     readTime: "6 min",
-    author: "Quantum Advisor Team",
+    author: "Quanfora Team",
     heroGradient: "from-emerald-600 via-teal-500 to-cyan-500",
     content: `## Key Takeaways
 
@@ -180,7 +180,7 @@ These blind spots aren't character flaws — they're tooling gaps. Spreadsheets 
 4. **Liquidity scoring** by position
 5. **Continuous risk monitoring** with automated alerts
 
-Quantum Advisor's Risk module generates all five of these for any portfolio you build, including AI-generated explanations of what the numbers mean and what to do about them. Because knowing your return is only half the picture — knowing your risk is the other half.`,
+Quanfora's Risk module generates all five of these for any portfolio you build, including AI-generated explanations of what the numbers mean and what to do about them. Because knowing your return is only half the picture — knowing your risk is the other half.`,
   },
 
   // ─── Article 3: BAB Framework ─────────────────────────────────────
@@ -192,7 +192,7 @@ Quantum Advisor's Risk module generates all five of these for any portfolio you 
     category: "Trading",
     date: "2026-05-12",
     readTime: "8 min",
-    author: "Quantum Advisor Team",
+    author: "Quanfora Team",
     heroGradient: "from-amber-600 via-orange-500 to-red-500",
     content: `## TL;DR
 
@@ -255,7 +255,7 @@ If a strategy survives all five steps with metrics you can live with (literally 
 
 ## Build Your Validation Pipeline
 
-Quantum Advisor's Backtest Lab includes all five validation stages with configurable assumptions for slippage, fees, and position sizing. The Advanced Validation module adds walk-forward analysis, Monte Carlo paths, and bootstrap confidence intervals — because the goal isn't to find strategies that look good in hindsight, but strategies that survive contact with live markets.`,
+Quanfora's Backtest Lab includes all five validation stages with configurable assumptions for slippage, fees, and position sizing. The Advanced Validation module adds walk-forward analysis, Monte Carlo paths, and bootstrap confidence intervals — because the goal isn't to find strategies that look good in hindsight, but strategies that survive contact with live markets.`,
   },
 
   // ─── Article 4: Informational + Counter-narrative ─────────────────
@@ -267,7 +267,7 @@ Quantum Advisor's Backtest Lab includes all five validation stages with configur
     category: "Quantum",
     date: "2026-05-05",
     readTime: "7 min",
-    author: "Quantum Advisor Team",
+    author: "Quanfora Team",
     heroGradient: "from-purple-600 via-fuchsia-500 to-pink-500",
     content: `## TL;DR
 
@@ -281,7 +281,7 @@ You've seen this claim in tech blogs, crypto Twitter, and fintech pitch decks. T
 
 ## What Quantum Optimization Actually Does Today
 
-Quantum Advisor includes a QAOA-based portfolio optimizer built on PennyLane. Here's exactly what it does and what it doesn't:
+Quanfora includes a QAOA-based portfolio optimizer built on PennyLane. Here's exactly what it does and what it doesn't:
 
 ### What it does:
 
@@ -305,11 +305,11 @@ Most "quantum finance" products fall into three categories:
 
 1. **Quantum-inspired classical algorithms** — Classical algorithms that borrow ideas from quantum computing (like quantum annealing-inspired optimization) but run on regular CPUs. These can be useful but aren't quantum computing.
 
-2. **Quantum simulators** — Actual quantum algorithms running on classical hardware that simulates quantum circuits. This is what most accessible tools use today, including Quantum Advisor. Pedagogically valuable, practically limited to small problem sizes.
+2. **Quantum simulators** — Actual quantum algorithms running on classical hardware that simulates quantum circuits. This is what most accessible tools use today, including Quanfora. Pedagogically valuable, practically limited to small problem sizes.
 
 3. **Cloud quantum hardware** — Running on actual quantum processors (IBM Quantum, IonQ, Rigetti). Currently available but noisy, expensive, and limited in qubit count. Useful for research, not yet for production portfolio management.
 
-Quantum Advisor is honest about being in category 2. The optimizer is a real QAOA implementation that teaches you how quantum optimization works on portfolio problems — with side-by-side comparison to classical results so you can see exactly where the approaches converge and diverge.
+Quanfora is honest about being in category 2. The optimizer is a real QAOA implementation that teaches you how quantum optimization works on portfolio problems — with side-by-side comparison to classical results so you can see exactly where the approaches converge and diverge.
 
 ## Why Include Quantum at All?
 
@@ -323,7 +323,7 @@ Three reasons:
 
 ## What to Expect When You Use It
 
-When you run quantum optimization in Quantum Advisor:
+When you run quantum optimization in Quanfora:
 
 1. Select your asset universe (the tickers you're considering)
 2. Set your risk tolerance and target number of assets
@@ -347,7 +347,7 @@ Quantum portfolio optimization is real technology, not vaporware. But it's early
     category: "Trading",
     date: "2026-04-28",
     readTime: "6 min",
-    author: "Quantum Advisor Team",
+    author: "Quanfora Team",
     heroGradient: "from-blue-600 via-indigo-500 to-violet-500",
     content: `## Key Takeaways
 
@@ -440,7 +440,7 @@ If all four metrics improve, the journal is working. If none improve, you're log
 
 ## Start Your Journal Today
 
-Quantum Advisor's Journal module captures all six fields with structured tagging, automated P&L calculation, and built-in analytics that surface the patterns described above. The weekly review format is built into the analytics dashboard — so you spend time on insights, not data entry. Because the best trading journal isn't the prettiest one; it's the one you actually use to change your behavior.`,
+Quanfora's Journal module captures all six fields with structured tagging, automated P&L calculation, and built-in analytics that surface the patterns described above. The weekly review format is built into the analytics dashboard — so you spend time on insights, not data entry. Because the best trading journal isn't the prettiest one; it's the one you actually use to change your behavior.`,
   },
 
   // ─── Article 6: QAE Framework ──────────────────────────────────────
@@ -452,11 +452,11 @@ Quantum Advisor's Journal module captures all six fields with structured tagging
     category: "Product",
     date: "2026-04-18",
     readTime: "7 min",
-    author: "Quantum Advisor Team",
+    author: "Quanfora Team",
     heroGradient: "from-sky-600 via-blue-500 to-indigo-500",
     content: `## TL;DR
 
-Generic LLMs fundamentally misunderstand financial jargon, leading to dangerous sentiment misclassifications. FinBERT, fine-tuned specifically on corporate reports and financial news, correctly interprets market nuance. Quantum Advisor uses FinBERT to evaluate institutional sentiment, giving you a quantified edge over retail noise.
+Generic LLMs fundamentally misunderstand financial jargon, leading to dangerous sentiment misclassifications. FinBERT, fine-tuned specifically on corporate reports and financial news, correctly interprets market nuance. Quanfora uses FinBERT to evaluate institutional sentiment, giving you a quantified edge over retail noise.
 
 ## Why Generic Sentiment Fails in Finance
 
@@ -470,9 +470,9 @@ FinBERT is a pre-trained NLP model specifically fine-tuned on financial text—e
 
 **How much better is it?** In benchmark tests on financial phrase banks, FinBERT achieves 97% accuracy compared to standard BERT's 76%. That 21% gap is the difference between buying a breakout and holding a bag.
 
-## How Quantum Advisor Uses Sentiment
+## How Quanfora Uses Sentiment
 
-When you ask Quantum Advisor to analyze a stock, the **Financial Data Scientist agent** doesn't just read the last three news headlines. It runs a deep FinBERT analysis across:
+When you ask Quanfora to analyze a stock, the **Financial Data Scientist agent** doesn't just read the last three news headlines. It runs a deep FinBERT analysis across:
 - The last 4 earnings transcripts
 - SEC 10-K and 10-Q filings
 - Analyst upgrade/downgrade notes
@@ -482,7 +482,7 @@ It then produces a quantified sentiment score (e.g., +0.82 Bullish) and extracts
 
 ## The Institutional Advantage
 
-Institutional quants have used domain-specific sentiment models for years to trade momentum before the retail crowd catches on. By integrating FinBERT into the QuanAd 1.0 and 2.0 pipelines, we've democratized that capability. Stop guessing how the market feels—measure it.`,
+Institutional quants have used domain-specific sentiment models for years to trade momentum before the retail crowd catches on. By integrating FinBERT into the Quanfora 1.0 and 2.0 pipelines, we've democratized that capability. Stop guessing how the market feels—measure it.`,
   },
 
   // ─── Article 7: Informational Framework ───────────────────────────
@@ -494,12 +494,12 @@ Institutional quants have used domain-specific sentiment models for years to tra
     category: "Product",
     date: "2026-04-10",
     readTime: "8 min",
-    author: "Quantum Advisor Team",
+    author: "Quanfora Team",
     heroGradient: "from-slate-700 via-slate-500 to-zinc-500",
     content: `## Key Takeaways
 
 - AI is only as good as the data it operates on; stale data equals bad trades.
-- Quantum Advisor uses a multi-tiered ingestion pipeline combining WebSockets, REST APIs, and edge caching.
+- Quanfora uses a multi-tiered ingestion pipeline combining WebSockets, REST APIs, and edge caching.
 - Vector embeddings of news flow allow agents to instantly recall historical context.
 - We aggressively deduplicate and normalize data before it ever reaches the LLM context window.
 
@@ -511,7 +511,7 @@ Furthermore, stuffing 10,000 lines of raw JSON into an LLM context window causes
 
 ## Our Three-Tiered Ingestion Pipeline
 
-To solve this, Quantum Advisor built a custom ingestion architecture designed specifically for agentic consumption.
+To solve this, Quanfora built a custom ingestion architecture designed specifically for agentic consumption.
 
 **Tier 1: Real-Time Price via WebSockets**
 We maintain persistent WebSocket connections to market data providers. When you query a ticker, the current price, bid/ask spread, and volume are pulled instantly from our memory cache—zero API latency.
@@ -524,7 +524,7 @@ We continuously ingest financial news, run it through FinBERT for sentiment scor
 
 ## Feeding the Consensus Engine
 
-When you trigger QuanAd 2.0's Multi-Agent Consensus, the Orchestrator doesn't send the data five times. It fetches the normalized data payload once and distributes a read-only reference to all 5 specialist agents. 
+When you trigger Quanfora 2.0's Multi-Agent Consensus, the Orchestrator doesn't send the data five times. It fetches the normalized data payload once and distributes a read-only reference to all 5 specialist agents. 
 
 This architecture allows us to run a 5-agent debate on real-time data in seconds, ensuring you get institutional-grade analysis without the institutional wait time.`,
   },
@@ -538,7 +538,7 @@ This architecture allows us to run a 5-agent debate on real-time data in seconds
     category: "Trading",
     date: "2026-03-25",
     readTime: "6 min",
-    author: "Quantum Advisor Team",
+    author: "Quanfora Team",
     heroGradient: "from-rose-600 via-red-500 to-orange-500",
     content: `## TL;DR
 
@@ -575,7 +575,7 @@ If you are willing to risk $500 on a trade:
 - On the stock with a $2 stop, you buy 250 shares.
 - On the stock with an $8 stop, you buy 62 shares.
 
-Your financial risk is identical ($500), but your stop is mathematically protected from normal daily noise. Quantum Advisor's Risk Module automatically calculates ATR-based stop levels and position sizing for every trade idea, ensuring your risk management is based on market reality, not arbitrary percentages.`,
+Your financial risk is identical ($500), but your stop is mathematically protected from normal daily noise. Quanfora's Risk Module automatically calculates ATR-based stop levels and position sizing for every trade idea, ensuring your risk management is based on market reality, not arbitrary percentages.`,
   },
 
   // ─── Article 9: Counter-narrative ───────────────────────────────────
@@ -587,7 +587,7 @@ Your financial risk is identical ($500), but your stop is mathematically protect
     category: "AI Agents",
     date: "2026-03-12",
     readTime: "7 min",
-    author: "Quantum Advisor Team",
+    author: "Quanfora Team",
     heroGradient: "from-fuchsia-600 via-purple-500 to-indigo-500",
     content: `## TL;DR
 
@@ -613,7 +613,7 @@ The nuance—that this is a high-risk momentum play suitable only for tight stop
 
 Agentic architecture solves this by restricting the scope of the LLM. 
 
-In Quantum Advisor, we prompt the underlying model to act exclusively as a **Risk Manager**. We explicitly tell it: *"Your only job is to find the downside. Ignore the upside. If the stock goes to zero, why did it happen?"*
+In Quanfora, we prompt the underlying model to act exclusively as a **Risk Manager**. We explicitly tell it: *"Your only job is to find the downside. Ignore the upside. If the stock goes to zero, why did it happen?"*
 
 We then spawn a separate agent as a **Momentum Quant**: *"Your only job is to evaluate the trend. Ignore valuation."*
 
@@ -635,14 +635,14 @@ In trading, **dissent is signal**. Knowing *why* a trade is risky is infinitely 
     category: "Portfolio",
     date: "2026-02-28",
     readTime: "6 min",
-    author: "Quantum Advisor Team",
+    author: "Quanfora Team",
     heroGradient: "from-teal-600 via-emerald-500 to-green-500",
     content: `## Key Takeaways
 
 - Owning 10 different SaaS stocks provides zero diversification during a sector rotation.
 - Effective tech portfolios mix high-beta growth with low-beta tech utilities (like enterprise hardware).
 - Supply chain diversification (foundries vs. fabless) reduces systemic risk.
-- Quantum Advisor's Risk module instantly flags hidden correlation clustering in your holdings.
+- Quanfora's Risk module instantly flags hidden correlation clustering in your holdings.
 
 ## The Tech Maximalist's Dilemma
 
@@ -684,7 +684,7 @@ If your portfolio is 80% tech, you cannot use the S&P 500 (SPY) as a hedge, beca
 
 ## Check Your Risk Score
 
-You can't manage what you can't measure. Quantum Advisor's Risk Analysis tool breaks down your portfolio's exact correlation matrix, sector exposure, and tail-risk vulnerability. Run your tech-heavy portfolio through the analyzer to see if you are actually diversified, or just holding 10 versions of the same bet.`,
+You can't manage what you can't measure. Quanfora's Risk Analysis tool breaks down your portfolio's exact correlation matrix, sector exposure, and tail-risk vulnerability. Run your tech-heavy portfolio through the analyzer to see if you are actually diversified, or just holding 10 versions of the same bet.`,
   }
 ];
 

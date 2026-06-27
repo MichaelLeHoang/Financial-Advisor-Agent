@@ -21,4 +21,4 @@ API transport stays in `api/equity_research.py`; shared request and response mod
 Test entitlement normalization, invalid tickers, missing prices, deterministic final decisions, and run-state transitions without live providers.
 
 ## Latest Change
-- Integrated Equity Research Desk progress into the AI Advisor so users can launch and follow QuanAd 2.1 runs from chat.
+- Added session-scoped guest ownership metadata to research runs so guest reports can be followed during the browser session without making `user_id = null` runs globally readable.

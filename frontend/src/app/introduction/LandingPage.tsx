@@ -138,7 +138,7 @@ export default function IntroductionPage() {
             transition={{ duration: 0.6, delay: 0.08 }}
             className="mt-6 font-heading text-[2.5rem] font-normal leading-none text-white sm:text-5xl md:text-6xl lg:text-7xl"
           >
-            Quantum Financial Advisor Platform
+            Quantum Financial Advisor Platform 
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: 18 }}
@@ -174,7 +174,7 @@ export default function IntroductionPage() {
       </section>
 
       <ScreenshotShowcase />
-      <WhyQuantoraSection />
+      <WhyQuanforaSection />
       <ResearchWorkflowShowcase />
       <SamplesSection />
       <FeaturesSection />
@@ -222,7 +222,7 @@ function ScreenshotShowcase() {
           className="relative isolate h-[550px] overflow-hidden rounded-[1.45rem] bg-[#cfc6b7] shadow-[0_38px_120px_rgba(0,0,0,0.42)] sm:h-[650px] lg:h-[730px]"
         >
           <div className="sr-only" aria-live="polite">
-            Interactive demo showing draggable Quantora desktop and terminal windows over a fixed macOS-style background.
+            Interactive demo showing draggable Quanfora desktop and terminal windows over a fixed macOS-style background.
           </div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -237,7 +237,7 @@ function ScreenshotShowcase() {
           <div className={`pointer-events-none absolute inset-0 flex items-center justify-center px-3 pb-10 pt-8 sm:px-8 ${activeWindow === "main" ? "z-50" : "z-20"}`}>
             <motion.div
               role="group"
-              aria-label="Draggable Quantora app preview window"
+              aria-label="Draggable Quanfora app preview window"
               drag
               dragControls={mainControls}
               dragConstraints={dragBoundsRef}
@@ -263,7 +263,7 @@ function ScreenshotShowcase() {
                   <span className={`size-3 rounded-full ${activeWindow === "main" ? "bg-[#28c840]" : "bg-[#3b3a34]"}`} />
                 </div>
                 <div className="pointer-events-none absolute left-1/2 top-1/2 max-w-[56%] -translate-x-1/2 -translate-y-1/2 truncate text-sm font-normal text-[#ffffff6b]">
-                  Quantora Desktop
+                  Quanfora Desktop
                 </div>
                 <div className="text-sm font-normal text-[#ffffff57]">Demo</div>
               </div>
@@ -290,7 +290,7 @@ function ScreenshotShowcase() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/cover-screenshot.png"
-                  alt="Quantora application screenshot inside a macOS-style preview window"
+                  alt="Quanfora application screenshot inside a macOS-style preview window"
                   className="h-full w-full object-cover object-top"
                   draggable={false}
                 />
@@ -302,7 +302,7 @@ function ScreenshotShowcase() {
           <div className={`pointer-events-none absolute inset-0 flex items-center justify-center ${activeWindow === "terminal" ? "z-50" : "z-30"}`}>
             <motion.div
               role="group"
-              aria-label="Draggable Quantora CLI preview window"
+              aria-label="Draggable Quanfora CLI preview window"
               drag
               dragControls={terminalControls}
               dragConstraints={dragBoundsRef}
@@ -327,7 +327,7 @@ function ScreenshotShowcase() {
                 </div>
                 <div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 truncate text-sm font-normal text-[#ffffff6b]">
                   <Terminal className="size-3.5" />
-                  Quantora CLI
+                  Quanfora CLI
                 </div>
                 <div className="text-sm font-normal text-[#ffffff57]">Live</div>
               </div>
@@ -373,9 +373,9 @@ function ScreenshotShowcase() {
   );
 }
 
-function WhyQuantoraSection() {
+function WhyQuanforaSection() {
   return (
-    <section className="relative z-10 px-6 py-14 sm:py-16">
+    <section className="why-quantora-section relative z-10 px-6 py-14 sm:py-16">
       <motion.div
         initial={{ opacity: 0, y: 28 }}
         whileInView={{ opacity: 1, y: 0 }}
@@ -383,14 +383,14 @@ function WhyQuantoraSection() {
         transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
         className="mx-auto max-w-4xl"
       >
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/28">Why Quantora</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/28">Why Quanfora</p>
         <h2 className="mt-7 max-w-3xl font-heading text-2xl font-normal leading-tight tracking-tight text-white sm:text-3xl ">
           Built for active traders, investors, and builders managing their own capital with cleaner risk analysis, and better-documented decisions.
         </h2>
         <p className="mt-12 max-w-5xl text-2xl leading-[1.45] tracking-tight text-white/36 sm:text-3xl">
           Turn market data, news, sentiment, fundamentals, backtests, and portfolio signals into one structured research workflow.
         </p>
-        <p className="mt-12 max-w-3xl text-2xl leading-tight tracking-tight text-white sm:text-3xl">
+        <p className="mt-12 max-w-3xl font-heading text-2xl font-normal leading-tight tracking-tight text-white sm:text-3xl ">
           No noise. No hype. All in one disciplined workspace.
         </p>
       </motion.div>
@@ -423,8 +423,41 @@ const DEMO_WORKFLOW_STEPS = [
   "Portfolio Manager",
 ];
 
+const RESEARCH_PLACEHOLDER = "Enter a ticker: AAPL, MSFT, NVDA...";
+
+const researchPlaceholderContainerVariants = {
+  initial: {},
+  animate: { transition: { staggerChildren: 0.015 } },
+  exit: { transition: { staggerChildren: 0.01, staggerDirection: -1 } },
+};
+
+const researchPlaceholderLetterVariants = {
+  initial: { opacity: 0, filter: "blur(12px)", y: 8 },
+  animate: {
+    opacity: 1,
+    filter: "blur(0px)",
+    y: 0,
+    transition: {
+      opacity: { duration: 0.25 },
+      filter: { duration: 0.4 },
+      y: { type: "spring" as const, stiffness: 80, damping: 20 },
+    },
+  },
+  exit: {
+    opacity: 0,
+    filter: "blur(12px)",
+    y: -8,
+    transition: {
+      opacity: { duration: 0.2 },
+      filter: { duration: 0.3 },
+      y: { type: "spring" as const, stiffness: 80, damping: 20 },
+    },
+  },
+};
+
 function ResearchWorkflowShowcase() {
   const tabs = ["Research", "Risk", "Narrative"];
+  const [activeTab, setActiveTab] = useState(tabs[0]);
 
   return (
     <section id="equity-research-demo" className="research-intro-demo relative z-10 px-4 py-12 sm:px-6 sm:py-14">
@@ -450,13 +483,13 @@ function ResearchWorkflowShowcase() {
               href="/research?source=introduction"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-11 items-center justify-center rounded-full bg-white px-6 text-sm font-semibold text-black transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
+              className="intro-primary-action inline-flex h-11 items-center justify-center rounded-full px-6 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
             >
               Open demo
             </a>
             <a
               href="/docs#research-guide"
-              className="inline-flex h-11 items-center justify-center rounded-full border border-white/[0.14] px-6 text-sm font-semibold text-white/78 transition-colors hover:border-white/26 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
+              className="research-docs-link inline-flex h-11 items-center justify-center rounded-full border border-white/[0.14] px-6 text-sm font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
             >
               View docs
             </a>
@@ -467,8 +500,8 @@ function ResearchWorkflowShowcase() {
               <p className="mt-1 text-white/30">agent workflow</p>
             </div>
             <div>
-              <p className="font-semibold tabular-nums text-white/72">2 modes</p>
-              <p className="mt-1 text-white/30">shallow or deep</p>
+              <p className="font-semibold tabular-nums text-white/72">3 modes</p>
+              <p className="mt-1 text-white/30">shallow to deep</p>
             </div>
             <div>
               <p className="font-semibold tabular-nums text-white/72">Risk first</p>
@@ -478,7 +511,7 @@ function ResearchWorkflowShowcase() {
         </div>
 
         <div className="relative">
-          <div className="relative rounded-[1.8rem] bg-[radial-gradient(circle_at_32%_10%,rgba(255,255,255,0.18),transparent_23%),radial-gradient(circle_at_85%_70%,rgba(255,255,255,0.20),transparent_30%),linear-gradient(145deg,#2d3036_0%,#0b0c10_52%,#3a3b3f_100%)] p-5 shadow-[0_34px_90px_rgba(0,0,0,0.38)] sm:p-7">
+          <div className="research-mockup-shell relative rounded-[1.8rem] bg-[radial-gradient(circle_at_32%_10%,rgba(255,255,255,0.18),transparent_23%),radial-gradient(circle_at_85%_70%,rgba(255,255,255,0.20),transparent_30%),linear-gradient(145deg,#2d3036_0%,#0b0c10_52%,#3a3b3f_100%)] p-5 sm:p-7">
             <div className="pointer-events-none absolute inset-0 rounded-[1.8rem] opacity-[0.18] [background-image:radial-gradient(rgba(255,255,255,0.5)_0.5px,transparent_0.5px)] [background-size:3px_3px]" aria-hidden="true" />
             <span className="absolute -left-px top-0 h-6 w-6 bg-[var(--background)]" aria-hidden="true" />
             <span className="absolute -right-px bottom-0 h-6 w-6 bg-[var(--background)]" aria-hidden="true" />
@@ -486,14 +519,16 @@ function ResearchWorkflowShowcase() {
             <ResearchWindowDemo />
           </div>
           <div className="mt-5 flex flex-wrap gap-2">
-            {tabs.map((tab, index) => (
+            {tabs.map((tab) => (
               <button
                 key={tab}
                 type="button"
-                className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  index === 0
-                    ? "bg-white/[0.08] text-white"
-                    : "text-white/36 hover:text-white/70"
+                aria-pressed={activeTab === tab}
+                onClick={() => setActiveTab(tab)}
+                className={`research-demo-tab rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === tab
+                    ? "research-demo-tab-active"
+                    : "research-demo-tab-muted"
                 }`}
               >
                 {tab}
@@ -513,6 +548,8 @@ function ResearchWindowDemo() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [selectedTicker, setSelectedTicker] = useState(DEMO_TICKERS[0]);
+  const [placeholderRun, setPlaceholderRun] = useState(0);
+  const [showAnimatedPlaceholder, setShowAnimatedPlaceholder] = useState(true);
 
   const matches = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -552,6 +589,24 @@ function ResearchWindowDemo() {
     return () => document.removeEventListener("pointerdown", closeSuggestions);
   }, [showSuggestions]);
 
+  useEffect(() => {
+    if (query) return;
+
+    let timeout: number | undefined;
+    const interval = window.setInterval(() => {
+      setShowAnimatedPlaceholder(false);
+      timeout = window.setTimeout(() => {
+        setPlaceholderRun((current) => current + 1);
+        setShowAnimatedPlaceholder(true);
+      }, 400);
+    }, 4000);
+
+    return () => {
+      window.clearInterval(interval);
+      if (timeout) window.clearTimeout(timeout);
+    };
+  }, [query]);
+
   const startWorkflow = (ticker = selectedTicker) => {
     setSelectedTicker(ticker);
     setQuery(ticker.ticker);
@@ -568,10 +623,10 @@ function ResearchWindowDemo() {
           <span className="size-3 rounded-full bg-[#febc2e]" />
           <span className="size-3 rounded-full bg-[#28c840]" />
         </div>
-        <span className="pointer-events-none absolute left-1/2 top-1/2 max-w-[56%] -translate-x-1/2 -translate-y-1/2 truncate text-base font-semibold text-[#ffffff6b]">
-          Quantora Live
+        <span className="pointer-events-none absolute left-1/2 top-1/2 max-w-[56%] -translate-x-1/2 -translate-y-1/2 truncate text-sm font-normal text-[#ffffff6b]">
+          Quanfora Live
         </span>
-        <span className="text-sm font-semibold text-[#ffffff57]">Research</span>
+        <span className="text-sm font-normal text-[#ffffff57]">Research</span>
       </div>
 
       <div className="relative h-[378px] overflow-hidden sm:h-[398px]">
@@ -587,7 +642,7 @@ function ResearchWindowDemo() {
             >
               <div className="inline-flex items-center gap-2 rounded-full border border-indigo-primary/35 bg-indigo-primary/10 px-3 py-1 text-xs font-semibold text-indigo-200">
                 <Radio className="h-3.5 w-3.5" />
-                Quantora 2.1 Equity Research Desk
+                Quanfora 2.1 Equity Research Desk
               </div>
               <h3 className="mt-5 max-w-xl font-heading text-3xl font-normal leading-tight tracking-tight text-white sm:text-4xl">
                 What stock would you like to analyze?
@@ -602,17 +657,39 @@ function ResearchWindowDemo() {
                 >
                   <div className="research-search-shell flex h-14 items-center gap-3 rounded-full border border-[#ffffff24] bg-[#ffffff] px-4 text-[#020617] shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
                     <Search className="h-5 w-5 shrink-0 text-slate-400" />
-                    <input
-                      value={query}
-                      onChange={(event) => {
-                        setQuery(event.target.value);
-                        setShowSuggestions(true);
-                      }}
-                      onFocus={() => setShowSuggestions(true)}
-                      className="research-ticker-input min-w-0 flex-1 bg-transparent text-base font-semibold text-[#0f172a] outline-none placeholder:text-[#94a3b8]"
-                      placeholder="Enter a ticker: AAPL, MSFT, NVDA..."
-                      aria-label="Ticker symbol"
-                    />
+                    <div className="relative min-w-0 flex-1">
+                      <input
+                        value={query}
+                        onChange={(event) => {
+                          setQuery(event.target.value);
+                          setShowSuggestions(true);
+                        }}
+                        onFocus={() => setShowSuggestions(true)}
+                        className="research-ticker-input relative z-10 w-full min-w-0 bg-transparent text-base font-semibold text-[#0f172a] outline-none"
+                        placeholder=""
+                        aria-label="Ticker symbol"
+                      />
+                      <div className="pointer-events-none absolute inset-0 flex items-center overflow-hidden">
+                        <AnimatePresence mode="wait">
+                          {!query && showAnimatedPlaceholder && (
+                            <motion.span
+                              key={placeholderRun}
+                              className="research-placeholder-text max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-base font-semibold text-[#94a3b8]"
+                              variants={researchPlaceholderContainerVariants}
+                              initial="initial"
+                              animate="animate"
+                              exit="exit"
+                            >
+                              {RESEARCH_PLACEHOLDER.split("").map((char, index) => (
+                                <motion.span key={`${placeholderRun}-${index}`} variants={researchPlaceholderLetterVariants} style={{ display: "inline-block" }}>
+                                  {char === " " ? "\u00A0" : char}
+                                </motion.span>
+                              ))}
+                            </motion.span>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
                     <button
                       type="submit"
                       aria-label="Analyze ticker"
@@ -855,7 +932,7 @@ function SamplesSection() {
               }`}
             >
               <div className="mb-1.5 text-sm font-bold text-white/50">
-                {msg.role === "user" ? "User" : "Quantora"}
+                {msg.role === "user" ? "User" : "Quanfora"}
               </div>
               <Markdown
                 content={sampleMarkdown(msg.text)}
@@ -945,7 +1022,7 @@ function FeaturesSection() {
           >
             <motion.div
               layoutId={`feature-card-${selectedFeature.title}`}
-              className="relative max-h-[90vh] w-full max-w-[520px] overflow-hidden rounded-xl border border-indigo-primary/22 bg-[#0b0c10] text-white shadow-[0_30px_90px_rgba(0,0,0,0.58),0_0_0_1px_rgba(99,102,241,0.10)]"
+              className="feature-dialog relative max-h-[90vh] w-full max-w-[520px] overflow-hidden rounded-xl border border-indigo-primary/22 bg-[#0b0c10] text-white shadow-[0_30px_90px_rgba(0,0,0,0.58),0_0_0_1px_rgba(99,102,241,0.10)]"
               transition={{ type: "spring", stiffness: 200, damping: 24 }}
               onClick={(event) => event.stopPropagation()}
             >
@@ -1054,8 +1131,8 @@ function PlanCard({ plan, index }: { plan: typeof PLANS[number]; index: number }
     <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: index * 0.08 }}
       className={`landing-plan-card relative flex flex-col rounded-2xl border p-6 transition-all duration-300 ${
         isRecommended
-          ? "border-indigo-500/55 bg-[#101225] shadow-[0_0_0_1px_rgba(99,102,241,0.24),0_20px_60px_rgba(99,102,241,0.16)] hover:shadow-[0_0_0_1px_rgba(99,102,241,0.36),0_24px_70px_rgba(99,102,241,0.22)]"
-          : "border-white/[0.10] bg-[#0f1117] shadow-[0_18px_58px_rgba(0,0,0,0.18)] hover:border-indigo-primary/30 hover:bg-[#121520]"
+          ? "border-indigo-500/55 bg-[#101225] shadow-[0_0_0_1px_rgba(99,102,241,0.24),0_20px_60px_rgba(99,102,241,0.16)] hover:-translate-y-1 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.48),0_28px_82px_rgba(99,102,241,0.28)]"
+          : "border-white/[0.10] bg-[#0f1117] shadow-[0_18px_58px_rgba(0,0,0,0.18)] hover:-translate-y-1 hover:border-indigo-primary/45 hover:bg-[#141827] hover:shadow-[0_24px_76px_rgba(0,0,0,0.28),0_0_32px_rgba(99,102,241,0.12)]"
       }`}
     >
       {isRecommended && (

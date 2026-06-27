@@ -36,7 +36,7 @@ export default function SharedResearchReportPage({ params }: { params: Promise<{
     <main className="min-h-screen bg-[#06080d] px-4 py-5 text-white sm:px-8">
       <div className="mx-auto max-w-5xl">
         <Link href="/research" className="mb-5 inline-flex items-center gap-2 text-sm text-white/45 hover:text-white">
-          <ArrowLeft className="size-4" /> QuanAd Research Desk
+          <ArrowLeft className="size-4" /> Quanfora Research Desk
         </Link>
         {error ? (
           <div className="rounded-2xl border border-red-negative/30 bg-red-negative/10 p-5 text-red-negative">{error}</div>

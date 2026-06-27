@@ -1,5 +1,6 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 let authToken: string | null = null;
+const GUEST_SESSION_STORAGE_KEY = "quanfora.guestResearchSession";
 
 // ─── Types ────────────────────
 
@@ -872,10 +873,25 @@ function errorMessage(detail: unknown): string {
   return "API error";
 }
 
+function getGuestSessionId(): string | null {
+  if (authToken || typeof window === "undefined") return null;
+  const storage = window.sessionStorage;
+  const existing = storage.getItem(GUEST_SESSION_STORAGE_KEY);
+  if (existing) return existing;
+
+  const next = typeof window.crypto?.randomUUID === "function"
+    ? window.crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  storage.setItem(GUEST_SESSION_STORAGE_KEY, next);
+  return next;
+}
+
 function requestHeaders(includeJson = true): HeadersInit {
+  const guestSessionId = getGuestSessionId();
   return {
     ...(includeJson ? { "Content-Type": "application/json" } : {}),
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    ...(guestSessionId ? { "X-Guest-Session-Id": guestSessionId } : {}),
     // Bypass ngrok free-tier browser interstitial warning page
     "ngrok-skip-browser-warning": "true",
   };
@@ -1013,7 +1029,7 @@ export const api = {
   exportStrategy: (payload: StrategyExportRequest) =>
     post<StrategyExportResult>("/api/v1/quant/export", payload),
 
-  /** Chat with the LangGraph agent — mode controls QuanAd version */
+  /** Chat with the LangGraph agent — mode controls Quanfora version */
   chat: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single") =>
     post<ChatResponse>("/api/v1/agent/chat", { message, session_id: sessionId, remember, mode }),
 
@@ -1041,11 +1057,11 @@ export const api = {
     }
   },
 
-  /** Full QuanAd 2.0 multi-agent consensus with metadata */
+  /** Full Quanfora 2.0 multi-agent consensus with metadata */
   consensus: (message: string, sessionId = "default", remember = true) =>
     post<ConsensusResponse>("/api/v1/agent/consensus", { message, session_id: sessionId, remember }),
 
-  /** QuanAd 2.1 Equity Research Desk */
+  /** Quanfora 2.1 Equity Research Desk */
   createEquityResearchRun: (payload: EquityResearchRunCreate) =>
     post<EquityResearchRun>("/api/v1/equity-research/runs", payload),
 

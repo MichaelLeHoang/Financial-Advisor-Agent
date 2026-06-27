@@ -19,4 +19,4 @@ Put cross-module request and response contracts here. Domain-internal calculatio
 Cover required fields, enum values, normalization, invalid tickers, defaults, serialization, and backward-compatible optional fields.
 
 ## Latest Change
-- Added structured Equity Research Desk models and normalized snapshot contracts consumed by the API and orchestration layers.
+- Added excluded guest ownership metadata to Equity Research Desk run models so backend access checks can bind guest runs to a browser session without exposing the token in API responses.

@@ -43,7 +43,7 @@ export default function ResearchRunPage({ params }: { params: Promise<{ runId: s
             </Link>
           ) : null}
           <div className="rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1 text-xs font-semibold text-white/50">
-            QuanAd 2.1
+            Quanfora 2.1
           </div>
         </div>
       </div>

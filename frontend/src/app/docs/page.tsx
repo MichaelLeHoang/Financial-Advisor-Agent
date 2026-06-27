@@ -924,7 +924,7 @@ export default function DocsPage() {
             {activeView === "guide" ? <UserGuide /> : <TechnicalReference />}
 
             <footer className="mt-20 border-t border-white/[0.06] pt-8 text-sm text-white/34">
-              <p>Quantum Advisor Documentation</p>
+              <p>Quanfora Documentation</p>
               <p className="mt-1">Research support only. Not professional financial, legal, or tax advice.</p>
             </footer>
           </div>
@@ -952,7 +952,7 @@ function UserGuide() {
         <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-indigo-300">Start Here</div>
         <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">Make each research decision traceable</h1>
         <p className="mt-5 text-lg leading-8 text-white/62">
-          Quantum Advisor is a financial research workspace for turning market data, sentiment, portfolio context, and
+          Quanfora is a financial research workspace for turning market data, sentiment, portfolio context, and
           advisor conversations into one reviewable decision trail.
         </p>
         <p className="mt-4 text-[15px] leading-7 text-white/58">
@@ -1275,13 +1275,13 @@ function UserGuide() {
       <section id="research-guide" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader eyebrow="Advanced Tools" title="Research Reports">
           <p>
-            QuanAd 2.1 Research Reports turn a ticker into a durable analyst-style run. The workflow captures a shared
+            Quanfora 2.1 Research Reports turn a ticker into a durable analyst-style run. The workflow captures a shared
             market snapshot, streams agent events, stores individual analyst reports, and can publish a shareable report
             link when you need to hand off the work.
           </p>
         </SectionHeader>
         <ScreenAnatomy
-          title="QuanAd 2.1 research report anatomy"
+          title="Quanfora 2.1 research report anatomy"
           description="Use this page when the output needs to survive beyond a chat answer."
           regions={[
             { label: "Run setup", detail: "Choose ticker, analysis date, depth, analyst coverage, and model preferences.", icon: <Search className="size-4" /> },
@@ -1291,7 +1291,7 @@ function UserGuide() {
           ]}
         />
         <WorkflowDiagram
-          title="QuanAd 2.1 workflow"
+          title="Quanfora 2.1 workflow"
           description="A 2.1 run is a ticker-based research workflow, not a normal chat response. It starts from AI Advisor, Market, or the Research page and ends with a saved report."
           steps={["Ticker + depth", "Shared snapshot", "Research agents", "PM verdict", "Share report"]}
         />
@@ -1352,7 +1352,7 @@ function TechnicalReference() {
       <section id="agent-modes" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader title="Agent modes">
           <p>
-            QuanAd currently has three user-facing architectures. These are the choices exposed in AI Advisor's model
+            Quanfora currently has three user-facing architectures. These are the choices exposed in AI Advisor's model
             selector: a fast single-agent advisor, a multi-agent consensus system, and the Equity Research Desk for
             ticker-based reports.
           </p>
@@ -1360,9 +1360,9 @@ function TechnicalReference() {
         <DocTable
           headers={["Architecture", "Behavior", "Best for"]}
           rows={[
-            ["QuanAd 1.0", "A lightweight single advisor agent uses tools and conversation context to answer quickly.", "Quotes, simple research questions, portfolio explanations, and fast follow-ups."],
-            ["QuanAd 2.0", "A five-specialist consensus system forms independent opinions before synthesis.", "High-consequence investment reviews, disagreement checks, and risk-heavy questions."],
-            ["QuanAd 2.1", "An Equity Research Desk creates a ticker-based run with a shared snapshot, ordered analyst reports, event timeline, and final PM-style verdict.", "Durable stock research reports that need evidence, caveats, and downloadable output."],
+            ["Quanfora 1.0", "A lightweight single advisor agent uses tools and conversation context to answer quickly.", "Quotes, simple research questions, portfolio explanations, and fast follow-ups."],
+            ["Quanfora 2.0", "A five-specialist consensus system forms independent opinions before synthesis.", "High-consequence investment reviews, disagreement checks, and risk-heavy questions."],
+            ["Quanfora 2.1", "An Equity Research Desk creates a ticker-based run with a shared snapshot, ordered analyst reports, event timeline, and final PM-style verdict.", "Durable stock research reports that need evidence, caveats, and downloadable output."],
           ]}
         />
         <Callout type="info">
@@ -1373,9 +1373,9 @@ function TechnicalReference() {
       </section>
 
       <section id="single-agent" data-doc-section className="mt-16 scroll-mt-24">
-        <SectionHeader title="QuanAd 1.0 single advisor">
+        <SectionHeader title="Quanfora 1.0 single advisor">
           <p>
-            QuanAd 1.0 is the default AI Advisor mode. It is optimized for speed and conversational continuity: one
+            Quanfora 1.0 is the default AI Advisor mode. It is optimized for speed and conversational continuity: one
             tool-using advisor interprets the request, calls the relevant market or portfolio tools, and returns a concise
             answer.
           </p>
@@ -1390,7 +1390,7 @@ function TechnicalReference() {
           ]}
         />
         <CodeBlock
-          title="QuanAd 1.0 flow"
+          title="Quanfora 1.0 flow"
           language="text"
           code={`User question
   -> single advisor reasoning
@@ -1430,9 +1430,9 @@ Risk flags can downgrade an otherwise bullish result when downside evidence is s
       </section>
 
       <section id="research-desk" data-doc-section className="mt-16 scroll-mt-24">
-        <SectionHeader title="QuanAd 2.1 Equity Research Desk">
+        <SectionHeader title="Quanfora 2.1 Equity Research Desk">
           <p>
-            QuanAd 2.1 is not a normal chat response. It turns a ticker into a structured research run with visible
+            Quanfora 2.1 is not a normal chat response. It turns a ticker into a structured research run with visible
             progress, report files, event logs, risk review, and a final portfolio-manager-style verdict.
           </p>
         </SectionHeader>
@@ -1447,7 +1447,7 @@ Risk flags can downgrade an otherwise bullish result when downside evidence is s
           ]}
         />
         <CodeBlock
-          title="QuanAd 2.1 workflow"
+          title="Quanfora 2.1 workflow"
           language="text"
           code={`Ticker + depth
   -> shared data snapshot

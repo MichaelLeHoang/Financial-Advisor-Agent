@@ -87,9 +87,9 @@ export default function PrivacyPage() {
             <Database className="size-6" />
           </div>
           <p className="mt-6 text-xs font-semibold uppercase tracking-widest text-indigo-primary">Privacy Policy</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white">QuanAd Privacy Policy</h1>
+          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white">Quanfora Privacy Policy</h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-white/52">
-            Last updated June 18, 2026. This policy explains how QuanAd collects, uses, shares, and protects information.
+            Last updated June 18, 2026. This policy explains how Quanfora collects, uses, shares, and protects information.
           </p>
           <div className="mt-5 flex items-start gap-3 rounded-2xl border border-indigo-primary/20 bg-indigo-primary/10 p-4 text-sm leading-6 text-indigo-50/78">
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-indigo-primary" />

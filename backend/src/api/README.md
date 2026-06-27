@@ -20,4 +20,4 @@ Route handlers should validate and translate requests only. Business logic belon
 Use FastAPI `TestClient` with mocked dependencies for route contracts, authorization, provider timeouts, status rollups, and error responses.
 
 ## Latest Change
-- Expanded prediction responses and regression coverage for both ensemble and single-model contracts, including valuation fallback, confidence, and model error metrics.
+- Tightened equity-research run authorization so authenticated runs stay user-owned and guest runs require a matching session-scoped guest owner token; shared reports remain public only through the dedicated shared-report route.

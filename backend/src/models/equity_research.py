@@ -159,6 +159,7 @@ class EquityResearchEvent(BaseModel):
 class EquityResearchRun(BaseModel):
     run_id: UUID = Field(default_factory=uuid4)
     user_id: UUID | None = None
+    guest_owner_id: str | None = Field(default=None, exclude=True)
     ticker: str
     company_name: str | None = None
     exchange: str | None = None

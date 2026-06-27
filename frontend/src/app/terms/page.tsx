@@ -5,14 +5,14 @@ const sections = [
   {
     title: "1. Agreement to These Terms",
     body: [
-      "These Terms of Service govern your access to and use of QuanAd, also presented as Quantum Financial Advisor. By creating an account, signing in, or using the platform, you agree to these Terms.",
+      "These Terms of Service govern your access to and use of Quanfora, also presented as Quanfora. By creating an account, signing in, or using the platform, you agree to these Terms.",
       "If you use the service on behalf of an organization, you represent that you have authority to bind that organization. If you do not agree, do not use the service.",
     ],
   },
   {
     title: "2. Educational Research Only",
     body: [
-      "QuanAd provides financial research software, AI-generated analysis, portfolio analytics, market data views, and workflow tools for educational and informational use.",
+      "Quanfora provides financial research software, AI-generated analysis, portfolio analytics, market data views, and workflow tools for educational and informational use.",
       "The service does not provide personalized financial, legal, tax, accounting, or investment advice. AI outputs, model signals, research reports, and Buy/Hold/Sell labels are not guarantees, fiduciary recommendations, or instructions to trade.",
       "You are responsible for independently verifying information, evaluating risks, and deciding whether any action is appropriate for your circumstances.",
     ],
@@ -28,7 +28,7 @@ const sections = [
   {
     title: "4. Acceptable Use",
     body: [
-      "You may not use QuanAd to break the law, manipulate markets, harass others, scrape or overload systems, reverse engineer restricted functionality, bypass usage limits, or interfere with security controls.",
+      "You may not use Quanfora to break the law, manipulate markets, harass others, scrape or overload systems, reverse engineer restricted functionality, bypass usage limits, or interfere with security controls.",
       "You may not represent AI-generated output as guaranteed performance, professional advice, or a direct brokerage execution instruction.",
       "You may not upload content or prompts that contain malware, unlawful material, confidential third-party data you are not authorized to use, or information that violates another person's rights.",
     ],
@@ -37,7 +37,7 @@ const sections = [
     title: "5. Market Data, AI Output, and Third-Party Services",
     body: [
       "Market data, news, sentiment, fundamentals, and analytics may come from third-party providers and may be delayed, incomplete, inaccurate, or unavailable.",
-      "AI-generated content can contain mistakes, stale assumptions, hallucinations, or reasoning gaps. QuanAd may summarize third-party data, but it does not guarantee that any data source is complete or error-free.",
+      "AI-generated content can contain mistakes, stale assumptions, hallucinations, or reasoning gaps. Quanfora may summarize third-party data, but it does not guarantee that any data source is complete or error-free.",
       "Some features depend on third-party systems such as authentication providers, market data APIs, model providers, payment providers, and hosting platforms. Their own terms may also apply.",
     ],
   },
@@ -91,13 +91,13 @@ export default function TermsPage() {
             <Scale className="size-6" />
           </div>
           <p className="mt-6 text-xs font-semibold uppercase tracking-widest text-indigo-primary">Terms of Service</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white">QuanAd Terms of Service</h1>
+          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white">Quanfora Terms of Service</h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-white/52">
-            Last updated June 18, 2026. These terms explain the rules for using QuanAd as an educational financial research workspace.
+            Last updated June 18, 2026. These terms explain the rules for using Quanfora as an educational financial research workspace.
           </p>
           <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-warning/20 bg-amber-warning/10 p-4 text-sm leading-6 text-amber-50/78">
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-amber-warning" />
-            <p>QuanAd is not a broker, registered investment adviser, or fiduciary. Research outputs are informational only.</p>
+            <p>Quanfora is not a broker, registered investment adviser, or fiduciary. Research outputs are informational only.</p>
           </div>
         </header>
         <section className="mt-8 space-y-5">

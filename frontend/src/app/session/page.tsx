@@ -1,10 +1,10 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
-import type { ChangeEvent, ComponentType, MouseEvent } from "react";
+import type { ChangeEvent, ComponentType } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Brain, Check, ChevronDown, ClipboardList, Image, Loader2, Paperclip, PieChart, Send, SlidersHorizontal, TableProperties, TrendingUp } from "lucide-react";
+import { ArrowRight, Brain, Check, ChevronDown, ClipboardList, FileText, Image, Loader2, Paperclip, PieChart, Send, SlidersHorizontal, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
 import type { ChatJobProgress, ChatJobStatusResponse, EquityResearchEvent, EquityResearchRunDetail, ResearchDepth } from "@/lib/api";
@@ -331,6 +331,7 @@ export default function ChatPage() {
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [showPlaceholder, setShowPlaceholder] = useState(true);
   const [isActive, setIsActive] = useState(false);
+  const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [completedTools, setCompletedTools] = useState<string[]>([]);
   const [agentRunState, setAgentRunState] = useState<"queued" | "running">("running");
@@ -343,6 +344,7 @@ export default function ChatPage() {
   const progressDrainPromiseRef = useRef<Promise<void> | null>(null);
   const notifyWhenCompleteRef = useRef(false);
   const firstName = getFirstName(user?.display_name || user?.email || "");
+  const [welcomeGreeting] = useState(() => (Math.random() > 0.5 ? "Hello" : "Hi"));
 
   const showLongRunningToast = (message: string) => {
     notifyWhenCompleteRef.current = false;
@@ -449,6 +451,7 @@ export default function ChatPage() {
     const handleClickOutside = (event: globalThis.MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
         if (!input) setIsActive(false);
+        setUploadMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -625,12 +628,12 @@ export default function ChatPage() {
         setMessages((prev) => [...prev, userMsg, {
           id: getUniqueId(),
           role: "assistant",
-          content: "QuanAd 2.1 needs a ticker to start a full Equity Research Desk run. Try `AAPL`, `NVDA`, or `/analyze MSFT deep`.",
+          content: "Quanfora 2.1 needs a ticker to start a full Equity Research Desk run. Try `AAPL`, `NVDA`, or `/analyze MSFT deep`.",
         }]);
         isStreamingRef.current = false;
         return;
       }
-      setMessages((prev) => [...prev, userMsg, { id: getUniqueId(), role: "assistant", content: "Creating QuanAd 2.1 research run...", status: "fetching" }]);
+      setMessages((prev) => [...prev, userMsg, { id: getUniqueId(), role: "assistant", content: "Creating Quanfora 2.1 research run...", status: "fetching" }]);
       setIsLoading(true);
       setUpgradeMessage(null);
       setAgentRunState("running");
@@ -638,7 +641,7 @@ export default function ChatPage() {
       setUseAgentSyntheticProgress(false);
       setActiveTool("equity_snapshot");
       setCompletedTools([]);
-      showLongRunningToast("QuanAd 2.1 research may take a little while.");
+      showLongRunningToast("Quanfora 2.1 research may take a little while.");
       const loadingStartedAt = Date.now();
       try {
         const run = await api.createEquityResearchRun({
@@ -720,7 +723,7 @@ export default function ChatPage() {
         finishLongRunningToast(
           true,
           "Analysis complete",
-          `${latestDetail.run.ticker} QuanAd 2.1 research is ready.`
+          `${latestDetail.run.ticker} Quanfora 2.1 research is ready.`
         );
         window.dispatchEvent(new Event("chat-sessions:changed"));
       } catch (err: any) {
@@ -734,7 +737,7 @@ export default function ChatPage() {
         finishLongRunningToast(
           false,
           "Analysis failed",
-          err instanceof Error ? err.message : "QuanAd 2.1 research could not be completed."
+          err instanceof Error ? err.message : "Quanfora 2.1 research could not be completed."
         );
       } finally {
         setIsLoading(false);
@@ -769,7 +772,7 @@ export default function ChatPage() {
     progressDrainActiveRef.current = false;
     progressDrainPromiseRef.current = null;
     if (shouldNotifyLongRun) {
-      showLongRunningToast("QuanAd 2.0 consensus analysis may take a little while.");
+      showLongRunningToast("Quanfora 2.0 consensus analysis may take a little while.");
     } else {
       notifyWhenCompleteRef.current = false;
     }
@@ -836,12 +839,12 @@ export default function ChatPage() {
         }).concat(investmentTicker ? [{
           id: getUniqueId(),
           role: "assistant",
-          content: `Generate a full QuanAd 2.1 Research Report for ${investmentTicker}?`,
+          content: `Generate a full Quanfora 2.1 Research Report for ${investmentTicker}?`,
           researchTicker: investmentTicker,
         }] : [])
       );
       if (shouldNotifyLongRun) {
-        finishLongRunningToast(true, "Analysis complete", "QuanAd 2.0 consensus response is ready.");
+        finishLongRunningToast(true, "Analysis complete", "Quanfora 2.0 consensus response is ready.");
       }
       window.dispatchEvent(new Event("chat-sessions:changed"));
     } catch (err: any) {
@@ -859,7 +862,7 @@ export default function ChatPage() {
         finishLongRunningToast(
           false,
           "Analysis failed",
-          isUpgradeRequiredError(err) ? err.detail.message : err instanceof Error ? err.message : "QuanAd 2.0 analysis could not be completed."
+          isUpgradeRequiredError(err) ? err.detail.message : err instanceof Error ? err.message : "Quanfora 2.0 analysis could not be completed."
         );
       }
     } finally {
@@ -873,11 +876,14 @@ export default function ChatPage() {
     }
   };
 
-  const handleUpload = async (event: ChangeEvent<HTMLInputElement>, type: "document" | "data" | "image") => {
+  const handleUpload = async (event: ChangeEvent<HTMLInputElement>, type: "auto" | "document" | "data" | "image") => {
     const file = event.target.files?.[0];
     if (!file) return;
+    const effectiveType = type === "auto"
+      ? file.type.startsWith("image/") ? "image" : "document"
+      : type;
 
-    if (type === "document" || type === "data") {
+    if (effectiveType === "document" || effectiveType === "data") {
       const text = await file.text().catch(() => "");
       const preview = text.trim().slice(0, 1200);
       setInput((current) =>
@@ -889,7 +895,180 @@ export default function ChatPage() {
       );
     }
 
+    setIsActive(true);
+    setUploadMenuOpen(false);
+    window.requestAnimationFrame(() => textareaRef.current?.focus());
     event.target.value = "";
+  };
+
+  const isWelcomeState = messages.length === 1 && messages[0].id === "welcome";
+
+  const renderComposer = (placement: "center" | "dock") => {
+    const composerExpanded = Boolean(input);
+
+    return (
+    <div className={cn("shrink-0", placement === "dock" ? "px-3 pb-3 pt-1 sm:px-8 sm:pb-6 sm:pt-0" : "w-full")}>
+      <div className="relative mx-auto w-full max-w-4xl">
+        <AnimatePresence>
+          {isActive && !input && !uploadMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 12, filter: "blur(8px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: 10, filter: "blur(8px)" }}
+              transition={{ duration: 0.22 }}
+              className="absolute bottom-full left-0 right-0 z-30 mb-3 flex flex-wrap justify-center gap-2 px-2"
+            >
+              {SUGGESTIONS.map((suggestion) => (
+                <SuggestionBubble
+                  key={suggestion.title}
+                  suggestion={suggestion}
+                  onClick={() => {
+                    setInput(suggestion.prompt);
+                    window.requestAnimationFrame(() => textareaRef.current?.focus());
+                  }}
+                />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <motion.div
+          layout
+          ref={wrapperRef}
+          onClick={() => {
+            setIsActive(true);
+            textareaRef.current?.focus();
+          }}
+          className="relative mx-auto w-full overflow-visible border border-white/[0.06] bg-white/[0.045] text-white transition-colors cursor-text"
+          animate={{
+            borderRadius: composerExpanded ? 28 : 999,
+            borderColor: isActive || input ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)",
+            backgroundColor: isActive || input ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.04)",
+            boxShadow: isActive || input ? "0 14px 42px rgba(0,0,0,0.24)" : "var(--shadow-accent-composer)",
+            minHeight: composerExpanded ? 64 : 52,
+            padding: composerExpanded ? 8 : 6,
+          }}
+          transition={{ type: "spring", stiffness: 120, damping: 18 }}
+        >
+          <div className="relative flex items-center gap-2">
+            <button
+              type="button"
+              aria-label="Add files"
+              aria-expanded={uploadMenuOpen}
+              onClick={(event) => {
+                event.stopPropagation();
+                setUploadMenuOpen((open) => !open);
+                setIsActive(true);
+              }}
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-white/62 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+            >
+              <Paperclip className="size-5" />
+            </button>
+            <div className="relative min-w-0 flex-1">
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={handleInput}
+                onFocus={() => setIsActive(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                rows={1}
+                className={cn(
+                  "relative z-10 w-full resize-none overflow-y-auto border-0 bg-transparent px-3 text-sm leading-5 text-white shadow-none outline-none focus-visible:border-transparent focus-visible:ring-0",
+                  composerExpanded ? "max-h-[180px] min-h-12 py-3.5" : "max-h-10 min-h-10 py-2.5"
+                )}
+              />
+              <div className="absolute inset-0 pointer-events-none flex items-center px-3">
+                <AnimatePresence mode="wait">
+                  {showPlaceholder && !isActive && !input && (
+                    <motion.span
+                      key={placeholderIndex}
+                      className="max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-5 text-white/24"
+                      variants={placeholderContainerVariants}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
+                    >
+                      {PLACEHOLDERS[placeholderIndex].split("").map((char, i) => (
+                        <motion.span key={i} variants={letterVariants} style={{ display: "inline-block" }}>
+                          {char === " " ? "\u00A0" : char}
+                        </motion.span>
+                      ))}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <ResearchModeSelector
+                plan={user.plan}
+                value={researchDepth}
+                onChange={setResearchDepth}
+                visible={version === "2.1"}
+              />
+              <ModelSelector placement="bottom" compact />
+              <Button
+                onClick={handleSend}
+                disabled={isLoading || !input.trim()}
+                size="icon"
+                className="on-accent accent-gradient-surface h-10 w-10 shrink-0 rounded-full shadow-[var(--shadow-primary-action)] hover:shadow-[var(--shadow-primary-action-hover)] disabled:opacity-45"
+                aria-label="Send message"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+          <AnimatePresence>
+            {uploadMenuOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -8, scale: 0.98, filter: "blur(8px)" }}
+                animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -8, scale: 0.98, filter: "blur(8px)" }}
+                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                className="absolute left-0 right-0 top-[calc(100%+0.75rem)] z-40 rounded-[1.45rem] border border-white/[0.08] bg-[#202124]/95 p-2 shadow-[0_24px_70px_rgba(0,0,0,0.46)] backdrop-blur-xl"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <UploadMenuItem
+                  icon={Paperclip}
+                  label="Add photos & files"
+                  accept=".pdf,.txt,.md,.csv,.json,image/*"
+                  onChange={(event) => handleUpload(event, "auto")}
+                />
+                <UploadMenuItem
+                  icon={FileText}
+                  label="Add PDF or notes"
+                  accept=".pdf,.txt,.md"
+                  onChange={(event) => handleUpload(event, "document")}
+                />
+                <UploadMenuItem
+                  icon={TableProperties}
+                  label="Add data file"
+                  accept=".csv,.json,.txt"
+                  onChange={(event) => handleUpload(event, "data")}
+                />
+                <UploadMenuItem
+                  icon={Image}
+                  label="Add image"
+                  accept="image/*"
+                  onChange={(event) => handleUpload(event, "image")}
+                />
+                <div className="px-3 pb-1 pt-2 text-sm text-white/34">
+                  Attach files for the advisor to reference in your next message.
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </div>
+      <p className="mt-2 text-center text-[11px] text-white/20 sm:mt-3 sm:text-xs">
+        AI-generated analysis only. Not professional financial advice.
+      </p>
+    </div>
+    );
   };
 
   return (
@@ -905,44 +1084,42 @@ export default function ChatPage() {
             </CardContent>
           </Card>
         )}
-        {messages.length === 1 && messages[0].id === "welcome" && (
-          <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-col items-center justify-start gap-5 py-2 sm:gap-8 sm:py-8 lg:min-h-full lg:justify-center">
-            <div className="w-full text-left">
+        {isWelcomeState && (
+          <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-col items-center justify-center gap-7 py-8 sm:gap-8 lg:min-h-full">
+            <motion.div
+              animate={{ y: isActive && !input && !uploadMenuOpen ? -46 : 0 }}
+              transition={{ type: "spring", stiffness: 140, damping: 22 }}
+              className="w-full max-w-3xl text-center"
+            >
               <motion.h1
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-2xl font-semibold text-white sm:text-4xl md:text-5xl"
+                className="text-3xl font-semibold text-white sm:text-4xl md:text-5xl"
               >
-                Hello{firstName ? <> <span className="gradient-highlight">{firstName}</span></> : null}
+                {welcomeGreeting}{firstName ? <> <span className="gradient-highlight">{firstName}</span></> : null}
               </motion.h1>
               <motion.p
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.06 }}
-                className="mt-1 text-xl font-semibold leading-snug text-white/42 sm:text-3xl sm:leading-tight md:text-5xl"
+                className="mt-3 text-2xl font-medium leading-snug text-white/70 sm:text-3xl sm:leading-tight md:text-4xl"
               >
-                Build a <span className="gradient-highlight">research trail</span> before you place the trade.
+                What do you want to know today?
               </motion.p>
+            </motion.div>
+            <div className="w-full">
+              {renderComposer("center")}
             </div>
             <div className="grid w-full grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
               {WORKFLOW_STEPS.map((step) => (
                 <WorkflowStep key={step.title} step={step} />
               ))}
             </div>
-            <div className="grid w-full grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-3">
-              {SUGGESTIONS.map((suggestion) => (
-                <SuggestionCard
-                  key={suggestion.title}
-                  suggestion={suggestion}
-                  onClick={() => setInput(suggestion.prompt)}
-                />
-              ))}
-            </div>
           </div>
         )}
 
         <AnimatePresence>
-          {messages.map((msg) => (
+          {messages.filter((msg) => !(isWelcomeState && msg.id === "welcome")).map((msg) => (
             <motion.div
               key={msg.id}
               initial={{ opacity: 0, y: 10 }}
@@ -976,7 +1153,7 @@ export default function ChatPage() {
                         <Markdown content={msg.content} />
                         <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
                           <p className="text-sm font-semibold text-white">
-                            {msg.researchRunId ? "QuanAd 2.1 Agent Reports" : "Generate a full QuanAd 2.1 Research Report?"}
+                            {msg.researchRunId ? "Quanfora 2.1 Agent Reports" : "Generate a full Quanfora 2.1 Research Report?"}
                           </p>
                           <p className="mt-1 text-xs leading-5 text-white/55">
                             {msg.researchRunId
@@ -1015,114 +1192,7 @@ export default function ChatPage() {
         </AnimatePresence>
       </div>
 
-      {/* Input */}
-      <div className="shrink-0 px-3 pb-3 pt-1 sm:px-8 sm:pb-6 sm:pt-0">
-        <motion.div
-          layout
-          ref={wrapperRef}
-          onClick={() => setIsActive(true)}
-          className="mx-auto w-full max-w-5xl overflow-visible rounded-[24px] border bg-white/[0.045] p-1.5 text-white transition-colors sm:p-2 cursor-text"
-          animate={{
-            borderColor: isActive || input ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)",
-            backgroundColor: isActive || input ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.035)",
-            boxShadow: isActive || input ? "0 8px 32px 0 rgba(0,0,0,0.25)" : "var(--shadow-accent-composer)",
-          }}
-          transition={{ type: "spring", stiffness: 120, damping: 18 }}
-        >
-          <div className="relative flex items-end">
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={handleInput}
-              onFocus={() => setIsActive(true)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              rows={1}
-              className="relative z-10 w-full max-h-[240px] min-h-12 border-transparent bg-transparent px-3 py-3 text-sm text-white focus-visible:border-transparent focus-visible:ring-0 sm:min-h-14 sm:px-4 sm:py-3.5 resize-none overflow-y-auto"
-            />
-            <div className="absolute inset-0 pointer-events-none flex items-start px-3 py-3 sm:px-4 sm:py-3.5">
-              <AnimatePresence mode="wait">
-                {showPlaceholder && !isActive && !input && (
-                  <motion.span
-                    key={placeholderIndex}
-                    className="text-sm text-white/24 select-none pointer-events-none max-w-full overflow-hidden text-ellipsis whitespace-nowrap mt-0.5"
-                    variants={placeholderContainerVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                  >
-                    {PLACEHOLDERS[placeholderIndex].split("").map((char, i) => (
-                      <motion.span key={i} variants={letterVariants} style={{ display: "inline-block" }}>
-                        {char === " " ? "\u00A0" : char}
-                      </motion.span>
-                    ))}
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-          <AnimatePresence>
-            {(isActive || input) && (
-              <motion.div
-                initial={{ opacity: 0, height: 0, filter: "blur(8px)" }}
-                animate={{ opacity: 1, height: "auto", filter: "blur(0px)" }}
-                exit={{ opacity: 0, height: 0, filter: "blur(8px)" }}
-                transition={{ duration: 0.25 }}
-                className="relative z-20"
-              >
-                <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] px-1.5 pt-2 sm:gap-3 sm:px-2 sm:pt-3">
-                  <div className="flex items-center gap-1 sm:gap-1.5">
-                    <UploadPill
-                      icon={Paperclip}
-                      label="PDF"
-                      accept=".pdf,.txt,.md"
-                      onChange={(event) => handleUpload(event, "document")}
-                    />
-                    <UploadPill
-                      icon={TableProperties}
-                      label="Data"
-                      accept=".csv,.json,.txt"
-                      onChange={(event) => handleUpload(event, "data")}
-                    />
-                    <UploadPill
-                      icon={Image}
-                      label="Image"
-                      accept="image/*"
-                      onChange={(event) => handleUpload(event, "image")}
-                    />
-                  </div>
-
-                  <div className="ml-auto flex shrink-0 items-center gap-2">
-                    <ResearchModeSelector
-                      plan={user.plan}
-                      value={researchDepth}
-                      onChange={setResearchDepth}
-                      visible={version === "2.1"}
-                    />
-                    <ModelSelector placement="top" compact />
-                    <Button
-                      onClick={handleSend}
-                      disabled={isLoading || !input.trim()}
-                      size="icon"
-                      className="on-accent accent-gradient-surface h-10 w-10 shrink-0 rounded-full shadow-[var(--shadow-primary-action)] hover:shadow-[var(--shadow-primary-action-hover)] disabled:opacity-45"
-                      aria-label="Send message"
-                    >
-                      <Send className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-        <p className="mt-2 text-center text-[11px] text-white/20 sm:mt-3 sm:text-xs">
-          AI-generated analysis only. Not professional financial advice.
-        </p>
-      </div>
+      {!isWelcomeState && renderComposer("dock")}
     </div>
   );
 }
@@ -1267,7 +1337,7 @@ function AssistantMessageContent({ content }: { content: string }) {
   );
 }
 
-function SuggestionCard({
+function SuggestionBubble({
   suggestion,
   onClick,
 }: {
@@ -1281,32 +1351,39 @@ function SuggestionCard({
 }) {
   const Icon = suggestion.icon;
 
-  const moveSpotlight = (event: MouseEvent<HTMLDivElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    event.currentTarget.style.setProperty("--x", `${event.clientX - rect.left}px`);
-    event.currentTarget.style.setProperty("--y", `${event.clientY - rect.top}px`);
-  };
-
   return (
-    <Card
-      role="button"
-      tabIndex={0}
-      onMouseMove={moveSpotlight}
+    <button
+      type="button"
       onClick={onClick}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") onClick();
-      }}
-      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.035] p-4 text-left text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_12px_32px_rgba(0,0,0,0.24)] transition-colors duration-200 hover:border-white/[0.12] hover:bg-white/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+      className="group inline-flex max-w-[16rem] items-center gap-2 rounded-full border border-white/[0.08] bg-[#17181d]/95 px-3 py-2 text-left text-xs text-white/72 shadow-[0_14px_44px_rgba(0,0,0,0.34)] backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:border-indigo-primary/35 hover:bg-[#1e2028] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-indigo-primary/45 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-      <div className="relative">
-        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.055] text-indigo-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-          <Icon className="h-5 w-5" />
-        </div>
-        <div className="text-sm font-semibold text-white/88">{suggestion.title}</div>
-        <p className="mt-1 text-sm leading-relaxed text-white/42">{suggestion.description}</p>
-      </div>
-    </Card>
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-indigo-primary/14 text-indigo-primary ring-1 ring-indigo-primary/20">
+        <Icon className="size-3.5" />
+      </span>
+      <span className="min-w-0 truncate font-medium">{suggestion.title}</span>
+    </button>
+  );
+}
+
+function UploadMenuItem({
+  icon: Icon,
+  label,
+  accept,
+  onChange,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  accept: string;
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <label className="group flex h-12 cursor-pointer items-center gap-3 rounded-[1.1rem] px-3 text-sm font-medium text-white/82 transition-colors hover:bg-white/[0.08] hover:text-white">
+      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-white/[0.06] text-white/70 transition-colors group-hover:text-indigo-primary">
+        <Icon className="size-4" />
+      </span>
+      <span>{label}</span>
+      <input type="file" accept={accept} className="sr-only" onChange={onChange} />
+    </label>
   );
 }
 
@@ -1346,24 +1423,4 @@ function WorkflowStep({
 function getFirstName(value: string) {
   const name = value.includes("@") ? value.split("@")[0] : value;
   return name.trim().split(/\s+/)[0] || "";
-}
-
-function UploadPill({
-  icon: Icon,
-  label,
-  accept,
-  onChange,
-}: {
-  icon: ComponentType<{ className?: string }>;
-  label: string;
-  accept: string;
-  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
-}) {
-  return (
-    <label className="group flex h-9 cursor-pointer items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.035] px-3 text-xs font-medium text-white/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-white/[0.075] hover:text-white">
-      <Icon className="h-4 w-4 text-white/38 group-hover:text-indigo-primary" />
-      <span className="hidden sm:inline">{label}</span>
-      <input type="file" accept={accept} className="sr-only" onChange={onChange} />
-    </label>
-  );
 }

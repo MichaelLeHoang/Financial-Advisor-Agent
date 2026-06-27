@@ -28,10 +28,8 @@ import {
 
 const SETTINGS_STORAGE_KEY = "financial-advisor.settings";
 const NAV_LINKS = [
-  { href: "/#features", label: "Home" },
   { href: "/#samples", label: "Samples" },
   { href: "/#pricing", label: "Pricing" },
-  { href: "/docs", label: "Doc" },
   { href: "/help", label: "Help" },
 ];
 
@@ -145,20 +143,20 @@ export function IntroductionNav() {
       >
         <Link
           href="/"
-          aria-label="Quantora home"
+          aria-label="Quanfora home"
           className="flex shrink-0 items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.svg" alt="" className="size-8 object-contain" />
           <span className="hidden text-sm font-semibold text-[var(--intro-nav-primary)] sm:block">
-            Quantora
+            Quanfora
           </span>
         </Link>
 
         <nav className="hidden items-center lg:flex" aria-label="Primary navigation">
           <NavigationMenu viewport={false}>
             <NavigationMenuList className="gap-1">
-              {NAV_LINKS.slice(0, 3).map((item) => (
+              {NAV_LINKS.slice(0, 2).map((item) => (
                 <NavigationMenuItem key={item.href}>
                   <NavigationMenuLink
                     asChild
@@ -191,6 +189,19 @@ export function IntroductionNav() {
                     )}
                     <li>
                       <NavigationMenuLink asChild>
+                        <Link href="/docs" className="flex flex-row items-center gap-3">
+                          <div className="flex size-8 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-400">
+                            <BookOpen className="size-4" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium text-white/90">Docs</span>
+                            <span className="text-xs text-white/40">Product guide</span>
+                          </div>
+                        </Link>
+                      </NavigationMenuLink>
+                    </li>
+                    <li>
+                      <NavigationMenuLink asChild>
                         <Link href="/blog" className="flex flex-row items-center gap-3">
                           <div className="flex size-8 items-center justify-center rounded-md bg-white/5 text-white/70">
                             <BookOpen className="size-4" />
@@ -205,7 +216,7 @@ export function IntroductionNav() {
                   </ul>
                 </NavigationMenuContent>
               </NavigationMenuItem>
-              {NAV_LINKS.slice(3).map((item) => (
+              {NAV_LINKS.slice(2).map((item) => (
                 <NavigationMenuItem key={item.href}>
                   <NavigationMenuLink
                     asChild
@@ -281,7 +292,7 @@ export function IntroductionNav() {
           ) : showSignedOutActions ? (
             <>
               <a
-                href="mailto:sales@quantumadvisor.app?subject=Quantora%20sales%20inquiry"
+                href="mailto:sales@quantumadvisor.app?subject=Quanfora%20sales%20inquiry"
                 className="hidden h-9 items-center rounded-full border border-white/[0.14] px-4 text-sm font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:inline-flex"
               >
                 Contact Sales
@@ -315,7 +326,7 @@ export function IntroductionNav() {
           }`}
         >
           <nav className="grid gap-1" aria-label="Mobile navigation">
-            {NAV_LINKS.map((item) => (
+            {NAV_LINKS.slice(0, 2).map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -347,6 +358,17 @@ export function IntroductionNav() {
                 </Link>
               )}
               <Link
+                href="/docs"
+                onClick={() => setMobileOpen(false)}
+                className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  theme === "White"
+                    ? "text-[#667085] hover:bg-black/[0.04] hover:text-[#121a2c]"
+                    : "text-white/70 hover:bg-white/[0.08] hover:text-white"
+                }`}
+              >
+                Docs
+              </Link>
+              <Link
                 href="/blog"
                 onClick={() => setMobileOpen(false)}
                 className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
@@ -358,6 +380,20 @@ export function IntroductionNav() {
                 Blog
               </Link>
             </div>
+            {NAV_LINKS.slice(2).map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  theme === "White"
+                    ? "text-[#667085] hover:bg-black/[0.04] hover:text-[#121a2c]"
+                    : "text-white/70 hover:bg-white/[0.08] hover:text-white"
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
             {isSignedIn ? (
               <button
                 type="button"
@@ -369,7 +405,7 @@ export function IntroductionNav() {
             ) : showSignedOutActions ? (
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <a
-                  href="mailto:sales@quantumadvisor.app?subject=Quantora%20sales%20inquiry"
+                  href="mailto:sales@quantumadvisor.app?subject=Quanfora%20sales%20inquiry"
                   className="inline-flex h-10 items-center justify-center rounded-full border border-white/[0.14] px-4 text-sm font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 >
                   Contact Sales
@@ -403,7 +439,7 @@ export function IntroductionFooter() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.svg" alt="" className="size-8 object-contain" />
           <div>
-            <div className="text-sm text-white/50">Quantora</div>
+            <div className="text-sm text-white/50">Quanfora</div>
             <p className="mt-1 max-w-md text-xs leading-5 text-white/25">
               AI-generated analysis only. Not professional financial advice. © 2026 Michael Le.
             </p>

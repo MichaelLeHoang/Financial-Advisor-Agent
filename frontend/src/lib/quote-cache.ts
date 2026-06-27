@@ -3,6 +3,7 @@ import type { MarketQuote } from "@/lib/api";
 
 const DEFAULT_TTL_MS = 120_000; // Fresh enough for portfolio hydration without feeling stale.
 const INTRADAY_TTL_MS = 20_000;
+const QUOTE_TIMEOUT_MS = 12_000;
 const STORAGE_KEY = "market.quoteCache.v1";
 
 interface Entry {
@@ -80,6 +81,24 @@ function get(ticker: string, period: string, interval: string): MarketQuote | nu
   return entry.data;
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = globalThis.setTimeout(() => {
+      reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s`));
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        globalThis.clearTimeout(timeout);
+        resolve(value);
+      })
+      .catch((error) => {
+        globalThis.clearTimeout(timeout);
+        reject(error);
+      });
+  });
+}
+
 export function invalidate(ticker: string): void {
   const normalized = ticker.toUpperCase();
   Array.from(cache.keys()).forEach((key) => {
@@ -103,8 +122,11 @@ export async function fetchQuote(ticker: string, period = "1mo", interval = "1d"
   const existing = inflight.get(key);
   if (existing) return existing;
 
-  const promise = api
-    .marketQuote(ticker, period, interval)
+  const promise = withTimeout(
+    api.marketQuote(ticker, period, interval),
+    QUOTE_TIMEOUT_MS,
+    `${ticker.toUpperCase()} quote`
+  )
     .then((data) => {
       cache.set(key, { data, fetchedAt: Date.now() });
       persistToStorage();

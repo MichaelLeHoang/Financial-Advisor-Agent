@@ -5,6 +5,7 @@ import type { Provider, Session, User } from "@supabase/supabase-js";
 import { api } from "@/lib/api";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import { clearLocalChatHistory, notifyChatPrivacyReset } from "@/lib/local-chat-history";
+import { clearAccountScopedBrowserState } from "@/lib/privacy-storage";
 
 export type Plan = "free" | "pro" | "trader" | "quant" | "execution_addon";
 
@@ -149,6 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (previousIdentity && previousIdentity !== identity) {
       clearLocalChatHistory();
+      clearAccountScopedBrowserState();
       notifyChatPrivacyReset();
     }
   }, [loading, user.id, user.is_guest]);

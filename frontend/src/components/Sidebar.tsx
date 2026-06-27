@@ -29,7 +29,6 @@ import {
     Sparkles,
     Trash2,
     TrendingUp,
-    Zap,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { ChatSession } from "@/lib/api";
@@ -88,12 +87,12 @@ export default function Sidebar({
     const path = usePathname();
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
     const [sessions, setSessions] = useState<ChatSession[]>([]);
     const [sessionsLoading, setSessionsLoading] = useState(true);
-    const isGuest = Boolean(user?.is_guest);
+    const isGuest = !authLoading && Boolean(user?.is_guest);
     const visibleNav = isGuest
         ? NAV.filter((item) => item.href === "/session" || item.href === "/market")
         : getVisibleNav(user?.plan ?? "free");
@@ -110,6 +109,7 @@ export default function Sidebar({
 
     const refreshSessions = useCallback(async () => {
         setSessionsLoading(true);
+        if (authLoading) return;
         if (user?.is_guest) {
             setSessions(listLocalChatSessions());
             setSessionsLoading(false);
@@ -123,7 +123,7 @@ export default function Sidebar({
         } finally {
             setSessionsLoading(false);
         }
-    }, [user?.id, user?.is_guest]);
+    }, [authLoading, user?.id, user?.is_guest]);
 
     const startNewAnalysis = useCallback(() => {
         const nextSessionId = typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -421,8 +421,8 @@ function MiniSidebar({
                 onClick={onToggleSidebar}
                 className="group relative mb-3 flex h-10 w-10 cursor-e-resize items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
-                    <span className="accent-gradient-surface on-accent absolute flex h-10 w-10 items-center justify-center rounded-xl opacity-100 shadow-[var(--shadow-brand-mark)] transition-opacity group-hover:opacity-0">
-                    <Zap className="h-5 w-5" />
+                    <span className="absolute flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] opacity-100 shadow-[var(--shadow-brand-mark)] transition-opacity group-hover:opacity-0">
+                    <img src="/logo.svg" alt="" className="h-6 w-6 object-contain" />
                 </span>
                 <span className="absolute flex h-10 w-10 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
                     <SidebarGlyph />
@@ -624,10 +624,10 @@ function SidebarSurface({
                 <div className="mb-3 flex h-10 items-center justify-between">
                     <Link
                         href="/session"
-                        aria-label="Quantum Advisor home"
-                        className="accent-gradient-surface on-accent flex h-10 w-10 items-center justify-center rounded-xl shadow-[var(--shadow-brand-mark-strong)] outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                        aria-label="Quanfora home"
+                        className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] shadow-[var(--shadow-brand-mark-strong)] outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
-                        <Zap className="h-5 w-5" />
+                        <img src="/logo.svg" alt="" className="h-6 w-6 object-contain" />
                     </Link>
                     {onToggle && (
                         <button
