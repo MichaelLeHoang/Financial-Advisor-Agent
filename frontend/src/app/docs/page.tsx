@@ -34,7 +34,6 @@ import {
   TrendingUp,
   Wallet,
   X,
-  Zap,
 } from "lucide-react";
 import { COMPARISON_TABLE, PLANS } from "@/config/plans";
 
@@ -53,7 +52,37 @@ type NavSection = {
   items: NavItem[];
 };
 
-const DOCS_THEME_STORAGE_KEY = "financial-advisor.docs-theme";
+const SETTINGS_STORAGE_KEY = "financial-advisor.settings";
+
+function themeFromAppTheme(themeName: unknown): DocsTheme {
+  return themeName === "White" ? "light" : "dark";
+}
+
+function getStoredDocsTheme(): DocsTheme {
+  try {
+    const stored = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!stored) return "dark";
+    const parsed = JSON.parse(stored) as { theme?: unknown };
+    return themeFromAppTheme(parsed.theme);
+  } catch {
+    return "dark";
+  }
+}
+
+function updateStoredAppTheme(theme: DocsTheme) {
+  const nextThemeName = theme === "light" ? "White" : "Deep Space";
+  let nextSettings: Record<string, unknown> = { theme: nextThemeName };
+
+  try {
+    const stored = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (stored) nextSettings = { ...JSON.parse(stored), theme: nextThemeName };
+  } catch {
+    nextSettings = { theme: nextThemeName };
+  }
+
+  window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(nextSettings));
+  window.dispatchEvent(new CustomEvent("financial-advisor:theme-change", { detail: nextThemeName }));
+}
 
 const NAV_SECTIONS: NavSection[] = [
   {
@@ -330,12 +359,12 @@ function WorkspaceMap() {
   return (
     <div className="my-6 grid gap-3 lg:grid-cols-5">
       {WORKSPACE_GROUPS.map((group) => (
-        <div key={group.title} className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
-          <div className={`mb-4 h-1.5 w-12 rounded-full ${toneClass(group.tone)}`} />
+        <div key={group.title} className="docs-map-card rounded-lg border border-white/[0.08] bg-white/[0.025] p-4">
+          <div className={`docs-tone-bar mb-4 h-2 w-16 rounded-full ${toneClass(group.tone)}`} />
           <h3 className="text-sm font-semibold text-white/84">{group.title}</h3>
           <div className="mt-4 space-y-2">
             {group.items.map((item) => (
-              <div key={item} className="rounded-md border border-white/[0.06] bg-[var(--docs-panel-strong)] px-3 py-2 text-xs text-white/55">
+              <div key={item} className="docs-map-item rounded-md border border-white/[0.06] bg-[var(--docs-panel-strong)] px-3 py-2 text-xs text-white/55">
                 {item}
               </div>
             ))}
@@ -540,41 +569,41 @@ export default function DocsPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [theme, setTheme] = useState<DocsTheme>(() => {
     if (typeof window === "undefined") return "dark";
-    const storedTheme = window.localStorage.getItem(DOCS_THEME_STORAGE_KEY);
-    return storedTheme === "light" || storedTheme === "dark" ? storedTheme : "dark";
+    return getStoredDocsTheme();
   });
 
   const visibleSections = NAV_SECTIONS.filter((section) => section.view === activeView);
   const docsThemeStyle = {
-    "--docs-bg": theme === "light" ? "oklch(97.5% 0.008 265)" : "oklch(15% 0.018 265)",
-    "--docs-text": theme === "light" ? "oklch(23% 0.028 265)" : "oklch(96% 0.006 265)",
-    "--docs-text-secondary": theme === "light" ? "oklch(35% 0.026 265)" : "oklch(84% 0.01 265)",
-    "--docs-text-muted": theme === "light" ? "oklch(46% 0.022 265)" : "oklch(70% 0.012 265)",
-    "--docs-text-subtle": theme === "light" ? "oklch(56% 0.018 265)" : "oklch(55% 0.012 265)",
-    "--docs-text-faint": theme === "light" ? "oklch(66% 0.015 265)" : "oklch(42% 0.012 265)",
-    "--docs-header": theme === "light" ? "oklch(99% 0.005 265 / 0.94)" : "oklch(15% 0.018 265 / 0.92)",
-    "--docs-sidebar": theme === "light" ? "oklch(98.8% 0.007 265)" : "oklch(15% 0.018 265)",
-    "--docs-border": theme === "light" ? "oklch(78% 0.022 265)" : "oklch(100% 0.006 265 / 0.08)",
-    "--docs-border-soft": theme === "light" ? "oklch(85% 0.016 265)" : "oklch(100% 0.006 265 / 0.06)",
-    "--docs-control": theme === "light" ? "oklch(100% 0.004 265)" : "oklch(100% 0.006 265 / 0.035)",
-    "--docs-control-hover": theme === "light" ? "oklch(94.5% 0.014 265)" : "oklch(100% 0.006 265 / 0.06)",
-    "--docs-control-active": theme === "light" ? "oklch(93% 0.04 268)" : "oklch(100% 0.006 265 / 0.1)",
-    "--docs-control-active-text": theme === "light" ? "oklch(38% 0.14 268)" : "oklch(87% 0.06 268)",
-    "--docs-panel": theme === "light" ? "oklch(99.2% 0.005 265)" : "oklch(100% 0.006 265 / 0.025)",
-    "--docs-panel-strong": theme === "light" ? "oklch(95.5% 0.012 265)" : "oklch(20% 0.02 265)",
-    "--docs-code-bg": theme === "light" ? "oklch(94.5% 0.013 265)" : "oklch(13% 0.018 265)",
-    "--docs-modal-bg": theme === "light" ? "oklch(99.5% 0.004 265)" : "oklch(14% 0.018 265)",
-    "--docs-accent": theme === "light" ? "oklch(38% 0.15 268)" : "oklch(78% 0.11 268)",
-    "--docs-accent-soft": theme === "light" ? "oklch(93% 0.04 268)" : "oklch(56% 0.16 268 / 0.14)",
-    "--docs-info": theme === "light" ? "oklch(37% 0.1 225)" : "oklch(80% 0.1 225)",
-    "--docs-info-soft": theme === "light" ? "oklch(93.5% 0.035 225)" : "oklch(58% 0.12 225 / 0.14)",
-    "--docs-success": theme === "light" ? "oklch(38% 0.11 154)" : "oklch(78% 0.13 154)",
-    "--docs-success-soft": theme === "light" ? "oklch(94% 0.04 154)" : "oklch(64% 0.13 154 / 0.14)",
-    "--docs-warning": theme === "light" ? "oklch(42% 0.11 76)" : "oklch(82% 0.13 76)",
-    "--docs-warning-soft": theme === "light" ? "oklch(94.5% 0.045 76)" : "oklch(70% 0.13 76 / 0.14)",
-    "--docs-rose": theme === "light" ? "oklch(42% 0.13 18)" : "oklch(79% 0.12 18)",
-    "--docs-rose-soft": theme === "light" ? "oklch(94% 0.04 18)" : "oklch(65% 0.13 18 / 0.14)",
-    "--docs-shadow": theme === "light" ? "0 16px 44px oklch(42% 0.04 265 / 0.12)" : "none",
+    "--docs-bg": theme === "light" ? "#f7f5f2" : "oklch(15% 0.018 265)",
+    "--docs-text": theme === "light" ? "#121a2c" : "oklch(96% 0.006 265)",
+    "--docs-text-secondary": theme === "light" ? "#344054" : "oklch(84% 0.01 265)",
+    "--docs-text-muted": theme === "light" ? "#667085" : "oklch(70% 0.012 265)",
+    "--docs-text-subtle": theme === "light" ? "#98a2b3" : "oklch(55% 0.012 265)",
+    "--docs-text-faint": theme === "light" ? "#b6bdc9" : "oklch(42% 0.012 265)",
+    "--docs-header": theme === "light" ? "rgba(247,245,242,0.88)" : "oklch(15% 0.018 265 / 0.92)",
+    "--docs-sidebar": theme === "light" ? "#fbfaf8" : "oklch(15% 0.018 265)",
+    "--docs-border": theme === "light" ? "#e3e1dc" : "oklch(100% 0.006 265 / 0.08)",
+    "--docs-border-soft": theme === "light" ? "#ebe8e1" : "oklch(100% 0.006 265 / 0.06)",
+    "--docs-control": theme === "light" ? "#fbfaf8" : "oklch(100% 0.006 265 / 0.035)",
+    "--docs-control-hover": theme === "light" ? "#f2f0ec" : "oklch(100% 0.006 265 / 0.06)",
+    "--docs-control-active": theme === "light" ? "#eeedff" : "oklch(100% 0.006 265 / 0.1)",
+    "--docs-control-active-text": theme === "light" ? "#3730a3" : "oklch(87% 0.06 268)",
+    "--docs-panel": theme === "light" ? "#fbfaf8" : "oklch(100% 0.006 265 / 0.025)",
+    "--docs-panel-strong": theme === "light" ? "#f2f0ec" : "oklch(20% 0.02 265)",
+    "--docs-code-bg": theme === "light" ? "#f2f0ec" : "oklch(13% 0.018 265)",
+    "--docs-modal-bg": theme === "light" ? "#fbfaf8" : "oklch(14% 0.018 265)",
+    "--docs-accent": theme === "light" ? "#4f46e5" : "oklch(78% 0.11 268)",
+    "--docs-accent-hover": theme === "light" ? "#4338ca" : "oklch(84% 0.1 268)",
+    "--docs-accent-soft": theme === "light" ? "#eeedff" : "oklch(56% 0.16 268 / 0.14)",
+    "--docs-info": theme === "light" ? "#0369a1" : "oklch(80% 0.1 225)",
+    "--docs-info-soft": theme === "light" ? "#e0f2fe" : "oklch(58% 0.12 225 / 0.14)",
+    "--docs-success": theme === "light" ? "#047857" : "oklch(78% 0.13 154)",
+    "--docs-success-soft": theme === "light" ? "#dcfce7" : "oklch(64% 0.13 154 / 0.14)",
+    "--docs-warning": theme === "light" ? "#b45309" : "oklch(82% 0.13 76)",
+    "--docs-warning-soft": theme === "light" ? "#fef3c7" : "oklch(70% 0.13 76 / 0.14)",
+    "--docs-rose": theme === "light" ? "#be123c" : "oklch(79% 0.12 18)",
+    "--docs-rose-soft": theme === "light" ? "#ffe4e6" : "oklch(65% 0.13 18 / 0.14)",
+    "--docs-shadow": theme === "light" ? "0 14px 34px rgba(18,26,44,0.08)" : "none",
   } as React.CSSProperties;
 
   useEffect(() => {
@@ -586,8 +615,14 @@ export default function DocsPage() {
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem(DOCS_THEME_STORAGE_KEY, theme);
-  }, [theme]);
+    const handleThemeChange = (event: Event) => {
+      const nextTheme = themeFromAppTheme((event as CustomEvent<string>).detail);
+      setTheme(nextTheme);
+    };
+
+    window.addEventListener("financial-advisor:theme-change", handleThemeChange);
+    return () => window.removeEventListener("financial-advisor:theme-change", handleThemeChange);
+  }, []);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -616,6 +651,7 @@ export default function DocsPage() {
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
+    updateStoredAppTheme(next);
     setTheme(next);
   };
 
@@ -648,6 +684,53 @@ export default function DocsPage() {
 
         [data-docs-theme="light"] .docs-logo-icon {
           color: oklch(98% 0.01 265) !important;
+        }
+
+        [data-docs-theme="light"] .docs-map-card {
+          background: var(--docs-panel) !important;
+          border-color: var(--docs-border) !important;
+          box-shadow: var(--docs-shadow);
+        }
+
+        [data-docs-theme="light"] .docs-map-item {
+          background: var(--docs-control-hover) !important;
+          border-color: #d8d5ce !important;
+          color: var(--docs-text-muted) !important;
+        }
+
+        [data-docs-theme="light"] .docs-tone-bar.bg-indigo-400 {
+          background: #4f46e5 !important;
+        }
+
+        [data-docs-theme="light"] .docs-tone-bar.bg-cyan-400 {
+          background: #0891b2 !important;
+        }
+
+        [data-docs-theme="light"] .docs-tone-bar.bg-emerald-400 {
+          background: #047857 !important;
+        }
+
+        [data-docs-theme="light"] .docs-tone-bar.bg-amber-400 {
+          background: #b45309 !important;
+        }
+
+        [data-docs-theme="light"] .docs-tone-bar.bg-rose-400 {
+          background: #be123c !important;
+        }
+
+        [data-docs-theme="light"] a:hover,
+        [data-docs-theme="light"] button:hover {
+          border-color: var(--docs-border) !important;
+        }
+
+        [data-docs-theme="light"] button:hover:not(:disabled) {
+          background-color: var(--docs-control-hover);
+        }
+
+        [data-docs-theme="light"] [aria-pressed="true"],
+        [data-docs-theme="light"] [data-active="true"] {
+          background-color: var(--docs-control-active) !important;
+          color: var(--docs-control-active-text) !important;
         }
 
         [data-docs-theme="light"] [class~="text-white/95"],
@@ -800,8 +883,8 @@ export default function DocsPage() {
       <header className="fixed left-0 right-0 top-0 z-50 border-b border-[var(--docs-border)] bg-[var(--docs-header)] backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-4 px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2.5">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400">
-              <Zap className="docs-logo-icon size-3.5 text-white" />
+            <span className="docs-logo-mark flex size-7 items-center justify-center rounded-lg border border-[var(--docs-border)] bg-[var(--docs-control)] shadow-[var(--docs-shadow)]">
+              <img src="/logo.svg" alt="" className="size-5 object-contain" />
             </span>
             <span className="text-sm font-semibold text-[var(--docs-text)]">Documentation</span>
           </Link>
@@ -923,7 +1006,7 @@ export default function DocsPage() {
           <div className="mx-auto max-w-4xl">
             {activeView === "guide" ? <UserGuide /> : <TechnicalReference />}
 
-            <footer className="mt-20 border-t border-white/[0.06] pt-8 text-sm text-white/34">
+            <footer className="mt-20 border-t border-[var(--docs-border-soft)] pt-8 text-sm text-[var(--docs-text-subtle)]">
               <p>Quanfora Documentation</p>
               <p className="mt-1">Research support only. Not professional financial, legal, or tax advice.</p>
             </footer>
@@ -934,7 +1017,7 @@ export default function DocsPage() {
       <button
         type="button"
         onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-        className="fixed bottom-6 right-6 z-50 flex size-10 items-center justify-center rounded-full border border-white/[0.08] bg-[#0c0d14]/90 text-white/42 backdrop-blur-sm transition-all hover:bg-white/[0.08] hover:text-white/75"
+        className="fixed bottom-6 right-6 z-50 flex size-10 items-center justify-center rounded-full border border-[var(--docs-border)] bg-[var(--docs-control)] text-[var(--docs-text-muted)] shadow-[var(--docs-shadow)] backdrop-blur-sm transition-all hover:bg-[var(--docs-control-hover)] hover:text-[var(--docs-text-secondary)]"
         aria-label="Scroll to top"
       >
         <ArrowUp className="size-4" />

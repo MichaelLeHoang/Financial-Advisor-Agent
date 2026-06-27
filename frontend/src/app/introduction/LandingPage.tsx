@@ -614,6 +614,7 @@ function ResearchWindowDemo() {
     setActiveStep(0);
     setPhase("workflow");
   };
+  const workflowScrollOffset = phase === "workflow" ? -Math.min(92, Math.max(0, activeStep - 5) * 30) : 0;
 
   return (
     <div className="research-window-demo relative mx-auto max-w-2xl overflow-hidden rounded-[1.35rem] bg-[#050609] text-[#ffffff] shadow-[0_24px_70px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.08)]">
@@ -765,7 +766,11 @@ function ResearchWindowDemo() {
                 />
               </div>
 
-              <div className="mt-3 space-y-1">
+              <motion.div
+                className="mt-3 space-y-1"
+                animate={{ y: workflowScrollOffset }}
+                transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
+              >
                 {DEMO_WORKFLOW_STEPS.map((step, index) => {
                   const done = index < activeStep;
                   const active = index === activeStep;
@@ -790,7 +795,7 @@ function ResearchWindowDemo() {
                     </div>
                   );
                 })}
-              </div>
+              </motion.div>
             </motion.div>
           )}
 
