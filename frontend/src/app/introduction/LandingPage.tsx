@@ -12,6 +12,7 @@ import { PLANS, COMPARISON_TABLE, type PlanId, type CheckState } from "@/config/
 import { IntroductionFooter, IntroductionNav } from "./components";
 import Markdown from "@/components/ui/markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { TestimonialsMinimal } from "@/components/ui/minimal-testimonial";
 
 /* ───── data ───── */
 
@@ -177,6 +178,7 @@ export default function IntroductionPage() {
       <WhyQuanforaSection />
       <ResearchWorkflowShowcase />
       <SamplesSection />
+      <TestimonialsMinimal />
       <FeaturesSection />
       <PricingSection />
       <IntroductionFooter />
@@ -607,12 +609,28 @@ function ResearchWindowDemo() {
     };
   }, [query]);
 
+  const chooseTicker = (ticker: typeof DEMO_TICKERS[number]) => {
+    setSelectedTicker(ticker);
+    setQuery(ticker.ticker);
+    setShowSuggestions(false);
+  };
+
   const startWorkflow = (ticker = selectedTicker) => {
     setSelectedTicker(ticker);
     setQuery(ticker.ticker);
     setShowSuggestions(false);
     setActiveStep(0);
     setPhase("workflow");
+  };
+
+  const submitTicker = () => {
+    const normalized = query.trim().toLowerCase();
+    const exactMatch = DEMO_TICKERS.find((item) =>
+      item.ticker.toLowerCase() === normalized ||
+      item.name.toLowerCase() === normalized
+    );
+
+    startWorkflow(exactMatch ?? matches[0] ?? selectedTicker);
   };
   const workflowScrollOffset = phase === "workflow" ? -Math.min(92, Math.max(0, activeStep - 5) * 30) : 0;
 
@@ -653,7 +671,7 @@ function ResearchWindowDemo() {
                 <form
                   onSubmit={(event) => {
                     event.preventDefault();
-                    startWorkflow(matches[0] ?? DEMO_TICKERS[0]);
+                    submitTicker();
                   }}
                 >
                   <div className="research-search-shell flex h-14 items-center gap-3 rounded-full border border-[#ffffff24] bg-[#ffffff] px-4 text-[#020617] shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
@@ -714,7 +732,7 @@ function ResearchWindowDemo() {
                         <button
                           key={item.ticker}
                           type="button"
-                          onClick={() => startWorkflow(item)}
+                          onClick={() => chooseTicker(item)}
                           className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/[0.07]"
                         >
                           <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-indigo-primary/25 bg-indigo-primary/15 text-xs font-bold text-indigo-200">
@@ -997,18 +1015,18 @@ function FeaturesSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-80px" }}
               transition={{ duration: 0.55, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] }}
-              className="group relative min-h-[230px] rounded-lg border border-indigo-primary/16 bg-white/[0.02] p-8 text-left transition-all duration-300 hover:border-indigo-primary/36 hover:bg-indigo-primary/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/60"
+              className="landing-feature-card group relative min-h-[230px] rounded-lg border border-indigo-primary/16 bg-white/[0.02] p-8 text-left transition-all duration-300 hover:-translate-y-1 hover:border-indigo-primary/40 hover:bg-indigo-primary/[0.035] hover:shadow-[0_22px_70px_rgba(99,102,241,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/60"
             >
               <motion.div
                 layoutId={`feature-icon-${f.title}`}
-                className="mb-8 flex h-12 w-12 items-center justify-center rounded-full border border-indigo-primary/18 bg-indigo-primary/[0.12] text-indigo-primary transition-colors group-hover:bg-indigo-primary/[0.18] group-hover:text-indigo-200"
+                className="landing-feature-icon mb-8 flex h-12 w-12 items-center justify-center rounded-full border border-indigo-primary/18 bg-indigo-primary/[0.12] text-indigo-primary transition-colors group-hover:bg-indigo-primary/[0.18] group-hover:text-indigo-200"
               >
                 <f.icon className="h-5 w-5" />
               </motion.div>
-              <motion.h3 layoutId={`feature-title-${f.title}`} className="text-xl font-semibold leading-tight text-white">
+              <motion.h3 layoutId={`feature-title-${f.title}`} className="landing-feature-title text-xl font-semibold leading-tight text-white">
                 {f.title}
               </motion.h3>
-              <motion.p layoutId={`feature-desc-${f.title}`} className="mt-5 text-base leading-7 text-white/46">
+              <motion.p layoutId={`feature-desc-${f.title}`} className="landing-feature-desc mt-5 text-base leading-7 text-white/46">
                 {f.desc}
               </motion.p>
             </motion.button>

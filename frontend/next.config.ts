@@ -16,6 +16,14 @@ const publicEnv = Object.fromEntries(
 
 const nextConfig: NextConfig = {
   env: publicEnv,
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
+    ],
+  },
 };
 
 export default nextConfig;

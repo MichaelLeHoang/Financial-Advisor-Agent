@@ -175,13 +175,13 @@ export function IntroductionNav() {
                     {isSignedIn && (
                       <li>
                         <NavigationMenuLink asChild>
-                          <Link href="/news" className="flex flex-row items-center gap-3">
-                            <div className="flex size-8 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-400">
+                          <Link href="/news" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
+                            <div className="intro-resource-icon flex size-8 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-400 transition-colors">
                               <Newspaper className="size-4" />
                             </div>
                             <div className="flex flex-col">
-                              <span className="text-sm font-medium text-white/90">News</span>
-                              <span className="text-xs text-white/40">Market insights</span>
+                              <span className="intro-resource-title text-sm font-medium text-white/90 transition-colors">News</span>
+                              <span className="intro-resource-subtitle text-xs text-white/40 transition-colors">Market insights</span>
                             </div>
                           </Link>
                         </NavigationMenuLink>
@@ -189,26 +189,26 @@ export function IntroductionNav() {
                     )}
                     <li>
                       <NavigationMenuLink asChild>
-                        <Link href="/docs" className="flex flex-row items-center gap-3">
-                          <div className="flex size-8 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-400">
+                        <Link href="/docs" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
+                          <div className="intro-resource-icon flex size-8 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-400 transition-colors">
                             <BookOpen className="size-4" />
                           </div>
                           <div className="flex flex-col">
-                            <span className="text-sm font-medium text-white/90">Docs</span>
-                            <span className="text-xs text-white/40">Product guide</span>
+                            <span className="intro-resource-title text-sm font-medium text-white/90 transition-colors">Docs</span>
+                            <span className="intro-resource-subtitle text-xs text-white/40 transition-colors">Product guide</span>
                           </div>
                         </Link>
                       </NavigationMenuLink>
                     </li>
                     <li>
                       <NavigationMenuLink asChild>
-                        <Link href="/blog" className="flex flex-row items-center gap-3">
-                          <div className="flex size-8 items-center justify-center rounded-md bg-white/5 text-white/70">
+                        <Link href="/blog" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
+                          <div className="intro-resource-icon flex size-8 items-center justify-center rounded-md bg-white/5 text-white/70 transition-colors">
                             <BookOpen className="size-4" />
                           </div>
                           <div className="flex flex-col">
-                            <span className="text-sm font-medium text-white/90">Blog</span>
-                            <span className="text-xs text-white/40">Our articles</span>
+                            <span className="intro-resource-title text-sm font-medium text-white/90 transition-colors">Blog</span>
+                            <span className="intro-resource-subtitle text-xs text-white/40 transition-colors">Our articles</span>
                           </div>
                         </Link>
                       </NavigationMenuLink>
@@ -226,6 +226,16 @@ export function IntroductionNav() {
                   </NavigationMenuLink>
                 </NavigationMenuItem>
               ))}
+              {isSignedIn && (
+                <NavigationMenuItem>
+                  <NavigationMenuLink
+                    asChild
+                    className={`${navigationMenuTriggerStyle()} text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[active=true]:bg-transparent`}
+                  >
+                    <Link href="/contact-sales">Contact</Link>
+                  </NavigationMenuLink>
+                </NavigationMenuItem>
+              )}
             </NavigationMenuList>
           </NavigationMenu>
         </nav>
@@ -394,6 +404,19 @@ export function IntroductionNav() {
                 {item.label}
               </Link>
             ))}
+            {isSignedIn && (
+              <Link
+                href="/contact-sales"
+                onClick={() => setMobileOpen(false)}
+                className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  theme === "White"
+                    ? "text-[#667085] hover:bg-black/[0.04] hover:text-[#121a2c]"
+                    : "text-white/70 hover:bg-white/[0.08] hover:text-white"
+                }`}
+              >
+                Contact
+              </Link>
+            )}
             {isSignedIn ? (
               <button
                 type="button"

@@ -63,6 +63,27 @@ export default function LoginPage() {
   const [quoteIndex, setQuoteIndex] = useState(0);
 
   useEffect(() => {
+    const previousTheme = document.body.dataset.theme;
+    const lockTheme = () => {
+      document.body.dataset.theme = "Deep Space";
+      document.body.dataset.authThemeLock = "true";
+    };
+
+    lockTheme();
+    const frame = window.requestAnimationFrame(lockTheme);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      delete document.body.dataset.authThemeLock;
+      if (previousTheme) {
+        document.body.dataset.theme = previousTheme;
+      } else {
+        delete document.body.dataset.theme;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!loading && !user.is_guest) {
       router.replace(getSafeNextTarget());
     }
