@@ -291,17 +291,17 @@ export function IntroductionNav() {
             </>
           ) : showSignedOutActions ? (
             <>
-              <a
-                href="mailto:sales@quantumadvisor.app?subject=Quanfora%20sales%20inquiry"
+              <Link
+                href="/contact-sales"
                 className="hidden h-9 items-center rounded-full border border-white/[0.14] px-4 text-sm font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:inline-flex"
               >
                 Contact Sales
-              </a>
+              </Link>
               <Link
                 href="/login"
                 className="hidden h-9 items-center rounded-full bg-[var(--intro-nav-action-bg)] px-4 text-sm font-semibold text-[var(--intro-nav-action-text)] transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 sm:inline-flex"
               >
-                Log in
+                Sign in
               </Link>
             </>
           ) : null}
@@ -404,12 +404,13 @@ export function IntroductionNav() {
               </button>
             ) : showSignedOutActions ? (
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <a
-                  href="mailto:sales@quantumadvisor.app?subject=Quanfora%20sales%20inquiry"
+                <Link
+                  href="/contact-sales"
+                  onClick={() => setMobileOpen(false)}
                   className="inline-flex h-10 items-center justify-center rounded-full border border-white/[0.14] px-4 text-sm font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 >
                   Contact Sales
-                </a>
+                </Link>
                 <Link
                   href="/login"
                   onClick={() => setMobileOpen(false)}
@@ -419,7 +420,7 @@ export function IntroductionNav() {
                       : "bg-white text-black focus-visible:ring-white"
                   }`}
                 >
-                  Log in
+                  Sign in
                 </Link>
               </div>
             ) : null}

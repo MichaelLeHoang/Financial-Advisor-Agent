@@ -1222,3 +1222,145 @@ body[data-theme="Crimson"] .theme-menu-item[data-highlighted] {
   color: var(--text-primary) !important;
   box-shadow: var(--shadow-row-hover) !important;
 }
+
+body[data-theme] .login-theme-lock {
+  background: #070707 !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  color-scheme: dark;
+}
+
+body[data-theme] .login-theme-lock [class~="bg-transparent"] {
+  background-color: transparent !important;
+}
+
+body[data-theme] .login-theme-lock [class~="bg-white"] {
+  background-color: #ffffff !important;
+}
+
+body[data-theme] .login-theme-lock [class~="bg-white/[0.08]"] {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="bg-white/[0.075]"],
+body[data-theme] .login-theme-lock [class~="hover:bg-white/[0.075]"]:hover {
+  background-color: rgba(255, 255, 255, 0.075) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="bg-white/[0.055]"],
+body[data-theme] .login-theme-lock [class~="hover:bg-white/[0.055]"]:hover {
+  background-color: rgba(255, 255, 255, 0.055) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="bg-white/[0.045]"] {
+  background-color: rgba(255, 255, 255, 0.045) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="bg-white/[0.035]"] {
+  background-color: rgba(255, 255, 255, 0.035) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="bg-white/[0.025]"] {
+  background-color: rgba(255, 255, 255, 0.025) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="border-white"] {
+  border-color: #ffffff !important;
+}
+
+body[data-theme] .login-theme-lock [class~="border-white/[0.10]"] {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="border-white/[0.08]"] {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="border-white/25"] {
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="border-white/15"] {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="border-t-white"] {
+  border-top-color: #ffffff !important;
+}
+
+body[data-theme] .login-theme-lock [class~="hover:border-white/18"]:hover {
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="focus:border-white/30"]:focus {
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="text-black"] {
+  color: #000000 !important;
+}
+
+body[data-theme] .login-theme-lock [class~="text-white"],
+body[data-theme] .login-theme-lock[class~="text-white"] {
+  color: #ffffff !important;
+}
+
+body[data-theme] .login-theme-lock [class~="text-white/90"] {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="text-white/82"] {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="text-white/78"] {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="text-white/70"],
+body[data-theme] .login-theme-lock [class~="hover:text-white/70"]:hover {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="text-white/46"] {
+  color: rgba(255, 255, 255, 0.46) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="text-white/45"] {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="text-white/44"] {
+  color: rgba(255, 255, 255, 0.44) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="text-white/42"] {
+  color: rgba(255, 255, 255, 0.42) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="text-white/38"] {
+  color: rgba(255, 255, 255, 0.38) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="text-white/34"] {
+  color: rgba(255, 255, 255, 0.34) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="text-white/32"] {
+  color: rgba(255, 255, 255, 0.32) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="text-white/30"] {
+  color: rgba(255, 255, 255, 0.3) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="text-white/25"] {
+  color: rgba(255, 255, 255, 0.25) !important;
+}
+
+body[data-theme] .login-theme-lock [class~="hover:text-white"]:hover {
+  color: #ffffff !important;
+}
+
+body[data-theme] .login-theme-lock [class*="placeholder:text-white"]::placeholder {
+  color: rgba(255, 255, 255, 0.3) !important;
+}

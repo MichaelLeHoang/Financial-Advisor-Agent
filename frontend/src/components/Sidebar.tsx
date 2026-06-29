@@ -101,6 +101,7 @@ export default function Sidebar({
     const routeSessionId = isSessionPath && path !== "/session" ? decodeURIComponent(path.split("/")[2] || "") : null;
     const activeSessionId = isSessionPath ? routeSessionId || searchParams.get("session") || "default" : null;
     const displaySessions = useMemo(() => sessions, [sessions]);
+    const creatingSessionRef = useRef(false);
 
     const openSearch = useCallback(() => {
         setSearchOpen(true);
@@ -126,6 +127,24 @@ export default function Sidebar({
     }, [authLoading, user?.id, user?.is_guest]);
 
     const startNewAnalysis = useCallback(() => {
+        const activeSessionIsListed = activeSessionId ? sessions.some((session) => session.session_id === activeSessionId) : false;
+        if (activeSessionId && !activeSessionIsListed) {
+            router.push(activeSessionId === "default" ? "/session" : `/session/${encodeURIComponent(activeSessionId)}`);
+            setMobileOpen(false);
+            window.setTimeout(() => window.dispatchEvent(new Event("chat-input:focus")), 80);
+            return;
+        }
+
+        const reusableBlankSession = sessions.find((session) => session.message_count === 0);
+        if (reusableBlankSession) {
+            router.push(`/session/${encodeURIComponent(reusableBlankSession.session_id)}`);
+            setMobileOpen(false);
+            window.setTimeout(() => window.dispatchEvent(new Event("chat-input:focus")), 80);
+            return;
+        }
+        if (creatingSessionRef.current) return;
+        creatingSessionRef.current = true;
+
         const nextSessionId = typeof crypto !== "undefined" && "randomUUID" in crypto
             ? crypto.randomUUID()
             : `session-${Date.now()}`;
@@ -143,6 +162,7 @@ export default function Sidebar({
 
         if (user?.is_guest) {
             createLocalChatSession(nextSessionId);
+            creatingSessionRef.current = false;
             return;
         }
 
@@ -153,8 +173,11 @@ export default function Sidebar({
             .catch(() => {
                 setSessions((current) => current.filter((session) => session.session_id !== nextSessionId));
                 router.replace("/session");
+            })
+            .finally(() => {
+                creatingSessionRef.current = false;
             });
-    }, [router, user?.is_guest]);
+    }, [activeSessionId, router, sessions, user?.is_guest]);
 
     const handleSessionDeleted = useCallback((sessionId: string) => {
         refreshSessions();

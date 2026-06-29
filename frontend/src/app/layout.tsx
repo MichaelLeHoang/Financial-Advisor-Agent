@@ -36,6 +36,7 @@ const STANDALONE_PUBLIC_PATHS = [
   "/",
   "/help",
   "/login",
+  "/contact-sales",
   "/news",
   "/blog",
   "/pricing",

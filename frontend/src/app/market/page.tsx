@@ -47,7 +47,6 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import {
     CHART_RANGES,
     DEFAULT_MARKET_TICKERS,
-    createMarketSeries,
     createMarketSymbol,
     normalizeTicker,
     searchMarketSymbols,
@@ -80,6 +79,7 @@ import { ResearchDepthSelector } from "@/components/equity-research/ResearchComp
 
 interface StockInfo extends MarketSymbol {
     data: MarketPoint[];
+    hasQuote?: boolean;
     loading?: boolean;
     currency?: string | null;
     openPrice?: number | null;
@@ -136,16 +136,22 @@ const CHART_STYLE_LABELS: Record<DetailChartStyle, string> = {
     bar: "Bar",
 };
 
-function createStock(ticker: string): StockInfo {
+function createPendingStock(ticker: string): StockInfo {
     const symbol = createMarketSymbol(ticker);
     return {
         ...symbol,
-        data: createMarketSeries(symbol, DEFAULT_MARKET_RANGE),
+        price: 0,
+        change: 0,
+        data: [],
+        hasQuote: false,
+        loading: true,
     };
 }
 
 function quoteToStock(quote: MarketQuote, fallback?: StockInfo): StockInfo {
-    const history = quote.history.length > 0 ? quote.history : fallback?.data ?? createMarketSeries(createMarketSymbol(quote.ticker), DEFAULT_MARKET_RANGE);
+    const history = quote.history.length > 0
+        ? quote.history
+        : [{ label: "Latest", price: quote.price, volume: quote.volume ?? 0 }];
     return {
         ticker: quote.ticker,
         name: quote.name || fallback?.name || quote.ticker,
@@ -166,6 +172,7 @@ function quoteToStock(quote: MarketQuote, fallback?: StockInfo): StockInfo {
         dividendRate: quote.dividend_rate,
         quarterlyDividendAmount: quote.quarterly_dividend_amount,
         data: history,
+        hasQuote: true,
         earnings: quote.earnings,
         quarterlyFinancials: quote.quarterly_financials,
     };
@@ -334,7 +341,7 @@ export default function MarketPage() {
     const { user, loading: authLoading } = useAuth();
     const searchInputRef = useRef<HTMLInputElement>(null);
     const marketTopRef = useRef<HTMLDivElement>(null);
-    const [stocks, setStocks] = useState<StockInfo[]>(() => DEFAULT_MARKET_TICKERS.map(createStock));
+    const [stocks, setStocks] = useState<StockInfo[]>(() => DEFAULT_MARKET_TICKERS.map(createPendingStock));
     const [query, setQuery] = useState("");
     const [searchOpen, setSearchOpen] = useState(false);
     const [symbolMatches, setSymbolMatches] = useState<MarketSymbol[]>([]);
@@ -367,9 +374,9 @@ export default function MarketPage() {
         setMounted(false);
         const saved = readSavedMarketStocks(marketStorageScope);
         if (saved !== null) {
-            setStocks(saved.map(createStock));
+            setStocks(saved.map(createPendingStock));
         } else {
-            setStocks(DEFAULT_MARKET_TICKERS.map(createStock));
+            setStocks(DEFAULT_MARKET_TICKERS.map(createPendingStock));
         }
         window.localStorage.removeItem(MARKET_SKIP_REMOVE_CONFIRM_STORAGE_KEY);
         setSkipRemoveConfirm(window.localStorage.getItem(marketStorageKey(MARKET_SKIP_REMOVE_CONFIRM_STORAGE_KEY, marketStorageScope)) === "true");
@@ -462,7 +469,7 @@ export default function MarketPage() {
             return;
         }
 
-        setStocks((current) => [{ ...createStock(ticker), loading: true }, ...current]);
+        setStocks((current) => [createPendingStock(ticker), ...current]);
         setQuery("");
         setSearchOpen(false);
 
@@ -493,6 +500,11 @@ export default function MarketPage() {
     const removeTicker = (ticker: string) => {
         setStocks((current) => current.filter((stock) => stock.ticker !== ticker));
         setSelectedStock((current) => current?.ticker === ticker ? null : current);
+        showToast({
+            title: "Market card deleted",
+            message: `${ticker} was removed from Market.`,
+            variant: "success",
+        });
     };
 
     const requestRemoveTicker = (stock: StockInfo) => {
@@ -519,7 +531,7 @@ export default function MarketPage() {
     const openChartForTicker = (ticker: string) => {
         const normalized = normalizeTicker(ticker);
         const existing = stocks.find((stock) => stock.ticker === normalized);
-        const next = existing ?? createStock(normalized);
+        const next = existing ?? createPendingStock(normalized);
         setSelectedStock(next);
         setSelectedRange(DEFAULT_MARKET_RANGE);
         setChartStyle("area");
@@ -574,18 +586,22 @@ export default function MarketPage() {
         }
     };
 
-    const refresh = async () => {
-        if (stocks.length === 0) return;
+    const refresh = async (targetStocks: StockInfo[] = stocks) => {
+        if (targetStocks.length === 0) return;
         setLoading(true);
-        setStocks((current) => current.map((stock) => ({ ...stock, loading: true })));
+        const targetTickers = new Set(targetStocks.map((stock) => stock.ticker));
+        setStocks((current) => current.map((stock) => targetTickers.has(stock.ticker) ? { ...stock, loading: true } : stock));
         const [period, interval] = quotePeriod(DEFAULT_MARKET_RANGE);
         try {
-            const quoteMap = await fetchCachedQuotes(stocks.map((stock) => stock.ticker), period, interval);
-            const updated = stocks.map((stock) => {
+            const quoteMap = await fetchCachedQuotes(targetStocks.map((stock) => stock.ticker), period, interval);
+            const updated = targetStocks.map((stock) => {
                 const quote = quoteMap.get(stock.ticker.toUpperCase());
                 return quote ? quoteToStock(quote, stock) : { ...stock, loading: false };
             });
-            setStocks(updated);
+            setStocks((current) => {
+                const updatedByTicker = new Map(updated.map((stock) => [stock.ticker, stock]));
+                return current.map((stock) => updatedByTicker.get(stock.ticker) ?? stock);
+            });
             if (quoteMap.size === 0) {
                 showToast({
                     title: "Market data unavailable",
@@ -628,7 +644,7 @@ export default function MarketPage() {
                             onPreview={openChartForTicker}
                         />
                         <Button
-                            onClick={refresh}
+                            onClick={() => void refresh()}
                             disabled={loading || stocks.length === 0}
                             size="icon"
                             variant="outline"
@@ -645,7 +661,9 @@ export default function MarketPage() {
                             variant="outline"
                             className="rounded-xl"
                             onClick={() => {
-                                setStocks(DEFAULT_MARKET_TICKERS.map(createStock));
+                                const defaults = DEFAULT_MARKET_TICKERS.map(createPendingStock);
+                                setStocks(defaults);
+                                void refresh(defaults);
                             }}
                         >
                             Restore defaults
@@ -906,6 +924,7 @@ function MarketCard({
     onRequestRemove: () => void;
 }) {
     const up = stock.change >= 0;
+    const hasQuote = Boolean(stock.hasQuote);
 
     return (
         <motion.div whileHover={{ y: -5 }} className="group">
@@ -925,16 +944,22 @@ function MarketCard({
                             <p className="truncate text-sm text-white/40">{stock.name}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                            <Badge
-                                variant="outline"
-                                className={cn(
-                                    "h-6 rounded-lg border-transparent gap-1",
-                                    up ? "bg-green-positive/20 text-green-positive" : "bg-red-negative/20 text-red-negative"
-                                )}
-                            >
-                                {up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-                                {formatChange(stock.change)}
-                            </Badge>
+                            {hasQuote ? (
+                                <Badge
+                                    variant="outline"
+                                    className={cn(
+                                        "h-6 rounded-lg border-transparent gap-1",
+                                        up ? "bg-green-positive/20 text-green-positive" : "bg-red-negative/20 text-red-negative"
+                                    )}
+                                >
+                                    {up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+                                    {formatChange(stock.change)}
+                                </Badge>
+                            ) : (
+                                <Badge variant="outline" className="h-6 rounded-lg border-white/[0.08] bg-white/[0.04] text-white/38">
+                                    {stock.loading ? "Loading" : "No quote"}
+                                </Badge>
+                            )}
                             <button
                                 type="button"
                                 className="group inline-flex size-8 items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
@@ -957,14 +982,22 @@ function MarketCard({
 
                     <div className="mb-6 flex items-end justify-between gap-3">
                         <div>
-                            <div className="text-3xl font-bold">{formatCurrency(stock.price)}</div>
-                            <div className="mt-1 text-xs text-white/35">{stock.loading ? "Updating..." : `${stock.exchange} · ${stock.sector}`}</div>
+                            <div className="text-3xl font-bold">{hasQuote ? formatCurrency(stock.price) : "—"}</div>
+                            <div className="mt-1 text-xs text-white/35">
+                                {stock.loading ? "Loading live quote..." : hasQuote ? `${stock.exchange} · ${stock.sector}` : "Live quote unavailable"}
+                            </div>
                         </div>
                         <Maximize2 className="size-4 text-white/30 transition-colors group-hover:text-white/70" />
                     </div>
 
                     <div className="h-24 min-h-24 w-full min-w-0">
-                        {mounted ? <MiniChart stock={stock} /> : <div className="h-full w-full rounded-xl bg-white/[0.035]" />}
+                        {mounted && hasQuote && stock.data.length > 0 ? (
+                            <MiniChart stock={stock} />
+                        ) : (
+                            <div className="flex h-full w-full items-center justify-center rounded-xl bg-white/[0.035] text-xs text-white/30">
+                                {stock.loading ? "Loading chart..." : "No live chart"}
+                            </div>
+                        )}
                     </div>
                     <button
                         type="button"
@@ -1245,7 +1278,7 @@ function MarketChartDialog({
                 activeComparisonSymbols
                     .map((symbol) => quotes.get(symbol.toUpperCase()))
                     .filter((quote): quote is MarketQuote => Boolean(quote))
-                    .map((quote) => quoteToStock(quote, createStock(quote.ticker)))
+                    .map((quote) => quoteToStock(quote, createPendingStock(quote.ticker)))
             );
             setCompareLoading(false);
         });
@@ -1262,8 +1295,8 @@ function MarketChartDialog({
 
     const series = useMemo(() => {
         if (!detailStock) return [];
-        return detailStock.data.length > 0 ? detailStock.data : createMarketSeries(detailStock, range === "MAX" ? "5Y" : range);
-    }, [detailStock, range]);
+        return detailStock.data;
+    }, [detailStock]);
     const chartData = useMemo(() => {
         return series.map((point, index, history) => ({
             ...pointToDetail(point, history[index - 1]?.price),
@@ -1293,6 +1326,7 @@ function MarketChartDialog({
     }, [chartData, compareQuotes]);
 
     const stats = useMemo(() => createStats(detailStock, series), [detailStock, series]);
+    const detailHasQuote = Boolean(detailStock?.hasQuote);
     const chartValues = compareMode
         ? displayedChartData.flatMap((point) => [
             point.primaryPerformance,
@@ -1309,10 +1343,11 @@ function MarketChartDialog({
             : displayedChartData.map((point) => point.price);
     const yDomain = domainWithPadding(chartValues);
     const activePoint = hoverPoint ?? displayedChartData[displayedChartData.length - 1] ?? null;
-    const activePrice = activePoint?.price ?? detailStock?.price ?? 0;
-    const rangeBaseline = displayedChartData[0]?.price ?? activePrice;
-    const activePercentChange = performanceFrom(rangeBaseline, activePrice);
-    const activeAbsoluteChange = activePrice - rangeBaseline;
+    const activePrice = detailHasQuote ? activePoint?.price ?? detailStock?.price ?? null : null;
+    const activePriceForMath = activePrice ?? 0;
+    const rangeBaseline = displayedChartData[0]?.price ?? activePriceForMath;
+    const activePercentChange = detailHasQuote ? performanceFrom(rangeBaseline, activePriceForMath) : 0;
+    const activeAbsoluteChange = activePriceForMath - rangeBaseline;
     const up = activePercentChange >= 0;
     const color = compareMode ? COMPARE_COLORS[0] : up ? "#34d399" : "#f87171";
     const filteredCompareMatches = useMemo(() => {
@@ -1347,12 +1382,16 @@ function MarketChartDialog({
                                     <DialogDescription>{detailStock.name} · {detailStock.sector}</DialogDescription>
                                 </div>
                                 <div className="text-left lg:text-right">
-                                    <div className="text-2xl font-bold text-white sm:text-3xl">{formatCurrency(activePrice)}</div>
-                                    <div className={cn("mt-1 inline-flex items-center gap-1 text-sm", up ? "text-green-positive" : "text-red-negative")}>
-                                        {activePercentChange >= 0 ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
-                                        {formatChange(activePercentChange)}
-                                        <span className="text-white/42">({activeAbsoluteChange >= 0 ? "+" : "-"}{formatCurrency(Math.abs(activeAbsoluteChange))})</span>
-                                    </div>
+                                    <div className="text-2xl font-bold text-white sm:text-3xl">{activePrice == null ? "—" : formatCurrency(activePrice)}</div>
+                                    {detailHasQuote ? (
+                                        <div className={cn("mt-1 inline-flex items-center gap-1 text-sm", up ? "text-green-positive" : "text-red-negative")}>
+                                            {activePercentChange >= 0 ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
+                                            {formatChange(activePercentChange)}
+                                            <span className="text-white/42">({activeAbsoluteChange >= 0 ? "+" : "-"}{formatCurrency(Math.abs(activeAbsoluteChange))})</span>
+                                        </div>
+                                    ) : (
+                                        <div className="mt-1 text-sm text-white/42">Loading live quote...</div>
+                                    )}
                                 </div>
                             </div>
                         </DialogHeader>
@@ -1800,13 +1839,12 @@ function createStats(stock: StockInfo | null, series: MarketPoint[]) {
     const high = Math.max(...prices);
     const low = Math.min(...prices);
     const volume = stock.volume ?? series.reduce((sum, point) => sum + point.volume, 0);
-    const marketCap = stock.marketCap ?? stock.price * (900000000 + stock.ticker.length * 420000000);
 
     return [
         { label: "Open", value: formatCurrency(stock.openPrice ?? open) },
         { label: "High", value: formatCurrency(stock.dayHigh ?? high) },
         { label: "Low", value: formatCurrency(stock.dayLow ?? low) },
-        { label: "Mkt cap", value: formatLargeNumber(marketCap) },
+        { label: "Mkt cap", value: stock.marketCap == null ? "—" : formatLargeNumber(stock.marketCap) },
         { label: "P/E ratio", value: formatRatio(stock.peRatio) },
         { label: "52-wk high", value: formatCurrency(stock.fiftyTwoWeekHigh ?? high) },
         { label: "Dividend", value: formatPercent(stock.dividendYield) },
