@@ -219,6 +219,14 @@
   box-shadow: var(--shadow-dialog);
 }
 
+.news-section-heading {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+body[data-theme="White"] .news-section-heading {
+  color: var(--color-indigo-primary) !important;
+}
+
 .profile-field {
   border-color: var(--theme-border);
   background-color: rgba(255, 255, 255, 0.035);

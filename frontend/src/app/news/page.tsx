@@ -841,8 +841,8 @@ function ReportTickerRail({
 }) {
   return (
     <div className="group fixed right-5 top-1/2 z-30 hidden -translate-y-1/2 lg:block">
-      <div className="rounded-2xl border border-transparent bg-transparent p-3 transition-all duration-200 group-hover:border-white/[0.10] group-hover:bg-[#151517]/95 group-hover:shadow-2xl group-hover:shadow-black/35">
-        <div className="flex w-8 flex-col items-center gap-3 py-1 transition-all duration-200 group-hover:w-56 group-hover:items-stretch">
+      <div className="rounded-2xl border border-transparent bg-transparent p-2 transition-all duration-200 group-hover:border-white/[0.10] group-hover:bg-[#151517]/95 group-hover:shadow-2xl group-hover:shadow-black/35">
+        <div className="flex w-8 flex-col items-center gap-2 py-1 transition-all duration-200 group-hover:w-32 group-hover:items-stretch">
           {reports.map((report) => {
             const ticker = report.affected_tickers[0] ?? "Memo";
             const active = report.id === activeReportId;
@@ -854,7 +854,7 @@ function ReportTickerRail({
                   onNavigate(report.id);
                   document.getElementById(report.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
                 }}
-                className="flex h-7 w-full items-center gap-3 rounded-md px-1 text-left transition-colors hover:bg-white/[0.06]"
+                className="flex h-6 w-full items-center gap-3 rounded-md px-1 text-left transition-colors hover:bg-white/[0.06]"
                 aria-label={`Jump to ${ticker} report`}
               >
                 <span
@@ -863,9 +863,8 @@ function ReportTickerRail({
                     active ? "bg-white shadow-[0_0_10px_rgba(255,255,255,0.65)]" : "bg-white/30 group-hover:bg-white/45"
                   )}
                 />
-                <span className="hidden min-w-0 flex-1 items-baseline gap-2 overflow-hidden whitespace-nowrap opacity-0 transition-opacity duration-150 group-hover:flex group-hover:opacity-100">
+                <span className="hidden min-w-0 flex-1 overflow-hidden whitespace-nowrap opacity-0 transition-opacity duration-150 group-hover:block group-hover:opacity-100">
                   <span className={cn("font-mono text-sm font-semibold", active ? "text-white" : "text-white/68")}>{ticker}</span>
-                  <span className="truncate text-xs text-white/38">{report.title}</span>
                 </span>
               </button>
             );
@@ -1045,7 +1044,7 @@ function ScorePill({ label, value }: { label: string; value: number }) {
 function EvidenceBlock({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
   return (
     <div className="rounded-xl border border-white/[0.08] bg-black/18 p-4 text-sm leading-6 text-white/52">
-      <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-white/78">
+      <p className="news-section-heading mb-2 flex items-center gap-2 text-sm font-semibold">
         {icon}
         {title}
       </p>
@@ -1066,9 +1065,9 @@ function ReportVisual({ report }: { report: ResearchReport }) {
   return (
     <div className="mt-5 overflow-hidden rounded-xl border border-white/[0.08] bg-[#090a0e]">
       <div className="grid lg:grid-cols-[300px_1fr]">
-        <div className="relative min-h-56 border-b border-white/[0.08] bg-white/[0.025] p-5 lg:border-b-0 lg:border-r">
+        <div className="relative min-h-44 border-b border-white/[0.08] bg-white/[0.025] p-5 lg:border-b-0 lg:border-r">
           <div className="absolute inset-0 opacity-70 [background-image:linear-gradient(rgba(255,255,255,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.055)_1px,transparent_1px)] [background-size:18px_18px]" />
-          <div className="relative flex h-full flex-col justify-between">
+          <div className="relative flex h-full flex-col justify-start">
             <div>
               <div className="flex items-center gap-3">
                 <div className="flex size-16 items-center justify-center rounded-2xl border border-indigo-300/24 bg-indigo-300/[0.10] font-mono text-2xl font-semibold text-indigo-100">
@@ -1080,7 +1079,7 @@ function ReportVisual({ report }: { report: ResearchReport }) {
                 </div>
               </div>
             </div>
-            <div className="mt-8 grid grid-cols-2 gap-2">
+            <div className="mt-6 grid grid-cols-2 gap-2">
               <VisualStat label="Risk" value={riskLevel} tone={tone} />
               <VisualStat label="Sources" value={String(sourceCount)} />
             </div>
@@ -1094,7 +1093,7 @@ function ReportVisual({ report }: { report: ResearchReport }) {
           </div>
           <div className="mt-5 rounded-xl border border-white/[0.08] bg-black/18 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-white">Evidence balance</p>
+              <p className="news-section-heading text-sm font-semibold">Evidence balance</p>
               <span className="rounded-md border border-white/[0.10] bg-white/[0.04] px-2 py-1 text-xs text-white/48">
                 {report.sources.length} linked source{report.sources.length === 1 ? "" : "s"}
               </span>
