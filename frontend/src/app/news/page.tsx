@@ -58,7 +58,7 @@ const CATEGORIES: CategoryDef[] = [
     label: "Market Overview",
     icon: BarChart3,
     accent: "hover:border-sky-300/34 hover:bg-sky-300/[0.08]",
-    selected: "border-sky-300/45 bg-sky-300/[0.12] text-sky-50 shadow-[0_0_0_1px_rgba(125,211,252,0.10)]",
+    selected: "border-sky-300/45 bg-sky-300/[0.12] text-white shadow-[0_0_0_1px_rgba(125,211,252,0.10)]",
     iconTone: "border-sky-300/26 bg-sky-300/[0.12] text-sky-200",
     pill: "border-sky-300/22 bg-sky-300/[0.10] text-sky-100",
   },
@@ -67,7 +67,7 @@ const CATEGORIES: CategoryDef[] = [
     label: "Technology",
     icon: Cpu,
     accent: "hover:border-indigo-300/34 hover:bg-indigo-300/[0.08]",
-    selected: "border-indigo-300/45 bg-indigo-300/[0.12] text-indigo-50 shadow-[0_0_0_1px_rgba(165,180,252,0.10)]",
+    selected: "border-indigo-300/45 bg-indigo-300/[0.12] text-white shadow-[0_0_0_1px_rgba(165,180,252,0.10)]",
     iconTone: "border-indigo-300/26 bg-indigo-300/[0.12] text-indigo-200",
     pill: "border-indigo-300/22 bg-indigo-300/[0.10] text-indigo-100",
   },
@@ -76,7 +76,7 @@ const CATEGORIES: CategoryDef[] = [
     label: "Crypto",
     icon: Bitcoin,
     accent: "hover:border-amber-300/34 hover:bg-amber-300/[0.08]",
-    selected: "border-amber-300/45 bg-amber-300/[0.12] text-amber-50 shadow-[0_0_0_1px_rgba(252,211,77,0.10)]",
+    selected: "border-amber-300/45 bg-amber-300/[0.12] text-white shadow-[0_0_0_1px_rgba(252,211,77,0.10)]",
     iconTone: "border-amber-300/26 bg-amber-300/[0.12] text-amber-200",
     pill: "border-amber-300/22 bg-amber-300/[0.10] text-amber-100",
   },
@@ -85,7 +85,7 @@ const CATEGORIES: CategoryDef[] = [
     label: "Energy",
     icon: Flame,
     accent: "hover:border-orange-300/34 hover:bg-orange-300/[0.08]",
-    selected: "border-orange-300/45 bg-orange-300/[0.12] text-orange-50 shadow-[0_0_0_1px_rgba(253,186,116,0.10)]",
+    selected: "border-orange-300/45 bg-orange-300/[0.12] text-white shadow-[0_0_0_1px_rgba(253,186,116,0.10)]",
     iconTone: "border-orange-300/26 bg-orange-300/[0.12] text-orange-200",
     pill: "border-orange-300/22 bg-orange-300/[0.10] text-orange-100",
   },
@@ -94,7 +94,7 @@ const CATEGORIES: CategoryDef[] = [
     label: "Healthcare",
     icon: Heart,
     accent: "hover:border-emerald-300/34 hover:bg-emerald-300/[0.08]",
-    selected: "border-emerald-300/45 bg-emerald-300/[0.12] text-emerald-50 shadow-[0_0_0_1px_rgba(110,231,183,0.10)]",
+    selected: "border-emerald-300/45 bg-emerald-300/[0.12] text-white shadow-[0_0_0_1px_rgba(110,231,183,0.10)]",
     iconTone: "border-emerald-300/26 bg-emerald-300/[0.12] text-emerald-200",
     pill: "border-emerald-300/22 bg-emerald-300/[0.10] text-emerald-100",
   },
@@ -103,7 +103,7 @@ const CATEGORIES: CategoryDef[] = [
     label: "Financials",
     icon: Building2,
     accent: "hover:border-lime-300/34 hover:bg-lime-300/[0.08]",
-    selected: "border-lime-300/45 bg-lime-300/[0.12] text-lime-50 shadow-[0_0_0_1px_rgba(190,242,100,0.10)]",
+    selected: "border-lime-300/45 bg-lime-300/[0.12] text-white shadow-[0_0_0_1px_rgba(190,242,100,0.10)]",
     iconTone: "border-lime-300/26 bg-lime-300/[0.12] text-lime-200",
     pill: "border-lime-300/22 bg-lime-300/[0.10] text-lime-100",
   },
@@ -112,7 +112,7 @@ const CATEGORIES: CategoryDef[] = [
     label: "AI & Semis",
     icon: Brain,
     accent: "hover:border-violet-300/34 hover:bg-violet-300/[0.08]",
-    selected: "border-violet-300/45 bg-violet-300/[0.12] text-violet-50 shadow-[0_0_0_1px_rgba(196,181,253,0.10)]",
+    selected: "border-violet-300/45 bg-violet-300/[0.12] text-white shadow-[0_0_0_1px_rgba(196,181,253,0.10)]",
     iconTone: "border-violet-300/26 bg-violet-300/[0.12] text-violet-200",
     pill: "border-violet-300/22 bg-violet-300/[0.10] text-violet-100",
   },
@@ -121,7 +121,7 @@ const CATEGORIES: CategoryDef[] = [
     label: "Consumer",
     icon: ShoppingBag,
     accent: "hover:border-rose-300/34 hover:bg-rose-300/[0.08]",
-    selected: "border-rose-300/45 bg-rose-300/[0.12] text-rose-50 shadow-[0_0_0_1px_rgba(253,164,175,0.10)]",
+    selected: "border-rose-300/45 bg-rose-300/[0.12] text-white shadow-[0_0_0_1px_rgba(253,164,175,0.10)]",
     iconTone: "border-rose-300/26 bg-rose-300/[0.12] text-rose-200",
     pill: "border-rose-300/22 bg-rose-300/[0.10] text-rose-100",
   },
@@ -271,7 +271,7 @@ function NewsPageContent() {
   );
 
   return (
-    <main className="min-h-screen bg-[#050507] text-white">
+    <main className="news-page min-h-screen">
       <IntroductionNav />
 
       {(authLoading || !isSignedIn) && (
@@ -289,7 +289,7 @@ function NewsPageContent() {
         <section className="mx-auto max-w-7xl px-5 pb-20 pt-28 sm:px-8 sm:pt-32">
           <div className="mb-7 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
-              <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.04] px-3 py-1 text-xs font-semibold text-white/55">
+              <p className="news-chip inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold">
                 <SearchCheck className="size-3.5 text-indigo-300" />
                 Evidence-first market workspace
               </p>
@@ -304,7 +304,7 @@ function NewsPageContent() {
                 type="button"
                 onClick={fetchWorkspace}
                 disabled={loading}
-                className="inline-flex h-10 items-center gap-2 rounded-lg border border-white/[0.10] bg-white/[0.04] px-4 text-sm font-semibold text-white/65 transition-colors hover:bg-white/[0.08] hover:text-white disabled:opacity-50"
+                className="news-action inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-sm font-semibold transition-colors disabled:opacity-50"
               >
                 <RefreshCw className={cn("size-4", loading && "animate-spin")} />
                 Refresh
@@ -312,7 +312,7 @@ function NewsPageContent() {
               <button
                 type="button"
                 onClick={resetPrefs}
-                className="inline-flex h-10 items-center rounded-lg border border-white/[0.10] bg-white/[0.04] px-4 text-sm font-semibold text-white/65 transition-colors hover:bg-white/[0.08] hover:text-white"
+                className="news-action inline-flex h-10 items-center rounded-lg border px-4 text-sm font-semibold transition-colors"
               >
                 Change topics
               </button>
@@ -321,13 +321,13 @@ function NewsPageContent() {
 
           <div className="mb-6 flex flex-wrap gap-2">
             {selectedLabels.map((category) => (
-              <span key={category.key} className={cn("inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold", category.pill)}>
+              <span key={category.key} className={cn("news-topic-pill inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold", category.pill)}>
                 {category.label}
               </span>
             ))}
           </div>
 
-          <div className="mb-6 flex flex-wrap gap-2 border-b border-white/[0.08] pb-3">
+          <div className="news-divider mb-6 flex flex-wrap gap-2 border-b pb-3">
             <TabButton active={activeTab === "news"} icon={<Newspaper className="size-4" />} label="News" onClick={() => setTab("news")} />
             <TabButton active={activeTab === "briefing"} icon={<Newspaper className="size-4" />} label="Briefing" onClick={() => setTab("briefing")} />
             <TabButton active={activeTab === "picks"} icon={<Target className="size-4" />} label="Today's Picks" onClick={() => setTab("picks")} />
@@ -341,14 +341,14 @@ function NewsPageContent() {
           )}
 
           {loading && !workspace && !rawNews && (
-            <div className="flex min-h-96 flex-col items-center justify-center gap-4 rounded-xl border border-white/[0.08] bg-white/[0.025]">
+            <div className="news-card flex min-h-96 flex-col items-center justify-center gap-4 rounded-xl border">
               <Loader2 className="size-8 animate-spin text-indigo-300" />
               <p className="text-sm text-white/45">Building the intelligence brief...</p>
             </div>
           )}
 
           {!loading && activeTab === "news" && rawNews && rawNews.articles.length === 0 && (
-            <div className="flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] text-center">
+            <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border text-center">
               <Newspaper className="size-10 text-white/20" />
               <p className="max-w-md text-sm text-white/42">
                 No source articles were returned. Refresh again or choose a different market mix.
@@ -357,7 +357,7 @@ function NewsPageContent() {
           )}
 
           {!loading && activeTab !== "news" && workspace && workspace.briefing.length === 0 && (
-            <div className="flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] text-center">
+            <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border text-center">
               <Newspaper className="size-10 text-white/20" />
               <p className="max-w-md text-sm text-white/42">
                 No intelligence cards were generated from this source set. Refresh again or choose a different market mix.
@@ -437,8 +437,8 @@ function CategorySetup({
                   isSelected
                     ? category.selected
                     : isDisabled
-                    ? "cursor-not-allowed border-white/[0.05] bg-white/[0.02] text-white/28"
-                    : cn("border-white/[0.08] bg-white/[0.035] text-white/62 hover:text-white", category.accent)
+                    ? "news-card cursor-not-allowed text-white/28 opacity-45"
+                    : cn("news-card text-white/62 hover:text-white", category.accent)
                 )}
               >
                 <span className={cn("flex size-9 items-center justify-center rounded-lg border", category.iconTone)}>
@@ -479,14 +479,14 @@ function TabButton({ active, icon, label, onClick }: { active: boolean; icon: Re
       onClick={onClick}
       className={cn(
         "group relative inline-flex h-11 items-center gap-2 px-2 text-sm font-semibold transition-colors sm:px-3",
-        active ? "text-white" : "text-white/48 hover:text-white"
+        active ? "news-tab-active" : "news-tab-muted"
       )}
     >
       {icon}
       {label}
-      <span className="absolute bottom-0 left-2 right-2 h-px bg-white/12" />
+      <span className="news-tab-track absolute bottom-0 left-2 right-2 h-px" />
       <motion.span
-        className={cn("absolute bottom-0 left-2 right-2 h-[2px] rounded-full", active ? "bg-white" : "bg-white/45")}
+        className={cn("news-tab-underline absolute bottom-0 left-2 right-2 h-[2px] rounded-full", active ? "news-tab-underline-active" : "news-tab-underline-hover")}
         initial={false}
         animate={{ scaleX: active ? 1 : 0 }}
         whileHover={{ scaleX: 1 }}
@@ -520,10 +520,10 @@ function FeaturedNewsArticle({ article }: { article: NewsArticle }) {
       href={article.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="group mb-6 block overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.035] transition-colors hover:border-white/[0.16] hover:bg-white/[0.055]"
+      className="news-card group mb-6 block overflow-hidden rounded-xl border transition-colors"
     >
       <div className="grid min-h-[280px] md:grid-cols-[0.9fr_1.1fr]">
-        <div className="relative min-h-56 overflow-hidden bg-white/[0.035]">
+        <div className="news-media relative min-h-56 overflow-hidden">
           {article.thumbnail ? (
             <img
               src={article.thumbnail}
@@ -533,7 +533,7 @@ function FeaturedNewsArticle({ article }: { article: NewsArticle }) {
           ) : (
             <NewsVisualFallback category={category} />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#050507]/80 via-transparent to-transparent" />
+          <div className="news-image-shade absolute inset-0" />
           <div className="absolute bottom-4 left-4">
             <CategoryBadge category={article.category} />
           </div>
@@ -565,9 +565,9 @@ function NewsArticleCard({ article }: { article: NewsArticle }) {
       href={article.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="group flex min-h-[360px] flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.035] transition-colors hover:border-white/[0.16] hover:bg-white/[0.055]"
+      className="news-card group flex min-h-[360px] flex-col overflow-hidden rounded-xl border transition-colors"
     >
-      <div className="relative h-40 overflow-hidden bg-white/[0.035]">
+      <div className="news-media relative h-40 overflow-hidden">
         {article.thumbnail ? (
           <img
             src={article.thumbnail}
@@ -577,7 +577,7 @@ function NewsArticleCard({ article }: { article: NewsArticle }) {
         ) : (
           <NewsVisualFallback category={category} compact />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#050507]/78 via-transparent to-transparent" />
+        <div className="news-image-shade absolute inset-0" />
         <div className="absolute bottom-3 left-3">
           <CategoryBadge category={article.category} small />
         </div>
@@ -605,7 +605,7 @@ function NewsVisualFallback({ category, compact = false }: { category?: Category
   const Icon = category?.icon ?? Newspaper;
   return (
     <div className={cn("flex h-full w-full items-center justify-center", category?.iconTone ?? "border-white/[0.10] bg-white/[0.05] text-white/45")}>
-      <div className={cn("flex items-center justify-center rounded-xl border bg-black/20", compact ? "size-14" : "size-20", category?.pill ?? "border-white/[0.10] text-white/50")}>
+      <div className={cn("news-chip flex items-center justify-center rounded-xl border", compact ? "size-14" : "size-20", category?.pill ?? "border-white/[0.10] text-white/50")}>
         <Icon className={compact ? "size-7" : "size-10"} />
       </div>
     </div>
@@ -617,7 +617,7 @@ function TickerRow({ tickers, compact = false }: { tickers: string[]; compact?: 
   return (
     <div className={cn("flex flex-wrap gap-2", compact ? "mt-0" : "mt-5")}>
       {tickers.slice(0, compact ? 3 : 5).map((ticker) => (
-        <span key={ticker} className="rounded-md border border-white/[0.10] bg-black/24 px-2 py-1 font-mono text-xs text-indigo-100">
+        <span key={ticker} className="news-ticker rounded-md border px-2 py-1 font-mono text-xs text-indigo-100">
           {ticker}
         </span>
       ))}
@@ -629,7 +629,7 @@ function CategoryBadge({ category, small = false }: { category: string; small?: 
   const definition = CATEGORIES.find((item) => item.key === category);
   if (!definition) return null;
   return (
-    <span className={cn("inline-flex items-center rounded-full border font-semibold", small ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-xs", definition.pill)}>
+    <span className={cn("news-category-badge inline-flex items-center rounded-full border font-semibold", small ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-xs", definition.pill)}>
       {definition.label}
     </span>
   );
@@ -639,7 +639,7 @@ function BriefingTab({ cards }: { cards: NewsBriefCard[] }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {cards.map((card) => (
-        <article key={card.id} className="rounded-xl border border-white/[0.08] bg-white/[0.035] p-5">
+        <article key={card.id} className="news-card rounded-xl border p-5">
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <SentimentBadge sentiment={card.sentiment} />
             <ScorePill label="Impact" value={card.impact_score} />
@@ -668,10 +668,10 @@ function BriefingTab({ cards }: { cards: NewsBriefCard[] }) {
 
           <div className="mt-4 flex flex-wrap gap-2">
             {card.tickers.map((ticker) => (
-              <span key={ticker} className="rounded-md border border-white/[0.10] bg-black/20 px-2 py-1 font-mono text-xs text-indigo-200">{ticker}</span>
+              <span key={ticker} className="news-ticker rounded-md border px-2 py-1 font-mono text-xs text-indigo-200">{ticker}</span>
             ))}
             {card.categories.map((category) => (
-              <span key={category} className="rounded-md border border-white/[0.10] bg-white/[0.04] px-2 py-1 text-xs text-white/50">{category}</span>
+              <span key={category} className="news-chip rounded-md border px-2 py-1 text-xs text-white/50">{category}</span>
             ))}
           </div>
 
@@ -692,12 +692,12 @@ function PicksTab({ picks, onViewReports }: { picks: TodayPickCard[]; onViewRepo
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {picks.map((pick) => (
-        <article key={pick.id} className="rounded-xl border border-white/[0.08] bg-white/[0.035] p-5">
+        <article key={pick.id} className="news-card rounded-xl border p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-3">
                 <h2 className="font-mono text-2xl font-semibold text-white">{pick.ticker}</h2>
-                <span className="rounded-md border border-indigo-300/25 bg-indigo-300/10 px-2 py-1 text-xs font-semibold text-indigo-100">{pick.label}</span>
+                <span className="news-pick-label rounded-md border px-2 py-1 text-xs font-semibold">{pick.label}</span>
               </div>
               <p className="mt-1 text-sm text-white/38">{pick.company_name ?? "Company name unavailable"}</p>
             </div>
@@ -739,7 +739,7 @@ function PicksTab({ picks, onViewReports }: { picks: TodayPickCard[]; onViewRepo
             <button
               type="button"
               onClick={onViewReports}
-              className="ml-auto inline-flex h-9 items-center gap-2 rounded-lg border border-white/[0.10] bg-white/[0.05] px-3 text-sm font-semibold text-white/68 hover:bg-white/[0.09] hover:text-white"
+              className="news-action ml-auto inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-semibold"
             >
               View report
               <FileText className="size-4" />
@@ -766,6 +766,42 @@ function ReportsTab({ reports }: { reports: ResearchReport[] }) {
     setActiveReportId(reports[0]?.id ?? "");
   }, [reports]);
 
+  useEffect(() => {
+    if (reports.length === 0) return;
+
+    let frame = 0;
+
+    const updateActiveReport = () => {
+      frame = 0;
+      const targetY = window.innerHeight * 0.34;
+      const closest = reports.reduce<{ id: string; distance: number } | null>((best, report) => {
+        const element = document.getElementById(report.id);
+        if (!element) return best;
+        const rect = element.getBoundingClientRect();
+        const distance = Math.abs(rect.top - targetY);
+        if (!best || distance < best.distance) return { id: report.id, distance };
+        return best;
+      }, null);
+
+      if (closest) setActiveReportId(closest.id);
+    };
+
+    const requestUpdate = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(updateActiveReport);
+    };
+
+    updateActiveReport();
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
+    };
+  }, [reports]);
+
   if (reports.length === 0) {
     return (
       <EmptyPanel icon={<FileText className="size-10" />} message="No memo-style reports are available yet. Refresh the workspace or choose themes with ticker-level sources." />
@@ -790,7 +826,7 @@ function ReportsTab({ reports }: { reports: ResearchReport[] }) {
                 setSelectedReport(report);
               }
             }}
-            className="cursor-pointer rounded-xl border border-white/[0.08] bg-white/[0.035] p-5 transition-colors hover:border-white/[0.16] hover:bg-white/[0.052] lg:p-6"
+            className="news-card cursor-pointer rounded-xl border p-5 transition-colors lg:p-6"
           >
             <div className="flex flex-col gap-4 border-b border-white/[0.08] pb-5 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -800,14 +836,14 @@ function ReportsTab({ reports }: { reports: ResearchReport[] }) {
               </div>
               <div className="flex flex-wrap gap-2">
                 {report.affected_tickers.map((ticker) => (
-                  <span key={ticker} className="rounded-md border border-white/[0.10] bg-black/25 px-2 py-1 font-mono text-xs text-indigo-200">{ticker}</span>
+                  <span key={ticker} className="news-ticker rounded-md border px-2 py-1 font-mono text-xs text-indigo-200">{ticker}</span>
                 ))}
               </div>
             </div>
 
             <ReportVisual report={report} />
 
-            <div className="mt-5 rounded-xl border border-white/[0.08] bg-black/20 p-4">
+            <div className="news-subpanel mt-5 rounded-xl border p-4">
               <p className="text-sm font-semibold text-white">Signal summary</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {Object.entries(report.signal_summary).map(([key, value]) => (
@@ -841,7 +877,7 @@ function ReportTickerRail({
 }) {
   return (
     <div className="group fixed right-5 top-1/2 z-30 hidden -translate-y-1/2 lg:block">
-      <div className="rounded-2xl border border-transparent bg-transparent p-2 transition-all duration-200 group-hover:border-white/[0.10] group-hover:bg-[#151517]/95 group-hover:shadow-2xl group-hover:shadow-black/35">
+      <div className="news-rail-panel rounded-2xl border border-transparent bg-transparent p-2 transition-all duration-200 group-hover:shadow-2xl">
         <div className="flex w-8 flex-col items-center gap-2 py-1 transition-all duration-200 group-hover:w-32 group-hover:items-stretch">
           {reports.map((report) => {
             const ticker = report.affected_tickers[0] ?? "Memo";
@@ -854,13 +890,13 @@ function ReportTickerRail({
                   onNavigate(report.id);
                   document.getElementById(report.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
                 }}
-                className="flex h-6 w-full items-center gap-3 rounded-md px-1 text-left transition-colors hover:bg-white/[0.06]"
+                className="news-rail-item flex h-6 w-full items-center gap-3 rounded-md px-1 text-left transition-colors"
                 aria-label={`Jump to ${ticker} report`}
               >
                 <span
                   className={cn(
                     "h-1 w-7 shrink-0 rounded-full transition-all duration-200",
-                    active ? "bg-white shadow-[0_0_10px_rgba(255,255,255,0.65)]" : "bg-white/30 group-hover:bg-white/45"
+                    active ? "news-rail-line-active shadow-[0_0_10px_rgba(255,255,255,0.65)]" : "news-rail-line"
                   )}
                 />
                 <span className="hidden min-w-0 flex-1 overflow-hidden whitespace-nowrap opacity-0 transition-opacity duration-150 group-hover:block group-hover:opacity-100">
@@ -1018,7 +1054,7 @@ function MemoListSection({ title, items }: { title: string; items: string[] }) {
 
 function SignalSummaryChip({ label, value }: { label: string; value: string }) {
   return (
-    <span className="rounded-md border border-white/[0.10] bg-white/[0.04] px-2.5 py-1.5 text-xs capitalize text-white/42">
+    <span className="news-chip rounded-md border px-2.5 py-1.5 text-xs capitalize text-white/42">
       {label}: <span className="font-mono font-semibold text-white">{value}</span>
     </span>
   );
@@ -1027,7 +1063,7 @@ function SignalSummaryChip({ label, value }: { label: string; value: string }) {
 function SentimentBadge({ sentiment }: { sentiment: NewsBriefCard["sentiment"] }) {
   const styles = {
     bullish: "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",
-    neutral: "border-white/[0.10] bg-white/[0.05] text-white/62",
+    neutral: "news-chip text-white/62",
     bearish: "border-red-300/25 bg-red-300/10 text-red-100",
   };
   return <span className={cn("rounded-md border px-2 py-1 text-xs font-semibold capitalize", styles[sentiment])}>{sentiment}</span>;
@@ -1035,7 +1071,7 @@ function SentimentBadge({ sentiment }: { sentiment: NewsBriefCard["sentiment"] }
 
 function ScorePill({ label, value }: { label: string; value: number }) {
   return (
-    <span className="rounded-md border border-white/[0.10] bg-white/[0.04] px-2 py-1 text-xs font-semibold text-white/45">
+    <span className="news-chip rounded-md border px-2 py-1 text-xs font-semibold text-white/45">
       {label}: <span className="font-mono text-white">{pct(value)}</span>
     </span>
   );
@@ -1043,7 +1079,7 @@ function ScorePill({ label, value }: { label: string; value: number }) {
 
 function EvidenceBlock({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-black/18 p-4 text-sm leading-6 text-white/52">
+    <div className="news-subpanel rounded-xl border p-4 text-sm leading-6 text-white/52">
       <p className="news-section-heading mb-2 flex items-center gap-2 text-sm font-semibold">
         {icon}
         {title}
@@ -1063,10 +1099,10 @@ function ReportVisual({ report }: { report: ResearchReport }) {
   const tone = riskTone(riskLevel);
 
   return (
-    <div className="mt-5 overflow-hidden rounded-xl border border-white/[0.08] bg-[#090a0e]">
+    <div className="news-report-visual mt-5 overflow-hidden rounded-xl border">
       <div className="grid lg:grid-cols-[300px_1fr]">
-        <div className="relative min-h-44 border-b border-white/[0.08] bg-white/[0.025] p-5 lg:border-b-0 lg:border-r">
-          <div className="absolute inset-0 opacity-70 [background-image:linear-gradient(rgba(255,255,255,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.055)_1px,transparent_1px)] [background-size:18px_18px]" />
+        <div className="news-report-visual-side relative min-h-44 border-b p-5 lg:border-b-0 lg:border-r">
+          <div className="news-grid-bg absolute inset-0 opacity-70" />
           <div className="relative flex h-full flex-col justify-start">
             <div>
               <div className="flex items-center gap-3">
@@ -1091,7 +1127,7 @@ function ReportVisual({ report }: { report: ResearchReport }) {
             <SignalBar label="Opportunity score" value={opportunity} tone="indigo" />
             <SignalBar label="Confidence" value={confidence} tone="emerald" />
           </div>
-          <div className="mt-5 rounded-xl border border-white/[0.08] bg-black/18 p-4">
+          <div className="news-subpanel mt-5 rounded-xl border p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="news-section-heading text-sm font-semibold">Evidence balance</p>
               <span className="rounded-md border border-white/[0.10] bg-white/[0.04] px-2 py-1 text-xs text-white/48">
@@ -1113,7 +1149,7 @@ function ReportVisual({ report }: { report: ResearchReport }) {
 function SignalBar({ label, value, tone }: { label: string; value: number; tone: "indigo" | "emerald" }) {
   const width = Math.max(0, Math.min(100, value));
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-black/18 p-4">
+    <div className="news-subpanel rounded-xl border p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="text-sm font-semibold text-white/78">{label}</p>
         <p className="font-mono text-sm font-semibold text-white">{pct(width)}</p>
@@ -1130,7 +1166,7 @@ function SignalBar({ label, value, tone }: { label: string; value: number; tone:
 
 function VisualStat({ label, value, tone = "base" }: { label: string; value: string; tone?: RiskTone }) {
   return (
-    <div className="rounded-lg border border-white/[0.08] bg-white/[0.035] p-3">
+    <div className="news-subpanel rounded-lg border p-3">
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/30">{label}</p>
       <p className={cn("mt-1 text-sm font-semibold capitalize", riskToneClass(tone))}>{value}</p>
     </div>
@@ -1147,7 +1183,7 @@ function signalText(value: unknown, fallback: string) {
 
 function Metric({ label, value, tone = "base" }: { label: string; value: string; tone?: RiskTone }) {
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-black/18 p-3">
+    <div className="news-subpanel rounded-xl border p-3">
       <p className="text-xs text-white/35">{label}</p>
       <p className={cn("mt-1 text-lg font-semibold capitalize", tone === "base" ? "text-white" : riskToneClass(tone))}>{value}</p>
     </div>
@@ -1168,7 +1204,7 @@ function SourceList({ sources }: { sources: { title: string; url: string | null;
               <ExternalLink className="size-3.5 shrink-0 text-white/25" />
             </>
           );
-          const className = "flex items-center gap-3 rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-xs text-white/48 hover:bg-white/[0.05] hover:text-white";
+          const className = "news-source-row flex items-center gap-3 rounded-lg border px-3 py-2 text-xs text-white/48";
           return source.url ? (
             <a key={`${source.url}-${index}`} href={source.url} target="_blank" rel="noopener noreferrer" className={className}>
               {content}
@@ -1186,7 +1222,7 @@ function SourceList({ sources }: { sources: { title: string; url: string | null;
 
 function EmptyPanel({ icon, message }: { icon: ReactNode; message: string }) {
   return (
-    <div className="flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] text-center text-white/38">
+    <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border text-center text-white/38">
       {icon}
       <p className="max-w-md text-sm">{message}</p>
     </div>
