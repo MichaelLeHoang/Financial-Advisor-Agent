@@ -38,6 +38,23 @@ const GREETING: Message = {
   content: "Hello. I can help with market research, portfolio analysis, and financial news.",
 };
 
+function messageFromChatHistory(message: {
+  id: number | string;
+  role: "user" | "assistant";
+  content: string;
+  metadata?: { consensus?: { opinions?: ConsensusOpinion[] }; researchReports?: EquityResearchReport[] } | null;
+  consensusOpinions?: ConsensusOpinion[];
+  researchReports?: EquityResearchReport[];
+}): Message {
+  return {
+    id: String(message.id),
+    role: message.role,
+    content: message.content,
+    consensusOpinions: message.consensusOpinions ?? message.metadata?.consensus?.opinions,
+    researchReports: message.researchReports ?? message.metadata?.researchReports,
+  };
+}
+
 const SUGGESTIONS = [
   {
     title: "Market pulse",
@@ -475,11 +492,7 @@ export default function ChatPage() {
         }
 
         if (user.is_guest) {
-          const localMessages = loadLocalChatMessages(activeSessionId).map((message) => ({
-            id: String(message.id),
-            role: message.role,
-            content: message.content,
-          }));
+          const localMessages = loadLocalChatMessages(activeSessionId).map(messageFromChatHistory);
           if (!cancelled) setMessages(localMessages.length > 0 ? localMessages : [GREETING]);
           return;
         }
@@ -487,11 +500,7 @@ export default function ChatPage() {
         const res = await api.chatSessionMessages(activeSessionId);
         if (cancelled) return;
 
-        const loadedMessages = res.messages.map((message) => ({
-          id: String(message.id),
-          role: message.role,
-          content: message.content,
-        }));
+        const loadedMessages = res.messages.map(messageFromChatHistory);
         setMessages(loadedMessages.length > 0 ? loadedMessages : [GREETING]);
       } catch (err: any) {
         if (cancelled) return;
@@ -711,7 +720,7 @@ export default function ChatPage() {
 
         if (!user.is_guest) {
           await api.appendChatSessionMessage(targetSessionId, "user", text);
-          await api.appendChatSessionMessage(targetSessionId, "assistant", finalMarkdown);
+          await api.appendChatSessionMessage(targetSessionId, "assistant", finalMarkdown, { researchReports: latestDetail.reports });
         }
         setMessages((prev) =>
           prev.filter((m) => m.status !== "fetching").concat({
@@ -785,60 +794,48 @@ export default function ChatPage() {
     try {
       const remember = !user.is_guest;
       let res;
-      let consensusOpinions: ConsensusOpinion[] | undefined;
-      if (mode === "consensus") {
+      try {
+        const queued = await api.chatJob(text, targetSessionId, remember, mode);
+
+        res = await api.waitForChatJob(queued.job_id, (job) => {
+          const appliedProgress = enqueueJobProgress(job, fetchingLabel);
+          if (job.status === "queued") {
+            setAgentRunState((current) => current === "running" ? "running" : "queued");
+            const positionText = job.queue_position ? ` Position ${job.queue_position}.` : "";
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.status === "fetching"
+                  ? { ...m, content: `Queued for analysis.${positionText}` }
+                  : m
+              )
+            );
+          } else if (job.status === "running" && !appliedProgress) {
+            setAgentRunState("running");
+            setAgentRunStartedAt((current) => current ?? Date.now());
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.status === "fetching"
+                  ? { ...m, content: fetchingLabel }
+                  : m
+              )
+            );
+          }
+        });
+      } catch (queueError) {
+        if (!isRedisUnavailableError(queueError)) throw queueError;
         setAgentRunState("running");
         setAgentRunStartedAt(Date.now());
         setUseAgentSyntheticProgress(true);
-        res = await api.consensus(text, targetSessionId, false);
-        consensusOpinions = res.consensus.opinions;
-        if (!user.is_guest) {
-          await api.appendChatSessionMessage(targetSessionId, "user", text);
-          await api.appendChatSessionMessage(targetSessionId, "assistant", res.response || "");
-        }
-      } else {
-        try {
-          const queued = await api.chatJob(text, targetSessionId, remember, mode);
-
-          res = await api.waitForChatJob(queued.job_id, (job) => {
-            const appliedProgress = enqueueJobProgress(job, fetchingLabel);
-            if (job.status === "queued") {
-              setAgentRunState((current) => current === "running" ? "running" : "queued");
-              const positionText = job.queue_position ? ` Position ${job.queue_position}.` : "";
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.status === "fetching"
-                    ? { ...m, content: `Queued for analysis.${positionText}` }
-                    : m
-                )
-              );
-            } else if (job.status === "running" && !appliedProgress) {
-              setAgentRunState("running");
-              setAgentRunStartedAt((current) => current ?? Date.now());
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.status === "fetching"
-                    ? { ...m, content: fetchingLabel }
-                    : m
-                )
-              );
-            }
-          });
-        } catch (queueError) {
-          if (!isRedisUnavailableError(queueError)) throw queueError;
-          setAgentRunState("running");
-          setAgentRunStartedAt(Date.now());
-          setUseAgentSyntheticProgress(true);
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.status === "fetching"
-                ? { ...m, content: fetchingLabel }
-                : m
-            )
-          );
-          res = await api.chat(text, targetSessionId, remember, mode);
-        }
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.status === "fetching"
+              ? { ...m, content: fetchingLabel }
+              : m
+          )
+        );
+        res = await api.chat(text, targetSessionId, remember, mode);
       }
+      const consensusOpinions = res.consensus?.opinions;
 
       const minimumPlanDuration = mode === "consensus" ? 3200 : 1800;
       const elapsedBeforeAnswer = Date.now() - loadingStartedAt;
@@ -1328,7 +1325,7 @@ function ResearchMessageTabs({ content, reports }: { content: string; reports?: 
   return (
     <div className="space-y-3">
       <ResponseTabs
-        tabs={[{ id: "final", label: "Final" }, ...reportTabs.map((report) => ({ id: report.report_id, label: report.agent_name }))]}
+        tabs={[{ id: "final", label: "Report" }, ...reportTabs.map((report) => ({ id: report.report_id, label: report.agent_name }))]}
         active={active}
         onChange={setActive}
       />
@@ -1355,9 +1352,9 @@ function ConsensusMessageTabs({ content, opinions }: { content: string; opinions
             <div><span className="text-white/45">Confidence</span><div className="font-semibold text-white/90">{Math.round(currentOpinion.confidence * 100)}%</div></div>
           </div>
           <Markdown content={currentOpinion.reasoning} />
-          {currentOpinion.risk_flags.length > 0 && (
+          {(currentOpinion.risk_flags ?? []).length > 0 && (
             <div className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-xs text-amber-100">
-              <span className="font-semibold">Risk flags:</span> {currentOpinion.risk_flags.join(", ")}
+              <span className="font-semibold">Risk flags:</span> {(currentOpinion.risk_flags ?? []).join(", ")}
             </div>
           )}
         </div>

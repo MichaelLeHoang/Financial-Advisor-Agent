@@ -61,7 +61,7 @@ def execute_llm_job(job: QueuedJob, progress_callback: ProgressCallback | None =
     def compute_response() -> str:
         return agent.chat(message, remember=False, mode=mode, progress_callback=progress_callback)
 
-    if history:
+    if history or job.kind == "consensus":
         response = compute_response()
     else:
         response = cached_value(
@@ -76,11 +76,15 @@ def execute_llm_job(job: QueuedJob, progress_callback: ProgressCallback | None =
             settings.llm_cache_ttl_seconds,
             compute_response,
         )
+    metadata = agent.last_response_metadata or None
     if remember and not is_guest:
         append_message(session_id, "user", message, user_id)
-        append_message(session_id, "assistant", response, user_id)
+        append_message(session_id, "assistant", response, user_id, metadata=metadata)
 
-    return {"response": response, "session_id": session_id, "mode": mode}
+    result = {"response": response, "session_id": session_id, "mode": mode}
+    if metadata:
+        result.update(metadata)
+    return result
 
 
 class LLMWorker:
