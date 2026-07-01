@@ -53,6 +53,49 @@ def test_portfolio_routes_are_user_scoped():
     store.reset()
 
 
+def test_holding_cost_currency_is_persisted_and_defaults_to_portfolio_base():
+    from src.api.app import app
+
+    user_id = uuid4()
+    client = TestClient(app)
+    store.reset()
+
+    app.dependency_overrides[get_current_or_guest_user] = _override_user(user_id)
+    created = client.post("/api/v1/portfolios", json={"name": "Core", "base_currency": "CAD"})
+    assert created.status_code == 201
+    portfolio_id = created.json()["id"]
+
+    defaulted = client.post(
+        f"/api/v1/portfolios/{portfolio_id}/holdings",
+        json={"symbol": "AAPL", "asset_type": "equity", "quantity": 2, "average_cost": 100},
+    )
+    assert defaulted.status_code == 201
+    assert defaulted.json()["cost_currency"] == "CAD"
+
+    explicit = client.post(
+        f"/api/v1/portfolios/{portfolio_id}/holdings",
+        json={"symbol": "RY", "asset_type": "equity", "quantity": 3, "average_cost": 80, "cost_currency": "usd"},
+    )
+    assert explicit.status_code == 201
+    assert explicit.json()["cost_currency"] == "USD"
+
+    holding_id = explicit.json()["id"]
+    updated = client.patch(
+        f"/api/v1/portfolios/{portfolio_id}/holdings/{holding_id}",
+        json={"average_cost": 84, "cost_currency": "cad"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["average_cost"] == 84
+    assert updated.json()["cost_currency"] == "CAD"
+
+    listed = client.get(f"/api/v1/portfolios/{portfolio_id}/holdings")
+    assert listed.status_code == 200
+    assert [holding["cost_currency"] for holding in listed.json()] == ["CAD", "CAD"]
+
+    app.dependency_overrides.clear()
+    store.reset()
+
+
 def test_watchlist_routes_are_user_scoped():
     from src.api.app import app
 

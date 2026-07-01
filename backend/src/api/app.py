@@ -37,6 +37,7 @@ from src.risk.routes import router as risk_router
 from src.journal.routes import router as journal_router
 from src.quant.routes import router as quant_router
 from src.api.news_routes import router as news_router
+from src.api.routes.intelligence import router as intelligence_router
 from src.api.equity_research import router as equity_research_router
 from src.llm.routing_policy import LLMMode
 from src.core.redis_client import RedisUnavailable
@@ -71,6 +72,7 @@ app.include_router(risk_router)
 app.include_router(journal_router)
 app.include_router(quant_router)
 app.include_router(news_router)
+app.include_router(intelligence_router)
 app.include_router(equity_research_router)
 
 # Register Inngest with FastAPI

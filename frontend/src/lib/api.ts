@@ -352,6 +352,7 @@ export interface Holding {
   asset_type: string;
   quantity: number;
   average_cost: number;
+  cost_currency: string;
   created_at: string;
 }
 
@@ -925,15 +926,16 @@ export const api = {
   portfolioHoldings: (portfolioId: string) =>
     get<Holding[]>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings`),
 
-  addHolding: (portfolioId: string, symbol: string, quantity: number, averageCost: number) =>
+  addHolding: (portfolioId: string, symbol: string, quantity: number, averageCost: number, costCurrency?: string) =>
     post<Holding>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings`, {
       symbol,
       asset_type: "equity",
       quantity,
       average_cost: averageCost,
+      cost_currency: costCurrency,
     }),
 
-  updateHolding: (portfolioId: string, holdingId: string, updates: { quantity?: number; average_cost?: number }) =>
+  updateHolding: (portfolioId: string, holdingId: string, updates: { quantity?: number; average_cost?: number; cost_currency?: string }) =>
     patch<Holding>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings/${encodeURIComponent(holdingId)}`, updates),
 
   removeHolding: (portfolioId: string, holdingId: string) =>
@@ -1138,6 +1140,9 @@ export const api = {
   news: (categories: string[], limit = 20) =>
     get<NewsResponse>(`/api/v1/news?categories=${encodeURIComponent(categories.join(","))}&limit=${limit}`),
 
+  marketIntelligence: (categories: string[], limit = 30) =>
+    get<MarketIntelligenceResponse>(`/api/v1/market-intelligence?categories=${encodeURIComponent(categories.join(","))}&limit=${limit}`),
+
   /** Health check */
   health: () => get<{ status: string }>("/health"),
   status: () => get<ServiceStatus>("/api/v1/status"),
@@ -1169,6 +1174,84 @@ export interface NewsResponse {
 export interface CategoryInfo {
   key: string;
   label: string;
+}
+
+export interface InsightSource {
+  title: string;
+  url: string | null;
+  publisher: string | null;
+  published_at: string | null;
+}
+
+export interface ImpactScoreBreakdown {
+  freshness: number;
+  relevance: number;
+  sentiment: number;
+  price_volume: number;
+  source_quality: number;
+  risk_penalty: number;
+  final_score: number;
+}
+
+export interface NewsBriefCard {
+  id: string;
+  headline: string;
+  summary: string;
+  tickers: string[];
+  categories: string[];
+  sentiment: "bullish" | "neutral" | "bearish";
+  impact_score: number;
+  confidence: number;
+  why_it_matters: string;
+  risk_flags: string[];
+  sources: InsightSource[];
+  published_at: string | null;
+  score_breakdown?: ImpactScoreBreakdown | null;
+}
+
+export interface TodayPickCard {
+  id: string;
+  ticker: string;
+  company_name: string | null;
+  current_price?: number | null;
+  daily_change_pct?: number | null;
+  thesis: string;
+  label: string;
+  opportunity_score: number;
+  confidence: number;
+  risk_level: "low" | "medium" | "high" | "critical";
+  key_evidence: string[];
+  risk_flags: string[];
+  related_news_count: number;
+  sources: InsightSource[];
+}
+
+export interface ResearchReport {
+  id: string;
+  title: string;
+  executive_summary: string;
+  affected_tickers: string[];
+  sections: Record<string, string>;
+  bull_case: string[];
+  bear_case: string[];
+  risk_flags: string[];
+  signal_summary: Record<string, unknown>;
+  sources: InsightSource[];
+  what_to_watch_next: string[];
+  disclaimer: string;
+  created_at: string;
+}
+
+export interface MarketIntelligenceResponse {
+  briefing: NewsBriefCard[];
+  picks: TodayPickCard[];
+  reports: ResearchReport[];
+  categories_fetched: string[];
+  total_sources: number;
+  sources_attempted: number;
+  sources_succeeded: number;
+  sources_failed: number;
+  generated_at: string;
 }
 
 /** WebSocket URL for streaming agent chat */

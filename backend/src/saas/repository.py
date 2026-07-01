@@ -166,7 +166,8 @@ class UserScopedStore:
             return True
 
     def add_holding(self, user_id: UUID, portfolio_id: UUID, payload: HoldingCreate) -> HoldingRead | None:
-        if self.get_portfolio(user_id, portfolio_id) is None:
+        portfolio = self.get_portfolio(user_id, portfolio_id)
+        if portfolio is None:
             return None
 
         holding = HoldingRead(
@@ -176,6 +177,7 @@ class UserScopedStore:
             asset_type=payload.asset_type,
             quantity=payload.quantity,
             average_cost=payload.average_cost,
+            cost_currency=(payload.cost_currency or portfolio.base_currency).upper(),
         )
         with self._lock:
             self._holdings.setdefault(portfolio_id, []).append(holding)
@@ -601,7 +603,8 @@ class SupabaseRestStore:
         return True
 
     def add_holding(self, user_id: UUID, portfolio_id: UUID, payload: HoldingCreate) -> HoldingRead | None:
-        if self.get_portfolio(user_id, portfolio_id) is None:
+        portfolio = self.get_portfolio(user_id, portfolio_id)
+        if portfolio is None:
             return None
         rows = self._request(
             "POST",
@@ -612,6 +615,7 @@ class SupabaseRestStore:
                 "asset_type": payload.asset_type,
                 "quantity": payload.quantity,
                 "average_cost": payload.average_cost,
+                "cost_currency": (payload.cost_currency or portfolio.base_currency).upper(),
             },
         )
         return HoldingRead.model_validate(rows[0])

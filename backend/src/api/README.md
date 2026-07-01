@@ -12,6 +12,7 @@ Provides the FastAPI application and thin transport adapters for QuanAd backend 
 - `app.py`: application composition and core API surface.
 - `equity_research.py`: QuanAd 2.1 run, event, share, and report routes.
 - `news_routes.py`: categorized financial-news endpoints.
+- `routes/intelligence.py`: Market Intelligence briefing, picks, and report endpoint.
 
 ## Boundaries
 Route handlers should validate and translate requests only. Business logic belongs in agent, data, SaaS, billing, risk, backtesting, or service modules.
@@ -20,4 +21,4 @@ Route handlers should validate and translate requests only. Business logic belon
 Use FastAPI `TestClient` with mocked dependencies for route contracts, authorization, provider timeouts, status rollups, and error responses.
 
 ## Latest Change
-- Tightened equity-research run authorization so authenticated runs stay user-owned and guest runs require a matching session-scoped guest owner token; shared reports remain public only through the dedicated shared-report route.
+- Added the Market Intelligence route that packages categorized news into briefing, picks, and report payloads.

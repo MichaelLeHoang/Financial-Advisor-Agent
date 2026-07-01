@@ -93,10 +93,16 @@ interface HoldingRow extends Holding {
   dailyChange: number | null;
   dailyChangePct: number | null;
   fxRate: number | null;
+  costFxRate: number | null;
+  costBasis: number | null;
   originalValue: number | null;
   value: number | null;
   pnl: number | null;
   pnlPct: number | null;
+  holdingValue: number | null;
+  holdingDailyChange: number | null;
+  holdingPnl: number | null;
+  holdingPnlPct: number | null;
 }
 
 // Inline edit state for a single holding
@@ -188,10 +194,16 @@ function emptyMetrics(baseCurrency: string): Pick<
   | "dailyChange"
   | "dailyChangePct"
   | "fxRate"
+  | "costFxRate"
+  | "costBasis"
   | "originalValue"
   | "value"
   | "pnl"
   | "pnlPct"
+  | "holdingValue"
+  | "holdingDailyChange"
+  | "holdingPnl"
+  | "holdingPnlPct"
 > {
   return {
     name: null,
@@ -202,10 +214,16 @@ function emptyMetrics(baseCurrency: string): Pick<
     dailyChange: null,
     dailyChangePct: null,
     fxRate: null,
+    costFxRate: null,
+    costBasis: null,
     originalValue: null,
     value: null,
     pnl: null,
     pnlPct: null,
+    holdingValue: null,
+    holdingDailyChange: null,
+    holdingPnl: null,
+    holdingPnlPct: null,
   };
 }
 
@@ -215,15 +233,19 @@ function computeMetrics(
   quoteCurrency: string | null | undefined,
   baseCurrency: string | null | undefined,
   fxRate = 1,
+  costFxRate = 1,
   change: number | null = null,
   name: string | null = null
 ) {
   const base = normalizeCurrency(baseCurrency);
   const quote = normalizeCurrency(quoteCurrency, base);
+  const costCurrency = normalizeCurrency(h.cost_currency, base);
   if (price == null) return emptyMetrics(base);
 
   const convertedPrice = price * fxRate;
   const convertedChange = change == null ? null : change * fxRate;
+  const holdingPrice = price * costFxRate;
+  const holdingChange = change == null ? null : change * costFxRate;
   const originalValue = h.quantity * price;
   const value = h.quantity * convertedPrice;
   const dailyChange = convertedChange == null ? null : h.quantity * convertedChange;
@@ -231,9 +253,14 @@ function computeMetrics(
   const dailyChangePct = dailyChange != null && priorValue != null && priorValue > 0
     ? (dailyChange / priorValue) * 100
     : null;
-  const costBasis = h.quantity * h.average_cost;
+  const costBasis = h.quantity * h.average_cost * deriveCostToBaseRate(costCurrency, base, fxRate, costFxRate);
   const pnl = value - costBasis;
   const pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
+  const holdingValue = h.quantity * holdingPrice;
+  const holdingDailyChange = holdingChange == null ? null : h.quantity * holdingChange;
+  const holdingCostBasis = h.quantity * h.average_cost;
+  const holdingPnl = holdingValue - holdingCostBasis;
+  const holdingPnlPct = holdingCostBasis > 0 ? (holdingPnl / holdingCostBasis) * 100 : 0;
   return {
     name,
     quoteCurrency: quote,
@@ -243,11 +270,23 @@ function computeMetrics(
     dailyChange,
     dailyChangePct,
     fxRate,
+    costFxRate,
+    costBasis,
     originalValue,
     value,
     pnl,
     pnlPct,
+    holdingValue,
+    holdingDailyChange,
+    holdingPnl,
+    holdingPnlPct,
   };
+}
+
+function deriveCostToBaseRate(costCurrency: string, baseCurrency: string, quoteFxRate: number, costFxRate: number) {
+  if (costCurrency === baseCurrency) return 1;
+  if (costFxRate > 0) return quoteFxRate / costFxRate;
+  return 1;
 }
 
 export default function PortfolioPage() {
@@ -264,6 +303,7 @@ export default function PortfolioPage() {
   const [addCost, setAddCost] = useState("");
   const [addCostCurrency, setAddCostCurrency] = useState<(typeof SUPPORTED_BASE_CURRENCIES)[number]>("USD");
   const [displayBaseCurrency, setDisplayBaseCurrency] = useState("USD");
+  const [displayTotalValue, setDisplayTotalValue] = useState(0);
   const [currencySearch, setCurrencySearch] = useState("");
   const [hideAmounts, setHideAmounts] = useState(false);
   const [mode, setMode] = useState<"classical" | "quantum">("classical");
@@ -293,11 +333,14 @@ export default function PortfolioPage() {
 
   const activePortfolio = portfolios.find((p) => p.id === activeId) ?? null;
   const portfolioBaseCurrency = normalizeCurrency(activePortfolio?.base_currency);
-  const activeBaseCurrency = displayBaseCurrency;
+  const activeBaseCurrency = portfolioBaseCurrency;
   const canLoadPortfolioData = !authLoading || Boolean(token);
 
   useEffect(() => {
     setDisplayBaseCurrency(portfolioBaseCurrency);
+    if (SUPPORTED_BASE_CURRENCIES.includes(portfolioBaseCurrency as (typeof SUPPORTED_BASE_CURRENCIES)[number])) {
+      setAddCostCurrency(portfolioBaseCurrency as (typeof SUPPORTED_BASE_CURRENCIES)[number]);
+    }
     setCurrencySearch("");
   }, [portfolioBaseCurrency]);
 
@@ -324,10 +367,6 @@ export default function PortfolioPage() {
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [showAccountMenu, showCurrencyMenu, showSortMenu]);
-
-  useEffect(() => {
-    setAddCostCurrency(activeBaseCurrency as (typeof SUPPORTED_BASE_CURRENCIES)[number]);
-  }, [activeBaseCurrency]);
 
   useEffect(() => {
     try {
@@ -393,7 +432,7 @@ export default function PortfolioPage() {
         const fxRate = await fetchCurrencyRate(quoteCurrency, normalizedBase);
         return { sym, price: quote.price, quoteCurrency, fxRate, change: quote.change ?? null, name: quote.name ?? null };
       })
-    ).then((results) => {
+    ).then(async (results) => {
       const quotes = new Map<
         string,
         { price: number; quoteCurrency: string; fxRate: number; change: number | null; name: string | null }
@@ -403,14 +442,28 @@ export default function PortfolioPage() {
       });
       if (quotes.size === 0) return;
 
+      const costRates = new Map<string, number>();
+      await Promise.allSettled(
+        list.map(async (holding) => {
+          const quote = quotes.get(holding.symbol);
+          if (!quote) return;
+          const costCurrency = normalizeCurrency(holding.cost_currency, normalizedBase);
+          const key = `${holding.symbol}:${costCurrency}`;
+          if (costRates.has(key)) return;
+          costRates.set(key, await fetchCurrencyRate(quote.quoteCurrency, costCurrency));
+        })
+      );
+
       setHoldings((prev) =>
         prev.map((h) => {
           const quote = quotes.get(h.symbol);
           if (!quote) return h;
           if (normalizeCurrency(h.baseCurrency, normalizedBase) !== normalizedBase) return h;
+          const costCurrency = normalizeCurrency(h.cost_currency, normalizedBase);
+          const costFxRate = costRates.get(`${h.symbol}:${costCurrency}`) ?? 1;
           return {
             ...h,
-            ...computeMetrics(h, quote.price, quote.quoteCurrency, normalizedBase, quote.fxRate, quote.change, quote.name),
+            ...computeMetrics(h, quote.price, quote.quoteCurrency, normalizedBase, quote.fxRate, costFxRate, quote.change, quote.name),
           };
         })
       );
@@ -502,8 +555,7 @@ export default function PortfolioPage() {
     setSaving(true);
     setError(null);
     try {
-      const costInBase = await convertAmount(cost, addCostCurrency, activeBaseCurrency);
-      const holding = await api.addHolding(activeId, addSymbol.toUpperCase(), qty, costInBase);
+      const holding = await api.addHolding(activeId, addSymbol.toUpperCase(), qty, cost, addCostCurrency);
       const row: HoldingRow = { ...holding, ...emptyMetrics(activeBaseCurrency) };
       setHoldings((prev) => [...prev, row]);
       setTickerInput("");
@@ -516,12 +568,13 @@ export default function PortfolioPage() {
         .then(async (quote) => {
           const quoteCurrency = normalizeCurrency(quote.currency, activeBaseCurrency);
           const fxRate = await fetchCurrencyRate(quoteCurrency, activeBaseCurrency);
+          const costFxRate = await fetchCurrencyRate(quoteCurrency, normalizeCurrency(holding.cost_currency, activeBaseCurrency));
           setHoldings((prev) =>
             prev.map((h) => {
               if (h.id !== holding.id) return h;
               return {
                 ...h,
-                ...computeMetrics(h, quote.price, quoteCurrency, activeBaseCurrency, fxRate, quote.change ?? null, quote.name ?? null),
+                ...computeMetrics(h, quote.price, quoteCurrency, activeBaseCurrency, fxRate, costFxRate, quote.change ?? null, quote.name ?? null),
               };
             })
           );
@@ -547,7 +600,8 @@ export default function PortfolioPage() {
 
   // ── Inline editing ────────────────────────────────────────
   const startEdit = (holdingId: string, field: "quantity" | "average_cost", current: number) => {
-    setEdit({ holdingId, field, draft: String(current), currency: activeBaseCurrency, saving: false });
+    const holding = holdings.find((row) => row.id === holdingId);
+    setEdit({ holdingId, field, draft: String(current), currency: normalizeCurrency(holding?.cost_currency, activeBaseCurrency), saving: false });
     // focus happens after render via useEffect below
   };
 
@@ -563,16 +617,20 @@ export default function PortfolioPage() {
     const h = holdings.find((r) => r.id === edit.holdingId);
     if (!h) { cancelEdit(); return; }
 
-    const savedValue = edit.field === "average_cost"
-      ? await convertAmount(val, edit.currency, activeBaseCurrency)
-      : val;
+    const nextCostCurrency = normalizeCurrency(edit.currency, activeBaseCurrency);
+    const nextCostFxRate = edit.field === "average_cost" && h.quoteCurrency
+      ? await fetchCurrencyRate(h.quoteCurrency, nextCostCurrency)
+      : h.costFxRate ?? 1;
 
     // Optimistically update UI immediately
-    const patch = { [edit.field]: savedValue } as { quantity?: number; average_cost?: number };
+    const patch = {
+      [edit.field]: val,
+      ...(edit.field === "average_cost" ? { cost_currency: nextCostCurrency } : {}),
+    } as { quantity?: number; average_cost?: number; cost_currency?: string };
     setHoldings((prev) =>
       prev.map((r) => {
         if (r.id !== edit.holdingId) return r;
-        const updated = { ...r, ...patch };
+        const updated = { ...r, ...patch, costFxRate: nextCostFxRate };
         return {
           ...updated,
           ...computeMetrics(
@@ -580,7 +638,8 @@ export default function PortfolioPage() {
             updated.currentPrice,
             updated.quoteCurrency,
             updated.baseCurrency ?? activeBaseCurrency,
-            updated.fxRate ?? 1
+            updated.fxRate ?? 1,
+            nextCostFxRate
           ),
         };
       })
@@ -627,7 +686,7 @@ export default function PortfolioPage() {
   };
 
   const totalValue = holdings.reduce((s, h) => s + (h.value ?? 0), 0);
-  const totalCost = holdings.reduce((s, h) => s + h.quantity * h.average_cost, 0);
+  const totalCost = holdings.reduce((s, h) => s + (h.costBasis ?? h.quantity * h.average_cost), 0);
   const totalPnl = totalValue > 0 ? totalValue - totalCost : null;
   const totalPnlPct = totalCost > 0 && totalPnl != null ? (totalPnl / totalCost) * 100 : null;
   const totalDailyReturn = holdings.reduce((s, h) => s + (h.dailyChange ?? 0), 0);
@@ -639,12 +698,33 @@ export default function PortfolioPage() {
   const displayedReturn = returnPeriod === "5D" ? totalDailyReturn : totalPnl ?? 0;
   const displayedReturnPct = returnPeriod === "5D" ? totalDailyReturnPct : totalPnlPct;
 
+  useEffect(() => {
+    let cancelled = false;
+
+    if (displayBaseCurrency === activeBaseCurrency) {
+      setDisplayTotalValue(totalValue);
+      return;
+    }
+
+    convertAmount(totalValue, activeBaseCurrency, displayBaseCurrency)
+      .then((converted) => {
+        if (!cancelled) setDisplayTotalValue(converted);
+      })
+      .catch(() => {
+        if (!cancelled) setDisplayTotalValue(totalValue);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBaseCurrency, displayBaseCurrency, totalValue]);
+
   const uniqueSymbols = [...new Set(holdings.map((h) => h.symbol))];
 
   const allocationData = useMemo(() => {
     const bySymbol: Record<string, number> = {};
     for (const h of holdings) {
-      bySymbol[h.symbol] = (bySymbol[h.symbol] ?? 0) + (h.value ?? h.quantity * h.average_cost);
+      bySymbol[h.symbol] = (bySymbol[h.symbol] ?? 0) + (h.value ?? h.costBasis ?? h.quantity * h.average_cost);
     }
     return Object.entries(bySymbol).map(([symbol, value], i) => ({
       symbol,
@@ -698,8 +778,9 @@ export default function PortfolioPage() {
   const quickCurrencies = useMemo(() => {
     const currencies = new Set<string>(SUPPORTED_BASE_CURRENCIES);
     currencies.add(activeBaseCurrency);
+    currencies.add(displayBaseCurrency);
     return Array.from(currencies);
-  }, [activeBaseCurrency]);
+  }, [activeBaseCurrency, displayBaseCurrency]);
 
   const optimizerPieData = result?.weights
     ? Object.entries(result.weights)
@@ -793,6 +874,10 @@ export default function PortfolioPage() {
             {error}
           </div>
         )}
+
+        <div>
+          <h1 className="text-3xl font-bold tracking-[-0.03em] text-white">Portfolio</h1>
+        </div>
 
         <section className="space-y-4">
             <div className="flex items-center justify-between border-b border-white/12 pb-3">
@@ -906,7 +991,7 @@ export default function PortfolioPage() {
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-center">
                       <div>
                         <p className="text-2xl font-medium tracking-[-0.03em] text-white">
-                          {formatPrivateMoney(totalValue, activeBaseCurrency, hideAmounts)}
+                          {formatPrivateMoney(displayTotalValue, displayBaseCurrency, hideAmounts)}
                         </p>
                         <p className="mt-1 text-sm text-white/70">Portfolio Value</p>
                       </div>
@@ -938,7 +1023,7 @@ export default function PortfolioPage() {
                   <div ref={currencyMenuRef} className="relative h-full">
                     <ActionButton
                       icon={<WalletCards className="size-5" />}
-                      label={`Currency: ${activeBaseCurrency}`}
+                      label={`Currency: ${displayBaseCurrency}`}
                       tone="amber"
                       onClick={() => {
                         setShowCurrencyMenu((value) => {
@@ -965,7 +1050,7 @@ export default function PortfolioPage() {
                             }}
                             className={cn(
                               "w-full rounded-xl px-3 py-2 text-left text-sm transition-colors",
-                              activeBaseCurrency === currency ? "bg-white/10 text-white" : "text-white/58 hover:bg-white/[0.06] hover:text-white"
+                              displayBaseCurrency === currency ? "bg-white/10 text-white" : "text-white/58 hover:bg-white/[0.06] hover:text-white"
                             )}
                           >
                             {currency}
@@ -1017,12 +1102,12 @@ export default function PortfolioPage() {
                                       }}
                                       className={cn(
                                         "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors",
-                                        activeBaseCurrency === currency.code ? "bg-white/10 text-white" : "text-white/58 hover:bg-white/[0.06] hover:text-white"
+                                        displayBaseCurrency === currency.code ? "bg-white/10 text-white" : "text-white/58 hover:bg-white/[0.06] hover:text-white"
                                       )}
                                     >
                                       <span className="font-semibold">{currency.code}</span>
                                       <span className="min-w-0 flex-1 truncate text-right text-xs text-white/38">{currency.name}</span>
-                                      {activeBaseCurrency === currency.code ? (
+                                      {displayBaseCurrency === currency.code ? (
                                         <Check className="size-4 shrink-0 text-green-positive" />
                                       ) : (
                                         <span className="size-4 shrink-0" />
@@ -1118,7 +1203,7 @@ export default function PortfolioPage() {
               </section>
             )}
 
-            <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(280px,0.62fr)_minmax(0,1fr)]">
+            <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(280px,420px)_minmax(0,1fr)]">
               <section className="min-w-0 space-y-5">
                 <div className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
                   <div className="flex items-center justify-between gap-4">
@@ -1283,6 +1368,11 @@ export default function PortfolioPage() {
                           {sortedHoldings.map((holding) => {
                             const rowWeight = totalValue > 0 && holding.value != null ? (holding.value / totalValue) * 100 : 0;
                             const holdingName = holding.name || holding.asset_type || "Holding";
+                            const holdingCurrency = normalizeCurrency(holding.cost_currency, activeBaseCurrency);
+                            const rowValue = holding.holdingValue ?? holding.quantity * holding.average_cost;
+                            const rowDailyChange = holding.holdingDailyChange;
+                            const rowPnl = holding.holdingPnl;
+                            const rowPnlPct = holding.holdingPnlPct;
 
                             return (
                               <tr key={holding.id} className="group transition-colors hover:bg-white/[0.025]">
@@ -1303,33 +1393,33 @@ export default function PortfolioPage() {
                                 <td className="px-3 py-3 text-right font-semibold tabular-nums text-white">{rowWeight.toFixed(2)}%</td>
                                 <td className="px-3 py-3 text-right tabular-nums">
                                   <p className="font-semibold text-white">
-                                    {formatPrivateMoney(holding.value ?? holding.quantity * holding.average_cost, activeBaseCurrency, hideAmounts)} {activeBaseCurrency}
+                                    {formatPrivateMoney(rowValue, holdingCurrency, hideAmounts)} {holdingCurrency}
                                   </p>
                                 </td>
                                 <td className="px-3 py-3 text-center tabular-nums">
                                   <EditableCell holdingId={holding.id} field="quantity" value={holding.quantity} format={(value) => `${value} shares`} />
                                 </td>
-                                <td className={cn("px-3 py-3 text-right tabular-nums font-semibold", (holding.dailyChange ?? 0) >= 0 ? "text-green-positive" : "text-red-negative")}>
-                                  {holding.dailyChange == null ? (
+                                <td className={cn("px-3 py-3 text-right tabular-nums font-semibold", (rowDailyChange ?? 0) >= 0 ? "text-green-positive" : "text-red-negative")}>
+                                  {rowDailyChange == null ? (
                                     <span className="text-white/25">Updating...</span>
                                   ) : (
                                     <>
-                                      {holding.dailyChange >= 0 ? "+" : "-"}
-                                      {formatPrivateMoney(Math.abs(holding.dailyChange), activeBaseCurrency, hideAmounts)}
+                                      {rowDailyChange >= 0 ? "+" : "-"}
+                                      {formatPrivateMoney(Math.abs(rowDailyChange), holdingCurrency, hideAmounts)}
                                       <p className="text-xs opacity-80">
                                         {holding.dailyChangePct == null ? "" : `${holding.dailyChangePct >= 0 ? "+" : ""}${holding.dailyChangePct.toFixed(2)}%`}
                                       </p>
                                     </>
                                   )}
                                 </td>
-                                <td className={cn("px-3 py-3 text-right tabular-nums font-semibold", holding.pnl == null ? "text-white/25" : holding.pnl >= 0 ? "text-green-positive" : "text-red-negative")}>
-                                  {holding.pnl == null ? (
+                                <td className={cn("px-3 py-3 text-right tabular-nums font-semibold", rowPnl == null ? "text-white/25" : rowPnl >= 0 ? "text-green-positive" : "text-red-negative")}>
+                                  {rowPnl == null ? (
                                     "—"
                                   ) : (
                                     <>
-                                      {holding.pnl >= 0 ? "+" : "-"}
-                                      {formatPrivateMoney(Math.abs(holding.pnl), activeBaseCurrency, hideAmounts)}
-                                      <p className="text-xs opacity-80">{holding.pnlPct! >= 0 ? "+" : ""}{holding.pnlPct!.toFixed(2)}%</p>
+                                      {rowPnl >= 0 ? "+" : "-"}
+                                      {formatPrivateMoney(Math.abs(rowPnl), holdingCurrency, hideAmounts)}
+                                      <p className="text-xs opacity-80">{rowPnlPct! >= 0 ? "+" : ""}{rowPnlPct!.toFixed(2)}%</p>
                                     </>
                                   )}
                                 </td>

@@ -11,6 +11,7 @@ const ACCOUNT_STATE_KEYS = [
 
 function shouldClearAccountStateKey(key: string) {
   return ACCOUNT_STATE_KEYS.includes(key)
+    || key.startsWith("financial-advisor.news-categories.")
     || key.startsWith("financial-advisor.wikipedia-profile.");
 }
 

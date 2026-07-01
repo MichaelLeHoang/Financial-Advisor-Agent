@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -52,11 +52,23 @@ class HoldingCreate(BaseModel):
     asset_type: str = Field(default="equity", min_length=1, max_length=40)
     quantity: float = Field(ge=0)
     average_cost: float = Field(ge=0)
+    cost_currency: str | None = Field(default=None, min_length=3, max_length=3)
+
+    @field_validator("cost_currency", mode="before")
+    @classmethod
+    def normalize_cost_currency(cls, value: Any) -> str | None:
+        return str(value).strip().upper() if value else value
 
 
 class HoldingUpdate(BaseModel):
     quantity: float | None = Field(default=None, ge=0)
     average_cost: float | None = Field(default=None, ge=0)
+    cost_currency: str | None = Field(default=None, min_length=3, max_length=3)
+
+    @field_validator("cost_currency", mode="before")
+    @classmethod
+    def normalize_cost_currency(cls, value: Any) -> str | None:
+        return str(value).strip().upper() if value else value
 
 
 class HoldingRead(BaseModel):
@@ -66,7 +78,13 @@ class HoldingRead(BaseModel):
     asset_type: str = "equity"
     quantity: float
     average_cost: float
+    cost_currency: str = "USD"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_validator("cost_currency", mode="before")
+    @classmethod
+    def normalize_cost_currency(cls, value: Any) -> str:
+        return str(value or "USD").strip().upper()
 
 
 class WatchlistCreate(BaseModel):
