@@ -8,6 +8,7 @@ export interface ChatResponse {
   response: string;
   session_id: string;
   mode?: "single" | "consensus" | "auto";
+  consensus?: ConsensusMetadata;
 }
 
 export type ChatJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
@@ -190,6 +191,12 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   created_at?: string;
+  metadata?: {
+    consensus?: ConsensusMetadata;
+    researchReports?: EquityResearchReport[];
+  } | null;
+  consensusOpinions?: ConsensusOpinion[];
+  researchReports?: EquityResearchReport[];
 }
 
 export interface ChatSession {
@@ -1092,8 +1099,8 @@ export const api = {
   chatSessionMessages: (sessionId = "default") =>
     get<ChatSessionMessages>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`),
 
-  appendChatSessionMessage: (sessionId: string, role: "user" | "assistant", content: string) =>
-    post<{ status: string; session_id: string }>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`, { role, content }),
+  appendChatSessionMessage: (sessionId: string, role: "user" | "assistant", content: string, metadata?: ChatMessage["metadata"]) =>
+    post<{ status: string; session_id: string }>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`, { role, content, metadata }),
 
   renameChatSession: (sessionId: string, title: string) =>
     patch<ChatSession>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}`, { title }),

@@ -7,7 +7,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Brain, Check, ChevronDown, ClipboardList, FileText, Image, Loader2, Paperclip, PieChart, Send, SlidersHorizontal, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
-import type { ChatJobProgress, ChatJobStatusResponse, EquityResearchEvent, EquityResearchRunDetail, ResearchDepth } from "@/lib/api";
+import type { ChatJobProgress, ChatJobStatusResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, ResearchDepth } from "@/lib/api";
 import { notifyCompletion, requestCompletionNotification } from "@/lib/completion-notifications";
 import { loadLocalChatMessages, saveLocalChatMessages } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,8 @@ interface Message {
   status?: "fetching" | "done";
   researchTicker?: string;
   researchRunId?: string;
+  researchReports?: EquityResearchReport[];
+  consensusOpinions?: ConsensusOpinion[];
 }
 
 const GREETING: Message = {
@@ -35,6 +37,23 @@ const GREETING: Message = {
   role: "assistant",
   content: "Hello. I can help with market research, portfolio analysis, and financial news.",
 };
+
+function messageFromChatHistory(message: {
+  id: number | string;
+  role: "user" | "assistant";
+  content: string;
+  metadata?: { consensus?: { opinions?: ConsensusOpinion[] }; researchReports?: EquityResearchReport[] } | null;
+  consensusOpinions?: ConsensusOpinion[];
+  researchReports?: EquityResearchReport[];
+}): Message {
+  return {
+    id: String(message.id),
+    role: message.role,
+    content: message.content,
+    consensusOpinions: message.consensusOpinions ?? message.metadata?.consensus?.opinions,
+    researchReports: message.researchReports ?? message.metadata?.researchReports,
+  };
+}
 
 const SUGGESTIONS = [
   {
@@ -473,11 +492,7 @@ export default function ChatPage() {
         }
 
         if (user.is_guest) {
-          const localMessages = loadLocalChatMessages(activeSessionId).map((message) => ({
-            id: String(message.id),
-            role: message.role,
-            content: message.content,
-          }));
+          const localMessages = loadLocalChatMessages(activeSessionId).map(messageFromChatHistory);
           if (!cancelled) setMessages(localMessages.length > 0 ? localMessages : [GREETING]);
           return;
         }
@@ -485,11 +500,7 @@ export default function ChatPage() {
         const res = await api.chatSessionMessages(activeSessionId);
         if (cancelled) return;
 
-        const loadedMessages = res.messages.map((message) => ({
-          id: String(message.id),
-          role: message.role,
-          content: message.content,
-        }));
+        const loadedMessages = res.messages.map(messageFromChatHistory);
         setMessages(loadedMessages.length > 0 ? loadedMessages : [GREETING]);
       } catch (err: any) {
         if (cancelled) return;
@@ -709,7 +720,7 @@ export default function ChatPage() {
 
         if (!user.is_guest) {
           await api.appendChatSessionMessage(targetSessionId, "user", text);
-          await api.appendChatSessionMessage(targetSessionId, "assistant", finalMarkdown);
+          await api.appendChatSessionMessage(targetSessionId, "assistant", finalMarkdown, { researchReports: latestDetail.reports });
         }
         setMessages((prev) =>
           prev.filter((m) => m.status !== "fetching").concat({
@@ -718,6 +729,7 @@ export default function ChatPage() {
             content: finalMarkdown,
             researchTicker: latestDetail.run.ticker,
             researchRunId: latestDetail.run.run_id,
+            researchReports: latestDetail.reports,
           })
         );
         finishLongRunningToast(
@@ -823,6 +835,7 @@ export default function ChatPage() {
         );
         res = await api.chat(text, targetSessionId, remember, mode);
       }
+      const consensusOpinions = res.consensus?.opinions;
 
       const minimumPlanDuration = mode === "consensus" ? 3200 : 1800;
       const elapsedBeforeAnswer = Date.now() - loadingStartedAt;
@@ -836,6 +849,7 @@ export default function ChatPage() {
           id: assistantMsgId,
           role: "assistant",
           content: res.response || "I'm sorry, I couldn't process that request.",
+          consensusOpinions,
         }).concat(investmentTicker ? [{
           id: getUniqueId(),
           role: "assistant",
@@ -1150,7 +1164,7 @@ export default function ChatPage() {
                   {msg.role === "assistant" ? (
                     msg.researchTicker ? (
                       <div className="space-y-3">
-                        <Markdown content={msg.content} />
+                        <ResearchMessageTabs content={msg.content} reports={msg.researchReports} />
                         <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
                           <p className="text-sm font-semibold text-white">
                             {msg.researchRunId ? "Quanfora 2.1 Agent Reports" : "Generate a full Quanfora 2.1 Research Report?"}
@@ -1180,7 +1194,7 @@ export default function ChatPage() {
                         </div>
                       </div>
                     ) : (
-                      <AssistantMessageContent content={msg.content} />
+                      <AssistantMessageContent content={msg.content} consensusOpinions={msg.consensusOpinions} />
                     )
                   ) : (
                     msg.content
@@ -1302,8 +1316,79 @@ function ResearchModeSelector({
   );
 }
 
-function AssistantMessageContent({ content }: { content: string }) {
+function ResearchMessageTabs({ content, reports }: { content: string; reports?: EquityResearchReport[] }) {
+  const [active, setActive] = useState("final");
+  const reportTabs = (reports ?? []).filter((report) => report.markdown && report.markdown.trim());
+  if (reportTabs.length === 0) return <Markdown content={content} />;
+  const currentReport = reportTabs.find((report) => report.report_id === active);
+
+  return (
+    <div className="space-y-3">
+      <ResponseTabs
+        tabs={[{ id: "final", label: "Report" }, ...reportTabs.map((report) => ({ id: report.report_id, label: report.agent_name }))]}
+        active={active}
+        onChange={setActive}
+      />
+      {currentReport ? <Markdown content={currentReport.markdown} /> : <Markdown content={content} />}
+    </div>
+  );
+}
+
+function ConsensusMessageTabs({ content, opinions }: { content: string; opinions: ConsensusOpinion[] }) {
+  const [active, setActive] = useState("combined");
+  const currentOpinion = opinions.find((opinion) => opinion.agent === active);
+
+  return (
+    <div className="space-y-3">
+      <ResponseTabs
+        tabs={[{ id: "combined", label: "Combined" }, ...opinions.map((opinion) => ({ id: opinion.agent, label: opinion.agent.replaceAll("_", " ") }))]}
+        active={active}
+        onChange={setActive}
+      />
+      {currentOpinion ? (
+        <div className="space-y-3">
+          <div className="grid gap-2 rounded-xl border border-white/[0.10] bg-white/[0.04] p-3 text-sm sm:grid-cols-2">
+            <div><span className="text-white/45">Verdict</span><div className="font-semibold capitalize text-white/90">{currentOpinion.verdict}</div></div>
+            <div><span className="text-white/45">Confidence</span><div className="font-semibold text-white/90">{Math.round(currentOpinion.confidence * 100)}%</div></div>
+          </div>
+          <Markdown content={currentOpinion.reasoning} />
+          {(currentOpinion.risk_flags ?? []).length > 0 && (
+            <div className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-xs text-amber-100">
+              <span className="font-semibold">Risk flags:</span> {(currentOpinion.risk_flags ?? []).join(", ")}
+            </div>
+          )}
+        </div>
+      ) : <Markdown content={content} />}
+    </div>
+  );
+}
+
+function ResponseTabs({ tabs, active, onChange }: { tabs: Array<{ id: string; label: string }>; active: string; onChange: (id: string) => void }) {
+  return (
+    <div className="flex gap-2 overflow-x-auto rounded-xl border border-white/[0.08] bg-black/15 p-1">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => onChange(tab.id)}
+          className={cn(
+            "shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition-colors",
+            active === tab.id ? "bg-white/12 text-white" : "text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AssistantMessageContent({ content, consensusOpinions }: { content: string; consensusOpinions?: ConsensusOpinion[] }) {
   const prediction = parsePredictionSummary(content);
+
+  if (consensusOpinions?.length) {
+    return <ConsensusMessageTabs content={content} opinions={consensusOpinions} />;
+  }
 
   if (!prediction) {
     return <Markdown content={content} />;

@@ -140,6 +140,7 @@ class AgentSessionCreateRequest(BaseModel):
 class AgentSessionMessageAppendRequest(BaseModel):
     role: str = Field(pattern="^(user|assistant)$")
     content: str = Field(min_length=1)
+    metadata: dict | None = None
 
 class AgentJobCreateResponse(BaseModel):
     job_id: str
@@ -935,10 +936,14 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
         response = agent.chat(req.message, remember=False, mode=req.mode)  # we handle persistence
 
         # Persist both turns
+        metadata = getattr(agent, "last_response_metadata", None)
         if req.remember and not user.is_guest:
             append_message(req.session_id, "user", req.message, str(user.id))
-            append_message(req.session_id, "assistant", response, str(user.id))
-        return {"response": response, "session_id": req.session_id, "mode": req.mode}
+            append_message(req.session_id, "assistant", response, str(user.id), metadata=metadata)
+        result = {"response": response, "session_id": req.session_id, "mode": req.mode}
+        if metadata:
+            result.update(metadata)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1132,7 +1137,7 @@ async def append_agent_session_message(
     from src.agent.history import append_message
 
     _ensure_chat_session_available(session_id, user)
-    append_message(session_id, req.role, req.content, str(user.id))
+    append_message(session_id, req.role, req.content, str(user.id), metadata=req.metadata)
     return {"status": "ok", "session_id": session_id}
 
 

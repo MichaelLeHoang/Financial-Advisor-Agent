@@ -7,14 +7,14 @@ Implements the QuanAd conversational advisor, deterministic market grounding, to
 - Route simple, consensus, and equity-research requests.
 - Ground market-status and quote questions through market search and quote data.
 - Run specialist consensus and synthesize responses.
-- Persist signed-in conversation history and execute queued LLM jobs.
+- Persist signed-in conversation history, including structured response metadata, and execute queued LLM jobs.
 
 ## Key Files
 - `agent.py`: primary chat router and ReAct agent.
 - `tools.py`: financial tools exposed to agents.
 - `market_grounding.py`: intent detection, entity resolution, quote formatting, and freshness metadata.
 - `orchestrator.py` / `consensus.py`: QuanAd 2.0 specialist aggregation.
-- `llm_queue.py` / `llm_worker.py`: asynchronous job lifecycle.
+- `llm_queue.py` / `llm_worker.py`: asynchronous job lifecycle and queued response metadata.
 
 ## Boundaries
 Reuse `data.market_data_service`, `llm.gateway`, `risk`, `quant`, and `saas` rather than duplicating provider or entitlement logic. Shared response shapes belong in `models/`.
@@ -23,4 +23,4 @@ Reuse `data.market_data_service`, `llm.gateway`, `risk`, `quant`, and `saas` rat
 Cover routing, grounding, consensus, queue state, history ownership, and tool failure behavior with mocked providers.
 
 ## Latest Change
-- Expanded ensemble prediction tool output and regression coverage for available and unavailable valuation summaries, combined signals, and validation performance labels.
+- Persisted structured assistant response metadata so queued QuanAd 2.0 consensus opinions and Quanfora 2.1 research report tabs survive chat reloads.

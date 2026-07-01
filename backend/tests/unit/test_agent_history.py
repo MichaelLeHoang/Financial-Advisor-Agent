@@ -84,3 +84,30 @@ def test_rename_and_delete_require_existing_owned_session(tmp_path, monkeypatch)
     assert history.clear_history("owned-session", "other") is False
     assert history.load_history("owned-session", "owner")[0]["content"] == "Owner chat"
     assert history.clear_history("owned-session", "owner") is True
+
+
+def test_chat_history_persists_structured_message_metadata(tmp_path, monkeypatch):
+    monkeypatch.setattr(history, "DB_PATH", tmp_path / "conversations.db")
+
+    metadata = {
+        "consensus": {
+            "opinions": [
+                {
+                    "agent": "risk_analyst",
+                    "verdict": "hold",
+                    "confidence": 0.72,
+                    "reasoning": "Risk is elevated but manageable.",
+                    "data_points": {},
+                    "risk_flags": None,
+                }
+            ]
+        }
+    }
+
+    history.append_message("metadata-session", "user", "Analyze NVDA", "user-1")
+    history.append_message("metadata-session", "assistant", "Combined answer", "user-1", metadata=metadata)
+
+    messages = history.load_history("metadata-session", "user-1")
+
+    assert messages[0].get("metadata") is None
+    assert messages[1]["metadata"] == metadata

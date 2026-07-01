@@ -23,6 +23,30 @@ from src.llm.gateway import LLMGateway, RoutedChatModel, llm_gateway
 from src.llm.routing_policy import LLMMode
 from src.saas.models import Plan
 
+def _consensus_result_metadata(result: Any) -> dict:
+    return {
+        "consensus": {
+            "verdict": result.verdict.value,
+            "confidence": result.confidence,
+            "consensus_score": result.consensus_score,
+            "agreement_ratio": result.agreement_ratio,
+            "risk_vetoed": result.risk_vetoed,
+            "risk_flags": result.risk_flags or [],
+            "dissenting_agents": result.dissenting_agents or [],
+            "opinions": [
+                {
+                    "agent": opinion.agent_name,
+                    "verdict": opinion.verdict.value,
+                    "confidence": opinion.confidence,
+                    "reasoning": opinion.reasoning,
+                    "data_points": opinion.data_points or {},
+                    "risk_flags": opinion.risk_flags or [],
+                }
+                for opinion in result.opinions
+            ],
+        }
+    }
+
 SYSTEM_PROMPT = """You are a professional Financial Advisor AI Agent with access to real-time tools.
 
 YOUR CAPABILITIES:
@@ -113,6 +137,7 @@ class FinancialAdvisorAgent:
         self.preferred_mode = preferred_mode
         self.gateway = gateway
         self._routed_model = self._create_llm(provider)
+        self.last_response_metadata: dict | None = None
         self._llm = self._routed_model.chat_model
         self._agent = create_react_agent(
             self._llm,
@@ -169,6 +194,8 @@ class FinancialAdvisorAgent:
             mode: "single" (default ReAct agent), "consensus" (QuanAd 2.0),
                   or "auto" (auto-detect based on query complexity).
         """
+        self.last_response_metadata = None
+
         if is_market_quote_query(message) and not _is_deep_market_analysis_query(message):
             grounded = ground_market_query(message, progress_callback=progress_callback)
             if grounded.handled and grounded.response:
@@ -303,7 +330,24 @@ class FinancialAdvisorAgent:
     ) -> str:
         """QuanAd 2.0 multi-agent consensus path."""
         orchestrator = self._get_orchestrator()
-        response_text = orchestrator.chat(message, remember=remember, progress_callback=progress_callback)
+        result = orchestrator.analyze(message)
+        self.last_response_metadata = _consensus_result_metadata(result)
+        completed_tools = [opinion.agent_name for opinion in result.opinions]
+        if progress_callback:
+            progress_callback({
+                "active_tool": "consensus_synthesis",
+                "completed_tools": completed_tools,
+                "active_label": "Consensus Synthesis",
+                "message": "Synthesizing consensus response...",
+            })
+        response_text = orchestrator._synthesize_response(message, result)
+        if progress_callback:
+            progress_callback({
+                "active_tool": None,
+                "completed_tools": [*completed_tools, "consensus_synthesis"],
+                "active_label": "Consensus Complete",
+                "message": "Consensus response completed.",
+            })
 
         if remember:
             self._history.append({"role": "user", "content": message})
