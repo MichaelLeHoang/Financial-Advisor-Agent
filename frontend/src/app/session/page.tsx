@@ -7,7 +7,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Brain, Check, ChevronDown, ClipboardList, FileText, Image, Loader2, Paperclip, PieChart, Send, SlidersHorizontal, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
-import type { ChatJobProgress, ChatJobStatusResponse, EquityResearchEvent, EquityResearchRunDetail, ResearchDepth } from "@/lib/api";
+import type { ChatJobProgress, ChatJobStatusResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, ResearchDepth } from "@/lib/api";
 import { notifyCompletion, requestCompletionNotification } from "@/lib/completion-notifications";
 import { loadLocalChatMessages, saveLocalChatMessages } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,8 @@ interface Message {
   status?: "fetching" | "done";
   researchTicker?: string;
   researchRunId?: string;
+  researchReports?: EquityResearchReport[];
+  consensusOpinions?: ConsensusOpinion[];
 }
 
 const GREETING: Message = {
@@ -718,6 +720,7 @@ export default function ChatPage() {
             content: finalMarkdown,
             researchTicker: latestDetail.run.ticker,
             researchRunId: latestDetail.run.run_id,
+            researchReports: latestDetail.reports,
           })
         );
         finishLongRunningToast(
@@ -782,46 +785,59 @@ export default function ChatPage() {
     try {
       const remember = !user.is_guest;
       let res;
-      try {
-        const queued = await api.chatJob(text, targetSessionId, remember, mode);
-
-        res = await api.waitForChatJob(queued.job_id, (job) => {
-          const appliedProgress = enqueueJobProgress(job, fetchingLabel);
-          if (job.status === "queued") {
-            setAgentRunState((current) => current === "running" ? "running" : "queued");
-            const positionText = job.queue_position ? ` Position ${job.queue_position}.` : "";
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.status === "fetching"
-                  ? { ...m, content: `Queued for analysis.${positionText}` }
-                  : m
-              )
-            );
-          } else if (job.status === "running" && !appliedProgress) {
-            setAgentRunState("running");
-            setAgentRunStartedAt((current) => current ?? Date.now());
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.status === "fetching"
-                  ? { ...m, content: fetchingLabel }
-                  : m
-              )
-            );
-          }
-        });
-      } catch (queueError) {
-        if (!isRedisUnavailableError(queueError)) throw queueError;
+      let consensusOpinions: ConsensusOpinion[] | undefined;
+      if (mode === "consensus") {
         setAgentRunState("running");
         setAgentRunStartedAt(Date.now());
         setUseAgentSyntheticProgress(true);
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.status === "fetching"
-              ? { ...m, content: fetchingLabel }
-              : m
-          )
-        );
-        res = await api.chat(text, targetSessionId, remember, mode);
+        res = await api.consensus(text, targetSessionId, false);
+        consensusOpinions = res.consensus.opinions;
+        if (!user.is_guest) {
+          await api.appendChatSessionMessage(targetSessionId, "user", text);
+          await api.appendChatSessionMessage(targetSessionId, "assistant", res.response || "");
+        }
+      } else {
+        try {
+          const queued = await api.chatJob(text, targetSessionId, remember, mode);
+
+          res = await api.waitForChatJob(queued.job_id, (job) => {
+            const appliedProgress = enqueueJobProgress(job, fetchingLabel);
+            if (job.status === "queued") {
+              setAgentRunState((current) => current === "running" ? "running" : "queued");
+              const positionText = job.queue_position ? ` Position ${job.queue_position}.` : "";
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.status === "fetching"
+                    ? { ...m, content: `Queued for analysis.${positionText}` }
+                    : m
+                )
+              );
+            } else if (job.status === "running" && !appliedProgress) {
+              setAgentRunState("running");
+              setAgentRunStartedAt((current) => current ?? Date.now());
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.status === "fetching"
+                    ? { ...m, content: fetchingLabel }
+                    : m
+                )
+              );
+            }
+          });
+        } catch (queueError) {
+          if (!isRedisUnavailableError(queueError)) throw queueError;
+          setAgentRunState("running");
+          setAgentRunStartedAt(Date.now());
+          setUseAgentSyntheticProgress(true);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.status === "fetching"
+                ? { ...m, content: fetchingLabel }
+                : m
+            )
+          );
+          res = await api.chat(text, targetSessionId, remember, mode);
+        }
       }
 
       const minimumPlanDuration = mode === "consensus" ? 3200 : 1800;
@@ -836,6 +852,7 @@ export default function ChatPage() {
           id: assistantMsgId,
           role: "assistant",
           content: res.response || "I'm sorry, I couldn't process that request.",
+          consensusOpinions,
         }).concat(investmentTicker ? [{
           id: getUniqueId(),
           role: "assistant",
@@ -1150,7 +1167,7 @@ export default function ChatPage() {
                   {msg.role === "assistant" ? (
                     msg.researchTicker ? (
                       <div className="space-y-3">
-                        <Markdown content={msg.content} />
+                        <ResearchMessageTabs content={msg.content} reports={msg.researchReports} />
                         <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
                           <p className="text-sm font-semibold text-white">
                             {msg.researchRunId ? "Quanfora 2.1 Agent Reports" : "Generate a full Quanfora 2.1 Research Report?"}
@@ -1180,7 +1197,7 @@ export default function ChatPage() {
                         </div>
                       </div>
                     ) : (
-                      <AssistantMessageContent content={msg.content} />
+                      <AssistantMessageContent content={msg.content} consensusOpinions={msg.consensusOpinions} />
                     )
                   ) : (
                     msg.content
@@ -1302,8 +1319,79 @@ function ResearchModeSelector({
   );
 }
 
-function AssistantMessageContent({ content }: { content: string }) {
+function ResearchMessageTabs({ content, reports }: { content: string; reports?: EquityResearchReport[] }) {
+  const [active, setActive] = useState("final");
+  const reportTabs = (reports ?? []).filter((report) => report.markdown && report.markdown.trim());
+  if (reportTabs.length === 0) return <Markdown content={content} />;
+  const currentReport = reportTabs.find((report) => report.report_id === active);
+
+  return (
+    <div className="space-y-3">
+      <ResponseTabs
+        tabs={[{ id: "final", label: "Final" }, ...reportTabs.map((report) => ({ id: report.report_id, label: report.agent_name }))]}
+        active={active}
+        onChange={setActive}
+      />
+      {currentReport ? <Markdown content={currentReport.markdown} /> : <Markdown content={content} />}
+    </div>
+  );
+}
+
+function ConsensusMessageTabs({ content, opinions }: { content: string; opinions: ConsensusOpinion[] }) {
+  const [active, setActive] = useState("combined");
+  const currentOpinion = opinions.find((opinion) => opinion.agent === active);
+
+  return (
+    <div className="space-y-3">
+      <ResponseTabs
+        tabs={[{ id: "combined", label: "Combined" }, ...opinions.map((opinion) => ({ id: opinion.agent, label: opinion.agent.replaceAll("_", " ") }))]}
+        active={active}
+        onChange={setActive}
+      />
+      {currentOpinion ? (
+        <div className="space-y-3">
+          <div className="grid gap-2 rounded-xl border border-white/[0.10] bg-white/[0.04] p-3 text-sm sm:grid-cols-2">
+            <div><span className="text-white/45">Verdict</span><div className="font-semibold capitalize text-white/90">{currentOpinion.verdict}</div></div>
+            <div><span className="text-white/45">Confidence</span><div className="font-semibold text-white/90">{Math.round(currentOpinion.confidence * 100)}%</div></div>
+          </div>
+          <Markdown content={currentOpinion.reasoning} />
+          {currentOpinion.risk_flags.length > 0 && (
+            <div className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-xs text-amber-100">
+              <span className="font-semibold">Risk flags:</span> {currentOpinion.risk_flags.join(", ")}
+            </div>
+          )}
+        </div>
+      ) : <Markdown content={content} />}
+    </div>
+  );
+}
+
+function ResponseTabs({ tabs, active, onChange }: { tabs: Array<{ id: string; label: string }>; active: string; onChange: (id: string) => void }) {
+  return (
+    <div className="flex gap-2 overflow-x-auto rounded-xl border border-white/[0.08] bg-black/15 p-1">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => onChange(tab.id)}
+          className={cn(
+            "shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition-colors",
+            active === tab.id ? "bg-white/12 text-white" : "text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AssistantMessageContent({ content, consensusOpinions }: { content: string; consensusOpinions?: ConsensusOpinion[] }) {
   const prediction = parsePredictionSummary(content);
+
+  if (consensusOpinions?.length) {
+    return <ConsensusMessageTabs content={content} opinions={consensusOpinions} />;
+  }
 
   if (!prediction) {
     return <Markdown content={content} />;
