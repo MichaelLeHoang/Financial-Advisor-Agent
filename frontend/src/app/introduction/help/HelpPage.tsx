@@ -88,7 +88,7 @@ const FAQS: FaqProItem[] = [
     id: "locked-features",
     question: "Why are some features like Quantum Optimization locked?",
     answer:
-      "Advanced modules like Multi-Agent Consensus and Quantum Portfolio Optimization require significant specialized compute resources and are reserved for premium plans. Free-tier users retain access to the baseline Quanfora 1.0 model for essential market research and sentiment analysis.",
+      "Advanced modules like Multi-Agent Consensus and Quantum Portfolio Optimization require significant specialized compute resources and are reserved for premium plans. Free-tier users retain access to the baseline Quanfora 1.0 mode for essential market research and sentiment analysis.",
   },
   {
     id: "recover-deleted-conversations",

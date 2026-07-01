@@ -11,28 +11,20 @@ import { cn } from "@/lib/utils";
 
 const QUOTES = [
   {
-    text: "Risk comes from not knowing what you're doing.",
+    text: "An investment operation is one which, upon thorough analysis, promises safety of principal and an adequate return. Operations not meeting these requirements are speculative.",
+    source: "Benjamin Graham and David Dodd",
+  },
+  {
+    text: "Know your circle of competence, and stick within it. The size of that circle is not very important; knowing its boundaries, however, is vital.",
     source: "Warren Buffett",
+  },
+  {
+    text: "Most investors are primarily oriented toward return, how much they can make, and pay little attention to risk, how much they can lose.",
+    source: "Seth Klarman",
   },
   {
     text: "The four most dangerous words in investing are: this time it's different.",
     source: "Sir John Templeton",
-  },
-  {
-    text: "Know what you own, and know why you own it.",
-    source: "Peter Lynch",
-  },
-  {
-    text: "The individual investor should act consistently as an investor and not as a speculator.",
-    source: "Benjamin Graham",
-  },
-  {
-    text: "Investing should be more like watching paint dry or watching grass grow.",
-    source: "Paul Samuelson",
-  },
-  {
-    text: "The stock market is filled with individuals who know the price of everything, but the value of nothing.",
-    source: "Philip Fisher",
   },
 ];
 
@@ -92,7 +84,7 @@ export default function LoginPage() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       setQuoteIndex((index) => (index + 1) % QUOTES.length);
-    }, 5200);
+    }, 7200);
 
     return () => window.clearInterval(timer);
   }, []);
@@ -138,6 +130,10 @@ export default function LoginPage() {
   };
 
   const activeQuote = QUOTES[quoteIndex];
+  const activeQuoteWords = activeQuote.text.split(" ");
+  const highlightedQuoteWords = Math.ceil(activeQuoteWords.length / 2);
+  const highlightedQuoteText = activeQuoteWords.slice(0, highlightedQuoteWords).join(" ");
+  const mutedQuoteText = activeQuoteWords.slice(highlightedQuoteWords).join(" ");
 
   return (
     <main className="login-theme-lock flex min-h-screen bg-[#070707] text-white">
@@ -173,19 +169,17 @@ export default function LoginPage() {
                   <p
                     className="mx-auto text-white/44"
                     style={{
-                      width: "min(100%, 48rem)",
+                      width: "min(100%, 50rem)",
                       whiteSpace: "normal",
                       overflowWrap: "normal",
                       wordBreak: "normal",
-                      fontSize: "clamp(1.45rem, 2.35vw, 2.35rem)",
-                      lineHeight: 1.58,
+                      fontSize: "clamp(1.2rem, 1.9vw, 2rem)",
+                      lineHeight: 1.52,
                       letterSpacing: "-0.02em",
                     }}
                   >
-                    <span className="text-white">&quot;{activeQuote.text.split(" ").slice(0, 7).join(" ")}</span>
-                    {activeQuote.text.split(" ").length > 7
-                      ? ` ${activeQuote.text.split(" ").slice(7).join(" ")}`
-                      : ""}
+                    <span className="text-white">&quot;{highlightedQuoteText}</span>
+                    {mutedQuoteText ? ` ${mutedQuoteText}` : ""}
                     &quot;
                   </p>
                   <p className="mt-8 text-sm text-white/42">{activeQuote.source}</p>

@@ -147,7 +147,7 @@ export default function IntroductionPage() {
             transition={{ duration: 0.55, delay: 0.18 }}
             className="mx-auto mt-5 max-w-3xl text-base leading-7 text-white/50 sm:text-lg"
           >
-            Structured AI research, risk analysis, and portfolio workflows for disciplined market decisions.
+            The art of structured AI research, risk analysis, and portfolio workflows for disciplined market decisions.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 16 }}

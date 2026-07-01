@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Check, ChevronDown, Cpu, FileSearch, Network, Zap } from "lucide-react";
 
-// ─── Model types ───────────────────────────
+// ─── Mode types ────────────────────────────
 
 export type QuanforaVersion = "1.0" | "2.0" | "2.1";
 
@@ -39,9 +39,9 @@ export function ModelProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// ─── Models data ───────────────────────────
+// ─── Modes data ────────────────────────────
 
-const MODELS: {
+const QUANFORA_MODES: {
   version: QuanforaVersion;
   label: string;
   tagline: string;
@@ -83,7 +83,7 @@ export default function ModelSelector({
   const { version, setVersion } = useModel();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const active = MODELS.find((m) => m.version === version) ?? MODELS[0];
+  const active = QUANFORA_MODES.find((m) => m.version === version) ?? QUANFORA_MODES[0];
   const ActiveIcon = active.icon;
   const menuPosition = placement === "top" ? "bottom-12" : "top-12";
   const menuAlignment = compact ? "right-0" : "left-0";
@@ -120,8 +120,8 @@ export default function ModelSelector({
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             className={`absolute ${menuAlignment} ${menuPosition} z-30 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]`}
           >
-            <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-subtle)]">Models</div>
-            {MODELS.map((model) => {
+            <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-subtle)]">Modes</div>
+            {QUANFORA_MODES.map((model) => {
               const Icon = model.icon;
               const isActive = model.version === version;
               const badgeClass = model.version === "2.1"

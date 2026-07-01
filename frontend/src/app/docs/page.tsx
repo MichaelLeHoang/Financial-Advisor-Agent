@@ -1134,7 +1134,7 @@ function UserGuide() {
           description="Use this page when you need synthesis across data, risk, sentiment, and portfolio context."
           regions={[
             { label: "Prompt composer", detail: "Ask a focused question. Include tickers, timeframe, current holdings, and the decision you are considering.", icon: <MessageSquare className="size-4" /> },
-            { label: "Model selector", detail: "Switch between faster research and deeper consensus-style analysis where available.", icon: <Brain className="size-4" /> },
+            { label: "Mode selector", detail: "Switch between faster research and deeper consensus-style analysis where available.", icon: <Brain className="size-4" /> },
             { label: "Suggestion cards", detail: "Start common workflows such as market pulse, sentiment brief, or portfolio review.", icon: <Sparkles className="size-4" /> },
             { label: "Session history", detail: "Return to prior research threads from the sidebar instead of restarting context.", icon: <BookOpen className="size-4" /> },
           ]}
@@ -1435,7 +1435,7 @@ function TechnicalReference() {
       <section id="agent-modes" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader title="Agent modes">
           <p>
-            Quanfora currently has three user-facing architectures. These are the choices exposed in AI Advisor's model
+            Quanfora currently has three user-facing architectures. These are the choices exposed in AI Advisor's mode
             selector: a fast single-agent advisor, a multi-agent consensus system, and the Equity Research Desk for
             ticker-based reports.
           </p>
@@ -1469,7 +1469,7 @@ function TechnicalReference() {
             ["Fast routing", "The advisor chooses the smallest useful tool path instead of launching a full research workflow."],
             ["Tool-backed answers", "It can use quotes, market research, sentiment, prediction, optimization, and portfolio context when needed."],
             ["Session continuity", "Chat history and session context help follow-up questions stay connected to the previous answer."],
-            ["Best default", "It remains the default model because most advisor questions do not need multi-agent debate or report generation."],
+            ["Best default", "It remains the default mode because most advisor questions do not need multi-agent debate or report generation."],
           ]}
         />
         <CodeBlock

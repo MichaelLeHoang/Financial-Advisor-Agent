@@ -165,7 +165,7 @@ export default function Header({
                                 transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                                 className="absolute left-0 top-12 w-72 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
                             >
-                                <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/35">Models</div>
+                                <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/35">Modes</div>
                                 <button
                                     type="button"
                                     className="flex w-full items-center gap-3 rounded-xl bg-white/[0.06] px-3 py-3 text-left"
