@@ -21,4 +21,4 @@ Route handlers should validate and translate requests only. Business logic belon
 Use FastAPI `TestClient` with mocked dependencies for route contracts, authorization, provider timeouts, status rollups, and error responses.
 
 ## Latest Change
-- Added the Market Intelligence route that packages categorized news into briefing, picks, and report payloads.
+- Fixed news thumbnail normalization so Yahoo/yfinance feeds prefer the largest usable image and ignore tiny-only thumbnails that would be stretched in the frontend.

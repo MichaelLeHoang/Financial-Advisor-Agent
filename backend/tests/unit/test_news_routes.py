@@ -3,6 +3,51 @@ import asyncio
 from fastapi.testclient import TestClient
 
 
+def test_news_parser_prefers_largest_thumbnail_resolution():
+    from src.api.news_routes import _parse_search_news
+
+    articles = _parse_search_news(
+        [
+            {
+                "title": "Sample market story",
+                "publisher": "Example",
+                "link": "https://example.com/story",
+                "thumbnail": {
+                    "resolutions": [
+                        {"url": "https://example.com/original.jpg", "width": 1760, "height": 990},
+                        {"url": "https://example.com/tiny.jpg", "width": 140, "height": 140},
+                    ]
+                },
+            }
+        ],
+        "market",
+    )
+
+    assert articles[0].thumbnail == "https://example.com/original.jpg"
+
+
+def test_news_parser_ignores_tiny_only_thumbnail():
+    from src.api.news_routes import _parse_search_news
+
+    articles = _parse_search_news(
+        [
+            {
+                "title": "Sample market story",
+                "publisher": "Example",
+                "link": "https://example.com/story",
+                "thumbnail": {
+                    "resolutions": [
+                        {"url": "https://example.com/tiny.jpg", "width": 140, "height": 140},
+                    ]
+                },
+            }
+        ],
+        "market",
+    )
+
+    assert articles[0].thumbnail is None
+
+
 def test_news_endpoint_returns_partial_response_when_sources_timeout(monkeypatch):
     from src.api import app as api_app
     from src.api import news_routes
