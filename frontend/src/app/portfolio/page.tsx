@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   BarChart3,
   Building2,
+  CalendarDays,
   Check,
   ChevronDown,
   ChevronRight,
@@ -39,7 +40,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
   type ChartConfig,
@@ -289,13 +289,59 @@ function deriveCostToBaseRate(costCurrency: string, baseCurrency: string, quoteF
   return 1;
 }
 
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function defaultGoalTargetDate() {
+  const nextYear = new Date();
+  nextYear.setFullYear(nextYear.getFullYear() + 1);
+  return toDateInputValue(nextYear);
+}
+
+function parseDateInputValue(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  const date = new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatGoalDate(value: string) {
+  const date = parseDateInputValue(value);
+  if (!date) return "No target date";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
+function getGoalDateDelta(value: string) {
+  const target = parseDateInputValue(value);
+  if (!target) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / 86_400_000);
+}
+
+function formatGoalDateDelta(days: number | null) {
+  if (days == null) return "Set target";
+  if (days === 0) return "Due today";
+  const unit = Math.abs(days) === 1 ? "day" : "days";
+  return days > 0 ? `${days} ${unit} remaining` : `${Math.abs(days)} ${unit} past target`;
+}
+
 export default function PortfolioPage() {
   const { loading: authLoading, token } = useAuth();
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [holdings, setHoldings] = useState<HoldingRow[]>([]);
   const [newPortfolioName, setNewPortfolioName] = useState("");
-  const [newBaseCurrency, setNewBaseCurrency] = useState<(typeof SUPPORTED_BASE_CURRENCIES)[number]>("USD");
+  const [newBaseCurrency, setNewBaseCurrency] = useState("USD");
   const [showNewForm, setShowNewForm] = useState(false);
   const [tickerInput, setTickerInput] = useState("");
   const [addSymbol, setAddSymbol] = useState("");
@@ -320,15 +366,23 @@ export default function PortfolioPage() {
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
   const [showCurrencySearchMenu, setShowCurrencySearchMenu] = useState(false);
+  const [showNewCurrencyMenu, setShowNewCurrencyMenu] = useState(false);
+  const [showNewCurrencySearchMenu, setShowNewCurrencySearchMenu] = useState(false);
+  const [newCurrencySearch, setNewCurrencySearch] = useState("");
+  const [portfolioToDelete, setPortfolioToDelete] = useState<Portfolio | null>(null);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [returnPeriod, setReturnPeriod] = useState<"5D" | "1M" | "YTD" | "1Y" | "5Y">("1Y");
   const [sortBy, setSortBy] = useState<"total" | "weight" | "today" | "allTime" | "symbol">("total");
   const [portfolioGoal, setPortfolioGoal] = useState(200000);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalDraft, setGoalDraft] = useState("200000");
+  const [goalTargetDate, setGoalTargetDate] = useState(defaultGoalTargetDate);
+  const [editingGoalDate, setEditingGoalDate] = useState(false);
+  const [goalDateDraft, setGoalDateDraft] = useState(goalTargetDate);
   const editRef = useRef<HTMLInputElement>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const currencyMenuRef = useRef<HTMLDivElement>(null);
+  const newCurrencyMenuRef = useRef<HTMLDivElement>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
 
   const activePortfolio = portfolios.find((p) => p.id === activeId) ?? null;
@@ -359,6 +413,12 @@ export default function PortfolioPage() {
         setCurrencySearch("");
       }
 
+      if (showNewCurrencyMenu && newCurrencyMenuRef.current && !newCurrencyMenuRef.current.contains(target)) {
+        setShowNewCurrencyMenu(false);
+        setShowNewCurrencySearchMenu(false);
+        setNewCurrencySearch("");
+      }
+
       if (showSortMenu && sortMenuRef.current && !sortMenuRef.current.contains(target)) {
         setShowSortMenu(false);
       }
@@ -366,7 +426,7 @@ export default function PortfolioPage() {
 
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [showAccountMenu, showCurrencyMenu, showSortMenu]);
+  }, [showAccountMenu, showCurrencyMenu, showNewCurrencyMenu, showSortMenu]);
 
   useEffect(() => {
     try {
@@ -412,11 +472,18 @@ export default function PortfolioPage() {
       const savedGoal = localStorage.getItem(`portfolio.goal.${activeId}`);
       const parsed = savedGoal ? Number(savedGoal) : NaN;
       const nextGoal = Number.isFinite(parsed) && parsed > 0 ? parsed : 200000;
+      const savedGoalDate = localStorage.getItem(`portfolio.goalDate.${activeId}`);
+      const nextGoalDate = savedGoalDate && parseDateInputValue(savedGoalDate) ? savedGoalDate : defaultGoalTargetDate();
       setPortfolioGoal(nextGoal);
       setGoalDraft(String(nextGoal));
+      setGoalTargetDate(nextGoalDate);
+      setGoalDateDraft(nextGoalDate);
     } catch {
+      const nextGoalDate = defaultGoalTargetDate();
       setPortfolioGoal(200000);
       setGoalDraft("200000");
+      setGoalTargetDate(nextGoalDate);
+      setGoalDateDraft(nextGoalDate);
     }
   }, [activeId]);
 
@@ -515,6 +582,7 @@ export default function PortfolioPage() {
       await api.deletePortfolio(portfolioId);
       const updated = portfolios.filter((p) => p.id !== portfolioId);
       setPortfolios(updated);
+      setShowAccountMenu(false);
       if (activeId === portfolioId) {
         setActiveId(updated.length > 0 ? updated[0].id : null);
         setHoldings([]);
@@ -522,6 +590,8 @@ export default function PortfolioPage() {
       }
     } catch (e: any) {
       setError(e.message);
+    } finally {
+      setPortfolioToDelete(null);
     }
   };
 
@@ -541,6 +611,23 @@ export default function PortfolioPage() {
       localStorage.setItem(`portfolio.goal.${activeId}`, String(parsed));
     } catch {
       // Goal persistence is best effort.
+    }
+  };
+
+  const commitGoalDate = () => {
+    if (!activeId) return;
+    if (!goalDateDraft || !parseDateInputValue(goalDateDraft)) {
+      setGoalDateDraft(goalTargetDate);
+      setEditingGoalDate(false);
+      return;
+    }
+
+    setGoalTargetDate(goalDateDraft);
+    setEditingGoalDate(false);
+    try {
+      localStorage.setItem(`portfolio.goalDate.${activeId}`, goalDateDraft);
+    } catch {
+      // Goal date persistence is best effort.
     }
   };
 
@@ -695,6 +782,9 @@ export default function PortfolioPage() {
   const pricedHoldingCount = holdings.filter((h) => h.value != null).length;
   const canShowAccountSummary = holdings.length > 0;
   const portfolioGoalProgress = portfolioGoal > 0 ? Math.min((totalValue / portfolioGoal) * 100, 100) : 0;
+  const goalTargetLabel = formatGoalDate(goalTargetDate);
+  const goalDateDelta = getGoalDateDelta(goalTargetDate);
+  const goalDateDeltaLabel = formatGoalDateDelta(goalDateDelta);
   const displayedReturn = returnPeriod === "5D" ? totalDailyReturn : totalPnl ?? 0;
   const displayedReturnPct = returnPeriod === "5D" ? totalDailyReturnPct : totalPnlPct;
 
@@ -781,6 +871,20 @@ export default function PortfolioPage() {
     currencies.add(displayBaseCurrency);
     return Array.from(currencies);
   }, [activeBaseCurrency, displayBaseCurrency]);
+
+  const quickNewCurrencies = useMemo(() => {
+    const currencies = new Set<string>(SUPPORTED_BASE_CURRENCIES);
+    currencies.add(normalizeCurrency(newBaseCurrency));
+    return Array.from(currencies);
+  }, [newBaseCurrency]);
+
+  const filteredNewCurrencies = useMemo(() => {
+    const query = newCurrencySearch.trim().toLowerCase();
+    if (!query) return GLOBAL_CURRENCIES;
+    return GLOBAL_CURRENCIES.filter((currency) =>
+      currency.code.toLowerCase().includes(query) || currency.name.toLowerCase().includes(query)
+    );
+  }, [newCurrencySearch]);
 
   const optimizerPieData = result?.weights
     ? Object.entries(result.weights)
@@ -879,7 +983,8 @@ export default function PortfolioPage() {
           <h1 className="text-3xl font-bold tracking-[-0.03em] text-white">Portfolio</h1>
         </div>
 
-        <section className="space-y-4">
+        {activePortfolio && (
+          <section className="space-y-4">
             <div className="flex items-center justify-between border-b border-white/12 pb-3">
               <button type="button" className="text-sm text-white/86">All</button>
               <div ref={accountMenuRef} className="relative">
@@ -896,21 +1001,36 @@ export default function PortfolioPage() {
                   <div className="absolute right-0 top-8 z-40 w-80 rounded-2xl border border-white/12 bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]">
                     <div className="max-h-64 space-y-1 overflow-auto">
                       {portfolios.map((portfolio) => (
-                        <button
+                        <div
                           key={portfolio.id}
-                          type="button"
-                          onClick={() => {
-                            setActiveId(portfolio.id);
-                            setShowAccountMenu(false);
-                          }}
                           className={cn(
-                            "flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition-colors",
+                            "group/portfolio flex items-center gap-1 rounded-xl pr-1 transition-colors",
                             activeId === portfolio.id ? "bg-white/10 text-white" : "text-white/60 hover:bg-white/[0.06] hover:text-white"
                           )}
                         >
-                          <span>{portfolio.name}</span>
-                          <span className="text-xs text-white/35">{normalizeCurrency(portfolio.base_currency)}</span>
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveId(portfolio.id);
+                              setShowAccountMenu(false);
+                            }}
+                            className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2 text-left text-sm"
+                          >
+                            <span className="min-w-0 truncate">{portfolio.name}</span>
+                            <span className="shrink-0 text-xs text-white/35">{normalizeCurrency(portfolio.base_currency)}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPortfolioToDelete(portfolio);
+                              setShowAccountMenu(false);
+                            }}
+                            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-white/30 opacity-0 transition-all hover:bg-red-negative/10 hover:text-red-negative group-hover/portfolio:opacity-100"
+                            aria-label={`Delete ${portfolio.name}`}
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        </div>
                       ))}
                     </div>
                     <div className="mt-2 border-t border-white/[0.08] pt-2">
@@ -1137,9 +1257,15 @@ export default function PortfolioPage() {
                 </div>
               </div>
             </div>
-        </section>
+          </section>
+        )}
 
-        {activePortfolio ? (
+        {portfoliosLoading ? (
+          <section className="flex min-h-48 items-center justify-center gap-2 rounded-2xl border border-white/12 bg-[var(--surface-card-strong)] p-10 text-sm text-white/45 shadow-[var(--shadow-card)]">
+            <Loader2 className="size-4 animate-spin" />
+            Loading portfolios…
+          </section>
+        ) : activePortfolio ? (
           <>
             {showAddPanel && (
               <section className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
@@ -1249,8 +1375,67 @@ export default function PortfolioPage() {
                       </span>
                     </div>
                   </div>
-                  <p className="mt-4 text-sm text-white/78">You&apos;re aiming to reach this in</p>
-                  <p className="mt-1.5 text-sm text-[#c4b5fd]">🎯 Date is in the past</p>
+                  <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-white/78">You&apos;re aiming to reach this by</p>
+                      {editingGoalDate ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <input
+                            type="date"
+                            value={goalDateDraft}
+                            onChange={(event) => setGoalDateDraft(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") commitGoalDate();
+                              if (event.key === "Escape") {
+                                setGoalDateDraft(goalTargetDate);
+                                setEditingGoalDate(false);
+                              }
+                            }}
+                            className="h-9 rounded-xl border border-white/[0.12] bg-black/20 px-3 text-sm text-white outline-none [color-scheme:dark] focus:border-[#a78bfa]/60"
+                            aria-label="Portfolio goal target date"
+                            autoFocus
+                          />
+                          <button type="button" onClick={commitGoalDate} className="text-sm text-[#c4b5fd] hover:text-white">
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setGoalDateDraft(goalTargetDate);
+                              setEditingGoalDate(false);
+                            }}
+                            className="text-sm text-white/52 hover:text-white"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGoalDateDraft(goalTargetDate);
+                            setEditingGoalDate(true);
+                          }}
+                          className="mt-1.5 inline-flex items-center gap-2 text-sm text-[#c4b5fd] transition-colors hover:text-white"
+                        >
+                          <CalendarDays className="size-4" />
+                          <span>{goalTargetLabel}</span>
+                        </button>
+                      )}
+                    </div>
+                    {!editingGoalDate && (
+                      <span
+                        className={cn(
+                          "rounded-full border px-2.5 py-1 text-xs font-semibold",
+                          goalDateDelta != null && goalDateDelta < 0
+                            ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
+                            : "border-[#a78bfa]/24 bg-[#a78bfa]/10 text-[#c4b5fd]"
+                        )}
+                      >
+                        {goalDateDeltaLabel}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
@@ -1525,18 +1710,183 @@ export default function PortfolioPage() {
         ) : (
           <section className="rounded-2xl border border-dashed border-white/12 bg-[var(--surface-card-strong)] p-10 text-center shadow-[var(--shadow-card)]">
             <p className="text-sm text-white/45">Create a portfolio to start tracking holdings.</p>
-            <button
-              type="button"
-              onClick={() => {
-                setShowAccountMenu(true);
-                setShowNewForm(true);
-              }}
-              className="mt-4 rounded-full bg-[#a78bfa] px-5 py-2 text-sm font-bold text-black hover:bg-[#b8a6ff]"
-            >
-              New portfolio
-            </button>
+            {showNewForm ? (
+              <div className="mx-auto mt-5 max-w-md space-y-3 text-left">
+                <input
+                  type="text"
+                  value={newPortfolioName}
+                  onChange={(event) => setNewPortfolioName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") createPortfolio();
+                    if (event.key === "Escape") setShowNewForm(false);
+                  }}
+                  placeholder="Portfolio name"
+                  autoFocus
+                  className="h-11 w-full rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-[#a78bfa]/60"
+                />
+                <div className="flex gap-2">
+                  <div ref={newCurrencyMenuRef} className="relative w-32 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowNewCurrencyMenu((value) => {
+                          const next = !value;
+                          if (!next) {
+                            setShowNewCurrencySearchMenu(false);
+                            setNewCurrencySearch("");
+                          }
+                          return next;
+                        });
+                      }}
+                      className="flex h-11 w-full items-center justify-between rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none transition-colors hover:border-white/18 focus:border-[#a78bfa]/60"
+                      aria-label="Portfolio base currency"
+                    >
+                      {normalizeCurrency(newBaseCurrency)}
+                      <ChevronDown className={cn("size-4 text-white/45 transition-transform", showNewCurrencyMenu && "rotate-180")} />
+                    </button>
+                    {showNewCurrencyMenu && (
+                      <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-44 rounded-2xl border border-white/12 bg-[var(--surface-popover)] p-1 shadow-[var(--shadow-popover)]">
+                        {quickNewCurrencies.map((currency) => (
+                          <button
+                            key={currency}
+                            type="button"
+                            onClick={() => {
+                              setNewBaseCurrency(currency);
+                              setShowNewCurrencyMenu(false);
+                              setShowNewCurrencySearchMenu(false);
+                              setNewCurrencySearch("");
+                            }}
+                            className={cn(
+                              "w-full rounded-xl px-3 py-2 text-left text-sm transition-colors",
+                              normalizeCurrency(newBaseCurrency) === currency ? "bg-white/10 text-white" : "text-white/58 hover:bg-white/[0.06] hover:text-white"
+                            )}
+                          >
+                            {currency}
+                          </button>
+                        ))}
+                        <div
+                          className="relative"
+                          onMouseEnter={() => setShowNewCurrencySearchMenu(true)}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setShowNewCurrencySearchMenu(true)}
+                            onFocus={() => setShowNewCurrencySearchMenu(true)}
+                            className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-white/58 transition-colors hover:bg-white/[0.06] hover:text-white"
+                          >
+                            Add
+                            <ChevronRight className="size-4" />
+                          </button>
+                          {showNewCurrencySearchMenu && (
+                            <>
+                              <div className="absolute left-full top-0 hidden h-full w-3 sm:block" />
+                              <div
+                                onMouseLeave={() => {
+                                  setShowNewCurrencySearchMenu(false);
+                                  setNewCurrencySearch("");
+                                }}
+                                className="absolute bottom-0 left-0 z-50 w-72 rounded-2xl border border-white/12 bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)] sm:bottom-auto sm:left-[calc(100%+0.5rem)] sm:top-0"
+                              >
+                                <label className="flex h-9 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-white/50">
+                                  <Search className="size-4" />
+                                  <input
+                                    type="search"
+                                    value={newCurrencySearch}
+                                    onChange={(event) => setNewCurrencySearch(event.target.value)}
+                                    placeholder="Search currency"
+                                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/28"
+                                  />
+                                </label>
+                                <div className="mt-2 max-h-64 overflow-y-auto pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/14 [&::-webkit-scrollbar-track]:bg-transparent">
+                                  {filteredNewCurrencies.map((currency) => {
+                                    const selected = normalizeCurrency(newBaseCurrency) === currency.code;
+                                    return (
+                                      <button
+                                        key={currency.code}
+                                        type="button"
+                                        onClick={() => {
+                                          setNewBaseCurrency(currency.code);
+                                          setShowNewCurrencyMenu(false);
+                                          setShowNewCurrencySearchMenu(false);
+                                          setNewCurrencySearch("");
+                                        }}
+                                        className={cn(
+                                          "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors",
+                                          selected ? "bg-white/10 text-white" : "text-white/58 hover:bg-white/[0.06] hover:text-white"
+                                        )}
+                                      >
+                                        <span className="font-semibold">{currency.code}</span>
+                                        <span className="min-w-0 flex-1 truncate text-right text-xs text-white/38">{currency.name}</span>
+                                        {selected ? (
+                                          <Check className="size-4 shrink-0 text-green-positive" />
+                                        ) : (
+                                          <span className="size-4 shrink-0" />
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={createPortfolio}
+                    disabled={saving || !newPortfolioName.trim()}
+                    className="h-11 flex-1 rounded-xl bg-[#a78bfa] text-sm font-bold text-black hover:bg-[#b8a6ff]"
+                  >
+                    {saving ? <Loader2 className="size-4 animate-spin" /> : "Create portfolio"}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewForm(false)}
+                    className="h-11 rounded-xl border border-white/10 px-4 text-sm font-medium text-white/58 transition-colors hover:border-white/18 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowNewForm(true)}
+                className="mt-4 rounded-full bg-[#a78bfa] px-5 py-2 text-sm font-bold text-black hover:bg-[#b8a6ff]"
+              >
+                New portfolio
+              </button>
+            )}
           </section>
         )}
+        <AlertDialog
+          open={Boolean(portfolioToDelete)}
+          onOpenChange={(open) => {
+            if (!open) setPortfolioToDelete(null);
+          }}
+        >
+          <AlertDialogContent size="sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete "{portfolioToDelete?.name}"?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently remove the portfolio and its holdings. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (portfolioToDelete) void deletePortfolio(portfolioToDelete.id);
+                }}
+                className="bg-red-negative text-white hover:bg-red-negative/85"
+              >
+                Delete portfolio
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
