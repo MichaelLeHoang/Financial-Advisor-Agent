@@ -1515,8 +1515,8 @@ Risk flags can downgrade an otherwise bullish result when downside evidence is s
       <section id="research-desk" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader title="Quanfora 2.1 Equity Research Desk">
           <p>
-            Quanfora 2.1 is not a normal chat response. It turns a ticker into a structured research run with visible
-            progress, report files, event logs, risk review, and a final portfolio-manager-style verdict.
+            Quanfora 2.1 is not a normal chat response. It turns a ticker into a structured investment or trading
+            report run with visible progress, report files, event logs, risk review, and a final portfolio-manager-style verdict.
           </p>
         </SectionHeader>
         <DocTable
@@ -1526,19 +1526,19 @@ Risk flags can downgrade an otherwise bullish result when downside evidence is s
             ["Analyst team", "Market, social sentiment, news, and fundamentals analysts write focused evidence-based reports."],
             ["Research debate", "Bull and bear researchers stress-test the thesis before the evaluator synthesizes agreement and disagreement."],
             ["Trading desk", "The trader proposes entry considerations, invalidation conditions, horizon, and sizing caveats without implying execution."],
-            ["Risk review and PM verdict", "Risk analysts evaluate upside/downside controls, then the portfolio manager issues the final recommendation and confidence."],
+            ["Risk review and PM verdict", "Risk analysts evaluate upside/downside controls, then the portfolio manager issues either a final investment view or final trading bias."],
           ]}
         />
         <CodeBlock
           title="Quanfora 2.1 workflow"
           language="text"
-          code={`Ticker + depth
+          code={`Ticker + report type + depth
   -> shared data snapshot
   -> analyst reports
   -> bull / bear debate
   -> trader plan
   -> risk review
-  -> final PM verdict
+  -> final investment view or trading bias
   -> downloadable report and optional share link`}
         />
       </section>
@@ -1585,7 +1585,7 @@ Risk flags can downgrade an otherwise bullish result when downside evidence is s
       <section id="api-research" data-doc-section className="mt-16 scroll-mt-24">
         <SectionHeader title="Equity research APIs">
           <p>
-            Equity research endpoints power analyst-style runs, event streams, saved reports, and public report sharing.
+            Equity research endpoints power investment and trading report runs, event streams, saved reports, and public report sharing.
           </p>
         </SectionHeader>
         <DocTable

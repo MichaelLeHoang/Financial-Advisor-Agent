@@ -64,6 +64,7 @@ export interface ConsensusResponse extends ChatResponse {
 }
 
 export type ResearchDepth = "shallow" | "medium" | "deep";
+export type ResearchReportType = "investment" | "trading";
 export type ResearchRunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 export type ResearchAgentStatus = "pending" | "running" | "completed" | "failed" | "skipped";
 export type ResearchRecommendation = "buy" | "hold" | "sell" | "insufficient_data";
@@ -73,6 +74,7 @@ export type ResearchEventType = "reasoning" | "tool" | "report" | "status" | "fi
 export interface EquityResearchRunCreate {
   ticker: string;
   analysis_date?: string;
+  report_type?: ResearchReportType;
   selected_analysts?: Array<"market" | "social" | "news" | "fundamentals">;
   research_depth?: ResearchDepth;
   quick_model?: string;
@@ -90,6 +92,7 @@ export interface EquityResearchRun {
   status: ResearchRunStatus;
   recommendation: ResearchRecommendation;
   confidence: number;
+  report_type: ResearchReportType;
   research_depth: ResearchDepth;
   selected_analysts: string[];
   quick_model: string;

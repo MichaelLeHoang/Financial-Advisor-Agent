@@ -6,7 +6,7 @@ Runs QuanAd 2.1 multi-stage equity research from one shared, source-aware market
 ## Responsibilities
 - Apply guest and plan entitlements.
 - Build normalized company, market, news, filing, technical, and risk snapshots.
-- Coordinate analyst, debate, trader, risk, and portfolio-manager reports.
+- Coordinate analyst, debate, trader, risk, and portfolio-manager reports for investment and trading report objectives.
 - Store run state, reports, events, sharing state, and final decisions.
 
 ## Key Files
@@ -18,7 +18,7 @@ Runs QuanAd 2.1 multi-stage equity research from one shared, source-aware market
 API transport stays in `api/equity_research.py`; shared request and response models stay in `models/equity_research.py`. Market providers should be reused through existing data services where possible.
 
 ## Testing
-Test entitlement normalization, invalid tickers, missing prices, deterministic final decisions, and run-state transitions without live providers.
+Test entitlement normalization, report objective gating, invalid tickers, missing prices, deterministic final decisions, and run-state transitions without live providers.
 
 ## Latest Change
-- Added session-scoped guest ownership metadata to research runs so guest reports can be followed during the browser session without making `user_id = null` runs globally readable.
+- Added investment vs trading report objectives with Trader-plan gating and objective-specific final report structures.

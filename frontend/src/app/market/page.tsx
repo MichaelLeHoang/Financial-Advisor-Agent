@@ -33,7 +33,7 @@ import {
     Tooltip,
 } from "recharts";
 import { cn } from "@/lib/utils";
-import { api, type EarningsPoint, type MarketQuote, type QuarterlyFinancial, type ResearchDepth } from "@/lib/api";
+import { api, type EarningsPoint, type MarketQuote, type QuarterlyFinancial, type ResearchDepth, type ResearchReportType } from "@/lib/api";
 import { fetchQuote as fetchCachedQuote, fetchQuotes as fetchCachedQuotes, invalidate as invalidateQuote } from "@/lib/quote-cache";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
@@ -67,7 +67,7 @@ import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { showToast } from "@/components/ui/toast";
-import { ResearchDepthSelector } from "@/components/equity-research/ResearchComponents";
+import { ResearchDepthSelector, ResearchReportTypeSelector, canUseTradingReports } from "@/components/equity-research/ResearchComponents";
 
 interface StockInfo extends MarketSymbol {
     data: MarketPoint[];
@@ -322,6 +322,7 @@ function DetailChartTooltip({
 export default function MarketPage() {
     const router = useRouter();
     const { user, loading: authLoading } = useAuth();
+    const canUseTradingResearch = canUseTradingReports(user.plan);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const marketTopRef = useRef<HTMLDivElement>(null);
     const [stocks, setStocks] = useState<StockInfo[]>(() => DEFAULT_MARKET_TICKERS.map(createPendingStock));
@@ -339,6 +340,7 @@ export default function MarketPage() {
     const [skipRemoveConfirm, setSkipRemoveConfirm] = useState(false);
     const [skipRemoveConfirmDraft, setSkipRemoveConfirmDraft] = useState(false);
     const [researchStock, setResearchStock] = useState<StockInfo | null>(null);
+    const [researchReportType, setResearchReportType] = useState<ResearchReportType>("investment");
     const [researchDepth, setResearchDepth] = useState<ResearchDepth>("shallow");
     const [researchStarting, setResearchStarting] = useState(false);
     const [researchError, setResearchError] = useState<string | null>(null);
@@ -557,6 +559,7 @@ export default function MarketPage() {
         try {
             const run = await api.createEquityResearchRun({
                 ticker: researchStock.ticker,
+                report_type: canUseTradingResearch ? researchReportType : "investment",
                 source_surface: "market",
                 research_depth: researchDepth,
             });
@@ -721,6 +724,9 @@ export default function MarketPage() {
             />
             <MarketResearchDrawer
                 stock={researchStock}
+                reportType={researchReportType}
+                onReportTypeChange={setResearchReportType}
+                canUseTrading={canUseTradingResearch}
                 depth={researchDepth}
                 onDepthChange={setResearchDepth}
                 starting={researchStarting}
@@ -1001,6 +1007,9 @@ function MarketCard({
 
 function MarketResearchDrawer({
     stock,
+    reportType,
+    onReportTypeChange,
+    canUseTrading,
     depth,
     onDepthChange,
     starting,
@@ -1009,6 +1018,9 @@ function MarketResearchDrawer({
     onClose,
 }: {
     stock: StockInfo | null;
+    reportType: ResearchReportType;
+    onReportTypeChange: (type: ResearchReportType) => void;
+    canUseTrading: boolean;
     depth: ResearchDepth;
     onDepthChange: (depth: ResearchDepth) => void;
     starting: boolean;
@@ -1043,6 +1055,10 @@ function MarketResearchDrawer({
                     <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
                         <p className="text-xs font-semibold uppercase tracking-widest text-white/35">Analysis Date</p>
                         <p className="mt-1 text-sm font-semibold text-white">{new Date().toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-white/35">Report Type</p>
+                        <ResearchReportTypeSelector value={reportType} onChange={onReportTypeChange} canUseTrading={canUseTrading} />
                     </div>
                     <div>
                         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-white/35">Research Depth</p>

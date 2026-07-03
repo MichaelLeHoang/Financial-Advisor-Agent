@@ -7,7 +7,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Brain, Check, ChevronDown, ClipboardList, FileText, Image, Loader2, Paperclip, PieChart, Send, SlidersHorizontal, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
-import type { ChatJobProgress, ChatJobStatusResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, ResearchDepth } from "@/lib/api";
+import type { ChatJobProgress, ChatJobStatusResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, ResearchDepth, ResearchReportType } from "@/lib/api";
 import { notifyCompletion, requestCompletionNotification } from "@/lib/completion-notifications";
 import { loadLocalChatMessages, saveLocalChatMessages } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
@@ -77,12 +77,22 @@ const SUGGESTIONS = [
 ];
 
 function extractResearchCommand(message: string) {
-  const match = message.trim().match(/^\/(?:research|analyze)\s+([A-Za-z][A-Za-z0-9.-]{0,14})(?:\s+(deep|medium|shallow))?/i);
+  const match = message.trim().match(/^\/(?:research|analyze)\s+([A-Za-z][A-Za-z0-9.-]{0,14})(.*)$/i);
   if (!match) return null;
+  const rest = match[2] ?? "";
+  const depth = rest.match(/\b(deep|medium|shallow)\b/i)?.[1]?.toLowerCase() ?? "shallow";
   return {
     ticker: match[1].toUpperCase(),
-    depth: (match[2]?.toLowerCase() || "shallow") as "shallow" | "medium" | "deep",
+    depth: depth as "shallow" | "medium" | "deep",
+    reportType: detectResearchReportType(message),
   };
+}
+
+function detectResearchReportType(message: string): ResearchReportType {
+  const lower = message.toLowerCase();
+  return /\b(trade|trading|swing|scalp|entry|stop|stop-loss|setup|invalidation|breakout|breakdown|target)\b/.test(lower)
+    ? "trading"
+    : "investment";
 }
 
 type PredictionSummary = {
@@ -655,8 +665,10 @@ export default function ChatPage() {
       showLongRunningToast("Quanfora 2.1 research may take a little while.");
       const loadingStartedAt = Date.now();
       try {
+        const reportType = researchCommand?.reportType ?? detectResearchReportType(text);
         const run = await api.createEquityResearchRun({
           ticker,
+          report_type: reportType,
           research_depth: researchCommand?.depth ?? bestResearchModeForPlan(user.plan, researchDepth),
           source_surface: "ai_advisor",
         });
@@ -1176,7 +1188,7 @@ export default function ChatPage() {
                           </p>
                           <div className="mt-3 flex flex-wrap gap-2">
                             <Link
-                              href={msg.researchRunId ? `/research/${msg.researchRunId}?from=ai_advisor` : `/research?ticker=${encodeURIComponent(msg.researchTicker)}&source=ai_advisor`}
+                              href={msg.researchRunId ? `/research/${msg.researchRunId}?from=ai_advisor` : `/research?ticker=${encodeURIComponent(msg.researchTicker)}&source=ai_advisor&report_type=investment`}
                               className="inline-flex h-9 items-center rounded-lg bg-indigo-primary px-3 text-xs font-semibold text-white hover:bg-indigo-primary/90"
                             >
                               {msg.researchRunId ? "View full agent reports" : "Generate Full Report"}

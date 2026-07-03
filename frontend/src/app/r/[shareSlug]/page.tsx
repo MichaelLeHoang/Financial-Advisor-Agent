@@ -45,7 +45,7 @@ export default function SharedResearchReportPage({ params }: { params: Promise<{
         ) : (
           <div className="space-y-4">
             <FinalDecisionCard run={data.run} />
-            <ReportFileList reports={data.reports} selectedAgent={selected} onSelectAgent={setSelected} />
+            <ReportFileList run={data.run} reports={data.reports} selectedAgent={selected} onSelectAgent={setSelected} />
             <article className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
               <Markdown content={report?.markdown ?? "No public report content is available."} />
             </article>

@@ -27,6 +27,7 @@ import type {
   EquityResearchRun,
   EquityResearchRunDetail,
   ResearchDepth,
+  ResearchReportType,
   ResearchRecommendation,
   ResearchRunStatus,
   ResearchSourceSurface,
@@ -61,14 +62,95 @@ const REPORT_FILES: Record<string, string> = {
   pm: "final_trade_decision.md",
 };
 
+const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, trader: 2, quant: 3, execution_addon: 4 };
+
+export function canUseTradingReports(plan: string | undefined) {
+  return PLAN_RANK[plan ?? "free"] >= PLAN_RANK.trader;
+}
+
+export function reportTypeLabel(type: ResearchReportType) {
+  return type === "trading" ? "Trading Report" : "Investment Report";
+}
+
+function reportTypeDescription(type: ResearchReportType) {
+  return type === "trading"
+    ? "Shorter-horizon setup, entry context, invalidation, and trading bias."
+    : "Longer-horizon thesis, fundamentals, valuation, portfolio fit, and investment view.";
+}
+
+function reportFileLabel(report: EquityResearchReport, run?: EquityResearchRun) {
+  if (report.agent_key === "pm" && run?.report_type === "trading") return "final_trading_bias.md";
+  if (report.agent_key === "pm") return "final_investment_view.md";
+  return REPORT_FILES[report.agent_key] ?? report.title;
+}
+
+function finalRecommendationTone(run: EquityResearchRun) {
+  const tone = recommendationTone(run.recommendation);
+  if (run.report_type === "trading") {
+    if (run.recommendation === "buy") return { label: "BULLISH", className: tone.className };
+    if (run.recommendation === "sell") return { label: "BEARISH", className: tone.className };
+    if (run.recommendation === "hold") return { label: "NEUTRAL", className: tone.className };
+    return { label: "INSUFFICIENT DATA", className: tone.className };
+  }
+  if (run.recommendation === "buy") return { label: "ACCUMULATE", className: tone.className };
+  if (run.recommendation === "sell") return { label: "AVOID", className: tone.className };
+  if (run.recommendation === "hold") return { label: "WATCHLIST", className: tone.className };
+  return { label: "INSUFFICIENT DATA", className: tone.className };
+}
+
 export function normalizeResearchTicker(value: string) {
   return value.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, "");
+}
+
+export function ResearchReportTypeSelector({
+  value,
+  onChange,
+  canUseTrading,
+  lockedMessage = "Trading reports require the Trader plan.",
+}: {
+  value: ResearchReportType;
+  onChange: (value: ResearchReportType) => void;
+  canUseTrading: boolean;
+  lockedMessage?: string;
+}) {
+  const options: Array<{ value: ResearchReportType; label: string }> = [
+    { value: "investment", label: "Investment" },
+    { value: "trading", label: "Trading" },
+  ];
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/[0.08] p-1">
+        {options.map((option) => {
+          const locked = option.value === "trading" && !canUseTrading;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              disabled={locked}
+              onClick={() => onChange(option.value)}
+              className={cn(
+                "rounded-lg px-2 py-2 text-xs font-semibold transition-colors",
+                value === option.value ? "bg-white/12 text-white" : "text-white/42 hover:bg-white/[0.05]",
+                locked && "cursor-not-allowed opacity-35"
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-xs leading-5 text-white/38">
+        {value === "trading" && !canUseTrading ? lockedMessage : reportTypeDescription(value)}
+      </p>
+    </div>
+  );
 }
 
 export function TickerAnalyzeInput({
   source,
   compact = false,
   initialTicker = "",
+  reportType = "investment",
   newTab = false,
   onCreated,
   frameClassName,
@@ -78,6 +160,7 @@ export function TickerAnalyzeInput({
   source: ResearchSourceSurface;
   compact?: boolean;
   initialTicker?: string;
+  reportType?: ResearchReportType;
   newTab?: boolean;
   onCreated?: (run: EquityResearchRun) => void;
   frameClassName?: string;
@@ -96,11 +179,12 @@ export function TickerAnalyzeInput({
     setError(null);
     try {
       if (newTab) {
-        window.open(`/research?ticker=${encodeURIComponent(normalized)}&source=${source}`, "_blank", "noopener,noreferrer");
+        window.open(`/research?ticker=${encodeURIComponent(normalized)}&source=${source}&report_type=${reportType}`, "_blank", "noopener,noreferrer");
         return;
       }
       const run = await api.createEquityResearchRun({
         ticker: normalized,
+        report_type: reportType,
         source_surface: source,
         research_depth: "shallow",
       });
@@ -261,16 +345,22 @@ export function ResearchDemoProgressLoop({ surface = "dark" }: { surface?: "dark
 }
 
 export function FinalDecisionCard({ run }: { run: EquityResearchRun }) {
-  const tone = recommendationTone(run.recommendation);
+  const tone = finalRecommendationTone(run);
+  const isTrading = run.report_type === "trading";
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-white/[0.045] p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-white/35">Final Recommendation</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-white/35">
+            {isTrading ? "Trade Stance" : "Final Investment View"}
+          </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className={cn("rounded-xl px-3 py-1.5 text-lg font-bold", tone.className)}>{tone.label}</span>
             <span className="rounded-xl border border-white/[0.08] px-3 py-1.5 text-sm font-semibold text-white/70">
               {Math.round(run.confidence * 100)}% confidence
+            </span>
+            <span className="rounded-xl border border-indigo-primary/20 bg-indigo-primary/10 px-3 py-1.5 text-sm font-semibold text-indigo-100">
+              {reportTypeLabel(run.report_type)}
             </span>
           </div>
         </div>
@@ -281,8 +371,8 @@ export function FinalDecisionCard({ run }: { run: EquityResearchRun }) {
         </div>
       </div>
       <div className="mt-5 grid gap-3 md:grid-cols-2">
-        <DecisionFact icon={<BarChart3 className="size-4" />} label="Main upside" value={run.main_upside ?? "Pending research output."} />
-        <DecisionFact icon={<AlertTriangle className="size-4" />} label="Main risk" value={run.main_risk ?? "Pending risk review."} />
+        <DecisionFact icon={<BarChart3 className="size-4" />} label={isTrading ? "Setup upside" : "Main upside"} value={run.main_upside ?? "Pending research output."} />
+        <DecisionFact icon={<AlertTriangle className="size-4" />} label={isTrading ? "Invalidation risk" : "Main risk"} value={run.main_risk ?? "Pending risk review."} />
       </div>
       {run.final_summary && <p className="mt-4 text-sm leading-6 text-white/62">{run.final_summary}</p>}
       <p className="mt-4 inline-flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.03] px-2.5 py-1.5 text-xs text-white/45">
@@ -302,6 +392,7 @@ function DecisionFact({ icon, label, value }: { icon: React.ReactNode; label: st
 }
 
 export function AgentProgressSidebar({
+  run,
   reports,
   status,
   events = [],
@@ -309,6 +400,7 @@ export function AgentProgressSidebar({
   onSelectAgent,
   compact = false,
 }: {
+  run?: EquityResearchRun;
   reports: EquityResearchReport[];
   status: ResearchRunStatus;
   events?: EquityResearchEvent[];
@@ -385,7 +477,7 @@ export function AgentProgressSidebar({
                     >
                       <StatusIcon status={agentStatus} />
                       <span className="min-w-0 flex-1 truncate">{name}</span>
-                      {report && <span className="text-[10px] text-white/30">{REPORT_FILES[key]}</span>}
+                      {report && <span className="text-[10px] text-white/30">{reportFileLabel(report, run)}</span>}
                     </button>
                   );
                 })}
@@ -470,6 +562,7 @@ export function AnalysisConfigPanel({ run }: { run: EquityResearchRun }) {
   return (
     <div className="space-y-3">
       <ConfigRow label="Analysis Date" value={run.analysis_date} />
+      <ConfigRow label="Report Type" value={reportTypeLabel(run.report_type)} locked={isGuest && run.report_type === "investment"} lockText="Sign up for Trader to unlock trading reports." />
       <ConfigRow label="Research Depth" value={run.research_depth} locked={isGuest && run.research_depth === "shallow"} lockText="Sign up to unlock medium and deep research." />
       <ConfigRow label="Quick Thinking" value={run.quick_model} locked={isGuest} lockText="Sign up to choose Quick Thinking models." />
       <ConfigRow label="Deep Thinking" value={run.deep_model} locked={isGuest} lockText="Sign up to choose Deep Thinking models." />
@@ -497,10 +590,12 @@ function ConfigRow({ label, value, locked, lockText }: { label: string; value: s
 }
 
 export function ReportFileList({
+  run,
   reports,
   selectedAgent,
   onSelectAgent,
 }: {
+  run?: EquityResearchRun;
   reports: EquityResearchReport[];
   selectedAgent: string | null;
   onSelectAgent: (agent: string) => void;
@@ -518,7 +613,7 @@ export function ReportFileList({
               : "border-white/[0.08] bg-white/[0.025] text-white/55 hover:bg-white/[0.055]"
           )}
         >
-          <span className="flex items-center gap-1.5 font-semibold"><FileText className="size-3.5" />{REPORT_FILES[report.agent_key] ?? report.title}</span>
+          <span className="flex items-center gap-1.5 font-semibold"><FileText className="size-3.5" />{reportFileLabel(report, run)}</span>
           <span className="mt-1 block text-[10px] text-white/34">{report.agent_name}</span>
         </button>
       ))}
@@ -578,11 +673,11 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
   return (
     <div className="grid min-h-[calc(100vh-5rem)] gap-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
       <aside className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
-        <AgentProgressSidebar reports={visibleReports} events={visibleEvents} status={detail.run.status} selectedAgent={selectedAgent ?? undefined} onSelectAgent={setSelectedAgent} />
+        <AgentProgressSidebar run={detail.run} reports={visibleReports} events={visibleEvents} status={detail.run.status} selectedAgent={selectedAgent ?? undefined} onSelectAgent={setSelectedAgent} />
       </aside>
       <main className="min-w-0 space-y-4">
         <FinalDecisionCard run={detail.run} />
-        <ReportFileList reports={visibleReports} selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} />
+        <ReportFileList run={detail.run} reports={visibleReports} selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} />
         <article className="min-h-[30rem] rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
           {selectedReport ? (
             <>
@@ -682,12 +777,13 @@ function downloadResearchMarkdown(detail: EquityResearchRunDetail) {
     return aIndex - bIndex;
   });
   const content = [
-    `# Quanfora 2.1 Equity Research Report: ${run.ticker}`,
+    `# Quanfora 2.1 ${reportTypeLabel(run.report_type)}: ${run.ticker}`,
     "",
     `- Company: ${run.company_name ?? "Unknown"}`,
     `- Exchange: ${run.exchange ?? "Unknown"}`,
     `- Analysis date: ${run.analysis_date}`,
-    `- Recommendation: ${run.recommendation.toUpperCase()}`,
+    `- Report type: ${reportTypeLabel(run.report_type)}`,
+    `- Final label: ${finalRecommendationTone(run).label}`,
     `- Confidence: ${Math.round(run.confidence * 100)}%`,
     `- Research depth: ${run.research_depth}`,
     "",
@@ -695,7 +791,7 @@ function downloadResearchMarkdown(detail: EquityResearchRunDetail) {
     "## Agent Reports",
     "",
     ...orderedReports.flatMap((report) => [
-      `### ${REPORT_FILES[report.agent_key] ?? report.title}`,
+      `### ${reportFileLabel(report, run)}`,
       "",
       report.markdown,
       "",
@@ -710,7 +806,7 @@ function downloadResearchMarkdown(detail: EquityResearchRunDetail) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `${run.ticker.toLowerCase()}-quanad-2.1-analysis.md`;
+  anchor.download = `${run.ticker.toLowerCase()}-quanfora-2.1-${run.report_type}.md`;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
@@ -765,13 +861,13 @@ export function ResearchRunCompactResult({
   from?: ResearchSourceSurface;
   showOpenLink?: boolean;
 }) {
-  const tone = recommendationTone(run.recommendation);
+  const tone = finalRecommendationTone(run);
   const fullReportHref = from ? `/research/${run.run_id}?from=${from}` : `/research/${run.run_id}`;
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
       <div className="flex items-center justify-between gap-3">
         <span className={cn("rounded-lg px-2.5 py-1 text-sm font-bold", tone.className)}>{tone.label}</span>
-        <span className="text-xs text-white/45">{Math.round(run.confidence * 100)}% confidence</span>
+        <span className="text-xs text-white/45">{reportTypeLabel(run.report_type)} · {Math.round(run.confidence * 100)}% confidence</span>
       </div>
       <p className="mt-3 text-sm text-white/62">{run.final_summary ?? "Final verdict is pending."}</p>
       {showOpenLink && (

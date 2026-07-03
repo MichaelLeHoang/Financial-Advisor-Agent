@@ -18,6 +18,7 @@ from src.models.equity_research import (
     EquityResearchRunDetail,
     EquityResearchSnapshot,
     EvidenceReference,
+    ReportType,
     Recommendation,
     ResearchEventType,
     ResearchRunStatus,
@@ -174,6 +175,7 @@ async def create_research_run(
         guest_owner_id=guest_owner_id if user.is_guest else None,
         ticker=effective.ticker,
         analysis_date=effective.analysis_date or date.today(),
+        report_type=effective.report_type,
         research_depth=effective.research_depth,
         selected_analysts=effective.selected_analysts,
         quick_model=effective.quick_model,
@@ -186,7 +188,7 @@ async def create_research_run(
             run_id=run.run_id,
             event_type=ResearchEventType.STATUS,
             label="Run queued",
-            content=f"Created QuanAd 2.1 research run for {run.ticker}.",
+            content=f"Created QuanAd 2.1 {run.report_type.value} research run for {run.ticker}.",
         )
     )
     asyncio.create_task(execute_research_run(run.run_id))
@@ -225,7 +227,8 @@ async def execute_research_run(run_id: UUID) -> None:
             report = _build_report(run, snapshot, agent, outputs, started_at)
             outputs[agent.key] = report
             store.add_report(report)
-            store.add_event(EquityResearchEvent(run_id=run_id, agent_key=agent.key, agent_name=agent.name, event_type=ResearchEventType.REPORT, label=agent.report_file, content=f"{agent.name} completed {agent.report_file}.", token_input=report.token_input, token_output=report.token_output))
+            report_file = _report_file_for(run, agent)
+            store.add_event(EquityResearchEvent(run_id=run_id, agent_key=agent.key, agent_name=agent.name, event_type=ResearchEventType.REPORT, label=report_file, content=f"{agent.name} completed {report_file}.", token_input=report.token_input, token_output=report.token_output))
 
         final = outputs["pm"]
         recommendation, confidence, main_upside, main_risk, summary = _final_decision(snapshot, outputs)
@@ -239,7 +242,8 @@ async def execute_research_run(run_id: UUID) -> None:
             main_risk=main_risk,
             final_summary=summary,
         )
-        store.add_event(EquityResearchEvent(run_id=run_id, agent_key="pm", agent_name="Portfolio Manager", event_type=ResearchEventType.FINAL, label="Final verdict", content=f"{final.agent_name} issued {recommendation.value.upper()} with {confidence:.0%} confidence."))
+        final_label = _final_label(run.report_type, recommendation)
+        store.add_event(EquityResearchEvent(run_id=run_id, agent_key="pm", agent_name="Portfolio Manager", event_type=ResearchEventType.FINAL, label="Final verdict", content=f"{final.agent_name} issued {final_label} with {confidence:.0%} confidence."))
     except Exception as exc:
         store.update_run(run_id, status=ResearchRunStatus.FAILED, error_message=str(exc), completed_at=datetime.now(timezone.utc))
         store.add_event(EquityResearchEvent(run_id=run_id, event_type=ResearchEventType.ERROR, label="Run failed", content=str(exc)))
@@ -260,6 +264,36 @@ def _skipped_report(run_id: UUID, agent: AgentDefinition) -> EquityResearchRepor
         started_at=now,
         completed_at=now,
     )
+
+
+def _report_file_for(run: EquityResearchRun, agent: AgentDefinition) -> str:
+    if agent.key != "pm":
+        return agent.report_file
+    return "final_trading_bias.md" if run.report_type == ReportType.TRADING else "final_investment_view.md"
+
+
+def _title_for(run: EquityResearchRun, agent: AgentDefinition) -> str:
+    if agent.key != "pm":
+        return agent.title
+    return "Final Trading Bias" if run.report_type == ReportType.TRADING else "Final Investment View"
+
+
+def _final_label(report_type: ReportType, recommendation: Recommendation) -> str:
+    labels = {
+        ReportType.TRADING: {
+            Recommendation.BUY: "BULLISH",
+            Recommendation.HOLD: "NEUTRAL",
+            Recommendation.SELL: "BEARISH",
+            Recommendation.INSUFFICIENT_DATA: "INSUFFICIENT DATA",
+        },
+        ReportType.INVESTMENT: {
+            Recommendation.BUY: "ACCUMULATE",
+            Recommendation.HOLD: "WATCHLIST",
+            Recommendation.SELL: "AVOID",
+            Recommendation.INSUFFICIENT_DATA: "INSUFFICIENT DATA",
+        },
+    }
+    return labels[report_type][recommendation]
 
 
 def _build_report(
@@ -291,7 +325,7 @@ def _build_report(
         agent_name=agent.name,
         team=agent.team,
         status=AgentStatus.COMPLETED,
-        title=agent.title,
+        title=_title_for(run, agent),
         markdown=markdown,
         summary_points=points,
         evidence=[EvidenceReference(label="Shared data snapshot", source="snapshot", detail=f"{snapshot.ticker} {snapshot.analysis_date}")],
@@ -402,15 +436,29 @@ def _maybe_enhance_with_llm(
             f"## {report.title}\n{report.markdown[:1800]}"
             for report in previous.values()
         )[:6000]
+        objective = "shorter-horizon trading setup" if run.report_type == ReportType.TRADING else "longer-horizon investment thesis"
+        section_policy = (
+            "For the Portfolio Manager final report, use exactly these top-level sections: Market Snapshot; "
+            "Technical Setup; Catalyst & Sentiment; Trade Plan; Risk / Invalidation; Bull vs Bear Scenario; "
+            "Final Trading Bias: Bullish / Neutral / Bearish; Confidence + What Would Change The View."
+            if agent.key == "pm" and run.report_type == ReportType.TRADING
+            else "For the Portfolio Manager final report, use exactly these top-level sections: Company / Asset Overview; "
+            "Long-Term Thesis; Fundamentals; Valuation Context; Growth Drivers; Key Risks; Portfolio Fit; "
+            "Final Investment View: Accumulate / Watchlist / Avoid; Confidence + Time Horizon."
+            if agent.key == "pm"
+            else "Keep the report aligned to the run objective and do not imply brokerage execution."
+        )
         prompt = f"""You are writing one source-grounded QuanAd 2.1 equity research report.
 
-Report file: {agent.report_file}
+Report file: {_report_file_for(run, agent)}
 Agent: {agent.name}
+Report objective: {run.report_type.value} ({objective})
 Research depth: {run.research_depth.value}
 
 Use only the evidence below. Do not invent news, analyst targets, product claims, prices, dates, or fundamentals.
 If data is missing, say it is missing and explain how that limits confidence.
-Write professionally for investors/traders. Include:
+Write professionally for the report objective. {section_policy}
+Include:
 - Executive summary
 - Key metrics and evidence
 - Interpretation
@@ -721,16 +769,29 @@ def _trader_report(run, snapshot, previous):
     rec, confidence, upside, risk, _ = _final_decision(snapshot, previous)
     support = snapshot.technical_indicators.get("support_20d")
     resistance = snapshot.technical_indicators.get("resistance_20d")
-    points = [
-        f"Proposed stance: {rec.value.upper()} with {confidence:.0%} confidence.",
-        f"Entry consideration: use support near {_money(support)} and confirmation above {_money(resistance)} rather than chasing price.",
-        f"Invalidation: downgrade if {risk.lower()} or price breaks key support with volume.",
-        "Position sizing: use conservative sizing; this is not direct brokerage execution.",
-    ]
+    label = _final_label(run.report_type, rec)
+    if run.report_type == ReportType.TRADING:
+        points = [
+            f"Trading bias: {label} with {confidence:.0%} confidence.",
+            f"Entry consideration: use support near {_money(support)} and confirmation above {_money(resistance)} rather than chasing price.",
+            f"Invalidation: downgrade if {risk.lower()} or price breaks key support with volume.",
+            "Position sizing: use conservative sizing; this is not direct brokerage execution.",
+        ]
+        title = "Trader Setup Plan"
+        framework_title = "Execution Framework"
+    else:
+        points = [
+            f"Investment view support: {label} with {confidence:.0%} confidence.",
+            f"Timing consideration: monitor support near {_money(support)} and confirmation above {_money(resistance)} before adding exposure.",
+            f"Thesis risk: reassess if {risk.lower()} or price breaks key support with volume.",
+            "Portfolio sizing should reflect risk tolerance, diversification, and time horizon.",
+        ]
+        title = "Investment Timing Review"
+        framework_title = "Position Building Framework"
     markdown = (
-        f"# Trader Investment Plan\n\n"
-        f"## Proposed Trade Stance\n{_bullets(points)}\n\n"
-        f"## Execution Framework\n"
+        f"# {title}\n\n"
+        f"## Proposed {'Trading Bias' if run.report_type == ReportType.TRADING else 'Investment Timing View'}\n{_bullets(points)}\n\n"
+        f"## {framework_title}\n"
         f"- **Pilot tranche:** small initial exposure only if the user accepts research risk.\n"
         f"- **Value tranche:** consider adding near support at **{_money(support)}** if evidence remains intact.\n"
         f"- **Confirmation tranche:** consider adding only after price clears resistance at **{_money(resistance)}** or trend metrics improve.\n\n"
@@ -778,40 +839,137 @@ def _safe_report(run, snapshot, previous):
 
 def _pm_report(run, snapshot, previous):
     rec, confidence, upside, risk, summary = _final_decision(snapshot, previous)
-    support = snapshot.technical_indicators.get("support_20d")
-    resistance = snapshot.technical_indicators.get("resistance_20d")
+    risk_flags = _collect_risks(previous) or [risk]
+    if run.report_type == ReportType.TRADING:
+        markdown, points = _trading_final_markdown(snapshot, rec, confidence, upside, risk, summary, risk_flags)
+    else:
+        markdown, points = _investment_final_markdown(snapshot, rec, confidence, upside, risk, summary, risk_flags)
+    return markdown, points, risk_flags, confidence
+
+
+def _trading_final_markdown(
+    snapshot: EquityResearchSnapshot,
+    rec: Recommendation,
+    confidence: float,
+    upside: str,
+    risk: str,
+    summary: str,
+    risk_flags: list[str],
+) -> tuple[str, list[str]]:
+    tech = snapshot.technical_indicators
+    support = tech.get("support_20d")
+    resistance = tech.get("resistance_20d")
+    sentiment = snapshot.sentiment_summary
+    label = _final_label(ReportType.TRADING, rec).title()
     points = [
-        f"Final Recommendation: {rec.value.upper()}",
+        f"Final Trading Bias: {label}",
         f"Confidence: {confidence:.0%}",
         f"Main upside: {upside}",
-        f"Main risk: {risk}",
-        "This verdict can change if price, fundamentals, news, or risk metrics materially change.",
+        f"Main invalidation risk: {risk}",
     ]
-    risk_flags = _collect_risks(previous) or [risk]
     markdown = (
-        f"# Final Trade Decision\n\n"
+        f"# Final Trading Bias\n\n"
         f"**Ticker:** {snapshot.ticker}  \n"
         f"**Company:** {snapshot.company_name or 'Unavailable'}  \n"
         f"**Analysis Date:** {snapshot.analysis_date}  \n"
-        f"**Final Recommendation:** {rec.value.upper()}  \n"
+        f"**Final Trading Bias:** {label}  \n"
         f"**Confidence:** {confidence:.0%}\n\n"
-        f"## Summary of Key Arguments\n{_bullets(points)}\n\n"
-        f"## Rationale\n{summary}\n\n"
-        f"## Strategic Actions\n"
-        f"- **Immediate posture:** Treat {rec.value.upper()} as a research stance, not an execution order.\n"
-        f"- **Support zone:** Monitor **{_money(support)}** for evidence of stabilization or failure.\n"
-        f"- **Confirmation zone:** Monitor **{_money(resistance)}** for upside confirmation.\n"
-        f"- **Sizing note:** Use staged exposure and risk limits; avoid all-in decisions from a single report.\n\n"
-        f"## Risk Flags\n{_bullets(risk_flags)}\n\n"
-        f"## Evidence/Data Used\n{_bullets(_evidence_items(snapshot))}\n\n"
-        f"## Source Quality\n{_source_quality(snapshot)}\n\n"
-        f"## What Would Change the Decision\n"
-        f"- A break below support with expanding volume.\n"
-        f"- A material earnings, margin, debt, or guidance change.\n"
-        f"- New adverse news or stronger evidence that current risk flags are resolving.\n\n"
+        f"## Market Snapshot\n"
+        f"- Latest price: **{_money(snapshot.latest_price)}**; daily change: **{_pct(snapshot.daily_change)}**.\n"
+        f"- Volume: **{_fmt(snapshot.volume)}**; market cap: **{_money(snapshot.market_cap)}**.\n"
+        f"- Source quality: {_source_quality(snapshot)}\n\n"
+        f"## Technical Setup\n"
+        f"- Trend: **{tech.get('trend', 'Unavailable')}**.\n"
+        f"- RSI (14): **{_fmt(tech.get('rsi_14'))}**; MACD: **{_fmt(tech.get('macd'))}**.\n"
+        f"- Support / resistance: **{_money(support)} / {_money(resistance)}**.\n"
+        f"- ATR (14): **{_fmt(tech.get('atr_14'))}**.\n\n"
+        f"## Catalyst & Sentiment\n"
+        f"- Sentiment signal: **{sentiment.get('signal', 'limited')}** with score **{sentiment.get('score', 0)}**.\n"
+        f"- Recent catalysts: {_bullets([item.get('title', 'Untitled news item') for item in snapshot.news_items[:4]] or ['No recent catalyst headlines were returned.'])}\n\n"
+        f"## Trade Plan\n"
+        f"- **Bias:** {label}.\n"
+        f"- **Entry area:** Prefer confirmation near support at **{_money(support)}** or a clean break above **{_money(resistance)}**.\n"
+        f"- **Target context:** Upside depends on {upside.lower()}.\n"
+        f"- **Sizing:** Use conservative sizing; this is a research plan, not an execution order.\n\n"
+        f"## Risk / Invalidation\n"
+        f"- Primary invalidation: {risk}\n"
+        f"- Risk flags: {_bullets(risk_flags)}\n\n"
+        f"## Bull vs Bear Scenario\n"
+        f"- **Bull case:** {upside}\n"
+        f"- **Bear case:** {risk}\n"
+        f"- **Balanced read:** {summary}\n\n"
+        f"## Final Trading Bias: Bullish / Neutral / Bearish\n"
+        f"**{label}.** Treat this as a conditional trading bias that must be refreshed if price, volume, news, or risk metrics change.\n\n"
+        f"## Confidence + What Would Change The View\n"
+        f"- Confidence: **{confidence:.0%}**.\n"
+        f"- A break below support with expanding volume would weaken the view.\n"
+        f"- A clean break above resistance with improving sentiment would strengthen the view.\n"
+        f"- A material earnings, guidance, regulatory, or liquidity event would require a fresh run.\n\n"
         f"## Disclaimer\n{DISCLAIMER}\n"
     )
-    return markdown, points, risk_flags, confidence
+    return markdown, points
+
+
+def _investment_final_markdown(
+    snapshot: EquityResearchSnapshot,
+    rec: Recommendation,
+    confidence: float,
+    upside: str,
+    risk: str,
+    summary: str,
+    risk_flags: list[str],
+) -> tuple[str, list[str]]:
+    f = snapshot.fundamentals
+    analyst = snapshot.analyst_context
+    label = _final_label(ReportType.INVESTMENT, rec).title()
+    time_horizon = "6-18 months" if rec != Recommendation.INSUFFICIENT_DATA else "Unavailable until evidence improves"
+    points = [
+        f"Final Investment View: {label}",
+        f"Confidence: {confidence:.0%}",
+        f"Time horizon: {time_horizon}",
+        f"Main risk: {risk}",
+    ]
+    markdown = (
+        f"# Final Investment View\n\n"
+        f"**Ticker:** {snapshot.ticker}  \n"
+        f"**Company:** {snapshot.company_name or 'Unavailable'}  \n"
+        f"**Analysis Date:** {snapshot.analysis_date}  \n"
+        f"**Final Investment View:** {label}  \n"
+        f"**Confidence:** {confidence:.0%}  \n"
+        f"**Time Horizon:** {time_horizon}\n\n"
+        f"## Company / Asset Overview\n"
+        f"{snapshot.company_name or snapshot.ticker} operates in **{f.get('sector') or 'Unavailable'} / {f.get('industry') or 'Unavailable'}**. "
+        f"Market capitalization is **{_money(snapshot.market_cap)}** and latest price is **{_money(snapshot.latest_price)}**.\n\n"
+        f"## Long-Term Thesis\n"
+        f"{summary}\n\n"
+        f"## Fundamentals\n"
+        f"- Revenue growth: **{_pct(f.get('revenue_growth') or f.get('quarterly_revenue_growth_yoy') or f.get('revenue_growth_ttm_yoy'))}**.\n"
+        f"- Profit margin: **{_pct(f.get('profit_margins') or f.get('net_margin_ttm'))}**.\n"
+        f"- Free cash flow: **{_money(f.get('free_cashflow'))}**.\n"
+        f"- Debt/equity: **{_fmt(f.get('debt_to_equity'))}**.\n\n"
+        f"## Valuation Context\n"
+        f"- Trailing P/E: **{_fmt(f.get('trailing_pe'))}**.\n"
+        f"- Forward P/E: **{_fmt(f.get('forward_pe'))}**.\n"
+        f"- Analyst target context: **{_money(analyst.get('analyst_target_price') or analyst.get('target_mean'))}**.\n"
+        f"- Valuation should be compared against growth durability and margin quality, not read in isolation.\n\n"
+        f"## Growth Drivers\n"
+        f"- {upside}\n"
+        f"- Growth driver evidence improves with stronger revenue, margin, guidance, or source-backed catalyst data.\n\n"
+        f"## Key Risks\n"
+        f"{_bullets(risk_flags)}\n\n"
+        f"## Portfolio Fit\n"
+        f"- View this as an **{label}** candidate within a diversified portfolio, not a standalone mandate.\n"
+        f"- Position sizing should consider volatility, drawdown tolerance, sector concentration, and existing exposure.\n"
+        f"- Refresh the thesis before increasing exposure after major earnings, guidance, or macro changes.\n\n"
+        f"## Final Investment View: Accumulate / Watchlist / Avoid\n"
+        f"**{label}.** This view reflects current evidence quality and can change if fundamentals, valuation, catalysts, or risk metrics shift.\n\n"
+        f"## Confidence + Time Horizon\n"
+        f"- Confidence: **{confidence:.0%}**.\n"
+        f"- Time horizon: **{time_horizon}**.\n"
+        f"- Revisit the view after earnings, major news, material valuation changes, or a technical breakdown.\n\n"
+        f"## Disclaimer\n{DISCLAIMER}\n"
+    )
+    return markdown, points
 
 
 def _markdown(title: str, run: EquityResearchRun, snapshot: EquityResearchSnapshot, points: list[str], risk: list[str], evidence: list[str]) -> str:

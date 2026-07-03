@@ -18,6 +18,11 @@ class ResearchDepth(str, Enum):
     DEEP = "deep"
 
 
+class ReportType(str, Enum):
+    INVESTMENT = "investment"
+    TRADING = "trading"
+
+
 class SourceSurface(str, Enum):
     INTRODUCTION = "introduction"
     RESEARCH = "research"
@@ -71,6 +76,7 @@ class EvidenceReference(BaseModel):
 class EquityResearchRunCreate(BaseModel):
     ticker: str = Field(min_length=1, max_length=20)
     analysis_date: date | None = None
+    report_type: ReportType = ReportType.INVESTMENT
     selected_analysts: list[AnalystKey] = Field(default_factory=lambda: ["market", "social", "news", "fundamentals"])
     research_depth: ResearchDepth = ResearchDepth.SHALLOW
     quick_model: str = "default-fast"
@@ -167,6 +173,7 @@ class EquityResearchRun(BaseModel):
     status: ResearchRunStatus = ResearchRunStatus.QUEUED
     recommendation: Recommendation = Recommendation.INSUFFICIENT_DATA
     confidence: float = Field(ge=0, le=1, default=0)
+    report_type: ReportType = ReportType.INVESTMENT
     research_depth: ResearchDepth = ResearchDepth.SHALLOW
     selected_analysts: list[str] = Field(default_factory=list)
     quick_model: str = "default-fast"
