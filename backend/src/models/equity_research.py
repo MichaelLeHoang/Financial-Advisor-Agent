@@ -54,6 +54,22 @@ class Recommendation(str, Enum):
     INSUFFICIENT_DATA = "insufficient_data"
 
 
+class InvestmentDecision(str, Enum):
+    STRONG_BUY = "strong_buy"
+    BUY = "buy"
+    HOLD = "hold"
+    WATCHLIST = "watchlist"
+    REDUCE = "reduce"
+    SELL = "sell"
+    AVOID = "avoid"
+
+
+class TradingBias(str, Enum):
+    BULLISH = "bullish"
+    NEUTRAL = "neutral"
+    BEARISH = "bearish"
+
+
 class ResearchEventType(str, Enum):
     REASONING = "reasoning"
     TOOL = "tool"
@@ -172,6 +188,8 @@ class EquityResearchRun(BaseModel):
     analysis_date: date
     status: ResearchRunStatus = ResearchRunStatus.QUEUED
     recommendation: Recommendation = Recommendation.INSUFFICIENT_DATA
+    investment_decision: InvestmentDecision | None = None
+    trading_bias: TradingBias | None = None
     confidence: float = Field(ge=0, le=1, default=0)
     report_type: ReportType = ReportType.INVESTMENT
     research_depth: ResearchDepth = ResearchDepth.SHALLOW

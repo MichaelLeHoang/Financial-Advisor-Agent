@@ -4,9 +4,9 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from src.agent.equity_research.entitlements import apply_research_entitlements
+from src.agent.equity_research.entitlements import apply_research_entitlements, research_deep_report_limit, research_report_limit
 from src.agent.equity_research.orchestrator import _final_decision, _pm_report
-from src.models.equity_research import EquityResearchRun, EquityResearchRunCreate, EquityResearchSnapshot, ReportType, ResearchDepth
+from src.models.equity_research import EquityResearchRun, EquityResearchRunCreate, EquityResearchSnapshot, InvestmentDecision, ReportType, ResearchDepth, TradingBias
 from src.saas.models import AuthenticatedUser, Plan
 
 
@@ -48,7 +48,19 @@ def test_trading_report_requires_trader_plan():
     assert effective.report_type == ReportType.TRADING
 
 
+def test_research_plan_limits_are_configured():
+    free = AuthenticatedUser(id=uuid4(), plan=Plan.FREE, is_guest=False)
+    trader = AuthenticatedUser(id=uuid4(), plan=Plan.TRADER, is_guest=False)
+    execution = AuthenticatedUser(id=uuid4(), plan=Plan.EXECUTION_ADDON, is_guest=False)
+
+    assert research_report_limit(free) == 5
+    assert research_report_limit(trader) == 150
+    assert research_deep_report_limit(trader) == 10
+    assert research_report_limit(execution) is None
+
+
 def test_final_decision_returns_insufficient_data_without_price():
+    run = EquityResearchRun(run_id=uuid4(), ticker="AAPL", analysis_date=date.today(), report_type=ReportType.INVESTMENT)
     snapshot = EquityResearchSnapshot(
         run_id=uuid4(),
         ticker="AAPL",
@@ -57,10 +69,11 @@ def test_final_decision_returns_insufficient_data_without_price():
         fundamentals={},
         technical_indicators={},
     )
-    recommendation, confidence, _, risk, _ = _final_decision(snapshot, {})
-    assert recommendation == "insufficient_data"
-    assert confidence == 0.25
-    assert "Price data" in risk
+    decision = _final_decision(run, snapshot, {})
+    assert decision.recommendation == "insufficient_data"
+    assert decision.investment_decision == InvestmentDecision.AVOID
+    assert decision.confidence == 0.25
+    assert "Price data" in decision.main_risk
 
 
 def test_pm_report_uses_trading_structure():
@@ -78,7 +91,8 @@ def test_pm_report_uses_trading_structure():
     assert "# Final Trading Bias" in markdown
     assert "## Technical Setup" in markdown
     assert "## Trade Plan" in markdown
-    assert "Final Trading Bias: Bullish / Neutral / Bearish" in markdown
+    assert "Bullish / Neutral / Bearish" not in markdown
+    assert "**Final Trading Bias:** Bullish" in markdown
     assert any("Final Trading Bias" in point for point in points)
 
 
@@ -99,5 +113,24 @@ def test_pm_report_uses_investment_structure():
     assert "# Final Investment View" in markdown
     assert "## Long-Term Thesis" in markdown
     assert "## Portfolio Fit" in markdown
-    assert "Final Investment View: Accumulate / Watchlist / Avoid" in markdown
+    assert "Accumulate / Watchlist / Avoid" not in markdown
+    assert "**Final Investment View:**" in markdown
     assert any("Final Investment View" in point for point in points)
+
+
+def test_trading_final_decision_sets_bias_field():
+    run = EquityResearchRun(run_id=uuid4(), ticker="AAPL", analysis_date=date.today(), report_type=ReportType.TRADING)
+    snapshot = EquityResearchSnapshot(
+        run_id=run.run_id,
+        ticker="AAPL",
+        analysis_date=date.today(),
+        latest_price=100,
+        technical_indicators={"trend": "uptrend", "rsi_14": 55},
+        fundamentals={"revenue_growth": 0.1},
+        sentiment_summary={"signal": "bullish", "score": 0.3},
+    )
+
+    decision = _final_decision(run, snapshot, {})
+
+    assert decision.trading_bias == TradingBias.BULLISH
+    assert decision.investment_decision is None

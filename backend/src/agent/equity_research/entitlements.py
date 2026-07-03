@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import HTTPException, status
 
 from src.models.equity_research import EquityResearchRunCreate, ReportType, ResearchDepth
+from src.saas.entitlements import get_entitlement
 from src.saas.models import AuthenticatedUser, Plan
 
 
@@ -20,6 +21,16 @@ GUEST_TICKER_ALLOWLIST = {
 
 DEFAULT_ANALYSTS = ["market", "social", "news", "fundamentals"]
 TRADING_REPORT_PLANS = {Plan.TRADER, Plan.QUANT, Plan.EXECUTION_ADDON}
+RESEARCH_REPORTS_LIMIT_KEY = "equity_research_reports_per_month"
+RESEARCH_DEEP_REPORTS_LIMIT_KEY = "equity_research_deep_reports_per_month"
+
+
+def research_report_limit(user: AuthenticatedUser) -> int | None:
+    return get_entitlement(user.plan).limits.get(RESEARCH_REPORTS_LIMIT_KEY)
+
+
+def research_deep_report_limit(user: AuthenticatedUser) -> int | None:
+    return get_entitlement(user.plan).limits.get(RESEARCH_DEEP_REPORTS_LIMIT_KEY)
 
 
 def apply_research_entitlements(payload: EquityResearchRunCreate, user: AuthenticatedUser) -> EquityResearchRunCreate:

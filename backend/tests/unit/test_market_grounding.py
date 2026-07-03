@@ -137,7 +137,7 @@ def test_deep_questions_still_use_quanad_consensus():
     agent._history = []
 
     def fake_consensus(self, message, remember, progress_callback=None):
-        return "QuanAd 2.0 consensus response"
+        return "Quanfora 2.0 consensus response"
 
     def fail_single(self, *args, **kwargs):
         raise AssertionError("single path should not run for auto consensus query")
@@ -145,4 +145,4 @@ def test_deep_questions_still_use_quanad_consensus():
     agent._chat_consensus = MethodType(fake_consensus, agent)
     agent._chat_single = MethodType(fail_single, agent)
 
-    assert agent.chat("Should I invest in SpaceX?", mode="auto") == "QuanAd 2.0 consensus response"
+    assert agent.chat("Should I invest in SpaceX?", mode="auto") == "Quanfora 2.0 consensus response"

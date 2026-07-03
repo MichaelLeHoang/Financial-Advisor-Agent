@@ -68,6 +68,8 @@ export type ResearchReportType = "investment" | "trading";
 export type ResearchRunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 export type ResearchAgentStatus = "pending" | "running" | "completed" | "failed" | "skipped";
 export type ResearchRecommendation = "buy" | "hold" | "sell" | "insufficient_data";
+export type InvestmentDecision = "strong_buy" | "buy" | "hold" | "watchlist" | "reduce" | "sell" | "avoid";
+export type TradingBias = "bullish" | "neutral" | "bearish";
 export type ResearchSourceSurface = "introduction" | "research" | "market" | "ai_advisor" | "shared";
 export type ResearchEventType = "reasoning" | "tool" | "report" | "status" | "final" | "error";
 
@@ -91,6 +93,8 @@ export interface EquityResearchRun {
   analysis_date: string;
   status: ResearchRunStatus;
   recommendation: ResearchRecommendation;
+  investment_decision?: InvestmentDecision | null;
+  trading_bias?: TradingBias | null;
   confidence: number;
   report_type: ResearchReportType;
   research_depth: ResearchDepth;

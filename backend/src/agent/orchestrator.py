@@ -1,5 +1,5 @@
 """
-QuanAd 2.0 — Orchestrator
+Quanfora 2.0 — Orchestrator
 
 Top-level agent that:
 1. Receives a user query
@@ -26,9 +26,9 @@ from src.saas.models import Plan
 ProgressCallback = Callable[[dict[str, Any]], None]
 
 
-class QuanAdOrchestrator:
+class QuanforaOrchestrator:
     """
-    QuanAd 2.0 multi-agent consensus orchestrator.
+    Quanfora 2.0 multi-agent consensus orchestrator.
 
     Dispatches a query to 5 specialist agents, collects their structured
     opinions, runs consensus aggregation, and synthesizes a final answer.
@@ -75,7 +75,7 @@ class QuanAdOrchestrator:
         completed_tools: list[str] = []
 
         print(f"\n{'='*60}")
-        print("  QuanAd 2.0 — Multi-Agent Consensus Analysis")
+        print("  Quanfora 2.0 — Multi-Agent Consensus Analysis")
         print(f"  Query: {query[:80]}...")
         print(f"  Dispatching to {len(specialists)} specialists (sequential, rate-limit safe)...")
         print(f"{'='*60}\n")
@@ -138,7 +138,7 @@ class QuanAdOrchestrator:
 
     def chat(self, message: str, remember: bool = True, progress_callback: ProgressCallback | None = None) -> str:
         """
-        Full QuanAd 2.0 consensus chat.
+        Full Quanfora 2.0 consensus chat.
 
         1. Dispatch to all specialists
         2. Collect opinions + run consensus
@@ -191,7 +191,7 @@ class QuanAdOrchestrator:
                 for o in result.opinions
             )
 
-            synthesis_prompt = f"""You are the QuanAd 2.0 Lead Analyst. You have received analysis from 5 specialist agents.
+            synthesis_prompt = f"""You are the Quanfora 2.0 Lead Analyst. You have received analysis from 5 specialist agents.
 Your job is to synthesize their findings into a clear, actionable recommendation.
 
 ## User Query
@@ -224,7 +224,7 @@ Rules:
 - Do not invent market data, news, prices, or analyst targets.
 - If evidence is missing or tool output failed, say so and lower confidence.
 - Do not imply guaranteed returns or direct brokerage execution.
-- End with: "This is AI-generated analysis from QuanAd 2.0's multi-agent consensus system, not professional financial advice."
+- End with: "This is AI-generated analysis from Quanfora 2.0's multi-agent consensus system, not professional financial advice."
 """
 
             response = llm.invoke([{"role": "user", "content": synthesis_prompt}])
@@ -255,7 +255,7 @@ Rules:
     def _fallback_response(result: ConsensusResult) -> str:
         """Generate a basic response if LLM synthesis fails."""
         parts = [
-            f"## QuanAd 2.0 Consensus: {result.verdict.value.upper()}",
+            f"## Quanfora 2.0 Consensus: {result.verdict.value.upper()}",
             f"**Confidence:** {result.confidence:.0%} | **Score:** {result.consensus_score:+.2f} | **Agreement:** {result.agreement_ratio:.0%}",
             "",
         ]
@@ -273,11 +273,11 @@ Rules:
         if result.dissenting_agents:
             parts.append(f"\n### Dissenting Views\n{', '.join(result.dissenting_agents)}")
 
-        parts.append("\n---\n*This is AI-generated analysis from QuanAd 2.0's multi-agent consensus system, not professional financial advice.*")
+        parts.append("\n---\n*This is AI-generated analysis from Quanfora 2.0's multi-agent consensus system, not professional financial advice.*")
 
         return "\n".join(parts)
 
     def reset_history(self) -> None:
         """Clear conversation history."""
         self._history = []
-        print("QuanAd 2.0 conversation history cleared.")
+        print("Quanfora 2.0 conversation history cleared.")

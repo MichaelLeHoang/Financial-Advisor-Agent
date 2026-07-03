@@ -2,7 +2,7 @@ from src.agent.llm_worker import LLMWorker
 
 
 def main() -> None:
-    print("Starting QuanAd LLM worker...")
+    print("Starting Quanfora LLM worker...")
     LLMWorker().run_forever()
 
 

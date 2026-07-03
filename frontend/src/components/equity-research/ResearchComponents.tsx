@@ -26,11 +26,13 @@ import type {
   EquityResearchReport,
   EquityResearchRun,
   EquityResearchRunDetail,
+  InvestmentDecision,
   ResearchDepth,
   ResearchReportType,
   ResearchRecommendation,
   ResearchRunStatus,
   ResearchSourceSurface,
+  TradingBias,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import Markdown from "@/components/ui/markdown";
@@ -85,17 +87,12 @@ function reportFileLabel(report: EquityResearchReport, run?: EquityResearchRun) 
 }
 
 function finalRecommendationTone(run: EquityResearchRun) {
-  const tone = recommendationTone(run.recommendation);
   if (run.report_type === "trading") {
-    if (run.recommendation === "buy") return { label: "BULLISH", className: tone.className };
-    if (run.recommendation === "sell") return { label: "BEARISH", className: tone.className };
-    if (run.recommendation === "hold") return { label: "NEUTRAL", className: tone.className };
-    return { label: "INSUFFICIENT DATA", className: tone.className };
+    if (run.trading_bias) return tradingBiasTone(run.trading_bias);
+    return legacyTradingTone(run.recommendation);
   }
-  if (run.recommendation === "buy") return { label: "ACCUMULATE", className: tone.className };
-  if (run.recommendation === "sell") return { label: "AVOID", className: tone.className };
-  if (run.recommendation === "hold") return { label: "WATCHLIST", className: tone.className };
-  return { label: "INSUFFICIENT DATA", className: tone.className };
+  if (run.investment_decision) return investmentDecisionTone(run.investment_decision);
+  return legacyInvestmentTone(run.recommendation);
 }
 
 export function normalizeResearchTicker(value: string) {
@@ -850,6 +847,42 @@ function recommendationTone(recommendation: ResearchRecommendation) {
   if (recommendation === "sell") return { label: "SELL", className: "bg-rose-400/14 text-rose-200 ring-1 ring-rose-400/25" };
   if (recommendation === "hold") return { label: "HOLD", className: "bg-amber-400/14 text-amber-100 ring-1 ring-amber-400/25" };
   return { label: "INSUFFICIENT DATA", className: "bg-slate-400/14 text-slate-200 ring-1 ring-slate-400/25" };
+}
+
+function investmentDecisionTone(decision: InvestmentDecision) {
+  const tones: Record<InvestmentDecision, { label: string; className: string }> = {
+    strong_buy: { label: "STRONG BUY", className: "bg-emerald-400/18 text-emerald-100 ring-1 ring-emerald-300/35" },
+    buy: { label: "BUY", className: "bg-emerald-400/14 text-emerald-200 ring-1 ring-emerald-400/25" },
+    hold: { label: "HOLD", className: "bg-sky-400/14 text-sky-100 ring-1 ring-sky-400/25" },
+    watchlist: { label: "WATCHLIST", className: "bg-amber-400/14 text-amber-100 ring-1 ring-amber-400/25" },
+    reduce: { label: "REDUCE", className: "bg-orange-400/14 text-orange-100 ring-1 ring-orange-400/25" },
+    sell: { label: "SELL", className: "bg-rose-400/14 text-rose-200 ring-1 ring-rose-400/25" },
+    avoid: { label: "AVOID", className: "bg-slate-400/14 text-slate-200 ring-1 ring-slate-400/25" },
+  };
+  return tones[decision];
+}
+
+function tradingBiasTone(bias: TradingBias) {
+  const tones: Record<TradingBias, { label: string; className: string }> = {
+    bullish: { label: "BULLISH", className: "bg-emerald-400/14 text-emerald-200 ring-1 ring-emerald-400/25" },
+    neutral: { label: "NEUTRAL", className: "bg-amber-400/14 text-amber-100 ring-1 ring-amber-400/25" },
+    bearish: { label: "BEARISH", className: "bg-rose-400/14 text-rose-200 ring-1 ring-rose-400/25" },
+  };
+  return tones[bias];
+}
+
+function legacyInvestmentTone(recommendation: ResearchRecommendation) {
+  if (recommendation === "buy") return investmentDecisionTone("buy");
+  if (recommendation === "sell") return investmentDecisionTone("avoid");
+  if (recommendation === "hold") return investmentDecisionTone("watchlist");
+  return recommendationTone("insufficient_data");
+}
+
+function legacyTradingTone(recommendation: ResearchRecommendation) {
+  if (recommendation === "buy") return tradingBiasTone("bullish");
+  if (recommendation === "sell") return tradingBiasTone("bearish");
+  if (recommendation === "hold") return tradingBiasTone("neutral");
+  return recommendationTone("insufficient_data");
 }
 
 export function ResearchRunCompactResult({

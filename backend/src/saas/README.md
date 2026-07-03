@@ -23,4 +23,4 @@ Authentication comes from `auth/`; billing provider logic stays in `billing/`; d
 Cover plan matrices, user isolation, guest restrictions, resource limits, upgrade errors, and repository fallback behavior.
 
 ## Latest Change
-- Added per-holding cost currency persistence so portfolio holdings can keep their original purchase currency.
+- Added monthly Quanfora 2.1 research report and deep research report limits to plan entitlements.

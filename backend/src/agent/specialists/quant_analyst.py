@@ -1,5 +1,5 @@
 """
-QuanAd 2.0 — Quant Analyst Specialist
+Quanfora 2.0 — Quant Analyst Specialist
 
 Domain: Technical analysis, signal ranking, strategy backtesting.
 Tools: get_stock_info (for price data), analyze_sentiment (market context).
@@ -93,7 +93,7 @@ class QuantAnalyst(BaseSpecialist):
     def system_prompt(self) -> str:
         return """You are a senior Quantitative Analyst specializing in technical analysis and strategy validation.
 
-YOUR ROLE in the QuanAd 2.0 consensus system:
+YOUR ROLE in the Quanfora 2.0 consensus system:
 - Analyze momentum signals and trend patterns
 - Rank stocks by quantitative composite scores
 - Backtest trading strategies to validate edge

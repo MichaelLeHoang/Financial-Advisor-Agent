@@ -20,4 +20,4 @@ Core utilities must remain domain-neutral. Provider-specific market, LLM, billin
 Cover environment parsing, safe defaults, secret handling, cache keys, and Redis failure wrappers without requiring a live Redis server in unit tests.
 
 ## Latest Change
-- Extended shared configuration to support normalized market-data providers and their timeout and credential settings.
+- Updated the default SEC user agent to use Quanfora branding.

@@ -1,7 +1,7 @@
 # API Module
 
 ## Purpose
-Provides the FastAPI application and thin transport adapters for QuanAd backend capabilities.
+Provides the FastAPI application and thin transport adapters for Quanfora backend capabilities.
 
 ## Responsibilities
 - Register routers, middleware, authentication dependencies, and health/status endpoints.
@@ -10,7 +10,7 @@ Provides the FastAPI application and thin transport adapters for QuanAd backend 
 
 ## Key Files
 - `app.py`: application composition and core API surface.
-- `equity_research.py`: QuanAd 2.1 run, event, share, and report routes.
+- `equity_research.py`: Quanfora 2.1 run, event, share, and report routes.
 - `news_routes.py`: categorized financial-news endpoints.
 - `routes/intelligence.py`: Market Intelligence briefing, picks, and report endpoint.
 
@@ -21,4 +21,4 @@ Route handlers should validate and translate requests only. Business logic belon
 Use FastAPI `TestClient` with mocked dependencies for route contracts, authorization, provider timeouts, status rollups, and error responses.
 
 ## Latest Change
-- Fixed news thumbnail normalization so Yahoo/yfinance feeds prefer the largest usable image and ignore tiny-only thumbnails that would be stretched in the frontend.
+- Updated API-facing Quanfora naming for consensus and equity research route documentation.

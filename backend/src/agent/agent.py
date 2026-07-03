@@ -1,10 +1,10 @@
 """
-Financial Advisor Agent — QuanAd 2.0
+Financial Advisor Agent — Quanfora 2.0
 
 Supports two modes:
 - **Single-agent** (legacy): A single LangGraph ReAct agent with all tools.
   Fast, suitable for simple queries like "What is the price of AAPL?"
-- **Multi-agent consensus** (QuanAd 2.0): 5 specialist agents analyze
+- **Multi-agent consensus** (Quanfora 2.0): 5 specialist agents analyze
   independently, then a consensus engine aggregates their opinions.
   Suitable for investment analysis queries.
 
@@ -107,7 +107,7 @@ def _is_deep_market_analysis_query(message: str) -> bool:
 
 class FinancialAdvisorAgent:
     """
-    LangChain-powered financial advisor agent with QuanAd 2.0 consensus support.
+    LangChain-powered financial advisor agent with Quanfora 2.0 consensus support.
 
     Usage:
         # Single-agent mode (default)
@@ -146,7 +146,7 @@ class FinancialAdvisorAgent:
         )
         self._history: list[dict] = []  # Multi-turn conversation history
 
-        # Lazy-init the QuanAd orchestrator only when needed.
+        # Lazy-init the Quanfora orchestrator only when needed.
         self._orchestrator = None
 
     def _create_llm(self, provider: str) -> RoutedChatModel:
@@ -166,11 +166,11 @@ class FinancialAdvisorAgent:
         )
 
     def _get_orchestrator(self):
-        """Lazy-initialize the QuanAd 2.0 orchestrator."""
+        """Lazy-initialize the Quanfora 2.0 orchestrator."""
         if self._orchestrator is None:
-            from src.agent.orchestrator import QuanAdOrchestrator
+            from src.agent.orchestrator import QuanforaOrchestrator
 
-            self._orchestrator = QuanAdOrchestrator(
+            self._orchestrator = QuanforaOrchestrator(
                 user_id=self.user_id,
                 plan=self.plan,
                 preferred_mode=self.preferred_mode,
@@ -191,7 +191,7 @@ class FinancialAdvisorAgent:
         Args:
             message: User's message.
             remember: If True, maintains conversation history for multi-turn context.
-            mode: "single" (default ReAct agent), "consensus" (QuanAd 2.0),
+            mode: "single" (default ReAct agent), "consensus" (Quanfora 2.0),
                   or "auto" (auto-detect based on query complexity).
         """
         self.last_response_metadata = None
@@ -328,7 +328,7 @@ class FinancialAdvisorAgent:
         remember: bool,
         progress_callback: ProgressCallback | None = None,
     ) -> str:
-        """QuanAd 2.0 multi-agent consensus path."""
+        """Quanfora 2.0 multi-agent consensus path."""
         orchestrator = self._get_orchestrator()
         result = orchestrator.analyze(message)
         self.last_response_metadata = _consensus_result_metadata(result)

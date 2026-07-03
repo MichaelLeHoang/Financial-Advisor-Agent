@@ -1,7 +1,7 @@
 # Agent Module
 
 ## Purpose
-Implements the QuanAd conversational advisor, deterministic market grounding, tool execution, queued jobs, conversation history, and QuanAd 2.0 consensus orchestration.
+Implements the Quanfora conversational advisor, deterministic market grounding, tool execution, queued jobs, conversation history, and Quanfora 2.0 consensus orchestration.
 
 ## Responsibilities
 - Route simple, consensus, and equity-research requests.
@@ -13,7 +13,7 @@ Implements the QuanAd conversational advisor, deterministic market grounding, to
 - `agent.py`: primary chat router and ReAct agent.
 - `tools.py`: financial tools exposed to agents.
 - `market_grounding.py`: intent detection, entity resolution, quote formatting, and freshness metadata.
-- `orchestrator.py` / `consensus.py`: QuanAd 2.0 specialist aggregation.
+- `orchestrator.py` / `consensus.py`: Quanfora 2.0 specialist aggregation.
 - `llm_queue.py` / `llm_worker.py`: asynchronous job lifecycle and queued response metadata.
 
 ## Boundaries
@@ -23,4 +23,4 @@ Reuse `data.market_data_service`, `llm.gateway`, `risk`, `quant`, and `saas` rat
 Cover routing, grounding, consensus, queue state, history ownership, and tool failure behavior with mocked providers.
 
 ## Latest Change
-- Persisted structured assistant response metadata so queued QuanAd 2.0 consensus opinions and Quanfora 2.1 research report tabs survive chat reloads.
+- Renamed the consensus orchestrator and user-facing agent copy to use Quanfora branding.

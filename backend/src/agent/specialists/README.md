@@ -1,7 +1,7 @@
 # Agent Specialists Module
 
 ## Purpose
-Defines the five QuanAd 2.0 specialist roles that produce structured opinions for consensus.
+Defines the five Quanfora 2.0 specialist roles that produce structured opinions for consensus.
 
 ## Responsibilities
 - Bind domain-appropriate existing tools.
@@ -20,4 +20,4 @@ Specialists should compose tools from `agent/tools.py` and calculations from dom
 Mock LLM and tool outputs; cover structured parsing, fallback opinions, model disagreement, and risk-veto inputs.
 
 ## Latest Change
-- Updated prediction-facing specialist behavior to consume the richer ensemble output, including model weights, validation metrics, agreement, confidence, and caveats.
+- Updated specialist role copy to use Quanfora branding for user-facing consensus prompts and documentation.

@@ -6,7 +6,9 @@ from datetime import date, datetime, timezone
 from threading import Lock
 from uuid import UUID, uuid4
 
-from src.agent.equity_research.entitlements import apply_research_entitlements
+from fastapi import HTTPException, status
+
+from src.agent.equity_research.entitlements import apply_research_entitlements, research_deep_report_limit, research_report_limit
 from src.agent.equity_research.snapshot import build_data_snapshot
 from src.models.equity_research import (
     DISCLAIMER,
@@ -18,10 +20,13 @@ from src.models.equity_research import (
     EquityResearchRunDetail,
     EquityResearchSnapshot,
     EvidenceReference,
+    InvestmentDecision,
     ReportType,
     Recommendation,
+    ResearchDepth,
     ResearchEventType,
     ResearchRunStatus,
+    TradingBias,
 )
 from src.llm.gateway import llm_gateway
 from src.saas.models import AuthenticatedUser
@@ -34,6 +39,17 @@ class AgentDefinition:
     team: str
     report_file: str
     title: str
+
+
+@dataclass(frozen=True)
+class FinalDecision:
+    recommendation: Recommendation
+    investment_decision: InvestmentDecision | None
+    trading_bias: TradingBias | None
+    confidence: float
+    main_upside: str
+    main_risk: str
+    summary: str
 
 
 AGENT_SEQUENCE: list[AgentDefinition] = [
@@ -50,6 +66,37 @@ AGENT_SEQUENCE: list[AgentDefinition] = [
     AgentDefinition("safe", "Safe Analyst", "Risk Management Agents", "safe_risk_controls.md", "Conservative Risk Controls"),
     AgentDefinition("pm", "Portfolio Manager", "Final Verdict", "final_trade_decision.md", "Final Trade Decision"),
 ]
+
+
+DEPTH_QUALITY_STANDARDS = {
+    ResearchDepth.SHALLOW: "shallow: concise snapshot, 500-900 words, plain English, no overstated certainty.",
+    ResearchDepth.MEDIUM: "medium: full investment memo, 1,200-2,000 words, with clear synthesis and nearby-decision tradeoffs.",
+    ResearchDepth.DEEP: "deep: institutional-style report, 2,500-4,000+ words, resolving agent disagreements and portfolio-manager judgment.",
+}
+
+INVESTMENT_DECISION_DEFINITIONS = """Allowed investment decisions:
+- strong_buy: high-conviction positive view. Use only when fundamentals, valuation, catalysts, trend, and risk/reward are strongly aligned.
+- buy: positive investment view with attractive upside and manageable risk.
+- hold: neutral view for an existing position; reasonable to keep but not compelling enough to add.
+- watchlist: promising but not ready due to valuation, timing, uncertainty, missing catalyst confirmation, or mixed evidence.
+- reduce: trim exposure because risk/reward is weakening.
+- sell: exit an existing position because the thesis is broken or downside risk is high.
+- avoid: not suitable for new investment due to weak fundamentals, poor risk/reward, excessive uncertainty, or unreliable data.
+
+Confidence rules:
+- strong_buy requires confidence >= 75% and no severe unresolved risk flags.
+- buy usually requires confidence >= 60%.
+- sell usually requires confidence >= 65% and clear downside evidence.
+- shallow mode should avoid strong_buy or sell unless evidence is unusually clear.
+- explain why the final decision is not a stronger or weaker adjacent decision."""
+
+FINAL_REPORT_QUALITY_GATE = """Final report quality gate:
+1. Include exactly one final decision.
+2. Do not include unfinished option strings such as "Accumulate / Watchlist / Avoid" or "Bullish / Neutral / Bearish".
+3. Explain why the decision was chosen and what would change it.
+4. Include market/trend context, catalysts, risks, portfolio fit, and confidence.
+5. Translate internal scoring into plain English; do not expose raw internal agent scores as the decision basis.
+6. Do not make unsupported claims."""
 
 
 class EquityResearchStore:
@@ -154,12 +201,85 @@ class EquityResearchStore:
         run_id = self.share_index.get(slug)
         return self.detail(run_id) if run_id else None
 
+    def count_monthly_runs(
+        self,
+        *,
+        user_id: UUID | None,
+        guest_owner_id: str | None,
+        month_start: datetime,
+        research_depth: ResearchDepth | None = None,
+    ) -> int:
+        with self._lock:
+            total = 0
+            for run in self.runs.values():
+                if run.created_at < month_start:
+                    continue
+                if research_depth is not None and run.research_depth != research_depth:
+                    continue
+                if user_id is not None and run.user_id == user_id:
+                    total += 1
+                    continue
+                if user_id is None and guest_owner_id and run.guest_owner_id == guest_owner_id:
+                    total += 1
+            return total
+
 
 _STORE = EquityResearchStore()
 
 
 def get_research_store() -> EquityResearchStore:
     return _STORE
+
+
+def _current_month_start() -> datetime:
+    now = datetime.now(timezone.utc)
+    return datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+
+
+def _enforce_research_limits(
+    payload: EquityResearchRunCreate,
+    user: AuthenticatedUser,
+    *,
+    guest_owner_id: str | None,
+) -> None:
+    store = get_research_store()
+    month_start = _current_month_start()
+    owner_id = user.id if not user.is_guest else None
+    monthly_limit = research_report_limit(user)
+    if monthly_limit is not None:
+        used = store.count_monthly_runs(user_id=owner_id, guest_owner_id=guest_owner_id, month_start=month_start)
+        if used >= monthly_limit:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "research_limit_reached",
+                    "message": "Monthly research report limit reached for your plan.",
+                    "limit": monthly_limit,
+                    "used": used,
+                    "research_depth": payload.research_depth.value,
+                },
+            )
+
+    if payload.research_depth == ResearchDepth.DEEP:
+        deep_limit = research_deep_report_limit(user)
+        if deep_limit is not None:
+            used_deep = store.count_monthly_runs(
+                user_id=owner_id,
+                guest_owner_id=guest_owner_id,
+                month_start=month_start,
+                research_depth=ResearchDepth.DEEP,
+            )
+            if used_deep >= deep_limit:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "error": "deep_research_limit_reached",
+                        "message": "Monthly deep research report limit reached for your plan.",
+                        "limit": deep_limit,
+                        "used": used_deep,
+                        "research_depth": payload.research_depth.value,
+                    },
+                )
 
 
 async def create_research_run(
@@ -169,6 +289,7 @@ async def create_research_run(
     guest_owner_id: str | None = None,
 ) -> EquityResearchRun:
     effective = apply_research_entitlements(payload, user)
+    _enforce_research_limits(effective, user, guest_owner_id=guest_owner_id)
     run = EquityResearchRun(
         run_id=uuid4(),
         user_id=user.id if not user.is_guest else None,
@@ -188,7 +309,7 @@ async def create_research_run(
             run_id=run.run_id,
             event_type=ResearchEventType.STATUS,
             label="Run queued",
-            content=f"Created QuanAd 2.1 {run.report_type.value} research run for {run.ticker}.",
+            content=f"Created Quanfora 2.1 {run.report_type.value} research run for {run.ticker}.",
         )
     )
     asyncio.create_task(execute_research_run(run.run_id))
@@ -231,19 +352,21 @@ async def execute_research_run(run_id: UUID) -> None:
             store.add_event(EquityResearchEvent(run_id=run_id, agent_key=agent.key, agent_name=agent.name, event_type=ResearchEventType.REPORT, label=report_file, content=f"{agent.name} completed {report_file}.", token_input=report.token_input, token_output=report.token_output))
 
         final = outputs["pm"]
-        recommendation, confidence, main_upside, main_risk, summary = _final_decision(snapshot, outputs)
+        decision = _final_decision(run, snapshot, outputs)
         store.update_run(
             run_id,
             status=ResearchRunStatus.COMPLETED,
-            recommendation=recommendation,
-            confidence=confidence,
+            recommendation=decision.recommendation,
+            investment_decision=decision.investment_decision,
+            trading_bias=decision.trading_bias,
+            confidence=decision.confidence,
             completed_at=datetime.now(timezone.utc),
-            main_upside=main_upside,
-            main_risk=main_risk,
-            final_summary=summary,
+            main_upside=decision.main_upside,
+            main_risk=decision.main_risk,
+            final_summary=decision.summary,
         )
-        final_label = _final_label(run.report_type, recommendation)
-        store.add_event(EquityResearchEvent(run_id=run_id, agent_key="pm", agent_name="Portfolio Manager", event_type=ResearchEventType.FINAL, label="Final verdict", content=f"{final.agent_name} issued {final_label} with {confidence:.0%} confidence."))
+        final_label = _final_label(run.report_type, decision)
+        store.add_event(EquityResearchEvent(run_id=run_id, agent_key="pm", agent_name="Portfolio Manager", event_type=ResearchEventType.FINAL, label="Final verdict", content=f"{final.agent_name} issued {final_label} with {decision.confidence:.0%} confidence."))
     except Exception as exc:
         store.update_run(run_id, status=ResearchRunStatus.FAILED, error_message=str(exc), completed_at=datetime.now(timezone.utc))
         store.add_event(EquityResearchEvent(run_id=run_id, event_type=ResearchEventType.ERROR, label="Run failed", content=str(exc)))
@@ -278,22 +401,35 @@ def _title_for(run: EquityResearchRun, agent: AgentDefinition) -> str:
     return "Final Trading Bias" if run.report_type == ReportType.TRADING else "Final Investment View"
 
 
-def _final_label(report_type: ReportType, recommendation: Recommendation) -> str:
-    labels = {
-        ReportType.TRADING: {
-            Recommendation.BUY: "BULLISH",
-            Recommendation.HOLD: "NEUTRAL",
-            Recommendation.SELL: "BEARISH",
-            Recommendation.INSUFFICIENT_DATA: "INSUFFICIENT DATA",
-        },
-        ReportType.INVESTMENT: {
-            Recommendation.BUY: "ACCUMULATE",
-            Recommendation.HOLD: "WATCHLIST",
-            Recommendation.SELL: "AVOID",
-            Recommendation.INSUFFICIENT_DATA: "INSUFFICIENT DATA",
-        },
-    }
-    return labels[report_type][recommendation]
+def _title_label(value: str) -> str:
+    return value.replace("_", " ").title()
+
+
+def _final_label(report_type: ReportType, decision: FinalDecision | Recommendation | InvestmentDecision | TradingBias) -> str:
+    if isinstance(decision, FinalDecision):
+        if report_type == ReportType.TRADING and decision.trading_bias is not None:
+            return _title_label(decision.trading_bias.value)
+        if report_type == ReportType.INVESTMENT and decision.investment_decision is not None:
+            return _title_label(decision.investment_decision.value)
+        recommendation = decision.recommendation
+    elif isinstance(decision, InvestmentDecision | TradingBias):
+        return _title_label(decision.value)
+    else:
+        recommendation = decision
+
+    if report_type == ReportType.TRADING:
+        return {
+            Recommendation.BUY: "Bullish",
+            Recommendation.HOLD: "Neutral",
+            Recommendation.SELL: "Bearish",
+            Recommendation.INSUFFICIENT_DATA: "Insufficient Data",
+        }[recommendation]
+    return {
+        Recommendation.BUY: "Buy",
+        Recommendation.HOLD: "Watchlist",
+        Recommendation.SELL: "Avoid",
+        Recommendation.INSUFFICIENT_DATA: "Avoid",
+    }[recommendation]
 
 
 def _build_report(
@@ -440,20 +576,27 @@ def _maybe_enhance_with_llm(
         section_policy = (
             "For the Portfolio Manager final report, use exactly these top-level sections: Market Snapshot; "
             "Technical Setup; Catalyst & Sentiment; Trade Plan; Risk / Invalidation; Bull vs Bear Scenario; "
-            "Final Trading Bias: Bullish / Neutral / Bearish; Confidence + What Would Change The View."
+            "Final Trading Bias; Confidence + What Would Change The View. The Final Trading Bias section must choose exactly one of bullish, neutral, or bearish."
             if agent.key == "pm" and run.report_type == ReportType.TRADING
             else "For the Portfolio Manager final report, use exactly these top-level sections: Company / Asset Overview; "
             "Long-Term Thesis; Fundamentals; Valuation Context; Growth Drivers; Key Risks; Portfolio Fit; "
-            "Final Investment View: Accumulate / Watchlist / Avoid; Confidence + Time Horizon."
+            "Final Investment View; Confidence + Time Horizon. The Final Investment View section must choose exactly one allowed investment decision."
             if agent.key == "pm"
             else "Keep the report aligned to the run objective and do not imply brokerage execution."
         )
-        prompt = f"""You are writing one source-grounded QuanAd 2.1 equity research report.
+        mode_guidance = DEPTH_QUALITY_STANDARDS.get(run.research_depth, DEPTH_QUALITY_STANDARDS[ResearchDepth.SHALLOW])
+        decision_guidance = INVESTMENT_DECISION_DEFINITIONS if run.report_type == ReportType.INVESTMENT else "Trading bias decisions are bullish, neutral, or bearish. Use exactly one."
+        prompt = f"""You are writing one source-grounded Quanfora 2.1 equity research report.
 
 Report file: {_report_file_for(run, agent)}
 Agent: {agent.name}
 Report objective: {run.report_type.value} ({objective})
 Research depth: {run.research_depth.value}
+Depth quality standard: {mode_guidance}
+
+{decision_guidance}
+
+{FINAL_REPORT_QUALITY_GATE}
 
 Use only the evidence below. Do not invent news, analyst targets, product claims, prices, dates, or fundamentals.
 If data is missing, say it is missing and explain how that limits confidence.
@@ -485,7 +628,7 @@ Prior agent context:
         content = response.content
         if isinstance(content, list):
             content = "\n".join(part.get("text", str(part)) if isinstance(part, dict) else str(part) for part in content)
-        if isinstance(content, str) and len(content.strip()) > 500:
+        if isinstance(content, str) and len(content.strip()) > 500 and _passes_quality_gate(content):
             llm_gateway.record_usage(
                 user_id=str(run.user_id),
                 task_type="equity_research_report",
@@ -497,6 +640,21 @@ Prior agent context:
     except Exception:
         return markdown
     return markdown
+
+
+def _passes_quality_gate(markdown: str) -> bool:
+    banned = [
+        "Accumulate / Watchlist / Avoid",
+        "Bullish / Neutral / Bearish",
+        "Strong Buy / Buy / Hold",
+    ]
+    if any(fragment in markdown for fragment in banned):
+        return False
+    if markdown.count("Final Investment View") > 2:
+        return False
+    if markdown.count("Final Trading Bias") > 2:
+        return False
+    return True
 
 
 def _score(snapshot: EquityResearchSnapshot) -> int:
@@ -631,7 +789,7 @@ def _news_report(run, snapshot, previous):
         f"# News Report\n\n"
         f"**Ticker:** {snapshot.ticker}  \n**Company:** {snapshot.company_name or 'Unavailable'}  \n**Analysis Date:** {snapshot.analysis_date}\n\n"
         f"## News and Macro Context\n"
-        f"The news tape should be read as catalyst evidence. QuanAd prioritizes source, timestamp, and direct links so the user can verify whether the narrative is current.\n\n"
+        f"The news tape should be read as catalyst evidence. Quanfora prioritizes source, timestamp, and direct links so the user can verify whether the narrative is current.\n\n"
         f"## Key Headlines\n{_bullets(points)}\n\n"
         f"## News Evidence Table\n| Headline | Source | Published |\n| --- | --- | --- |\n{news_rows}\n\n"
         f"## Trader Interpretation\n"
@@ -766,10 +924,13 @@ def _evaluation_report(run, snapshot, previous):
 
 
 def _trader_report(run, snapshot, previous):
-    rec, confidence, upside, risk, _ = _final_decision(snapshot, previous)
+    decision = _final_decision(run, snapshot, previous)
+    confidence = decision.confidence
+    upside = decision.main_upside
+    risk = decision.main_risk
     support = snapshot.technical_indicators.get("support_20d")
     resistance = snapshot.technical_indicators.get("resistance_20d")
-    label = _final_label(run.report_type, rec)
+    label = _final_label(run.report_type, decision)
     if run.report_type == ReportType.TRADING:
         points = [
             f"Trading bias: {label} with {confidence:.0%} confidence.",
@@ -805,13 +966,13 @@ def _trader_report(run, snapshot, previous):
 
 
 def _risky_report(run, snapshot, previous):
-    rec, confidence, upside, risk, _ = _final_decision(snapshot, previous)
+    decision = _final_decision(run, snapshot, previous)
     points = [
-        f"Upside scenario favors momentum continuation, positive data surprise, and a {rec.value.upper()} stance holding above invalidation levels.",
+        f"Upside scenario favors momentum continuation, positive data surprise, and a {_final_label(run.report_type, decision)} stance holding above invalidation levels.",
         "High-risk opportunity is only attractive when volatility is compensated by evidence quality.",
-        f"Main upside: {upside}",
+        f"Main upside: {decision.main_upside}",
     ]
-    markdown = _markdown("Risk Debate - Risky Analyst", run, snapshot, points, [risk] if confidence < 0.55 else [], ["Bull case, market report, sentiment report."])
+    markdown = _markdown("Risk Debate - Risky Analyst", run, snapshot, points, [decision.main_risk] if decision.confidence < 0.55 else [], ["Bull case, market report, sentiment report."])
     return markdown, points, [], 0.62
 
 
@@ -838,34 +999,30 @@ def _safe_report(run, snapshot, previous):
 
 
 def _pm_report(run, snapshot, previous):
-    rec, confidence, upside, risk, summary = _final_decision(snapshot, previous)
-    risk_flags = _collect_risks(previous) or [risk]
+    decision = _final_decision(run, snapshot, previous)
+    risk_flags = _collect_risks(previous) or [decision.main_risk]
     if run.report_type == ReportType.TRADING:
-        markdown, points = _trading_final_markdown(snapshot, rec, confidence, upside, risk, summary, risk_flags)
+        markdown, points = _trading_final_markdown(snapshot, decision, risk_flags)
     else:
-        markdown, points = _investment_final_markdown(snapshot, rec, confidence, upside, risk, summary, risk_flags)
-    return markdown, points, risk_flags, confidence
+        markdown, points = _investment_final_markdown(snapshot, decision, risk_flags)
+    return markdown, points, risk_flags, decision.confidence
 
 
 def _trading_final_markdown(
     snapshot: EquityResearchSnapshot,
-    rec: Recommendation,
-    confidence: float,
-    upside: str,
-    risk: str,
-    summary: str,
+    decision: FinalDecision,
     risk_flags: list[str],
 ) -> tuple[str, list[str]]:
     tech = snapshot.technical_indicators
     support = tech.get("support_20d")
     resistance = tech.get("resistance_20d")
     sentiment = snapshot.sentiment_summary
-    label = _final_label(ReportType.TRADING, rec).title()
+    label = _final_label(ReportType.TRADING, decision)
     points = [
         f"Final Trading Bias: {label}",
-        f"Confidence: {confidence:.0%}",
-        f"Main upside: {upside}",
-        f"Main invalidation risk: {risk}",
+        f"Confidence: {decision.confidence:.0%}",
+        f"Main upside: {decision.main_upside}",
+        f"Main invalidation risk: {decision.main_risk}",
     ]
     markdown = (
         f"# Final Trading Bias\n\n"
@@ -873,7 +1030,7 @@ def _trading_final_markdown(
         f"**Company:** {snapshot.company_name or 'Unavailable'}  \n"
         f"**Analysis Date:** {snapshot.analysis_date}  \n"
         f"**Final Trading Bias:** {label}  \n"
-        f"**Confidence:** {confidence:.0%}\n\n"
+        f"**Confidence:** {decision.confidence:.0%}\n\n"
         f"## Market Snapshot\n"
         f"- Latest price: **{_money(snapshot.latest_price)}**; daily change: **{_pct(snapshot.daily_change)}**.\n"
         f"- Volume: **{_fmt(snapshot.volume)}**; market cap: **{_money(snapshot.market_cap)}**.\n"
@@ -889,19 +1046,19 @@ def _trading_final_markdown(
         f"## Trade Plan\n"
         f"- **Bias:** {label}.\n"
         f"- **Entry area:** Prefer confirmation near support at **{_money(support)}** or a clean break above **{_money(resistance)}**.\n"
-        f"- **Target context:** Upside depends on {upside.lower()}.\n"
+        f"- **Target context:** Upside depends on {decision.main_upside.lower()}.\n"
         f"- **Sizing:** Use conservative sizing; this is a research plan, not an execution order.\n\n"
         f"## Risk / Invalidation\n"
-        f"- Primary invalidation: {risk}\n"
+        f"- Primary invalidation: {decision.main_risk}\n"
         f"- Risk flags: {_bullets(risk_flags)}\n\n"
         f"## Bull vs Bear Scenario\n"
-        f"- **Bull case:** {upside}\n"
-        f"- **Bear case:** {risk}\n"
-        f"- **Balanced read:** {summary}\n\n"
-        f"## Final Trading Bias: Bullish / Neutral / Bearish\n"
+        f"- **Bull case:** {decision.main_upside}\n"
+        f"- **Bear case:** {decision.main_risk}\n"
+        f"- **Balanced read:** {decision.summary}\n\n"
+        f"## Final Trading Bias\n"
         f"**{label}.** Treat this as a conditional trading bias that must be refreshed if price, volume, news, or risk metrics change.\n\n"
         f"## Confidence + What Would Change The View\n"
-        f"- Confidence: **{confidence:.0%}**.\n"
+        f"- Confidence: **{decision.confidence:.0%}**.\n"
         f"- A break below support with expanding volume would weaken the view.\n"
         f"- A clean break above resistance with improving sentiment would strengthen the view.\n"
         f"- A material earnings, guidance, regulatory, or liquidity event would require a fresh run.\n\n"
@@ -912,22 +1069,19 @@ def _trading_final_markdown(
 
 def _investment_final_markdown(
     snapshot: EquityResearchSnapshot,
-    rec: Recommendation,
-    confidence: float,
-    upside: str,
-    risk: str,
-    summary: str,
+    decision: FinalDecision,
     risk_flags: list[str],
 ) -> tuple[str, list[str]]:
     f = snapshot.fundamentals
     analyst = snapshot.analyst_context
-    label = _final_label(ReportType.INVESTMENT, rec).title()
-    time_horizon = "6-18 months" if rec != Recommendation.INSUFFICIENT_DATA else "Unavailable until evidence improves"
+    label = _final_label(ReportType.INVESTMENT, decision)
+    time_horizon = "6-18 months" if decision.recommendation != Recommendation.INSUFFICIENT_DATA else "Unavailable until evidence improves"
+    adjacent = _investment_adjacent_explanation(decision)
     points = [
         f"Final Investment View: {label}",
-        f"Confidence: {confidence:.0%}",
+        f"Confidence: {decision.confidence:.0%}",
         f"Time horizon: {time_horizon}",
-        f"Main risk: {risk}",
+        f"Main risk: {decision.main_risk}",
     ]
     markdown = (
         f"# Final Investment View\n\n"
@@ -935,13 +1089,13 @@ def _investment_final_markdown(
         f"**Company:** {snapshot.company_name or 'Unavailable'}  \n"
         f"**Analysis Date:** {snapshot.analysis_date}  \n"
         f"**Final Investment View:** {label}  \n"
-        f"**Confidence:** {confidence:.0%}  \n"
+        f"**Confidence:** {decision.confidence:.0%}  \n"
         f"**Time Horizon:** {time_horizon}\n\n"
         f"## Company / Asset Overview\n"
         f"{snapshot.company_name or snapshot.ticker} operates in **{f.get('sector') or 'Unavailable'} / {f.get('industry') or 'Unavailable'}**. "
         f"Market capitalization is **{_money(snapshot.market_cap)}** and latest price is **{_money(snapshot.latest_price)}**.\n\n"
         f"## Long-Term Thesis\n"
-        f"{summary}\n\n"
+        f"{decision.summary}\n\n"
         f"## Fundamentals\n"
         f"- Revenue growth: **{_pct(f.get('revenue_growth') or f.get('quarterly_revenue_growth_yoy') or f.get('revenue_growth_ttm_yoy'))}**.\n"
         f"- Profit margin: **{_pct(f.get('profit_margins') or f.get('net_margin_ttm'))}**.\n"
@@ -953,7 +1107,7 @@ def _investment_final_markdown(
         f"- Analyst target context: **{_money(analyst.get('analyst_target_price') or analyst.get('target_mean'))}**.\n"
         f"- Valuation should be compared against growth durability and margin quality, not read in isolation.\n\n"
         f"## Growth Drivers\n"
-        f"- {upside}\n"
+        f"- {decision.main_upside}\n"
         f"- Growth driver evidence improves with stronger revenue, margin, guidance, or source-backed catalyst data.\n\n"
         f"## Key Risks\n"
         f"{_bullets(risk_flags)}\n\n"
@@ -961,10 +1115,12 @@ def _investment_final_markdown(
         f"- View this as an **{label}** candidate within a diversified portfolio, not a standalone mandate.\n"
         f"- Position sizing should consider volatility, drawdown tolerance, sector concentration, and existing exposure.\n"
         f"- Refresh the thesis before increasing exposure after major earnings, guidance, or macro changes.\n\n"
-        f"## Final Investment View: Accumulate / Watchlist / Avoid\n"
+        f"## Final Investment View\n"
         f"**{label}.** This view reflects current evidence quality and can change if fundamentals, valuation, catalysts, or risk metrics shift.\n\n"
+        f"## Why This Decision\n"
+        f"{adjacent}\n\n"
         f"## Confidence + Time Horizon\n"
-        f"- Confidence: **{confidence:.0%}**.\n"
+        f"- Confidence: **{decision.confidence:.0%}**.\n"
         f"- Time horizon: **{time_horizon}**.\n"
         f"- Revisit the view after earnings, major news, material valuation changes, or a technical breakdown.\n\n"
         f"## Disclaimer\n{DISCLAIMER}\n"
@@ -1004,24 +1160,100 @@ def _collect_risks(reports: dict[str, EquityResearchReport]) -> list[str]:
     return risks
 
 
-def _final_decision(snapshot: EquityResearchSnapshot, previous: dict[str, EquityResearchReport]) -> tuple[Recommendation, float, str, str, str]:
+def _investment_adjacent_explanation(decision: FinalDecision) -> str:
+    selected = decision.investment_decision
+    if selected == InvestmentDecision.STRONG_BUY:
+        return "Strong Buy is used because the evidence is unusually aligned; any severe unresolved risk flag would downgrade this to Buy or Watchlist."
+    if selected == InvestmentDecision.BUY:
+        return "Buy is stronger than Watchlist because upside evidence is actionable, but it is not Strong Buy because conviction is not extreme across every evidence category."
+    if selected == InvestmentDecision.HOLD:
+        return "Hold is for an existing position: the evidence does not require an exit, but it is not strong enough to add aggressively."
+    if selected == InvestmentDecision.WATCHLIST:
+        return "Watchlist is used instead of Buy because the asset is interesting, but timing, valuation, catalyst strength, or evidence quality is not yet strong enough."
+    if selected == InvestmentDecision.REDUCE:
+        return "Reduce is weaker than Hold because risk/reward has deteriorated, but it stops short of Sell because the thesis is not fully broken."
+    if selected == InvestmentDecision.SELL:
+        return "Sell is stronger than Reduce because downside evidence or thesis damage is clear enough to justify exiting an existing position."
+    if selected == InvestmentDecision.AVOID:
+        return "Avoid is used for a new-money decision because uncertainty, weak evidence, or poor risk/reward makes the setup unsuitable."
+    return "The decision is constrained by incomplete evidence and should be refreshed when better data is available."
+
+
+def _legacy_recommendation(decision: InvestmentDecision | None, trading_bias: TradingBias | None, missing_price: bool) -> Recommendation:
+    if missing_price:
+        return Recommendation.INSUFFICIENT_DATA
+    if trading_bias == TradingBias.BULLISH:
+        return Recommendation.BUY
+    if trading_bias == TradingBias.BEARISH:
+        return Recommendation.SELL
+    if trading_bias == TradingBias.NEUTRAL:
+        return Recommendation.HOLD
+    if decision in {InvestmentDecision.STRONG_BUY, InvestmentDecision.BUY}:
+        return Recommendation.BUY
+    if decision in {InvestmentDecision.SELL, InvestmentDecision.AVOID}:
+        return Recommendation.SELL
+    return Recommendation.HOLD
+
+
+def _investment_decision_for(score: int, confidence: float, risks: list[str], missing_fundamentals: bool, depth: ResearchDepth) -> InvestmentDecision:
+    severe_risk = len(risks) >= 4 or missing_fundamentals
+    if score >= 4 and confidence >= 0.75 and not severe_risk and depth != ResearchDepth.SHALLOW:
+        return InvestmentDecision.STRONG_BUY
+    if score >= 3 and confidence >= 0.60:
+        return InvestmentDecision.BUY
+    if score <= -4 and confidence >= 0.65 and depth != ResearchDepth.SHALLOW:
+        return InvestmentDecision.SELL
+    if score <= -3 or len(risks) >= 5:
+        return InvestmentDecision.AVOID
+    if score <= -2 or len(risks) >= 3:
+        return InvestmentDecision.REDUCE
+    if score >= 2 and not severe_risk:
+        return InvestmentDecision.HOLD
+    return InvestmentDecision.WATCHLIST
+
+
+def _trading_bias_for(score: int, confidence: float, risks: list[str]) -> TradingBias:
+    if score >= 2 and confidence >= 0.55 and len(risks) < 4:
+        return TradingBias.BULLISH
+    if score <= -2 or len(risks) >= 4:
+        return TradingBias.BEARISH
+    return TradingBias.NEUTRAL
+
+
+def _final_decision(run: EquityResearchRun, snapshot: EquityResearchSnapshot, previous: dict[str, EquityResearchReport]) -> FinalDecision:
     risks = _collect_risks(previous)
     score = _score(snapshot)
     missing_penalty = 1 if not snapshot.latest_price or not snapshot.fundamentals else 0
     if not snapshot.latest_price:
-        return Recommendation.INSUFFICIENT_DATA, 0.25, "Insufficient price evidence.", "Price data is unavailable.", "The run cannot support a directional verdict without reliable price data."
-    if score >= 3 and len(risks) < 3:
-        rec = Recommendation.BUY
-    elif score <= -2 or len(risks) >= 4:
-        rec = Recommendation.SELL if score <= -3 else Recommendation.HOLD
-    else:
-        rec = Recommendation.HOLD
+        investment_decision = InvestmentDecision.AVOID if run.report_type == ReportType.INVESTMENT else None
+        trading_bias = TradingBias.NEUTRAL if run.report_type == ReportType.TRADING else None
+        return FinalDecision(
+            recommendation=Recommendation.INSUFFICIENT_DATA,
+            investment_decision=investment_decision,
+            trading_bias=trading_bias,
+            confidence=0.25,
+            main_upside="Insufficient price evidence.",
+            main_risk="Price data is unavailable.",
+            summary="The run cannot support a directional verdict without reliable price data. Avoid new action until the data gap is resolved.",
+        )
+
     confidence = max(0.35, min(0.86, 0.55 + abs(score) * 0.06 - missing_penalty * 0.12 - min(len(risks), 4) * 0.03))
+    confidence = round(confidence, 2)
+    missing_fundamentals = not bool(snapshot.fundamentals)
+    investment_decision = None
+    trading_bias = None
+    if run.report_type == ReportType.TRADING:
+        trading_bias = _trading_bias_for(score, confidence, risks)
+    else:
+        investment_decision = _investment_decision_for(score, confidence, risks, missing_fundamentals, run.research_depth)
+    rec = _legacy_recommendation(investment_decision, trading_bias, missing_price=False)
     upside = "Constructive price/fundamental alignment could support upside continuation." if score > 0 else "Upside requires fresh confirmation from price action or fundamentals."
     risk = risks[0] if risks else "The decision is sensitive to new data and near-term volatility."
+    label = _final_label(run.report_type, investment_decision or trading_bias or rec)
     summary = (
-        f"QuanAd 2.1 assigns a {rec.value.upper()} stance because the shared evidence score is {score}, "
-        f"with {len(risks)} risk flag(s). The portfolio manager treats the output as a research verdict, "
+        f"Quanfora 2.1 assigns a {label} view because the shared evidence is "
+        f"{'constructive' if score > 1 else 'negative' if score < -1 else 'mixed'}, with {len(risks)} risk flag(s). "
+        "The portfolio manager treats the output as a research verdict, "
         "not a guaranteed trading signal."
     )
-    return rec, round(confidence, 2), upside, risk, summary
+    return FinalDecision(rec, investment_decision, trading_bias, confidence, upside, risk, summary)

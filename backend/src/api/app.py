@@ -919,7 +919,7 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
 
     Supports three modes:
     - "single": Fast single-agent ReAct (default)
-    - "consensus": QuanAd 2.0 multi-agent consensus analysis
+    - "consensus": Quanfora 2.0 multi-agent consensus analysis
     - "auto": Auto-detect based on query complexity
 
     POST /api/v1/agent/chat
@@ -1021,7 +1021,7 @@ async def get_agent_chat_job(job_id: str, user: AuthenticatedUser = Depends(get_
 @app.post("/api/v1/agent/consensus")
 async def agent_consensus(req: AgentChatRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
     """
-    QuanAd 2.0 — Multi-agent consensus analysis.
+    Quanfora 2.0 — Multi-agent consensus analysis.
 
     Dispatches the query to 5 specialist agents (Quant Researcher, Quant Analyst,
     Financial Data Scientist, Risk Analyst, Portfolio Analytics), collects their
@@ -1030,14 +1030,14 @@ async def agent_consensus(req: AgentChatRequest, user: AuthenticatedUser = Depen
     POST /api/v1/agent/consensus
     {"message": "Should I invest in NVDA right now?"}
     """
-    from src.agent.orchestrator import QuanAdOrchestrator
+    from src.agent.orchestrator import QuanforaOrchestrator
     from src.agent.history import append_message
 
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
     _ensure_chat_session_available(req.session_id, user)
     try:
-        orchestrator = QuanAdOrchestrator(
+        orchestrator = QuanforaOrchestrator(
             user_id=str(user.id),
             plan=user.plan,
             preferred_mode=req.preferred_mode,
