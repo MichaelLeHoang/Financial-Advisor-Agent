@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
@@ -33,14 +33,39 @@ import { api } from "@/lib/api";
 import type { MarketIntelligenceResponse, NewsArticle, NewsBriefCard, NewsResponse, ResearchReport, TodayPickCard } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { IntroductionFooter, IntroductionNav } from "@/app/introduction/components";
+import InteractiveMarketChart from "@/components/market/InteractiveMarketChart";
 import { cn } from "@/lib/utils";
+import type { MarketQuote, MarketQuotePoint } from "@/lib/api";
 
 const LEGACY_PREFS_KEY = "financial-advisor.news-categories";
 const PREFS_KEY_PREFIX = "financial-advisor.news-categories.";
 const MAX_CATEGORIES = 3;
 const TABS = ["news", "briefing", "picks", "reports"] as const;
+const REPORT_CHART_RANGES = ["1M", "3M", "6M", "1Y"] as const;
+const REPORT_CHART_PERIODS: Record<ReportChartRange, string> = {
+  "1M": "1mo",
+  "3M": "3mo",
+  "6M": "6mo",
+  "1Y": "1y",
+};
+const REPORT_RS_BENCHMARK = "^IXIC";
+const REPORT_RS_BENCHMARK_LABEL = "Nasdaq Composite";
 
 type IntelligenceTab = (typeof TABS)[number];
+type ReportChartRange = (typeof REPORT_CHART_RANGES)[number];
+
+type ReportChartPoint = {
+  label: string;
+  chartIndex: number;
+  price: number;
+  open?: number;
+  high?: number;
+  low?: number;
+  volume: number;
+  movingAverage?: number;
+  rsLine?: number;
+  change?: number;
+};
 
 type CategoryDef = {
   key: string;
@@ -153,6 +178,86 @@ function timeAgo(iso: string | null): string {
 
 function pct(value: number) {
   return `${Math.round(value)}%`;
+}
+
+function formatAxisPrice(value: number) {
+  if (Math.abs(value) >= 1000) return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function formatCurrency(value: number, currency = "USD") {
+  if (!Number.isFinite(value)) return "—";
+  if (currency === "USD") {
+    return value >= 1000 ? `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : `$${value.toFixed(2)}`;
+  }
+  return `${value.toLocaleString(undefined, { maximumFractionDigits: value >= 1000 ? 2 : 4 })} ${currency}`;
+}
+
+function formatLargeNumber(value: number) {
+  if (!Number.isFinite(value)) return "—";
+  if (Math.abs(value) >= 1_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(2)}T`;
+  if (Math.abs(value) >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
+  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return value.toLocaleString();
+}
+
+function pointChange(point: MarketQuotePoint, previous?: MarketQuotePoint) {
+  if (!previous?.price) return 0;
+  return point.price - previous.price;
+}
+
+function movingAverage(points: MarketQuotePoint[], index: number, window = 20) {
+  const slice = points.slice(Math.max(0, index - window + 1), index + 1);
+  if (slice.length < Math.min(window, 5)) return undefined;
+  const total = slice.reduce((sum, point) => sum + point.price, 0);
+  return total / slice.length;
+}
+
+function buildReportChartData(primary: MarketQuote, benchmark?: MarketQuote | null): ReportChartPoint[] {
+  const primaryHistory = primary.history.filter((point) => Number.isFinite(point.price));
+  if (primaryHistory.length === 0) return [];
+  const benchmarkHistory = benchmark?.history.filter((point) => Number.isFinite(point.price)) ?? [];
+  const offset = Math.max(primaryHistory.length - benchmarkHistory.length, 0);
+  const primaryStart = primaryHistory[0]?.price || 1;
+  const benchmarkStart = benchmarkHistory[0]?.price || 1;
+
+  return primaryHistory.map((point, index) => {
+    const benchmarkPoint = benchmarkHistory[index - offset];
+    const primaryPerformance = primaryStart ? point.price / primaryStart : 1;
+    const benchmarkPerformance = benchmarkPoint?.price && benchmarkStart ? benchmarkPoint.price / benchmarkStart : null;
+    const rsLine = benchmarkPerformance ? (primaryPerformance / benchmarkPerformance) * 100 : undefined;
+
+    return {
+      label: point.label,
+      chartIndex: index,
+      price: point.price,
+      open: typeof point.open === "number" ? point.open : point.price,
+      high: typeof point.high === "number" ? point.high : Math.max(point.open ?? point.price, point.price),
+      low: typeof point.low === "number" ? point.low : Math.min(point.open ?? point.price, point.price),
+      volume: point.volume,
+      movingAverage: movingAverage(primaryHistory, index),
+      rsLine,
+      change: pointChange(point, primaryHistory[index - 1]),
+    };
+  });
+}
+
+function compactReportChartData(data: ReportChartPoint[], range: ReportChartRange) {
+  const visibleCount = range === "1M" ? 24 : range === "3M" ? 66 : range === "6M" ? 132 : 252;
+  return data.slice(-visibleCount);
+}
+
+function quoteSourceLabel(quote: MarketQuote | null) {
+  const sources = quote?.data_sources?.filter(Boolean);
+  if (!sources || sources.length === 0) return "Quanfora market data";
+  return sources.map((source) => source.replaceAll("_", " ")).join(" · ");
+}
+
+function isReportTickerChartable(ticker: string | undefined) {
+  if (!ticker) return false;
+  const normalized = ticker.trim().toUpperCase();
+  return normalized.length > 0 && normalized !== "N/A" && normalized !== "UNKNOWN";
 }
 
 type RiskTone = "base" | "success" | "warning" | "danger";
@@ -745,7 +850,7 @@ function PicksTab({ picks, onViewReports }: { picks: TodayPickCard[]; onViewRepo
               <FileText className="size-4" />
             </button>
             <Link
-              href={`/research?ticker=${encodeURIComponent(pick.ticker)}&source=research`}
+              href={`/research?ticker=${encodeURIComponent(pick.ticker)}&source=research&report_type=investment`}
               className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3 text-sm font-semibold text-[#050507] hover:bg-white/88"
             >
               Open analysis
@@ -911,6 +1016,199 @@ function ReportTickerRail({
   );
 }
 
+function ReportMarketChart({ report }: { report: ResearchReport }) {
+  const ticker = report.affected_tickers.find(isReportTickerChartable)?.toUpperCase();
+  const [range, setRange] = useState<ReportChartRange>("6M");
+  const [quote, setQuote] = useState<MarketQuote | null>(null);
+  const [benchmark, setBenchmark] = useState<MarketQuote | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hoverPoint, setHoverPoint] = useState<ReportChartPoint | null>(null);
+
+  useEffect(() => {
+    if (!ticker) return;
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setHoverPoint(null);
+
+    Promise.allSettled([
+      api.marketQuote(ticker, REPORT_CHART_PERIODS[range], "1d"),
+      api.marketQuote(REPORT_RS_BENCHMARK, REPORT_CHART_PERIODS[range], "1d"),
+    ])
+      .then(([primaryResult, benchmarkResult]) => {
+        if (cancelled) return;
+
+        if (primaryResult.status !== "fulfilled") {
+          setQuote(null);
+          setBenchmark(null);
+          setError(`No chart data is available for ${ticker}.`);
+          return;
+        }
+
+        setQuote(primaryResult.value);
+        setBenchmark(benchmarkResult.status === "fulfilled" ? benchmarkResult.value : null);
+      })
+      .catch(() => {
+        if (!cancelled) setError(`No chart data is available for ${ticker}.`);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [range, ticker]);
+
+  const chartData = useMemo(() => {
+    if (!quote) return [];
+    return compactReportChartData(buildReportChartData(quote, benchmark), range);
+  }, [benchmark, quote, range]);
+  const requestLongerRange = useCallback(() => {
+    const currentIndex = REPORT_CHART_RANGES.indexOf(range);
+    const nextRange = REPORT_CHART_RANGES[currentIndex + 1];
+    if (nextRange) setRange(nextRange);
+  }, [range]);
+
+  if (!ticker) return null;
+
+  const activePoint = hoverPoint ?? chartData[chartData.length - 1] ?? null;
+  const change = activePoint?.change ?? quote?.change ?? 0;
+  const changeColor = change >= 0 ? "text-emerald-700" : "text-red-700";
+  const currency = quote?.currency ?? "USD";
+  const lastUpdated = activePoint?.label ?? chartData[chartData.length - 1]?.label ?? "Unavailable";
+
+  return (
+    <section className="report-market-chart mt-8 rounded-3xl border border-black/10 bg-white/45 p-4 shadow-[0_24px_60px_-42px_rgba(15,23,42,0.65)] sm:p-5">
+      <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#77707c]">Interactive market chart</p>
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2 className="font-mono text-2xl font-semibold tracking-tight text-[#17151c]">{ticker}</h2>
+            {activePoint && (
+              <>
+                <span className="text-xl font-semibold text-[#2f2a35]">{formatCurrency(activePoint.price, currency)}</span>
+                <span className={cn("font-mono text-sm font-semibold", changeColor)}>
+                  {change >= 0 ? "+" : ""}{change.toFixed(2)}
+                </span>
+              </>
+            )}
+          </div>
+          <p className="mt-2 text-sm leading-6 text-[#5f5867]">
+            Candles, volume, 20-session average, and RS line versus {REPORT_RS_BENCHMARK_LABEL}. Hover the chart to inspect each session.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {REPORT_CHART_RANGES.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setRange(item)}
+              className={cn(
+                "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                item === range
+                  ? "border-[#3b2db4]/30 bg-[#6d5dfc]/14 text-[#3b2db4]"
+                  : "border-black/10 bg-white/45 text-[#5f5867] hover:border-[#6d5dfc]/30 hover:text-[#3b2db4]"
+              )}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="h-[340px] rounded-2xl border border-black/[0.08] bg-[#fbfaf6] p-3">
+        {loading ? (
+          <div className="flex h-full items-center justify-center gap-2 text-sm text-[#77707c]">
+            <Loader2 className="size-4 animate-spin" />
+            Loading chart data...
+          </div>
+        ) : error ? (
+          <div className="flex h-full items-center justify-center text-sm text-[#77707c]">{error}</div>
+        ) : chartData.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-[#77707c]">No chart history returned for this report ticker.</div>
+        ) : (
+          <InteractiveMarketChart
+            data={chartData}
+            mode="candle"
+            color="#2563eb"
+            positiveColor="#2563eb"
+            negativeColor="#db2777"
+            overlayLines={[
+              { key: "movingAverage", color: "#ef4444", lineWidth: 2 },
+              { key: "rsLine", color: "#1d4ed8", priceScaleId: "left", lineWidth: 2 },
+            ]}
+            axisFormatter={formatAxisPrice}
+            timeFormatter={formatReportChartLabel}
+            rangeKey={range}
+            onRequestLongerRange={requestLongerRange}
+            onHover={(point) => setHoverPoint(point)}
+            tooltip={(point) => <ReportChartTooltip active payload={[{ payload: point }]} ticker={ticker} currency={currency} />}
+            tooltipClassName="[&>div]:bg-[#fbfaf6]/95"
+          />
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-col gap-2 text-xs text-[#77707c] sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-[#2563eb]" /> Price</span>
+          <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-[#ef4444]" /> 20-session avg</span>
+          <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-[#1d4ed8]" /> RS vs {REPORT_RS_BENCHMARK}</span>
+        </div>
+        <span>Provided by {quoteSourceLabel(quote)} · Last point: {lastUpdated}</span>
+      </div>
+    </section>
+  );
+}
+
+function ReportChartTooltip({
+  active,
+  payload,
+  ticker,
+  currency,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: ReportChartPoint }>;
+  ticker: string;
+  currency: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const point = payload[0]?.payload;
+  if (!point) return null;
+
+  return (
+    <div className="min-w-56 rounded-xl border border-black/10 bg-[#fbfaf6]/95 px-3 py-2 text-xs shadow-xl shadow-black/15 backdrop-blur-md">
+      <p className="font-semibold text-[#17151c]">{point.label}</p>
+      <div className="mt-2 space-y-1.5 text-[#5f5867]">
+        <TooltipRow label={`${ticker} close`} value={formatCurrency(point.price, currency)} strong />
+        <TooltipRow label="High" value={formatCurrency(point.high ?? point.price, currency)} />
+        <TooltipRow label="Low" value={formatCurrency(point.low ?? point.price, currency)} />
+        <TooltipRow label="Change" value={`${(point.change ?? 0) >= 0 ? "+" : ""}${(point.change ?? 0).toFixed(2)}`} />
+        <TooltipRow label="Volume" value={formatLargeNumber(point.volume)} />
+        {typeof point.rsLine === "number" && <TooltipRow label="RS line" value={point.rsLine.toFixed(1)} />}
+      </div>
+    </div>
+  );
+}
+
+function TooltipRow({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span>{label}</span>
+      <span className={cn("font-mono tabular-nums", strong ? "font-semibold text-[#17151c]" : "text-[#403a46]")}>{value}</span>
+    </div>
+  );
+}
+
+function formatReportChartLabel(label: string) {
+  const parsed = new Date(label);
+  if (Number.isNaN(parsed.getTime())) return label;
+  return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 function ReportModal({ report, onClose }: { report: ResearchReport | null; onClose: () => void }) {
   return (
     <AnimatePresence>
@@ -927,7 +1225,7 @@ function ReportModal({ report, onClose }: { report: ResearchReport | null; onClo
             role="dialog"
             aria-modal="true"
             aria-label={report.title}
-            className="max-h-[90dvh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-white/[0.12] bg-[#f5f2ea] text-[#17151c] shadow-2xl shadow-black/45"
+            className="max-h-[90dvh] w-full max-w-6xl overflow-y-auto rounded-2xl border border-white/[0.12] bg-[#f5f2ea] text-[#17151c] shadow-2xl shadow-black/45"
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -963,6 +1261,8 @@ function ReportModal({ report, onClose }: { report: ResearchReport | null; onClo
                   <span>{signalText(report.signal_summary.label, "Research memo")}</span>
                 </div>
               </header>
+
+              <ReportMarketChart report={report} />
 
               <div className="grid gap-8 py-8 lg:grid-cols-[1fr_260px]">
                 <div className="space-y-8">

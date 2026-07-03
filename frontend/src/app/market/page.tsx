@@ -29,16 +29,8 @@ import { motion } from "motion/react";
 import {
     Area,
     AreaChart,
-    Bar,
-    CartesianGrid,
-    ComposedChart,
-    Line,
-    ReferenceDot,
-    ReferenceLine,
     ResponsiveContainer,
     Tooltip,
-    XAxis,
-    YAxis,
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { api, type EarningsPoint, type MarketQuote, type QuarterlyFinancial, type ResearchDepth } from "@/lib/api";
@@ -54,7 +46,7 @@ import {
     type MarketPoint,
     type MarketSymbol,
 } from "@/lib/market-data";
-import FinanceOhlcLayer from "@/components/market/FinanceOhlcLayer";
+import InteractiveMarketChart from "@/components/market/InteractiveMarketChart";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -257,15 +249,6 @@ function calculateSeriesChange(series: MarketPoint[], fallbackChange = 0): numbe
     const last = series[series.length - 1]?.price;
     if (!Number.isFinite(first) || !Number.isFinite(last) || first === 0) return fallbackChange;
     return performanceFrom(first, last);
-}
-
-function domainWithPadding(values: number[]): [number, number] {
-    const finite = values.filter((value) => Number.isFinite(value));
-    if (finite.length === 0) return [0, 1];
-    const min = Math.min(...finite);
-    const max = Math.max(...finite);
-    const padding = Math.max((max - min) * 0.12, Math.abs(max || min || 1) * 0.01);
-    return [min - padding, max + padding];
 }
 
 function compareKey(symbol: string, suffix: "price" | "performance"): string {
@@ -1262,6 +1245,11 @@ function MarketChartDialog({
         () => normalizeSymbolList(comparisonSymbols).filter((symbol) => symbol !== stock?.ticker),
         [comparisonSymbols, stock?.ticker]
     );
+    const requestLongerRange = useCallback(() => {
+        const currentIndex = CHART_DETAIL_RANGES.indexOf(range);
+        const nextRange = CHART_DETAIL_RANGES[currentIndex + 1];
+        if (nextRange) onRangeChange(nextRange);
+    }, [onRangeChange, range]);
 
     useEffect(() => {
         if (!stock || activeComparisonSymbols.length === 0) {
@@ -1327,21 +1315,6 @@ function MarketChartDialog({
 
     const stats = useMemo(() => createStats(detailStock, series), [detailStock, series]);
     const detailHasQuote = Boolean(detailStock?.hasQuote);
-    const chartValues = compareMode
-        ? displayedChartData.flatMap((point) => [
-            point.primaryPerformance,
-            ...compareQuotes.flatMap((compareQuote) => {
-                const value = point[compareKey(compareQuote.ticker, "performance")];
-                return typeof value === "number" ? [value] : [];
-            }),
-        ])
-        : chartStyle === "candle" || chartStyle === "bar"
-            ? displayedChartData.flatMap((point) => [
-                typeof point.high === "number" ? point.high : point.price,
-                typeof point.low === "number" ? point.low : point.price,
-            ])
-            : displayedChartData.map((point) => point.price);
-    const yDomain = domainWithPadding(chartValues);
     const activePoint = hoverPoint ?? displayedChartData[displayedChartData.length - 1] ?? null;
     const activePrice = detailHasQuote ? activePoint?.price ?? detailStock?.price ?? null : null;
     const activePriceForMath = activePrice ?? 0;
@@ -1515,120 +1488,31 @@ function MarketChartDialog({
                                         </div>
                                         {mounted ? (
                                             <div className="h-[20rem] sm:h-[24rem] lg:h-[28rem]">
-                                                <SafeChartContainer>
-                                                    <ComposedChart
-                                                        data={displayedChartData}
-                                                        margin={{ left: 0, right: 8, top: 12, bottom: 0 }}
-                                                        onMouseMove={(state: unknown) => {
-                                                            const payload = (state as { activePayload?: Array<{ payload?: DetailChartPoint }> })?.activePayload?.[0]?.payload;
-                                                            if (payload) setHoverPoint(payload);
-                                                        }}
-                                                        onMouseLeave={() => setHoverPoint(null)}
-                                                    >
-                                                        <defs>
-                                                            <linearGradient id={`dialog-grad-${detailStock.ticker}`} x1="0" y1="0" x2="0" y2="1">
-                                                                <stop offset="5%" stopColor={color} stopOpacity={0.34} />
-                                                                <stop offset="95%" stopColor={color} stopOpacity={0.02} />
-                                                            </linearGradient>
-                                                        </defs>
-                                                        <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
-                                                        <XAxis
-                                                            dataKey="chartIndex"
-                                                            tickLine={false}
-                                                            axisLine={false}
-                                                            tick={{ fill: "var(--chart-axis)", fontSize: 11 }}
-                                                            minTickGap={range === "1D" ? 16 : 24}
-                                                            tickFormatter={(value) => {
-                                                                const label = displayedChartData[Number(value)]?.label ?? String(value);
-                                                                return range === "1D" ? formatIntradayLabel(label) : label;
-                                                            }}
+                                                <InteractiveMarketChart
+                                                    data={displayedChartData}
+                                                    mode={compareMode ? "line" : chartStyle}
+                                                    color={color}
+                                                    compareMode={compareMode}
+                                                    valueKey={compareMode ? "primaryPerformance" : "price"}
+                                                    compareLines={compareQuotes.map((compareQuote, index) => ({
+                                                        key: compareKey(compareQuote.ticker, "performance"),
+                                                        color: COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length],
+                                                    }))}
+                                                    axisFormatter={(value) => compareMode ? `${value.toFixed(1)}%` : formatAxisPrice(value)}
+                                                    timeFormatter={(label) => range === "1D" ? formatIntradayLabel(label) : label}
+                                                    rangeKey={range}
+                                                    onRequestLongerRange={requestLongerRange}
+                                                    onHover={(point) => setHoverPoint(point)}
+                                                    tooltip={(point) => (
+                                                        <DetailChartTooltip
+                                                            active
+                                                            payload={[{ payload: point }]}
+                                                            primaryTicker={detailStock.ticker}
+                                                            compareQuotes={compareQuotes}
+                                                            compareMode={compareMode}
                                                         />
-                                                        <YAxis
-                                                            yAxisId="price"
-                                                            orientation="right"
-                                                            tickLine={false}
-                                                            axisLine={false}
-                                                            tick={{ fill: "var(--chart-axis)", fontSize: 11 }}
-                                                            width={64}
-                                                            domain={yDomain}
-                                                            tickFormatter={(value) => compareMode ? `${Number(value).toFixed(1)}%` : formatAxisPrice(Number(value))}
-                                                        />
-                                                        <YAxis yAxisId="volume" hide />
-                                                        <Tooltip
-                                                            content={<DetailChartTooltip primaryTicker={detailStock.ticker} compareQuotes={compareQuotes} compareMode={compareMode} />}
-                                                            cursor={{ stroke: "var(--chart-cursor)", strokeWidth: 1 }}
-                                                        />
-                                                        {compareMode && <ReferenceLine yAxisId="price" y={0} stroke="rgba(255,255,255,0.32)" strokeDasharray="4 4" />}
-                                                        {!compareMode && <Bar yAxisId="volume" dataKey="volume" fill="var(--chart-volume)" barSize={6} radius={[4, 4, 0, 0]} />}
-                                                        {chartStyle === "area" && !compareMode && (
-                                                            <Area yAxisId="price" type="monotone" dataKey="price" stroke={color} strokeWidth={2.4} fill={`url(#dialog-grad-${detailStock.ticker})`} dot={false} />
-                                                        )}
-                                                        {chartStyle === "bar" && !compareMode && (
-                                                            <FinanceOhlcLayer
-                                                                data={displayedChartData}
-                                                                mode="bar"
-                                                                yAxisId="price"
-                                                                positiveColor="#34d399"
-                                                                negativeColor="#f87171"
-                                                            />
-                                                        )}
-                                                        {chartStyle === "candle" && !compareMode && (
-                                                            <FinanceOhlcLayer
-                                                                data={displayedChartData}
-                                                                mode="candle"
-                                                                yAxisId="price"
-                                                                positiveColor="#34d399"
-                                                                negativeColor="#f87171"
-                                                            />
-                                                        )}
-                                                        {(chartStyle === "line" || compareMode) && (
-                                                            <Line yAxisId="price" type="monotone" dataKey={compareMode ? "primaryPerformance" : "price"} stroke={color} strokeWidth={2.4} dot={false} />
-                                                        )}
-                                                        {compareMode && compareQuotes.map((compareQuote, index) => (
-                                                            <Line
-                                                                key={compareQuote.ticker}
-                                                                yAxisId="price"
-                                                                type="monotone"
-                                                                dataKey={compareKey(compareQuote.ticker, "performance")}
-                                                                stroke={COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length]}
-                                                                strokeWidth={2.2}
-                                                                dot={false}
-                                                            />
-                                                        ))}
-                                                        {hoverPoint && (
-                                                            <ReferenceDot
-                                                                yAxisId="price"
-                                                                x={hoverPoint.chartIndex}
-                                                                y={compareMode ? hoverPoint.primaryPerformance : hoverPoint.price}
-                                                                r={4.5}
-                                                                fill={color}
-                                                                stroke="#0b0f17"
-                                                                strokeWidth={2}
-                                                                ifOverflow="visible"
-                                                            />
-                                                        )}
-                                                        {compareMode && hoverPoint && compareQuotes.map((compareQuote, index) => {
-                                                            const performance = hoverPoint[compareKey(compareQuote.ticker, "performance")];
-                                                            if (typeof performance !== "number") return null;
-                                                            return (
-                                                                <ReferenceDot
-                                                                    key={`${compareQuote.ticker}-active-dot`}
-                                                                    yAxisId="price"
-                                                                    x={hoverPoint.chartIndex}
-                                                                    y={performance}
-                                                                    r={4}
-                                                                    fill={COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length]}
-                                                                    stroke="#0b0f17"
-                                                                    strokeWidth={2}
-                                                                    ifOverflow="visible"
-                                                                />
-                                                            );
-                                                        })}
-                                                        {loading && (
-                                                            <ReferenceLine yAxisId="price" y={yDomain[1]} label={{ value: "Refreshing...", fill: "rgba(255,255,255,0.42)", fontSize: 11 }} stroke="transparent" />
-                                                        )}
-                                                    </ComposedChart>
-                                                </SafeChartContainer>
+                                                    )}
+                                                />
                                             </div>
                                         ) : (
                                             <div className="h-[20rem] sm:h-[24rem] lg:h-[28rem] rounded-xl bg-white/[0.035]" />

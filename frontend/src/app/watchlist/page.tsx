@@ -24,19 +24,19 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, ComposedChart, Line, ReferenceLine, XAxis, YAxis } from "recharts";
+import { Area, AreaChart } from "recharts";
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { Watchlist, WatchlistAsset, MarketQuote } from "@/lib/api";
 import { fetchQuote, fetchQuotes, invalidate } from "@/lib/quote-cache";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
-import FinanceOhlcLayer from "@/components/market/FinanceOhlcLayer";
+import InteractiveMarketChart from "@/components/market/InteractiveMarketChart";
 import MarketMovers from "@/components/market/MarketMovers";
 import MarketNewsFeed from "@/components/market/MarketNewsFeed";
 import MarketSummary from "@/components/market/MarketSummary";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
-import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
+import { ChartContainer } from "@/components/ui/chart";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -292,14 +292,6 @@ function performanceFrom(start: number, current: number): number {
   return ((current - start) / start) * 100;
 }
 
-function domainWithPadding(values: number[]): [number, number] {
-  if (values.length === 0) return [-1, 1];
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const padding = Math.max((max - min) * 0.08, 0.35);
-  return [Number((min - padding).toFixed(2)), Number((max + padding).toFixed(2))];
-}
-
 function compareKey(symbol: string, suffix: "price" | "performance"): string {
   return `compare_${symbol.replace(/[^a-zA-Z0-9]/g, "_")}_${suffix}`;
 }
@@ -311,11 +303,6 @@ const COMPARE_COLORS = [
   "#a78bfa",
   "#fb7185",
 ];
-
-const MAIN_CHART_ANIMATION = {
-  animationDuration: 450,
-  animationEasing: "ease-in-out" as const,
-};
 
 const CHART_MODE_LABELS: Record<ChartMode, string> = {
   line: "Line chart",
@@ -1014,6 +1001,11 @@ function QuoteDetailPanel({
       return next;
     });
   }, [chartData, compareQuotes]);
+  const requestLongerRange = useCallback(() => {
+    const currentIndex = RANGE_OPTIONS.indexOf(range);
+    const nextRange = RANGE_OPTIONS[currentIndex + 1];
+    if (nextRange) setRange(nextRange);
+  }, [range]);
 
   const addCompareSymbol = (symbol: string) => {
     const normalized = symbol.trim().toUpperCase();
@@ -1046,30 +1038,13 @@ function QuoteDetailPanel({
     if (compareMode && chartMode !== "line") setChartMode("line");
   }, [chartMode, compareMode]);
 
-  const chartValues = compareMode
-    ? displayedChartData.flatMap((point) => [
-        point.primaryPerformance,
-        ...compareQuotes.flatMap((compareQuote) => {
-          const value = point[compareKey(compareQuote.ticker, "performance")];
-          return typeof value === "number" ? [value] : [];
-        }),
-      ])
-    : displayedChartData.map((point) => point.price);
-  const singleAssetValues = chartMode === "candle" || chartMode === "bar"
-    ? displayedChartData.flatMap((point) => [
-        typeof point.high === "number" ? point.high : point.price,
-        typeof point.low === "number" ? point.low : point.price,
-      ])
-    : displayedChartData.map((point) => point.price);
-  const finalChartValues = compareMode ? chartValues : singleAssetValues;
-  const yDomain = domainWithPadding(finalChartValues);
   const activePoint = hoverPoint ?? displayedChartData[displayedChartData.length - 1] ?? null;
   const positive = quote ? quote.change >= 0 : true;
   const activePrice = activePoint?.price ?? quote?.price ?? 0;
   const absoluteChange = quote ? activePrice - (quote.price - estimateAbsoluteChange(quote)) : 0;
   const activePercentChange = quote ? performanceFrom(quote.price - estimateAbsoluteChange(quote), activePrice) : 0;
   const primaryLineColor = compareMode ? COMPARE_COLORS[0] : positive ? "var(--color-green-positive)" : "var(--color-red-negative)";
-  const chartTransitionKey = `${chartMode}:${range}:${activeComparisonSymbols.join("|") || "single"}:${quote?.ticker ?? instrument.symbol}`;
+  const chartTransitionKey = `${chartMode}:${activeComparisonSymbols.join("|") || "single"}:${quote?.ticker ?? instrument.symbol}`;
   const isCrypto = instrument.category === "Crypto";
   const displayName = quoteDisplayName(instrument, quote);
   const timestamp = useMemo(
@@ -1330,104 +1305,32 @@ function QuoteDetailPanel({
 
         <div className="h-[360px]">
           {quote && chartData.length > 1 ? (
-            <ChartContainer
-              config={{
-                price: { label: instrument.symbol, color: primaryLineColor },
-                primaryPerformance: { label: instrument.symbol, color: primaryLineColor },
-              }}
-              className="aspect-auto h-full w-full"
-              initialDimension={{ width: 720, height: 360 }}
-            >
-              <ComposedChart
-                key={chartTransitionKey}
-                data={displayedChartData}
-                margin={{ top: 10, right: 8, bottom: 8, left: 0 }}
-                onMouseMove={(state: unknown) => {
-                  const payload = (state as { activePayload?: Array<{ payload?: DetailChartPoint }> })?.activePayload?.[0]?.payload;
-                  if (payload) setHoverPoint(payload);
-                }}
-                onMouseLeave={() => setHoverPoint(null)}
-              >
-                <defs>
-                  <linearGradient id="watch-detail-chart" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="currentColor" stopOpacity={0.18} />
-                    <stop offset="100%" stopColor="currentColor" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "rgba(255,255,255,0.36)", fontSize: 11 }} minTickGap={28} />
-                <YAxis
-                  orientation="right"
-                  domain={yDomain}
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: "rgba(255,255,255,0.36)", fontSize: 11 }}
-                  width={58}
-                  tickFormatter={(value) => compareMode ? `${Number(value).toFixed(1)}%` : fmt(Number(value), 0)}
+            <InteractiveMarketChart
+              key={chartTransitionKey}
+              data={displayedChartData}
+              mode={compareMode ? "line" : chartMode}
+              color={primaryLineColor}
+              compareMode={compareMode}
+              valueKey={compareMode ? "primaryPerformance" : "price"}
+              compareLines={compareQuotes.map((compareQuote, index) => ({
+                key: compareKey(compareQuote.ticker, "performance"),
+                color: COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length],
+              }))}
+              axisFormatter={(value) => compareMode ? `${value.toFixed(1)}%` : fmt(value, 0)}
+              rangeKey={range}
+              onRequestLongerRange={requestLongerRange}
+              onHover={(point) => setHoverPoint(point)}
+              tooltip={(point) => (
+                <WatchlistChartTooltip
+                  active
+                  payload={[{ payload: point }]}
+                  compareQuotes={compareQuotes}
+                  compareMode={compareMode}
+                  primaryLabel={instrument.symbol}
+                  primaryColor={primaryLineColor}
                 />
-                <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
-                <ChartTooltip
-                  content={
-                    <WatchlistChartTooltip
-                      compareQuotes={compareQuotes}
-                      compareMode={compareMode}
-                      primaryLabel={instrument.symbol}
-                      primaryColor={primaryLineColor}
-                    />
-                  }
-                  cursor={{ stroke: "rgba(255,255,255,0.35)", strokeWidth: 1 }}
-                />
-                {compareMode && <ReferenceLine y={0} stroke="rgba(255,255,255,0.32)" strokeDasharray="4 4" />}
-                {hoverPoint && (
-                  <ReferenceLine
-                    y={compareMode ? hoverPoint.primaryPerformance : hoverPoint.price}
-                    stroke="rgba(255,255,255,0.28)"
-                    strokeWidth={1}
-                  />
-                )}
-                {chartMode === "area" && !compareMode ? (
-                  <Area
-                    type="monotone"
-                    dataKey="price"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    fill="url(#watch-detail-chart)"
-                    className={positive ? "text-green-positive" : "text-red-negative"}
-                    dot={false}
-                    activeDot={{ r: 4, fill: "currentColor", stroke: "#fff", strokeWidth: 2 }}
-                    isAnimationActive
-                    {...MAIN_CHART_ANIMATION}
-                  />
-                ) : chartMode === "bar" && !compareMode ? (
-                  <FinanceOhlcLayer data={displayedChartData} mode="bar" />
-                ) : chartMode === "candle" && !compareMode ? (
-                  <FinanceOhlcLayer data={displayedChartData} mode="candle" />
-                ) : (
-                  <Line
-                    type="monotone"
-                    dataKey={compareMode ? "primaryPerformance" : "price"}
-                    stroke={primaryLineColor}
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4, fill: primaryLineColor, stroke: "#fff", strokeWidth: 2 }}
-                    isAnimationActive
-                    {...MAIN_CHART_ANIMATION}
-                  />
-                )}
-                {compareMode && compareQuotes.map((compareQuote, index) => (
-                  <Line
-                    key={compareQuote.ticker}
-                    type="monotone"
-                    dataKey={compareKey(compareQuote.ticker, "performance")}
-                    stroke={COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length]}
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4, fill: COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length], stroke: "#fff", strokeWidth: 2 }}
-                    isAnimationActive
-                    {...MAIN_CHART_ANIMATION}
-                  />
-                ))}
-              </ComposedChart>
-            </ChartContainer>
+              )}
+            />
           ) : (
             <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-white/[0.08] text-sm text-white/32">
               {loading ? "Loading chart..." : "No chart history available"}
