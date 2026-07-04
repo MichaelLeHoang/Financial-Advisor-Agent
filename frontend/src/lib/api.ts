@@ -1227,6 +1227,7 @@ export interface TodayPickCard {
   opportunity_score: number;
   confidence: number;
   risk_level: "low" | "medium" | "high" | "critical";
+  score_breakdown?: ImpactScoreBreakdown | null;
   key_evidence: string[];
   risk_flags: string[];
   related_news_count: number;

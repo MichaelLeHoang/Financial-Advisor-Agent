@@ -7,6 +7,7 @@ Transforms the existing categorized news feed into trader-native briefing cards,
 - Score news articles for freshness, relevance, source quality, sentiment, and risk.
 - Convert raw category news into briefing, picks, and report payloads.
 - Preserve source links, caveats, confidence, and risk flags for evidence-first review.
+- Package Today’s Picks with research-priority drivers, concise evidence, and a single clear invalidation/risk read.
 
 ## Key Files
 - `models.py`: Pydantic response models for intelligence cards and reports.
@@ -20,4 +21,4 @@ This module reuses the current news feed and existing RAG/ingestion architecture
 Use deterministic sample news payloads. Cover briefing transformation, risk flags, pick ranking, report packaging, and empty-source behavior without live provider calls.
 
 ## Latest Change
-- Added the Market Intelligence workspace payload builder for news briefings, research opportunities, and editorial reports.
+- Added score-driver breakdowns and summarized evidence to Today’s Picks and report payloads so the frontend can explain why a ticker deserves review without exposing raw source lists or contradictory source-risk flags.

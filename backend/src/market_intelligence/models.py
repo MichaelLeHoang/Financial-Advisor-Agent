@@ -50,6 +50,7 @@ class TodayPickCard(BaseModel):
     opportunity_score: float
     confidence: float
     risk_level: Literal["low", "medium", "high", "critical"]
+    score_breakdown: ImpactScoreBreakdown | None = None
     key_evidence: list[str]
     risk_flags: list[str]
     related_news_count: int

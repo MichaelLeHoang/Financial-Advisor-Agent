@@ -55,8 +55,12 @@ def test_market_intelligence_builds_briefing_picks_and_reports():
         "Risk elevated",
         "Needs confirmation",
     }
+    assert response.picks[0].score_breakdown is not None
+    assert response.picks[0].key_evidence
+    assert all("Single-source" not in flag for flag in response.picks[0].risk_flags)
     assert response.reports
     assert "what_happened" in response.reports[0].sections
+    assert "research_priority" in response.reports[0].signal_summary
     assert response.reports[0].disclaimer
 
 

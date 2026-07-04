@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from src.api.news_routes import CATEGORY_MAP, NewsArticle, NewsResponse, get_news
 from src.market_intelligence.models import (
+    ImpactScoreBreakdown,
     InsightSource,
     MarketIntelligenceResponse,
     NewsBriefCard,
@@ -49,6 +50,30 @@ def _source_from_article(article: NewsArticle) -> InsightSource:
         publisher=article.publisher or None,
         published_at=parse_datetime(article.published_at),
     )
+
+
+def _average_breakdown(cards: list[NewsBriefCard]) -> ImpactScoreBreakdown | None:
+    breakdowns = [card.score_breakdown for card in cards if card.score_breakdown is not None]
+    if not breakdowns:
+        return None
+    count = len(breakdowns)
+    return ImpactScoreBreakdown(
+        freshness=round(sum(item.freshness for item in breakdowns) / count, 1),
+        relevance=round(sum(item.relevance for item in breakdowns) / count, 1),
+        sentiment=round(sum(item.sentiment for item in breakdowns) / count, 1),
+        price_volume=round(sum(item.price_volume for item in breakdowns) / count, 1),
+        source_quality=round(sum(item.source_quality for item in breakdowns) / count, 1),
+        risk_penalty=round(sum(item.risk_penalty for item in breakdowns) / count, 1),
+        final_score=round(sum(item.final_score for item in breakdowns) / count, 1),
+    )
+
+
+def _summarize_evidence(card: NewsBriefCard) -> str:
+    summary = card.summary.strip() or card.why_it_matters.strip() or card.headline.strip()
+    first_sentence = summary.split(". ")[0].strip()
+    if not first_sentence.endswith("."):
+        first_sentence = f"{first_sentence}."
+    return first_sentence
 
 
 def _editorial_summary(article: NewsArticle, sentiment: str, categories: list[str]) -> str:
@@ -143,12 +168,14 @@ def build_today_picks(briefing: list[NewsBriefCard]) -> list[TodayPickCard]:
         risks = []
         for card in cards:
             for flag in card.risk_flags:
+                if len(cards) > 1 and flag.lower().startswith("single-source"):
+                    continue
                 if flag not in risks:
                     risks.append(flag)
         sentiment_counts = {value: sum(1 for card in cards if card.sentiment == value) for value in ("bullish", "neutral", "bearish")}
         dominant_sentiment = max(sentiment_counts, key=sentiment_counts.get)
         label = _pick_label(dominant_sentiment, avg_score, risks)
-        evidence = [card.headline for card in sorted(cards, key=lambda card: card.impact_score, reverse=True)[:4]]
+        evidence = [_summarize_evidence(card) for card in sorted(cards, key=lambda card: card.impact_score, reverse=True)[:3]]
         thesis = _pick_thesis(ticker, dominant_sentiment, label, cards)
         sources = []
         for card in cards:
@@ -165,6 +192,7 @@ def build_today_picks(briefing: list[NewsBriefCard]) -> list[TodayPickCard]:
                 opportunity_score=round(min(avg_score + min(len(cards), 4) * 3, 96), 1),
                 confidence=round(min(confidence + min(len(cards), 3) * 3, 94), 1),
                 risk_level=risk_level(risks, dominant_sentiment, avg_score),
+                score_breakdown=_average_breakdown(cards),
                 key_evidence=evidence,
                 risk_flags=risks[:5] or ["Needs confirmation from additional sources and market response."],
                 related_news_count=len(cards),
@@ -208,7 +236,7 @@ def build_reports(briefing: list[NewsBriefCard], picks: list[TodayPickCard]) -> 
             "what_happened": " ".join(card.summary for card in related[:3]),
             "why_it_matters": top.why_it_matters,
             "signal_summary": (
-                f"Opportunity score {pick.opportunity_score:.1f}/100, confidence {pick.confidence:.1f}/100, "
+                f"Research priority {pick.opportunity_score:.1f}/100, confidence {pick.confidence:.1f}/100, "
                 f"risk level {pick.risk_level}. Label: {pick.label}."
             ),
             "what_to_watch_next": (
@@ -236,10 +264,11 @@ def build_reports(briefing: list[NewsBriefCard], picks: list[TodayPickCard]) -> 
                 risk_flags=risks,
                 signal_summary={
                     "label": pick.label,
-                    "opportunity_score": pick.opportunity_score,
+                    "research_priority": pick.opportunity_score,
                     "confidence": pick.confidence,
                     "risk_level": pick.risk_level,
                     "related_news_count": pick.related_news_count,
+                    "score_breakdown": pick.score_breakdown.model_dump() if pick.score_breakdown else None,
                 },
                 sources=sources,
                 what_to_watch_next=[
