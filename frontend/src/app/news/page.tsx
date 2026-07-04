@@ -485,7 +485,18 @@ function NewsPageContent() {
               {activeTab !== "news" && workspace && workspace.briefing.length > 0 && (
                 <>
                   {activeTab === "briefing" && <BriefingTab cards={workspace.briefing} />}
-                  {activeTab === "picks" && <PicksTab picks={workspace.picks} onViewReports={() => setTab("reports")} />}
+                  {activeTab === "picks" && (
+                    <PicksTab
+                      picks={workspace.picks}
+                      reports={workspace.reports}
+                      onViewReport={(reportId) => {
+                        setTab("reports");
+                        window.setTimeout(() => {
+                          document.getElementById(reportId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }, 260);
+                      }}
+                    />
+                  )}
                   {activeTab === "reports" && <ReportsTab reports={workspace.reports} />}
                 </>
               )}
@@ -787,7 +798,15 @@ function BriefingTab({ cards }: { cards: NewsBriefCard[] }) {
   );
 }
 
-function PicksTab({ picks, onViewReports }: { picks: TodayPickCard[]; onViewReports: () => void }) {
+function PicksTab({
+  picks,
+  reports,
+  onViewReport,
+}: {
+  picks: TodayPickCard[];
+  reports: ResearchReport[];
+  onViewReport: (reportId: string) => void;
+}) {
   if (picks.length === 0) {
     return (
       <EmptyPanel icon={<Target className="size-10" />} message="No ticker-level research opportunities were identified from the current source set." />
@@ -795,70 +814,99 @@ function PicksTab({ picks, onViewReports }: { picks: TodayPickCard[]; onViewRepo
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      {picks.map((pick) => (
-        <article key={pick.id} className="news-card rounded-xl border p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-3">
-                <h2 className="font-mono text-2xl font-semibold text-white">{pick.ticker}</h2>
-                <span className="news-pick-label rounded-md border px-2 py-1 text-xs font-semibold">{pick.label}</span>
+    <div className="grid gap-3 xl:grid-cols-3">
+      {picks.map((pick) => {
+        const report = findReportForPick(pick, reports);
+        const companyName = displayCompanyName(pick);
+        const mainRisk = pick.risk_flags.find((flag) => !isContradictorySourceRisk(flag, pick.related_news_count)) ?? "Reject the setup if follow-up news or price action fails to confirm the catalyst.";
+        const evidence = compactEvidence(pick);
+
+        return (
+          <article key={pick.id} className="news-card flex min-h-[430px] flex-col rounded-xl border p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="font-mono text-xl font-semibold text-white">{pick.ticker}</h2>
+                  <span className="news-pick-label rounded-md border px-2 py-1 text-[11px] font-semibold">{pick.label}</span>
+                </div>
+                <p className="mt-1 truncate text-xs text-white/42">{companyName}</p>
+                {pick.current_price != null && (
+                  <p className={cn("mt-2 text-xs font-semibold", (pick.daily_change_pct ?? 0) >= 0 ? "text-emerald-200" : "text-red-200")}>
+                    ${pick.current_price.toFixed(2)}
+                    {pick.daily_change_pct != null && <span className="ml-2">{pick.daily_change_pct >= 0 ? "+" : ""}{pick.daily_change_pct.toFixed(2)}%</span>}
+                  </p>
+                )}
               </div>
-              <p className="mt-1 text-sm text-white/38">{pick.company_name ?? "Company name unavailable"}</p>
+              <div className="shrink-0 text-right">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/30">Pick score</p>
+                <p className="mt-1 font-mono text-3xl font-semibold text-white">{pct(pick.opportunity_score)}</p>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/30">Quote</p>
-              <p className="mt-1 text-sm text-white/55">
-                {pick.current_price == null ? "Unavailable" : `$${pick.current_price.toFixed(2)}`}
-              </p>
+
+            <p className="mt-3 rounded-lg border border-white/[0.07] bg-white/[0.025] p-3 text-sm leading-6 text-white/68">
+              {pick.thesis}
+            </p>
+
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <PickMetric label="Pick score" value={pct(pick.opportunity_score)} />
+              <PickMetric label="Confidence" value={pct(pick.confidence)} />
+              <PickMetric label="Risk" value={pick.risk_level} tone={riskTone(pick.risk_level)} />
             </div>
-          </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <Metric label="Opportunity" value={pct(pick.opportunity_score)} />
-            <Metric label="Confidence" value={pct(pick.confidence)} />
-            <Metric label="Risk" value={pick.risk_level} tone={riskTone(pick.risk_level)} />
-          </div>
-
-          <p className="mt-4 text-sm leading-6 text-white/62">{pick.thesis}</p>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <EvidenceBlock title="Key evidence" icon={<BookOpenText className="size-4" />}>
-              <ul className="space-y-1.5">
-                {pick.key_evidence.map((item) => (
-                  <li key={item}>{item}</li>
+            <div className="mt-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="news-section-heading text-xs font-semibold uppercase tracking-[0.14em]">Score drivers</p>
+                <span className="text-[11px] text-white/34">Not a price forecast</span>
+              </div>
+              <div className="space-y-1.5">
+                {pickDriverRows(pick).map((driver) => (
+                  <ScoreDriverRow key={driver.label} {...driver} />
                 ))}
-              </ul>
-            </EvidenceBlock>
-            <EvidenceBlock title="Risk flags" icon={<AlertTriangle className="size-4" />}>
-              <ul className="space-y-1.5">
-                {pick.risk_flags.map((flag) => (
-                  <li key={flag}>{flag}</li>
-                ))}
-              </ul>
-            </EvidenceBlock>
-          </div>
+              </div>
+            </div>
 
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <span className="text-xs text-white/35">{pick.related_news_count} related source item(s)</span>
-            <button
-              type="button"
-              onClick={onViewReports}
-              className="news-action ml-auto inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-semibold"
-            >
-              View report
-              <FileText className="size-4" />
-            </button>
-            <Link
-              href={`/research?ticker=${encodeURIComponent(pick.ticker)}&source=research&report_type=investment`}
-              className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3 text-sm font-semibold text-[#050507] hover:bg-white/88"
-            >
-              Open analysis
-              <ChevronRight className="size-4" />
-            </Link>
-          </div>
-        </article>
-      ))}
+            <div className="mt-3 grid gap-3">
+              <EvidenceBlock title="Evidence" icon={<BookOpenText className="size-4" />}>
+                <ul className="list-disc space-y-1.5 pl-4 marker:text-indigo-200/70">
+                  {evidence.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </EvidenceBlock>
+              <EvidenceBlock title="Main risk" icon={<AlertTriangle className="size-4" />}>
+                <p>{mainRisk}</p>
+              </EvidenceBlock>
+            </div>
+
+            <p className="mt-3 text-[11px] leading-5 text-white/34">
+              Pick score ranks review urgency from news, sentiment, relevance, market confirmation, source quality, and risk.
+            </p>
+
+            <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
+              <span className="news-chip rounded-md border px-2 py-1 text-xs text-white/42">
+                {pick.related_news_count} related source{pick.related_news_count === 1 ? "" : "s"}
+              </span>
+              {report && (
+                <button
+                  type="button"
+                  onClick={() => onViewReport(report.id)}
+                  className="news-action ml-auto inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-semibold"
+                >
+                  View report
+                  <FileText className="size-4" />
+                </button>
+              )}
+              <Link
+                href={`/research?ticker=${encodeURIComponent(pick.ticker)}&source=research&report_type=investment`}
+                className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3 text-sm font-semibold text-[#050507] transition-colors hover:bg-white/88"
+              >
+                Open analysis
+                <ChevronRight className="size-4" />
+              </Link>
+            </div>
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -951,8 +999,8 @@ function ReportsTab({ reports }: { reports: ResearchReport[] }) {
             <div className="news-subpanel mt-5 rounded-xl border p-4">
               <p className="text-sm font-semibold text-white">Signal summary</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                {Object.entries(report.signal_summary).map(([key, value]) => (
-                  <SignalSummaryChip key={key} label={key.replaceAll("_", " ")} value={String(value)} />
+                {Object.entries(report.signal_summary).filter(([key]) => key !== "score_breakdown").map(([key, value]) => (
+                  <SignalSummaryChip key={key} label={displaySignalLabel(key)} value={String(value)} />
                 ))}
               </div>
             </div>
@@ -1278,14 +1326,16 @@ function ReportModal({ report, onClose }: { report: ResearchReport | null; onClo
                   <div className="rounded-2xl border border-black/10 bg-white/55 p-4">
                     <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[#77707c]">Signal summary</p>
                     <div className="space-y-2">
-                      {Object.entries(report.signal_summary).map(([key, value]) => (
+                      {Object.entries(report.signal_summary).filter(([key]) => key !== "score_breakdown").map(([key, value]) => (
                         <div key={key} className="flex items-center justify-between gap-3 border-b border-black/[0.07] py-2 last:border-b-0">
-                          <span className="text-xs capitalize text-[#5f5867]">{key.replaceAll("_", " ")}</span>
+                          <span className="text-xs capitalize text-[#5f5867]">{displaySignalLabel(key)}</span>
                           <span className="font-mono text-sm font-semibold capitalize text-[#3b2db4]">{String(value)}</span>
                         </div>
                       ))}
                     </div>
                   </div>
+
+                  <ModalScoreDrivers report={report} />
 
                   <div className="rounded-2xl border border-black/10 bg-white/55 p-4">
                     <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[#77707c]">Sources</p>
@@ -1360,6 +1410,11 @@ function SignalSummaryChip({ label, value }: { label: string; value: string }) {
   );
 }
 
+function displaySignalLabel(key: string) {
+  if (key === "research_priority" || key === "opportunity_score") return "Pick score";
+  return key.replaceAll("_", " ");
+}
+
 function SentimentBadge({ sentiment }: { sentiment: NewsBriefCard["sentiment"] }) {
   const styles = {
     bullish: "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",
@@ -1389,10 +1444,164 @@ function EvidenceBlock({ title, icon, children }: { title: string; icon: ReactNo
   );
 }
 
+function findReportForPick(pick: TodayPickCard, reports: ResearchReport[]) {
+  return reports.find((report) => report.affected_tickers.some((ticker) => ticker.toUpperCase() === pick.ticker.toUpperCase()));
+}
+
+function displayCompanyName(pick: TodayPickCard) {
+  const name = pick.company_name?.trim();
+  return name || `${pick.ticker} research candidate`;
+}
+
+function isContradictorySourceRisk(flag: string, sourceCount: number) {
+  return sourceCount > 1 && flag.toLowerCase().includes("single-source");
+}
+
+function compactEvidence(pick: TodayPickCard) {
+  const items = pick.key_evidence
+    .filter((item) => item.trim())
+    .map((item) => item.trim().replace(/\s+/g, " "))
+    .filter((item) => !isContradictorySourceRisk(item, pick.related_news_count));
+  return (items.length > 0 ? items : ["Related headlines are clustered enough to justify a focused review."]).slice(0, 3);
+}
+
+function pickDriverRows(pick: TodayPickCard) {
+  const breakdown = pick.score_breakdown;
+  return [
+    { label: "Theme relevance", value: breakdown?.relevance ?? pick.opportunity_score, tone: "indigo" as const },
+    { label: "News momentum", value: breakdown?.freshness ?? pick.opportunity_score, tone: "indigo" as const },
+    { label: "Sentiment", value: breakdown?.sentiment ?? pick.confidence, tone: "emerald" as const },
+    { label: "Price/volume", value: breakdown?.price_volume ?? 0, tone: "emerald" as const },
+    { label: "Risk penalty", value: breakdown?.risk_penalty ?? riskPenaltyFallback(pick.risk_level), tone: "danger" as const, penalty: true },
+  ];
+}
+
+function reportDriverRows(report: ResearchReport) {
+  const scoreBreakdown = isSignalBreakdown(report.signal_summary.score_breakdown) ? report.signal_summary.score_breakdown : null;
+  if (!scoreBreakdown) return [];
+
+  return [
+    { label: "Theme relevance", value: scoreBreakdown.relevance, tone: "indigo" as const },
+    { label: "News momentum", value: scoreBreakdown.freshness, tone: "indigo" as const },
+    { label: "Sentiment", value: scoreBreakdown.sentiment, tone: "emerald" as const },
+    { label: "Price/volume", value: scoreBreakdown.price_volume, tone: "emerald" as const },
+    { label: "Risk penalty", value: scoreBreakdown.risk_penalty, tone: "danger" as const, penalty: true },
+  ];
+}
+
+function riskPenaltyFallback(riskLevel: TodayPickCard["risk_level"]) {
+  if (riskLevel === "critical") return 80;
+  if (riskLevel === "high") return 62;
+  if (riskLevel === "medium") return 34;
+  return 12;
+}
+
+function PickMetric({ label, value, tone = "base" }: { label: string; value: string; tone?: RiskTone }) {
+  return (
+    <div className="news-subpanel rounded-lg border p-2.5">
+      <p className="text-[11px] text-white/34">{label}</p>
+      <p className={cn("mt-1 text-sm font-semibold capitalize", tone === "base" ? "text-white" : riskToneClass(tone))}>{value}</p>
+    </div>
+  );
+}
+
+function ScoreDriverRow({
+  label,
+  value,
+  tone,
+  penalty = false,
+}: {
+  label: string;
+  value: number;
+  tone: "indigo" | "emerald" | "danger";
+  penalty?: boolean;
+}) {
+  const width = Math.max(0, Math.min(100, value));
+  return (
+    <div className="grid grid-cols-[112px_1fr_38px] items-center gap-2 text-[11px]">
+      <span className="truncate text-white/46">{label}</span>
+      <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+        <div
+          className={cn(
+            "h-full rounded-full",
+            tone === "indigo" && "bg-indigo-300",
+            tone === "emerald" && "bg-emerald-300",
+            tone === "danger" && "bg-red-300"
+          )}
+          style={{ width: `${width}%` }}
+        />
+      </div>
+      <span className={cn("text-right font-mono", penalty ? "text-red-200" : "text-white/62")}>{pct(width)}</span>
+    </div>
+  );
+}
+
+function ModalScoreDrivers({ report }: { report: ResearchReport }) {
+  const drivers = reportDriverRows(report);
+  if (drivers.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-black/10 bg-white/55 p-4">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[#77707c]">Score drivers</p>
+      <div className="space-y-2">
+        {drivers.map((driver) => (
+          <ModalScoreDriverRow key={driver.label} {...driver} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ModalScoreDriverRow({
+  label,
+  value,
+  tone,
+  penalty = false,
+}: {
+  label: string;
+  value: number;
+  tone: "indigo" | "emerald" | "danger";
+  penalty?: boolean;
+}) {
+  const width = Math.max(0, Math.min(100, value));
+  return (
+    <div className="grid grid-cols-[112px_1fr_40px] items-center gap-2 text-xs">
+      <span className="truncate text-[#5f5867]">{label}</span>
+      <div className="h-1.5 overflow-hidden rounded-full bg-black/[0.08]">
+        <div
+          className={cn(
+            "h-full rounded-full",
+            tone === "indigo" && "bg-[#6d5dfc]",
+            tone === "emerald" && "bg-emerald-500",
+            tone === "danger" && "bg-red-500"
+          )}
+          style={{ width: `${width}%` }}
+        />
+      </div>
+      <span className={cn("text-right font-mono font-semibold", penalty ? "text-red-600" : "text-[#3b2db4]")}>{pct(width)}</span>
+    </div>
+  );
+}
+
+function isSignalBreakdown(value: unknown): value is {
+  relevance: number;
+  freshness: number;
+  sentiment: number;
+  price_volume: number;
+  risk_penalty: number;
+} {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return ["relevance", "freshness", "sentiment", "price_volume", "risk_penalty"].every((key) => {
+    const item = record[key];
+    return typeof item === "number" && Number.isFinite(item);
+  });
+}
+
 function ReportVisual({ report }: { report: ResearchReport }) {
   const label = signalText(report.signal_summary.label, "Research memo");
   const riskLevel = signalText(report.signal_summary.risk_level, "medium");
-  const opportunity = signalNumber(report.signal_summary.opportunity_score, 0);
+  const opportunity = signalNumber(report.signal_summary.research_priority, signalNumber(report.signal_summary.opportunity_score, 0));
   const confidence = signalNumber(report.signal_summary.confidence, 0);
   const sourceCount = signalNumber(report.signal_summary.related_news_count, report.sources.length);
   const ticker = report.affected_tickers[0] ?? "N/A";
@@ -1424,7 +1633,7 @@ function ReportVisual({ report }: { report: ResearchReport }) {
 
         <div className="p-5">
           <div className="grid gap-4 md:grid-cols-2">
-            <SignalBar label="Opportunity score" value={opportunity} tone="indigo" />
+            <SignalBar label="Pick score" value={opportunity} tone="indigo" />
             <SignalBar label="Confidence" value={confidence} tone="emerald" />
           </div>
           <div className="news-subpanel mt-5 rounded-xl border p-4">
