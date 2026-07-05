@@ -5,7 +5,7 @@ import pytest
 from fastapi import HTTPException
 
 from src.agent.equity_research.entitlements import apply_research_entitlements, research_deep_report_limit, research_report_limit
-from src.agent.equity_research.orchestrator import _final_decision, _pm_report
+from src.agent.equity_research.orchestrator import MAX_REPORT_LINE_CHARS, MAX_TABLE_CELL_CHARS, _final_decision, _pm_report, _sanitize_llm_report_markdown
 from src.models.equity_research import EquityResearchRun, EquityResearchRunCreate, EquityResearchSnapshot, InvestmentDecision, ReportType, ResearchDepth, TradingBias
 from src.saas.models import AuthenticatedUser, Plan
 
@@ -134,3 +134,29 @@ def test_trading_final_decision_sets_bias_field():
 
     assert decision.trading_bias == TradingBias.BULLISH
     assert decision.investment_decision is None
+
+
+def test_llm_report_sanitizer_clamps_pathological_table_cells():
+    huge_source_cell = "Sandisk Corporation develops NAND flash memory technology. " * 80
+    markdown = (
+        "# Fundamentals Report\n\n"
+        + ("Executive summary with enough report text to pass the minimum length guard. " * 8)
+        + "\n\n| Metric | Value | Source |\n"
+        + "| :--- | :--- | :" + ("-" * 5000) + " |\n"
+        + f"| Company profile | Available | {huge_source_cell} |\n"
+    )
+
+    sanitized = _sanitize_llm_report_markdown(markdown)
+
+    assert sanitized is not None
+    assert "----" not in sanitized
+    assert len(max(sanitized.splitlines(), key=len)) < MAX_REPORT_LINE_CHARS
+    assert "Sandisk Corporation develops" in sanitized
+    assert huge_source_cell not in sanitized
+    assert all(len(cell.strip()) <= MAX_TABLE_CELL_CHARS for line in sanitized.splitlines() if line.startswith("|") for cell in line.strip("|").split("|"))
+
+
+def test_llm_report_sanitizer_rejects_pathological_non_table_lines():
+    markdown = "# Report\n\n" + ("A single unbounded paragraph. " * 200)
+
+    assert _sanitize_llm_report_markdown(markdown) is None

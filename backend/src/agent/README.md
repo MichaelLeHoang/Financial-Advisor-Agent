@@ -23,4 +23,4 @@ Reuse `data.market_data_service`, `llm.gateway`, `risk`, `quant`, and `saas` rat
 Cover routing, grounding, consensus, queue state, history ownership, and tool failure behavior with mocked providers.
 
 ## Latest Change
-- Renamed the consensus orchestrator and user-facing agent copy to use Quanfora branding.
+- Added prediction ticker aliasing for SpaceX-style company names and clarified that prediction requests must resolve current public tickers before answering from model memory.

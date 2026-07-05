@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from threading import Lock
@@ -97,6 +98,11 @@ FINAL_REPORT_QUALITY_GATE = """Final report quality gate:
 4. Include market/trend context, catalysts, risks, portfolio fit, and confidence.
 5. Translate internal scoring into plain English; do not expose raw internal agent scores as the decision basis.
 6. Do not make unsupported claims."""
+
+MAX_REPORT_LINE_CHARS = 1400
+MAX_TABLE_CELL_CHARS = 220
+MAX_TABLE_COLUMNS = 6
+MAX_TABLE_ROWS = 120
 
 
 class EquityResearchStore:
@@ -500,8 +506,53 @@ def _pct(value: float | None) -> str:
 
 
 def _metric_rows(rows: list[tuple[str, str, str, str]]) -> str:
-    body = "\n".join(f"| {a} | {b} | {c} | {d} |" for a, b, c, d in rows)
+    body = "\n".join(_table_row([a, b, c, d]) for a, b, c, d in rows)
     return "| Metric | Value | Signal | Why It Matters |\n| --- | ---: | --- | --- |\n" + body
+
+
+def _table_cell(value: Any, limit: int = MAX_TABLE_CELL_CHARS) -> str:
+    text = re.sub(r"\s+", " ", str(value or "n/a")).strip()
+    text = text.replace("|", "/")
+    if len(text) > limit:
+        return f"{text[:limit - 3].rstrip()}..."
+    return text or "n/a"
+
+
+def _table_row(cells: list[Any]) -> str:
+    safe_cells = [_table_cell(cell) for cell in cells[:MAX_TABLE_COLUMNS]]
+    return "| " + " | ".join(safe_cells) + " |"
+
+
+def _is_table_separator_cell(value: str) -> bool:
+    return bool(re.fullmatch(r":?-{3,}:?", value.strip()))
+
+
+def _sanitize_markdown_table_line(line: str) -> str:
+    raw_cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+    if raw_cells and all(_is_table_separator_cell(cell) for cell in raw_cells):
+        return "| " + " | ".join("---" for _ in raw_cells[:MAX_TABLE_COLUMNS]) + " |"
+    return _table_row(raw_cells)
+
+
+def _sanitize_llm_report_markdown(markdown: str) -> str | None:
+    table_rows = 0
+    sanitized_lines: list[str] = []
+
+    for line in markdown.splitlines():
+        if line.lstrip().startswith("|") and line.rstrip().endswith("|"):
+            table_rows += 1
+            if table_rows > MAX_TABLE_ROWS:
+                return None
+            sanitized_lines.append(_sanitize_markdown_table_line(line))
+            continue
+
+        compact = re.sub(r"\s+", " ", line).strip()
+        if len(compact) > MAX_REPORT_LINE_CHARS:
+            return None
+        sanitized_lines.append(line)
+
+    sanitized = "\n".join(sanitized_lines).strip()
+    return sanitized if len(sanitized) >= 500 else None
 
 
 def _source_quality(snapshot: EquityResearchSnapshot) -> str:
@@ -515,7 +566,7 @@ def _source_quality(snapshot: EquityResearchSnapshot) -> str:
         rows.append((provider, state, detail_text))
     if not rows:
         return "No provider status was captured."
-    return "| Provider | Status | Detail |\n| --- | --- | --- |\n" + "\n".join(f"| {p} | {s} | {d} |" for p, s, d in rows)
+    return "| Provider | Status | Detail |\n| --- | --- | --- |\n" + "\n".join(_table_row([p, s, d]) for p, s, d in rows)
 
 
 def _evidence_items(snapshot: EquityResearchSnapshot) -> list[str]:
@@ -611,6 +662,7 @@ Include:
 - Disclaimer
 
 Prefer quality over hype. Do not imply guaranteed returns or brokerage execution.
+If you use markdown tables, keep every cell concise. Never put full paragraphs, long source text, URLs, or raw article excerpts inside table cells; use bullets below the table for details instead.
 
 Shared snapshot:
 {_snapshot_brief(snapshot)}
@@ -628,15 +680,16 @@ Prior agent context:
         content = response.content
         if isinstance(content, list):
             content = "\n".join(part.get("text", str(part)) if isinstance(part, dict) else str(part) for part in content)
-        if isinstance(content, str) and len(content.strip()) > 500 and _passes_quality_gate(content):
+        sanitized = _sanitize_llm_report_markdown(content) if isinstance(content, str) else None
+        if sanitized and _passes_quality_gate(sanitized):
             llm_gateway.record_usage(
                 user_id=str(run.user_id),
                 task_type="equity_research_report",
                 routed_model=routed,
                 input_text=prompt,
-                output_text=content,
+                output_text=sanitized,
             )
-            return content
+            return sanitized
     except Exception:
         return markdown
     return markdown
@@ -753,7 +806,7 @@ def _sentiment_report(run, snapshot, previous):
     ]
     risk = list(sentiment.get("limitations", []))
     headline_rows = "\n".join(
-        f"| {item.get('title', 'Untitled')} | {item.get('publisher') or item.get('source') or 'Unknown'} | {item.get('sentiment') or 'n/a'} |"
+        _table_row([item.get("title", "Untitled"), item.get("publisher") or item.get("source") or "Unknown", item.get("sentiment") or "n/a"])
         for item in news
     ) or "| No recent headlines available | n/a | n/a |"
     markdown = (
@@ -781,8 +834,7 @@ def _news_report(run, snapshot, previous):
         points = ["No recent news items were returned by the configured source."]
     risk = [] if snapshot.news_items else ["News context is limited for this run."]
     news_rows = "\n".join(
-        f"| [{item.get('title', 'Untitled')}]({item.get('url')}) | {item.get('publisher') or item.get('source') or 'Unknown'} | {item.get('published_at') or 'n/a'} |"
-        if item.get("url") else f"| {item.get('title', 'Untitled')} | {item.get('publisher') or item.get('source') or 'Unknown'} | {item.get('published_at') or 'n/a'} |"
+        _table_row([f"[{item.get('title', 'Untitled')}]({item.get('url')})" if item.get("url") else item.get("title", "Untitled"), item.get("publisher") or item.get("source") or "Unknown", item.get("published_at") or "n/a"])
         for item in snapshot.news_items[:10]
     ) or "| No current news available | n/a | n/a |"
     markdown = (

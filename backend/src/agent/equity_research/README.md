@@ -22,4 +22,4 @@ API transport stays in `api/equity_research.py`; shared request and response mod
 Test entitlement normalization, report objective gating, report limits, invalid tickers, missing prices, deterministic final decisions, and run-state transitions without live providers.
 
 ## Latest Change
-- Added Quanfora 2.1 investment decision enums, trading bias output, depth quality gates, and monthly research report limit enforcement.
+- Added markdown table sanitization for medium/deep LLM-enhanced reports so oversized source cells or malformed table separators cannot be persisted into research output.

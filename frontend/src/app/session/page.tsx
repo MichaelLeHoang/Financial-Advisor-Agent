@@ -188,6 +188,38 @@ function extractTickerForResearch(message: string) {
   return null;
 }
 
+const RESEARCH_PUBLIC_QUOTE_TYPES = new Set(["equity", "stock", "etf", "fund"]);
+
+function extractResearchSearchQuery(message: string) {
+  const cleaned = message.replace(/[?!.]+$/g, "").trim();
+  const patterns = [
+    /\b(?:of|for|on|about)\s+([A-Za-z][A-Za-z0-9 .&-]{1,80}?)\s+(?:stock|shares?|ticker)\b/i,
+    /\b(?:analyze|research|forecast|predict)\s+([A-Za-z][A-Za-z0-9 .&-]{1,80}?)\s+(?:stock|shares?|ticker)?\b/i,
+    /\b([A-Za-z][A-Za-z0-9 .&-]{1,80}?)\s+(?:stock|shares?|ticker)\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = cleaned.match(pattern);
+    const entity = match?.[1]?.replace(/\b(?:the|a|an|company|stock|shares?|price|percentage|increase|decrease|next|months?|year)\b/gi, " ").replace(/\s+/g, " ").trim();
+    if (entity && entity.length <= 80) return entity;
+  }
+
+  return cleaned.split(/\s+/).length <= 4 ? cleaned : null;
+}
+
+async function resolveResearchTicker(message: string) {
+  const query = extractResearchSearchQuery(message);
+  if (!query) return null;
+
+  try {
+    const matches = await api.marketSearch(query, 6);
+    const candidate = matches.find((item) => RESEARCH_PUBLIC_QUOTE_TYPES.has((item.quote_type ?? "").toLowerCase())) ?? matches[0];
+    return normalizeTickerCandidate(candidate?.ticker);
+  } catch {
+    return null;
+  }
+}
+
 const RESEARCH_EVENT_TOOL_BY_AGENT: Record<string, string> = {
   market: "market",
   social: "social",
@@ -644,12 +676,12 @@ export default function ChatPage() {
     const investmentTicker = researchCommand?.ticker ?? extractInvestmentTicker(text);
 
     if (researchCommand || version === "2.1") {
-      const ticker = researchCommand?.ticker ?? extractTickerForResearch(text);
+      const ticker = researchCommand?.ticker ?? extractTickerForResearch(text) ?? await resolveResearchTicker(text);
       if (!ticker) {
         setMessages((prev) => [...prev, userMsg, {
           id: getUniqueId(),
           role: "assistant",
-          content: "Quanfora 2.1 needs a ticker to start a full Equity Research Desk run. Try `AAPL`, `NVDA`, or `/analyze MSFT deep`.",
+          content: "Quanfora 2.1 needs a public ticker to start a full Equity Research Desk run. I could not resolve one from that prompt. Try `SPCX`, `AAPL`, `NVDA`, or `/analyze MSFT deep`.",
         }]);
         isStreamingRef.current = false;
         return;
@@ -1036,7 +1068,7 @@ export default function ChatPage() {
                 onChange={setResearchDepth}
                 visible={version === "2.1"}
               />
-              <ModelSelector placement="bottom" compact />
+              <ModelSelector placement={placement === "dock" ? "top" : "bottom"} compact />
               <Button
                 onClick={handleSend}
                 disabled={isLoading || !input.trim()}

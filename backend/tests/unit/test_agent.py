@@ -119,6 +119,7 @@ def test_single_agent_prompt_prefers_ensemble_prediction():
     from src.agent.agent import SYSTEM_PROMPT
 
     assert 'predict_stock_price with model="ensemble"' in SYSTEM_PROMPT
+    assert "Do not say a company is private from memory" in SYSTEM_PROMPT
 
 
 class TestPredictStockPriceTool:
@@ -221,6 +222,40 @@ class TestPredictStockPriceTool:
         assert "Valuation Target: Unavailable" in result
         assert "Final Signal: Neutral" in result
         assert "None" not in result
+
+    def test_resolves_spacex_alias_before_prediction(self):
+        from src.agent.tools import predict_stock_price
+
+        calls = []
+
+        class FakeService:
+            def predict_with_models(self, ticker, *args, **kwargs):
+                calls.append(ticker)
+                return {
+                    "ticker": ticker,
+                    "summary": f"The ensemble model generated a prediction for {ticker}.",
+                    "current_price": 100.0,
+                    "predictions": {
+                        "weighted_ensemble": {"predicted_return": 0.014, "predicted_price": 101.4, "direction": "UP"},
+                    },
+                    "weights": {},
+                    "validation": {},
+                    "agreement": {},
+                    "confidence": "medium",
+                    "ml_prediction": "UP",
+                    "final_signal": "Bullish",
+                    "warnings": [],
+                    "caveat": "This is AI-generated analysis, not professional financial advice.",
+                }
+
+        with (
+            patch("src.agent.tools.fetch_stock_history", return_value=_make_price_df([100 + i for i in range(50)])),
+            patch("src.agent.tools.EnsemblePredictionService", return_value=FakeService()),
+        ):
+            result = predict_stock_price.invoke({"ticker": "spacex"})
+
+        assert calls == ["SPCX"]
+        assert "SPCX" in result
 
     def test_returns_random_forest_prediction_string_when_requested(self):
         from src.agent.tools import predict_stock_price

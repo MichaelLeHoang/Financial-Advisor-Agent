@@ -99,7 +99,7 @@ const components: Components = {
   ),
   table: ({ children }) => (
     <div className="my-3 overflow-x-auto rounded-xl border border-[var(--theme-border)]">
-      <table className="w-full text-sm">{children}</table>
+      <table className="w-full table-fixed text-sm">{children}</table>
     </div>
   ),
   thead: ({ children }) => (
@@ -107,13 +107,13 @@ const components: Components = {
       {children}
     </thead>
   ),
-  th: ({ children }) => <th className="px-3 py-2 font-medium text-[var(--text-primary)]">{children}</th>,
+  th: ({ children }) => <th className="max-w-[18rem] break-words px-3 py-2 align-top font-medium text-[var(--text-primary)] [overflow-wrap:anywhere]">{children}</th>,
   td: ({ children }) => {
     const text = textFromChildren(children);
     const shouldHighlight = /\b(buy|sell|hold|bullish|bearish|neutral|risk|support|resistance|confidence|source|unavailable|limited)\b/i.test(text);
     return (
-      <td className="px-3 py-2 text-[var(--text-secondary)]">
-        {shouldHighlight ? <span className={`rounded-md px-1.5 py-0.5 ring-1 ${highlightClass(text)}`}>{children}</span> : children}
+      <td className="max-w-[18rem] break-words px-3 py-2 align-top text-[var(--text-secondary)] [overflow-wrap:anywhere]">
+        {shouldHighlight ? <span className={`break-words rounded-md px-1.5 py-0.5 ring-1 [overflow-wrap:anywhere] ${highlightClass(text)}`}>{children}</span> : children}
       </td>
     );
   },
