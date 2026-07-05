@@ -6,7 +6,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import StreamingResponse
 
-from src.agent.equity_research.orchestrator import create_research_run, get_research_store
+from src.agent.equity_research.orchestrator import (
+    create_research_run,
+    get_research_store,
+)
 from src.auth.supabase import get_current_or_guest_user
 from src.models.equity_research import (
     EquityResearchRun,
@@ -17,7 +20,6 @@ from src.models.equity_research import (
     ResearchRunStatus,
 )
 from src.saas.models import AuthenticatedUser
-
 
 router = APIRouter(prefix="/api/v1/equity-research", tags=["equity-research"])
 GUEST_SESSION_HEADER = "X-Guest-Session-Id"
@@ -30,17 +32,29 @@ def _normalize_guest_owner_id(value: str | None) -> str | None:
     return normalized[:128]
 
 
-def _can_access(detail: EquityResearchRunDetail, user: AuthenticatedUser, guest_owner_id: str | None = None) -> bool:
+def _can_access(
+    detail: EquityResearchRunDetail,
+    user: AuthenticatedUser,
+    guest_owner_id: str | None = None,
+) -> bool:
     run = detail.run
     if run.user_id is None:
-        return user.is_guest and bool(run.guest_owner_id) and run.guest_owner_id == guest_owner_id
+        return (
+            user.is_guest
+            and bool(run.guest_owner_id)
+            and run.guest_owner_id == guest_owner_id
+        )
     return run.user_id == user.id
 
 
-def _get_detail_or_404(run_id: UUID, user: AuthenticatedUser, guest_owner_id: str | None = None) -> EquityResearchRunDetail:
+def _get_detail_or_404(
+    run_id: UUID, user: AuthenticatedUser, guest_owner_id: str | None = None
+) -> EquityResearchRunDetail:
     detail = get_research_store().detail(run_id)
     if detail is None or not _can_access(detail, user, guest_owner_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Research run not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Research run not found"
+        )
     return detail
 
 
@@ -52,7 +66,10 @@ async def create_run(
 ):
     guest_owner_id = _normalize_guest_owner_id(x_guest_session_id)
     if user.is_guest and guest_owner_id is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Guest session id is required.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Guest session id is required.",
+        )
     return await create_research_run(payload, user, guest_owner_id=guest_owner_id)
 
 
@@ -62,7 +79,9 @@ async def get_run(
     user: AuthenticatedUser = Depends(get_current_or_guest_user),
     x_guest_session_id: str | None = Header(default=None, alias=GUEST_SESSION_HEADER),
 ):
-    return _get_detail_or_404(run_id, user, _normalize_guest_owner_id(x_guest_session_id))
+    return _get_detail_or_404(
+        run_id, user, _normalize_guest_owner_id(x_guest_session_id)
+    )
 
 
 @router.get("/runs/{run_id}/reports")
@@ -74,7 +93,9 @@ async def get_reports(
     _get_detail_or_404(run_id, user, _normalize_guest_owner_id(x_guest_session_id))
     reports = get_research_store().list_reports(run_id)
     if reports is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Research run not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Research run not found"
+        )
     return reports
 
 
@@ -88,7 +109,9 @@ async def list_events(
     _get_detail_or_404(run_id, user, _normalize_guest_owner_id(x_guest_session_id))
     result = get_research_store().list_events(run_id, after=max(after, 0))
     if result is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Research run not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Research run not found"
+        )
     cursor, events = result
     return {"cursor": cursor, "events": events}
 
@@ -108,12 +131,20 @@ async def stream_events(
             detail = _get_detail_or_404(run_id, user, guest_owner_id)
             result = get_research_store().list_events(run_id, after=cursor)
             if result is None:
-                yield "event: error\ndata: {\"detail\":\"Research run not found\"}\n\n"
+                yield 'event: error\ndata: {"detail":"Research run not found"}\n\n'
                 return
             cursor, events = result
             for event in events:
                 yield f"event: {event.event_type.value}\ndata: {event.model_dump_json()}\n\n"
-            if detail.run.status in {ResearchRunStatus.COMPLETED, ResearchRunStatus.FAILED, ResearchRunStatus.CANCELLED} and not events:
+            if (
+                detail.run.status
+                in {
+                    ResearchRunStatus.COMPLETED,
+                    ResearchRunStatus.FAILED,
+                    ResearchRunStatus.CANCELLED,
+                }
+                and not events
+            ):
                 return
             await asyncio.sleep(0.75)
 
@@ -127,14 +158,23 @@ async def share_run(
     user: AuthenticatedUser = Depends(get_current_or_guest_user),
     x_guest_session_id: str | None = Header(default=None, alias=GUEST_SESSION_HEADER),
 ):
-    detail = _get_detail_or_404(run_id, user, _normalize_guest_owner_id(x_guest_session_id))
+    detail = _get_detail_or_404(
+        run_id, user, _normalize_guest_owner_id(x_guest_session_id)
+    )
     if detail.run.user_id is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sign in to share saved reports.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sign in to share saved reports.",
+        )
     if detail.run.user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Research run not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Research run not found"
+        )
     run = get_research_store().share(run_id, payload.shared)
     if run is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Research run not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Research run not found"
+        )
     return run
 
 
@@ -144,11 +184,17 @@ async def delete_run(
     user: AuthenticatedUser = Depends(get_current_or_guest_user),
     x_guest_session_id: str | None = Header(default=None, alias=GUEST_SESSION_HEADER),
 ):
-    detail = _get_detail_or_404(run_id, user, _normalize_guest_owner_id(x_guest_session_id))
+    detail = _get_detail_or_404(
+        run_id, user, _normalize_guest_owner_id(x_guest_session_id)
+    )
     if detail.run.user_id is not None and detail.run.user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Research run not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Research run not found"
+        )
     if not get_research_store().delete_run(run_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Research run not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Research run not found"
+        )
     return None
 
 
@@ -156,5 +202,12 @@ async def delete_run(
 async def get_shared_report(share_slug: str):
     detail = get_research_store().get_shared(share_slug)
     if detail is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared report not found")
-    return PublicEquityResearchReport(run=detail.run, reports=detail.reports, snapshot=detail.snapshot)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Shared report not found"
+        )
+    return PublicEquityResearchReport(
+        run=detail.run,
+        reports=detail.reports,
+        snapshot=detail.snapshot,
+        decision_workspace=detail.decision_workspace,
+    )

@@ -9,11 +9,20 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 
-from src.agent.equity_research.entitlements import apply_research_entitlements, research_deep_report_limit, research_report_limit
+from src.agent.equity_research.entitlements import (
+    apply_research_entitlements,
+    research_deep_report_limit,
+    research_report_limit,
+)
 from src.agent.equity_research.snapshot import build_data_snapshot
 from src.models.equity_research import (
     DISCLAIMER,
     AgentStatus,
+    DecisionWorkspace,
+    DecisionWorkspaceBacktest,
+    DecisionWorkspaceMetric,
+    DecisionWorkspaceNextStep,
+    DecisionWorkspaceSection,
     EquityResearchEvent,
     EquityResearchReport,
     EquityResearchRun,
@@ -54,18 +63,76 @@ class FinalDecision:
 
 
 AGENT_SEQUENCE: list[AgentDefinition] = [
-    AgentDefinition("market", "Market Analyst", "Analyst Agents", "market_report.md", "Market Structure Report"),
-    AgentDefinition("social", "Social Media Analyst", "Analyst Agents", "sentiment_report.md", "Sentiment Limits Report"),
-    AgentDefinition("news", "News Analyst", "Analyst Agents", "news_report.md", "News and Macro Context"),
-    AgentDefinition("fundamentals", "Fundamentals Analyst", "Analyst Agents", "fundamentals_report.md", "Fundamentals Report"),
-    AgentDefinition("bull", "Bull Researcher", "Research Agents", "bull_case.md", "Bull Case"),
-    AgentDefinition("bear", "Bear Researcher", "Research Agents", "bear_case.md", "Bear Case"),
-    AgentDefinition("evaluator", "Research Evaluator", "Research Agents", "research_evaluation.md", "Balanced Thesis"),
+    AgentDefinition(
+        "market",
+        "Market Analyst",
+        "Analyst Agents",
+        "market_report.md",
+        "Market Structure Report",
+    ),
+    AgentDefinition(
+        "social",
+        "Social Media Analyst",
+        "Analyst Agents",
+        "sentiment_report.md",
+        "Sentiment Limits Report",
+    ),
+    AgentDefinition(
+        "news",
+        "News Analyst",
+        "Analyst Agents",
+        "news_report.md",
+        "News and Macro Context",
+    ),
+    AgentDefinition(
+        "fundamentals",
+        "Fundamentals Analyst",
+        "Analyst Agents",
+        "fundamentals_report.md",
+        "Fundamentals Report",
+    ),
+    AgentDefinition(
+        "bull", "Bull Researcher", "Research Agents", "bull_case.md", "Bull Case"
+    ),
+    AgentDefinition(
+        "bear", "Bear Researcher", "Research Agents", "bear_case.md", "Bear Case"
+    ),
+    AgentDefinition(
+        "evaluator",
+        "Research Evaluator",
+        "Research Agents",
+        "research_evaluation.md",
+        "Balanced Thesis",
+    ),
     AgentDefinition("trader", "Trader", "Trading Desk", "trader_plan.md", "Trade Plan"),
-    AgentDefinition("risky", "Risky Analyst", "Risk Management Agents", "risk_opportunity.md", "Upside Risk Review"),
-    AgentDefinition("neutral", "Neutral Analyst", "Risk Management Agents", "risk_review.md", "Neutral Risk Review"),
-    AgentDefinition("safe", "Safe Analyst", "Risk Management Agents", "safe_risk_controls.md", "Conservative Risk Controls"),
-    AgentDefinition("pm", "Portfolio Manager", "Final Verdict", "final_trade_decision.md", "Final Trade Decision"),
+    AgentDefinition(
+        "risky",
+        "Risky Analyst",
+        "Risk Management Agents",
+        "risk_opportunity.md",
+        "Upside Risk Review",
+    ),
+    AgentDefinition(
+        "neutral",
+        "Neutral Analyst",
+        "Risk Management Agents",
+        "risk_review.md",
+        "Neutral Risk Review",
+    ),
+    AgentDefinition(
+        "safe",
+        "Safe Analyst",
+        "Risk Management Agents",
+        "safe_risk_controls.md",
+        "Conservative Risk Controls",
+    ),
+    AgentDefinition(
+        "pm",
+        "Portfolio Manager",
+        "Final Verdict",
+        "final_trade_decision.md",
+        "Final Trade Decision",
+    ),
 ]
 
 
@@ -112,6 +179,7 @@ class EquityResearchStore:
         self.snapshots: dict[UUID, EquityResearchSnapshot] = {}
         self.reports: dict[UUID, list[EquityResearchReport]] = {}
         self.events: dict[UUID, list[EquityResearchEvent]] = {}
+        self.workspaces: dict[UUID, DecisionWorkspace] = {}
         self.share_index: dict[str, UUID] = {}
         self._versions: dict[UUID, int] = {}
 
@@ -120,6 +188,7 @@ class EquityResearchStore:
             self.runs[run.run_id] = run
             self.reports[run.run_id] = []
             self.events[run.run_id] = []
+            self.workspaces.pop(run.run_id, None)
             self._versions[run.run_id] = 0
         return run
 
@@ -128,7 +197,9 @@ class EquityResearchStore:
             run = self.runs.get(run_id)
             if not run:
                 return None
-            updated = run.model_copy(update={**fields, "updated_at": datetime.now(timezone.utc)})
+            updated = run.model_copy(
+                update={**fields, "updated_at": datetime.now(timezone.utc)}
+            )
             self.runs[run_id] = updated
             return updated
 
@@ -139,10 +210,19 @@ class EquityResearchStore:
 
     def add_report(self, report: EquityResearchReport) -> None:
         with self._lock:
-            existing = [item for item in self.reports.get(report.run_id, []) if item.agent_key != report.agent_key]
+            existing = [
+                item
+                for item in self.reports.get(report.run_id, [])
+                if item.agent_key != report.agent_key
+            ]
             existing.append(report)
             self.reports[report.run_id] = existing
             self._versions[report.run_id] = self._versions.get(report.run_id, 0) + 1
+
+    def add_workspace(self, run_id: UUID, workspace: DecisionWorkspace) -> None:
+        with self._lock:
+            self.workspaces[run_id] = workspace
+            self._versions[run_id] = self._versions.get(run_id, 0) + 1
 
     def add_event(self, event: EquityResearchEvent) -> None:
         with self._lock:
@@ -157,8 +237,13 @@ class EquityResearchStore:
             return EquityResearchRunDetail(
                 run=run,
                 snapshot=self.snapshots.get(run_id),
-                reports=sorted(self.reports.get(run_id, []), key=lambda item: item.completed_at or datetime.max.replace(tzinfo=timezone.utc)),
+                reports=sorted(
+                    self.reports.get(run_id, []),
+                    key=lambda item: item.completed_at
+                    or datetime.max.replace(tzinfo=timezone.utc),
+                ),
                 latest_events=self.events.get(run_id, [])[-30:],
+                decision_workspace=self.workspaces.get(run_id),
             )
 
     def list_reports(self, run_id: UUID) -> list[EquityResearchReport] | None:
@@ -167,7 +252,9 @@ class EquityResearchStore:
                 return None
             return list(self.reports.get(run_id, []))
 
-    def list_events(self, run_id: UUID, after: int = 0) -> tuple[int, list[EquityResearchEvent]] | None:
+    def list_events(
+        self, run_id: UUID, after: int = 0
+    ) -> tuple[int, list[EquityResearchEvent]] | None:
         with self._lock:
             if run_id not in self.runs:
                 return None
@@ -184,6 +271,7 @@ class EquityResearchStore:
             self.snapshots.pop(run_id, None)
             self.reports.pop(run_id, None)
             self.events.pop(run_id, None)
+            self.workspaces.pop(run_id, None)
             self._versions.pop(run_id, None)
             return True
 
@@ -199,7 +287,12 @@ class EquityResearchStore:
             if not shared and share_slug:
                 self.share_index.pop(share_slug, None)
                 share_slug = None
-            updated = run.model_copy(update={"share_slug": share_slug, "updated_at": datetime.now(timezone.utc)})
+            updated = run.model_copy(
+                update={
+                    "share_slug": share_slug,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            )
             self.runs[run_id] = updated
             return updated
 
@@ -225,7 +318,11 @@ class EquityResearchStore:
                 if user_id is not None and run.user_id == user_id:
                     total += 1
                     continue
-                if user_id is None and guest_owner_id and run.guest_owner_id == guest_owner_id:
+                if (
+                    user_id is None
+                    and guest_owner_id
+                    and run.guest_owner_id == guest_owner_id
+                ):
                     total += 1
             return total
 
@@ -253,7 +350,9 @@ def _enforce_research_limits(
     owner_id = user.id if not user.is_guest else None
     monthly_limit = research_report_limit(user)
     if monthly_limit is not None:
-        used = store.count_monthly_runs(user_id=owner_id, guest_owner_id=guest_owner_id, month_start=month_start)
+        used = store.count_monthly_runs(
+            user_id=owner_id, guest_owner_id=guest_owner_id, month_start=month_start
+        )
         if used >= monthly_limit:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -328,8 +427,19 @@ async def execute_research_run(run_id: UUID) -> None:
     if not run:
         return
     try:
-        store.add_event(EquityResearchEvent(run_id=run_id, event_type=ResearchEventType.TOOL, label="Snapshot", content="Resolving ticker identity and market data.", tool_name="build_data_snapshot", tool_args={"ticker": run.ticker}))
-        snapshot = await asyncio.to_thread(build_data_snapshot, run_id, run.ticker, run.analysis_date)
+        store.add_event(
+            EquityResearchEvent(
+                run_id=run_id,
+                event_type=ResearchEventType.TOOL,
+                label="Snapshot",
+                content="Resolving ticker identity and market data.",
+                tool_name="build_data_snapshot",
+                tool_args={"ticker": run.ticker},
+            )
+        )
+        snapshot = await asyncio.to_thread(
+            build_data_snapshot, run_id, run.ticker, run.analysis_date
+        )
         store.add_snapshot(snapshot)
         store.update_run(
             run_id,
@@ -337,28 +447,71 @@ async def execute_research_run(run_id: UUID) -> None:
             exchange=snapshot.exchange,
             data_snapshot_id=snapshot.snapshot_id,
         )
-        store.add_event(EquityResearchEvent(run_id=run_id, event_type=ResearchEventType.STATUS, label="Snapshot ready", content="Data snapshot captured. Agents will reason from the same evidence base."))
+        store.add_event(
+            EquityResearchEvent(
+                run_id=run_id,
+                event_type=ResearchEventType.STATUS,
+                label="Snapshot ready",
+                content="Data snapshot captured. Agents will reason from the same evidence base.",
+            )
+        )
 
         outputs: dict[str, EquityResearchReport] = {}
         for agent in AGENT_SEQUENCE:
-            if agent.key in {"market", "social", "news", "fundamentals"} and agent.key not in run.selected_analysts:
+            if (
+                agent.key in {"market", "social", "news", "fundamentals"}
+                and agent.key not in run.selected_analysts
+            ):
                 report = _skipped_report(run_id, agent)
                 outputs[agent.key] = report
                 store.add_report(report)
-                store.add_event(EquityResearchEvent(run_id=run_id, agent_key=agent.key, agent_name=agent.name, event_type=ResearchEventType.STATUS, label="Skipped", content=f"{agent.name} was not selected for this run."))
+                store.add_event(
+                    EquityResearchEvent(
+                        run_id=run_id,
+                        agent_key=agent.key,
+                        agent_name=agent.name,
+                        event_type=ResearchEventType.STATUS,
+                        label="Skipped",
+                        content=f"{agent.name} was not selected for this run.",
+                    )
+                )
                 continue
 
             started_at = datetime.now(timezone.utc)
-            store.add_event(EquityResearchEvent(run_id=run_id, agent_key=agent.key, agent_name=agent.name, event_type=ResearchEventType.REASONING, label="Agent started", content=f"{agent.name} is reviewing the shared snapshot."))
+            store.add_event(
+                EquityResearchEvent(
+                    run_id=run_id,
+                    agent_key=agent.key,
+                    agent_name=agent.name,
+                    event_type=ResearchEventType.REASONING,
+                    label="Agent started",
+                    content=f"{agent.name} is reviewing the shared snapshot.",
+                )
+            )
             await asyncio.sleep(0.55)
             report = _build_report(run, snapshot, agent, outputs, started_at)
             outputs[agent.key] = report
             store.add_report(report)
             report_file = _report_file_for(run, agent)
-            store.add_event(EquityResearchEvent(run_id=run_id, agent_key=agent.key, agent_name=agent.name, event_type=ResearchEventType.REPORT, label=report_file, content=f"{agent.name} completed {report_file}.", token_input=report.token_input, token_output=report.token_output))
+            store.add_event(
+                EquityResearchEvent(
+                    run_id=run_id,
+                    agent_key=agent.key,
+                    agent_name=agent.name,
+                    event_type=ResearchEventType.REPORT,
+                    label=report_file,
+                    content=f"{agent.name} completed {report_file}.",
+                    token_input=report.token_input,
+                    token_output=report.token_output,
+                )
+            )
 
         final = outputs["pm"]
         decision = _final_decision(run, snapshot, outputs)
+        workspace = _build_decision_workspace(
+            run, snapshot, list(outputs.values()), decision
+        )
+        store.add_workspace(run_id, workspace)
         store.update_run(
             run_id,
             status=ResearchRunStatus.COMPLETED,
@@ -372,10 +525,39 @@ async def execute_research_run(run_id: UUID) -> None:
             final_summary=decision.summary,
         )
         final_label = _final_label(run.report_type, decision)
-        store.add_event(EquityResearchEvent(run_id=run_id, agent_key="pm", agent_name="Portfolio Manager", event_type=ResearchEventType.FINAL, label="Final verdict", content=f"{final.agent_name} issued {final_label} with {decision.confidence:.0%} confidence."))
+        store.add_event(
+            EquityResearchEvent(
+                run_id=run_id,
+                event_type=ResearchEventType.REPORT,
+                label="Decision workspace",
+                content="Overview, evidence, signals, backtest, regime, debate, and next steps are ready.",
+            )
+        )
+        store.add_event(
+            EquityResearchEvent(
+                run_id=run_id,
+                agent_key="pm",
+                agent_name="Portfolio Manager",
+                event_type=ResearchEventType.FINAL,
+                label="Final verdict",
+                content=f"{final.agent_name} issued {final_label} with {decision.confidence:.0%} confidence.",
+            )
+        )
     except Exception as exc:
-        store.update_run(run_id, status=ResearchRunStatus.FAILED, error_message=str(exc), completed_at=datetime.now(timezone.utc))
-        store.add_event(EquityResearchEvent(run_id=run_id, event_type=ResearchEventType.ERROR, label="Run failed", content=str(exc)))
+        store.update_run(
+            run_id,
+            status=ResearchRunStatus.FAILED,
+            error_message=str(exc),
+            completed_at=datetime.now(timezone.utc),
+        )
+        store.add_event(
+            EquityResearchEvent(
+                run_id=run_id,
+                event_type=ResearchEventType.ERROR,
+                label="Run failed",
+                content=str(exc),
+            )
+        )
 
 
 def _skipped_report(run_id: UUID, agent: AgentDefinition) -> EquityResearchReport:
@@ -398,24 +580,38 @@ def _skipped_report(run_id: UUID, agent: AgentDefinition) -> EquityResearchRepor
 def _report_file_for(run: EquityResearchRun, agent: AgentDefinition) -> str:
     if agent.key != "pm":
         return agent.report_file
-    return "final_trading_bias.md" if run.report_type == ReportType.TRADING else "final_investment_view.md"
+    return (
+        "final_trading_bias.md"
+        if run.report_type == ReportType.TRADING
+        else "final_investment_view.md"
+    )
 
 
 def _title_for(run: EquityResearchRun, agent: AgentDefinition) -> str:
     if agent.key != "pm":
         return agent.title
-    return "Final Trading Bias" if run.report_type == ReportType.TRADING else "Final Investment View"
+    return (
+        "Final Trading Bias"
+        if run.report_type == ReportType.TRADING
+        else "Final Investment View"
+    )
 
 
 def _title_label(value: str) -> str:
     return value.replace("_", " ").title()
 
 
-def _final_label(report_type: ReportType, decision: FinalDecision | Recommendation | InvestmentDecision | TradingBias) -> str:
+def _final_label(
+    report_type: ReportType,
+    decision: FinalDecision | Recommendation | InvestmentDecision | TradingBias,
+) -> str:
     if isinstance(decision, FinalDecision):
         if report_type == ReportType.TRADING and decision.trading_bias is not None:
             return _title_label(decision.trading_bias.value)
-        if report_type == ReportType.INVESTMENT and decision.investment_decision is not None:
+        if (
+            report_type == ReportType.INVESTMENT
+            and decision.investment_decision is not None
+        ):
             return _title_label(decision.investment_decision.value)
         recommendation = decision.recommendation
     elif isinstance(decision, InvestmentDecision | TradingBias):
@@ -459,7 +655,9 @@ def _build_report(
         "safe": _safe_report,
         "pm": _pm_report,
     }
-    markdown, points, risk_flags, confidence = builders[agent.key](run, snapshot, previous)
+    markdown, points, risk_flags, confidence = builders[agent.key](
+        run, snapshot, previous
+    )
     markdown = _maybe_enhance_with_llm(run, snapshot, agent, markdown, previous)
     return EquityResearchReport(
         run_id=run.run_id,
@@ -470,7 +668,13 @@ def _build_report(
         title=_title_for(run, agent),
         markdown=markdown,
         summary_points=points,
-        evidence=[EvidenceReference(label="Shared data snapshot", source="snapshot", detail=f"{snapshot.ticker} {snapshot.analysis_date}")],
+        evidence=[
+            EvidenceReference(
+                label="Shared data snapshot",
+                source="snapshot",
+                detail=f"{snapshot.ticker} {snapshot.analysis_date}",
+            )
+        ],
         confidence=confidence,
         risk_flags=risk_flags,
         started_at=started_at,
@@ -507,7 +711,10 @@ def _pct(value: float | None) -> str:
 
 def _metric_rows(rows: list[tuple[str, str, str, str]]) -> str:
     body = "\n".join(_table_row([a, b, c, d]) for a, b, c, d in rows)
-    return "| Metric | Value | Signal | Why It Matters |\n| --- | ---: | --- | --- |\n" + body
+    return (
+        "| Metric | Value | Signal | Why It Matters |\n| --- | ---: | --- | --- |\n"
+        + body
+    )
 
 
 def _table_cell(value: Any, limit: int = MAX_TABLE_CELL_CHARS) -> str:
@@ -562,11 +769,15 @@ def _source_quality(snapshot: EquityResearchSnapshot) -> str:
         provider = status.get("provider", "unknown")
         state = status.get("status", "unknown")
         detail = status.get("detail") or ""
-        detail_text = detail[:90] if detail else ("Available" if state == "ok" else "No detail")
+        detail_text = (
+            detail[:90] if detail else ("Available" if state == "ok" else "No detail")
+        )
         rows.append((provider, state, detail_text))
     if not rows:
         return "No provider status was captured."
-    return "| Provider | Status | Detail |\n| --- | --- | --- |\n" + "\n".join(_table_row([p, s, d]) for p, s, d in rows)
+    return "| Provider | Status | Detail |\n| --- | --- | --- |\n" + "\n".join(
+        _table_row([p, s, d]) for p, s, d in rows
+    )
 
 
 def _evidence_items(snapshot: EquityResearchSnapshot) -> list[str]:
@@ -587,19 +798,345 @@ def _evidence_items(snapshot: EquityResearchSnapshot) -> list[str]:
     return items
 
 
+def _workspace_metric(
+    label: str, value: str, tone: str = "neutral"
+) -> DecisionWorkspaceMetric:
+    allowed = {"positive", "neutral", "negative", "info"}
+    return DecisionWorkspaceMetric(
+        label=label, value=value, tone=tone if tone in allowed else "neutral"
+    )
+
+
+def _tone_for_change(value: float | None) -> str:
+    if value is None:
+        return "neutral"
+    return "positive" if value > 0 else "negative" if value < 0 else "neutral"
+
+
+def _tone_for_trend(value: str | None) -> str:
+    if value == "uptrend":
+        return "positive"
+    if value == "downtrend":
+        return "negative"
+    return "neutral"
+
+
+def _compact_points(items: list[str], limit: int = 5) -> list[str]:
+    points: list[str] = []
+    for item in items:
+        compact = re.sub(r"\s+", " ", str(item or "")).strip()
+        if compact and compact not in points:
+            points.append(compact[:240])
+        if len(points) >= limit:
+            break
+    return points
+
+
+def _as_text_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if item]
+    if isinstance(value, tuple):
+        return [str(item) for item in value if item]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
+def _build_decision_workspace(
+    run: EquityResearchRun,
+    snapshot: EquityResearchSnapshot,
+    reports: list[EquityResearchReport],
+    decision: FinalDecision,
+) -> DecisionWorkspace:
+    tech = snapshot.technical_indicators
+    fundamentals = snapshot.fundamentals
+    sentiment = snapshot.sentiment_summary
+    risk = snapshot.risk_metrics
+    label = _final_label(run.report_type, decision)
+    trend = tech.get("trend")
+    rsi = tech.get("rsi_14")
+    support = tech.get("support_20d")
+    resistance = tech.get("resistance_20d")
+    volatility = tech.get("annualized_volatility") or risk.get("annualized_volatility")
+    drawdown = risk.get("max_drawdown_window")
+    source_count = len(snapshot.data_sources)
+    news_count = len(snapshot.news_items)
+    risk_flags = _compact_points(
+        [flag for report in reports for flag in report.risk_flags], 6
+    )
+    completed_reports = [
+        report for report in reports if report.status == AgentStatus.COMPLETED
+    ]
+    avg_confidence = (
+        sum(report.confidence for report in completed_reports) / len(completed_reports)
+        if completed_reports
+        else 0
+    )
+    debate_points = _compact_points(
+        [
+            point
+            for key in ("bull", "bear", "risky", "safe", "pm")
+            for report in reports
+            if report.agent_key == key
+            for point in report.summary_points
+        ],
+        7,
+    )
+    headline_points = _compact_points(
+        [item.get("title", "Untitled news item") for item in snapshot.news_items],
+        5,
+    )
+    evidence_points = headline_points or _compact_points(_evidence_items(snapshot), 5)
+    if snapshot.latest_price is not None:
+        evidence_points.append(
+            f"Latest price is {_money(snapshot.latest_price)} with daily change {_pct(snapshot.daily_change)}."
+        )
+    evidence_points.append(
+        f"Revenue growth is {_pct(fundamentals.get('revenue_growth') or fundamentals.get('quarterly_revenue_growth_yoy') or fundamentals.get('revenue_growth_ttm_yoy'))}; profit margin is {_pct(fundamentals.get('profit_margins') or fundamentals.get('net_margin_ttm'))}."
+    )
+    signal_bullets = [
+        f"Trend classification is {trend or 'unavailable'} with RSI {_fmt(rsi)} and MACD {_fmt(tech.get('macd'))}.",
+        f"Support/resistance from the snapshot window: {_money(support)} / {_money(resistance)}.",
+        f"Sentiment signal is {sentiment.get('signal', 'limited')} with score {sentiment.get('score', 'unavailable')}.",
+        f"Risk window drawdown is {_pct(drawdown)} and annualized volatility is {_pct(volatility)}.",
+    ]
+    regime_bullets = [
+        f"Market regime reads as {trend or 'mixed'} price action with {sentiment.get('signal', 'limited')} sentiment.",
+        f"Volatility is {_pct(volatility)} in the captured window.",
+        f"Drawdown pressure is {_pct(drawdown)} in the captured window.",
+    ]
+    if risk_flags:
+        regime_bullets.append(f"Primary risk flag: {risk_flags[0]}")
+
+    return DecisionWorkspace(
+        overview=DecisionWorkspaceSection(
+            summary=decision.summary,
+            metrics=[
+                _workspace_metric(
+                    "Verdict",
+                    label,
+                    (
+                        "positive"
+                        if decision.recommendation == Recommendation.BUY
+                        else (
+                            "negative"
+                            if decision.recommendation == Recommendation.SELL
+                            else "neutral"
+                        )
+                    ),
+                ),
+                _workspace_metric("Confidence", f"{decision.confidence:.0%}", "info"),
+                _workspace_metric("Price", _money(snapshot.latest_price), "neutral"),
+                _workspace_metric(
+                    "Daily Move",
+                    _pct(snapshot.daily_change),
+                    _tone_for_change(snapshot.daily_change),
+                ),
+            ],
+            bullets=[
+                decision.main_upside,
+                decision.main_risk,
+                f"Research depth: {run.research_depth.value}; report objective: {run.report_type.value}.",
+            ],
+            limitations=_compact_points(
+                (
+                    _as_text_list(snapshot.source_quality.get("limitations"))
+                    if isinstance(snapshot.source_quality, dict)
+                    else []
+                ),
+                3,
+            ),
+        ),
+        evidence=DecisionWorkspaceSection(
+            summary="The evidence tab separates source-backed inputs from the final opinion so the user can inspect what drove the verdict.",
+            metrics=[
+                _workspace_metric("News Items", str(news_count), "info"),
+                _workspace_metric("Sources", str(source_count), "info"),
+                _workspace_metric(
+                    "Sentiment",
+                    str(sentiment.get("signal", "limited")).title(),
+                    _tone_for_trend(
+                        "uptrend"
+                        if sentiment.get("signal") == "bullish"
+                        else (
+                            "downtrend"
+                            if sentiment.get("signal") == "bearish"
+                            else None
+                        )
+                    ),
+                ),
+                _workspace_metric("Market Cap", _money(snapshot.market_cap), "neutral"),
+            ],
+            bullets=_compact_points(evidence_points, 7),
+            limitations=_compact_points(
+                _as_text_list(sentiment.get("limitations"))
+                + (
+                    _as_text_list(snapshot.source_quality.get("limitations"))
+                    if isinstance(snapshot.source_quality, dict)
+                    else []
+                ),
+                4,
+            ),
+        ),
+        signals=DecisionWorkspaceSection(
+            summary="Signals combine technicals, sentiment, fundamentals, and risk context. Missing ML signals are called out instead of being invented.",
+            metrics=[
+                _workspace_metric(
+                    "Trend", str(trend or "Unavailable").title(), _tone_for_trend(trend)
+                ),
+                _workspace_metric("RSI", _fmt(rsi), "neutral"),
+                _workspace_metric(
+                    "MACD",
+                    _fmt(tech.get("macd")),
+                    _tone_for_change(
+                        tech.get("macd")
+                        if isinstance(tech.get("macd"), (int, float))
+                        else None
+                    ),
+                ),
+                _workspace_metric(
+                    "Risk Flags",
+                    str(len(risk_flags)),
+                    "negative" if risk_flags else "positive",
+                ),
+            ],
+            bullets=signal_bullets,
+            limitations=[
+                "ML directional signal is not included in this snapshot. Use a configured prediction run before treating ML as part of the evidence."
+            ],
+        ),
+        backtest=DecisionWorkspaceBacktest(
+            summary="This is an assumption-based scenario tab, not a full Backtest Lab run. It records the strategy logic implied by the research verdict and the available risk context.",
+            assumptions=[
+                f"Entry reference uses latest available price: {_money(snapshot.latest_price)}.",
+                f"Support/invalidation reference: {_money(support)}; resistance/watch level: {_money(resistance)}.",
+                "No transaction costs, slippage, tax impact, or trade execution constraints are modeled here.",
+                "Use Backtest Lab for a full historical trade ledger, Sharpe, drawdown, and win-rate calculation.",
+            ],
+            metrics=[
+                _workspace_metric("Scenario Verdict", label, "info"),
+                _workspace_metric(
+                    "Recent Move",
+                    _pct(snapshot.daily_change),
+                    _tone_for_change(snapshot.daily_change),
+                ),
+                _workspace_metric("Sharpe", "Not computed", "neutral"),
+                _workspace_metric("Win Rate", "Not computed", "neutral"),
+                _workspace_metric(
+                    "Drawdown Window",
+                    _pct(drawdown),
+                    (
+                        "negative"
+                        if isinstance(drawdown, (int, float)) and drawdown > 0.2
+                        else "neutral"
+                    ),
+                ),
+            ],
+            limitations=[
+                "This tab intentionally avoids fake precision when historical strategy returns are unavailable.",
+                "A robust production upgrade should call the existing Backtest Lab engine with explicit strategy assumptions.",
+            ],
+        ),
+        regime=DecisionWorkspaceSection(
+            summary="Regime context frames whether the current setup resembles a trend-following, range-bound, or risk-off environment.",
+            metrics=[
+                _workspace_metric(
+                    "Trend Regime",
+                    str(trend or "Unavailable").title(),
+                    _tone_for_trend(trend),
+                ),
+                _workspace_metric(
+                    "Volatility",
+                    _pct(volatility),
+                    (
+                        "negative"
+                        if isinstance(volatility, (int, float)) and volatility > 0.35
+                        else "neutral"
+                    ),
+                ),
+                _workspace_metric(
+                    "Sentiment", str(sentiment.get("signal", "limited")).title(), "info"
+                ),
+                _workspace_metric(
+                    "Drawdown",
+                    _pct(drawdown),
+                    (
+                        "negative"
+                        if isinstance(drawdown, (int, float)) and drawdown > 0.2
+                        else "neutral"
+                    ),
+                ),
+            ],
+            bullets=regime_bullets,
+            limitations=[
+                "Matching historical regimes require a dedicated historical similarity run and are not inferred from a single snapshot."
+            ],
+        ),
+        agent_debate=DecisionWorkspaceSection(
+            summary="Agent debate shows where the specialist reports agree, disagree, or ask for tighter risk controls.",
+            metrics=[
+                _workspace_metric(
+                    "Completed Reports",
+                    f"{len(completed_reports)}/{len(reports)}",
+                    "info",
+                ),
+                _workspace_metric(
+                    "Avg Confidence",
+                    f"{avg_confidence:.0%}" if completed_reports else "Unavailable",
+                    "info",
+                ),
+                _workspace_metric(
+                    "Risk Flags",
+                    str(len(risk_flags)),
+                    "negative" if risk_flags else "positive",
+                ),
+            ],
+            bullets=debate_points
+            or ["Agent debate is still building. Refresh when more reports complete."],
+            limitations=(
+                []
+                if len(debate_points) >= 2
+                else ["Limited disagreement was available from the current report set."]
+            ),
+        ),
+        next_steps=[
+            DecisionWorkspaceNextStep(
+                label="Watch support",
+                detail=f"Reassess if price loses the support reference near {_money(support)}.",
+                trigger=_money(support),
+            ),
+            DecisionWorkspaceNextStep(
+                label="Watch resistance",
+                detail=f"Upgrade momentum evidence only if price clears resistance near {_money(resistance)} with confirmation.",
+                trigger=_money(resistance),
+            ),
+            DecisionWorkspaceNextStep(
+                label="Refresh after catalysts",
+                detail="Run a fresh workspace after earnings, guidance, legal/regulatory news, or major macro events.",
+            ),
+            DecisionWorkspaceNextStep(
+                label="Set risk boundary",
+                detail=f"Use the main risk as the invalidation note: {decision.main_risk}",
+            ),
+        ],
+    )
+
+
 def _snapshot_brief(snapshot: EquityResearchSnapshot) -> str:
     f = snapshot.fundamentals
     t = snapshot.technical_indicators
-    return "\n".join([
-        f"Ticker: {snapshot.ticker}",
-        f"Company: {snapshot.company_name}",
-        f"Analysis date: {snapshot.analysis_date}",
-        f"Latest price: {_money(snapshot.latest_price)}; daily change: {_pct(snapshot.daily_change)}; market cap: {_money(snapshot.market_cap)}",
-        f"Trend: {t.get('trend')}; RSI: {_fmt(t.get('rsi_14'))}; MACD: {_fmt(t.get('macd'))}; support/resistance: {_money(t.get('support_20d'))} / {_money(t.get('resistance_20d'))}",
-        f"Valuation: trailing PE {_fmt(f.get('trailing_pe'))}; revenue growth {_pct(f.get('revenue_growth') or f.get('quarterly_revenue_growth_yoy') or f.get('revenue_growth_ttm_yoy'))}; profit margin {_pct(f.get('profit_margins') or f.get('net_margin_ttm'))}",
-        f"Sentiment: {snapshot.sentiment_summary.get('signal')} ({snapshot.sentiment_summary.get('score')})",
-        f"Sources: {', '.join(snapshot.data_sources)}",
-    ])
+    return "\n".join(
+        [
+            f"Ticker: {snapshot.ticker}",
+            f"Company: {snapshot.company_name}",
+            f"Analysis date: {snapshot.analysis_date}",
+            f"Latest price: {_money(snapshot.latest_price)}; daily change: {_pct(snapshot.daily_change)}; market cap: {_money(snapshot.market_cap)}",
+            f"Trend: {t.get('trend')}; RSI: {_fmt(t.get('rsi_14'))}; MACD: {_fmt(t.get('macd'))}; support/resistance: {_money(t.get('support_20d'))} / {_money(t.get('resistance_20d'))}",
+            f"Valuation: trailing PE {_fmt(f.get('trailing_pe'))}; revenue growth {_pct(f.get('revenue_growth') or f.get('quarterly_revenue_growth_yoy') or f.get('revenue_growth_ttm_yoy'))}; profit margin {_pct(f.get('profit_margins') or f.get('net_margin_ttm'))}",
+            f"Sentiment: {snapshot.sentiment_summary.get('signal')} ({snapshot.sentiment_summary.get('score')})",
+            f"Sources: {', '.join(snapshot.data_sources)}",
+        ]
+    )
 
 
 def _maybe_enhance_with_llm(
@@ -623,20 +1160,32 @@ def _maybe_enhance_with_llm(
             f"## {report.title}\n{report.markdown[:1800]}"
             for report in previous.values()
         )[:6000]
-        objective = "shorter-horizon trading setup" if run.report_type == ReportType.TRADING else "longer-horizon investment thesis"
+        objective = (
+            "shorter-horizon trading setup"
+            if run.report_type == ReportType.TRADING
+            else "longer-horizon investment thesis"
+        )
         section_policy = (
             "For the Portfolio Manager final report, use exactly these top-level sections: Market Snapshot; "
             "Technical Setup; Catalyst & Sentiment; Trade Plan; Risk / Invalidation; Bull vs Bear Scenario; "
             "Final Trading Bias; Confidence + What Would Change The View. The Final Trading Bias section must choose exactly one of bullish, neutral, or bearish."
             if agent.key == "pm" and run.report_type == ReportType.TRADING
-            else "For the Portfolio Manager final report, use exactly these top-level sections: Company / Asset Overview; "
-            "Long-Term Thesis; Fundamentals; Valuation Context; Growth Drivers; Key Risks; Portfolio Fit; "
-            "Final Investment View; Confidence + Time Horizon. The Final Investment View section must choose exactly one allowed investment decision."
-            if agent.key == "pm"
-            else "Keep the report aligned to the run objective and do not imply brokerage execution."
+            else (
+                "For the Portfolio Manager final report, use exactly these top-level sections: Company / Asset Overview; "
+                "Long-Term Thesis; Fundamentals; Valuation Context; Growth Drivers; Key Risks; Portfolio Fit; "
+                "Final Investment View; Confidence + Time Horizon. The Final Investment View section must choose exactly one allowed investment decision."
+                if agent.key == "pm"
+                else "Keep the report aligned to the run objective and do not imply brokerage execution."
+            )
         )
-        mode_guidance = DEPTH_QUALITY_STANDARDS.get(run.research_depth, DEPTH_QUALITY_STANDARDS[ResearchDepth.SHALLOW])
-        decision_guidance = INVESTMENT_DECISION_DEFINITIONS if run.report_type == ReportType.INVESTMENT else "Trading bias decisions are bullish, neutral, or bearish. Use exactly one."
+        mode_guidance = DEPTH_QUALITY_STANDARDS.get(
+            run.research_depth, DEPTH_QUALITY_STANDARDS[ResearchDepth.SHALLOW]
+        )
+        decision_guidance = (
+            INVESTMENT_DECISION_DEFINITIONS
+            if run.report_type == ReportType.INVESTMENT
+            else "Trading bias decisions are bullish, neutral, or bearish. Use exactly one."
+        )
         prompt = f"""You are writing one source-grounded Quanfora 2.1 equity research report.
 
 Report file: {_report_file_for(run, agent)}
@@ -679,8 +1228,13 @@ Prior agent context:
         response = routed.chat_model.invoke([{"role": "user", "content": prompt}])
         content = response.content
         if isinstance(content, list):
-            content = "\n".join(part.get("text", str(part)) if isinstance(part, dict) else str(part) for part in content)
-        sanitized = _sanitize_llm_report_markdown(content) if isinstance(content, str) else None
+            content = "\n".join(
+                part.get("text", str(part)) if isinstance(part, dict) else str(part)
+                for part in content
+            )
+        sanitized = (
+            _sanitize_llm_report_markdown(content) if isinstance(content, str) else None
+        )
         if sanitized and _passes_quality_gate(sanitized):
             llm_gateway.record_usage(
                 user_id=str(run.user_id),
@@ -715,7 +1269,9 @@ def _score(snapshot: EquityResearchSnapshot) -> int:
     tech = snapshot.technical_indicators
     fundamentals = snapshot.fundamentals
     if snapshot.daily_change is not None:
-        score += 1 if snapshot.daily_change > 0 else -1 if snapshot.daily_change < -2 else 0
+        score += (
+            1 if snapshot.daily_change > 0 else -1 if snapshot.daily_change < -2 else 0
+        )
     if tech.get("trend") == "uptrend":
         score += 1
     rsi = tech.get("rsi_14")
@@ -729,7 +1285,10 @@ def _score(snapshot: EquityResearchSnapshot) -> int:
         score += 1
     if snapshot.sentiment_summary.get("signal") == "bearish":
         score -= 1
-    if snapshot.risk_metrics.get("max_drawdown_window") and snapshot.risk_metrics["max_drawdown_window"] > 0.25:
+    if (
+        snapshot.risk_metrics.get("max_drawdown_window")
+        and snapshot.risk_metrics["max_drawdown_window"] > 0.25
+    ):
         score -= 1
     return score
 
@@ -748,7 +1307,11 @@ def _market_report(run, snapshot, previous):
     support = tech.get("support_20d")
     resistance = tech.get("resistance_20d")
     trend_label = tech.get("trend", "Unavailable")
-    sentiment = "Bullish" if trend_label == "uptrend" and (rsi or 0) < 70 else "Bearish" if latest and sma_50 and latest < sma_50 else "Neutral"
+    sentiment = (
+        "Bullish"
+        if trend_label == "uptrend" and (rsi or 0) < 70
+        else "Bearish" if latest and sma_50 and latest < sma_50 else "Neutral"
+    )
     points = [
         f"Latest price is {_money(latest)} with daily change {_pct(snapshot.daily_change)}.",
         f"Trend classification is {trend_label}; price is {'above' if latest and sma_50 and latest >= sma_50 else 'below' if latest and sma_50 else 'not comparable to'} the 50-day SMA.",
@@ -756,23 +1319,67 @@ def _market_report(run, snapshot, previous):
     ]
     risk = []
     if latest and sma_50 and latest < sma_50:
-        risk.append("Price is trading below the 50-day SMA, which weakens medium-term trend confirmation.")
+        risk.append(
+            "Price is trading below the 50-day SMA, which weakens medium-term trend confirmation."
+        )
     if rsi and rsi > 75:
         risk.append("RSI is elevated and may indicate momentum exhaustion.")
     if rsi and rsi < 35:
         risk.append("RSI is weak; sellers may still control near-term momentum.")
     if tech.get("annualized_volatility") and tech["annualized_volatility"] > 0.35:
         risk.append("High realized volatility in the snapshot window.")
-    table = _metric_rows([
-        ("Price", _money(latest), sentiment, "Anchor for support/resistance and trend confirmation."),
-        ("10-day EMA", _money(ema_10), "Short-term trend", "Dynamic short-term momentum line."),
-        ("50-day SMA", _money(sma_50), "Medium-term trend", "Common institutional trend filter."),
-        ("MACD", _fmt(macd), "Momentum", "Negative values often show weakening momentum."),
-        ("RSI (14)", _fmt(rsi), "Momentum breadth", "Below 30 is often oversold; above 70 is often extended."),
-        ("VWMA (20)", _money(vwma), "Volume-weighted cost basis", "Shows where recent volume-weighted buyers are positioned."),
-        ("Bollinger Range", f"{_money(lower)} - {_money(upper)}", "Volatility band", "Defines the current statistical trading envelope."),
-        ("ATR (14)", _fmt(atr), "Volatility", "Measures average daily trading range."),
-    ])
+    table = _metric_rows(
+        [
+            (
+                "Price",
+                _money(latest),
+                sentiment,
+                "Anchor for support/resistance and trend confirmation.",
+            ),
+            (
+                "10-day EMA",
+                _money(ema_10),
+                "Short-term trend",
+                "Dynamic short-term momentum line.",
+            ),
+            (
+                "50-day SMA",
+                _money(sma_50),
+                "Medium-term trend",
+                "Common institutional trend filter.",
+            ),
+            (
+                "MACD",
+                _fmt(macd),
+                "Momentum",
+                "Negative values often show weakening momentum.",
+            ),
+            (
+                "RSI (14)",
+                _fmt(rsi),
+                "Momentum breadth",
+                "Below 30 is often oversold; above 70 is often extended.",
+            ),
+            (
+                "VWMA (20)",
+                _money(vwma),
+                "Volume-weighted cost basis",
+                "Shows where recent volume-weighted buyers are positioned.",
+            ),
+            (
+                "Bollinger Range",
+                f"{_money(lower)} - {_money(upper)}",
+                "Volatility band",
+                "Defines the current statistical trading envelope.",
+            ),
+            (
+                "ATR (14)",
+                _fmt(atr),
+                "Volatility",
+                "Measures average daily trading range.",
+            ),
+        ]
+    )
     markdown = (
         f"# Market Report\n\n"
         f"**Ticker:** {snapshot.ticker}  \n**Company:** {snapshot.company_name or 'Unavailable'}  \n**Analysis Date:** {snapshot.analysis_date}\n\n"
@@ -805,10 +1412,19 @@ def _sentiment_report(run, snapshot, previous):
         "Social media sentiment remains unavailable unless a social provider is configured; this report uses provider news plus FinBERT-style title analysis where available.",
     ]
     risk = list(sentiment.get("limitations", []))
-    headline_rows = "\n".join(
-        _table_row([item.get("title", "Untitled"), item.get("publisher") or item.get("source") or "Unknown", item.get("sentiment") or "n/a"])
-        for item in news
-    ) or "| No recent headlines available | n/a | n/a |"
+    headline_rows = (
+        "\n".join(
+            _table_row(
+                [
+                    item.get("title", "Untitled"),
+                    item.get("publisher") or item.get("source") or "Unknown",
+                    item.get("sentiment") or "n/a",
+                ]
+            )
+            for item in news
+        )
+        or "| No recent headlines available | n/a | n/a |"
+    )
     markdown = (
         f"# Sentiment Report\n\n"
         f"**Ticker:** {snapshot.ticker}  \n**Company:** {snapshot.company_name or 'Unavailable'}  \n**Analysis Date:** {snapshot.analysis_date}\n\n"
@@ -829,14 +1445,29 @@ def _sentiment_report(run, snapshot, previous):
 
 
 def _news_report(run, snapshot, previous):
-    points = [item.get("title", "Untitled news item") for item in snapshot.news_items[:6]]
+    points = [
+        item.get("title", "Untitled news item") for item in snapshot.news_items[:6]
+    ]
     if not points:
         points = ["No recent news items were returned by the configured source."]
     risk = [] if snapshot.news_items else ["News context is limited for this run."]
-    news_rows = "\n".join(
-        _table_row([f"[{item.get('title', 'Untitled')}]({item.get('url')})" if item.get("url") else item.get("title", "Untitled"), item.get("publisher") or item.get("source") or "Unknown", item.get("published_at") or "n/a"])
-        for item in snapshot.news_items[:10]
-    ) or "| No current news available | n/a | n/a |"
+    news_rows = (
+        "\n".join(
+            _table_row(
+                [
+                    (
+                        f"[{item.get('title', 'Untitled')}]({item.get('url')})"
+                        if item.get("url")
+                        else item.get("title", "Untitled")
+                    ),
+                    item.get("publisher") or item.get("source") or "Unknown",
+                    item.get("published_at") or "n/a",
+                ]
+            )
+            for item in snapshot.news_items[:10]
+        )
+        or "| No current news available | n/a | n/a |"
+    )
     markdown = (
         f"# News Report\n\n"
         f"**Ticker:** {snapshot.ticker}  \n**Company:** {snapshot.company_name or 'Unavailable'}  \n**Analysis Date:** {snapshot.analysis_date}\n\n"
@@ -870,19 +1501,71 @@ def _fundamentals_report(run, snapshot, previous):
         risk.append("Debt-to-equity appears elevated.")
     if f.get("revenue_growth") is None:
         risk.append("Revenue growth was unavailable.")
-    table = _metric_rows([
-        ("Market Cap", _money(snapshot.market_cap), "Scale", "Large market caps can provide durability but require large catalysts to rerate."),
-        ("Revenue TTM", _money(f.get("revenue_ttm")), "Growth base", "Shows the revenue base investors are paying for."),
-        ("Revenue Growth", _pct(f.get("revenue_growth") or f.get("quarterly_revenue_growth_yoy") or f.get("revenue_growth_ttm_yoy")), "Growth", "Growth justifies or undermines valuation premium."),
-        ("Profit Margin", _pct(f.get("profit_margins") or f.get("net_margin_ttm")), "Profitability", "High margins support earnings resilience."),
-        ("EPS TTM", _fmt(f.get("eps_ttm")), "Earnings", "Per-share earnings after dilution."),
-        ("P/E", _fmt(f.get("trailing_pe")), "Valuation", "Higher multiples require stronger future growth."),
-        ("Free Cash Flow", _money(f.get("free_cashflow")), "Cash generation", "Supports buybacks, dividends, reinvestment, and balance-sheet flexibility."),
-        ("Analyst Target", _money(analyst.get("analyst_target_price") or analyst.get("target_mean")), "Street context", "Useful context, not a guarantee."),
-    ])
+    table = _metric_rows(
+        [
+            (
+                "Market Cap",
+                _money(snapshot.market_cap),
+                "Scale",
+                "Large market caps can provide durability but require large catalysts to rerate.",
+            ),
+            (
+                "Revenue TTM",
+                _money(f.get("revenue_ttm")),
+                "Growth base",
+                "Shows the revenue base investors are paying for.",
+            ),
+            (
+                "Revenue Growth",
+                _pct(
+                    f.get("revenue_growth")
+                    or f.get("quarterly_revenue_growth_yoy")
+                    or f.get("revenue_growth_ttm_yoy")
+                ),
+                "Growth",
+                "Growth justifies or undermines valuation premium.",
+            ),
+            (
+                "Profit Margin",
+                _pct(f.get("profit_margins") or f.get("net_margin_ttm")),
+                "Profitability",
+                "High margins support earnings resilience.",
+            ),
+            (
+                "EPS TTM",
+                _fmt(f.get("eps_ttm")),
+                "Earnings",
+                "Per-share earnings after dilution.",
+            ),
+            (
+                "P/E",
+                _fmt(f.get("trailing_pe")),
+                "Valuation",
+                "Higher multiples require stronger future growth.",
+            ),
+            (
+                "Free Cash Flow",
+                _money(f.get("free_cashflow")),
+                "Cash generation",
+                "Supports buybacks, dividends, reinvestment, and balance-sheet flexibility.",
+            ),
+            (
+                "Analyst Target",
+                _money(
+                    analyst.get("analyst_target_price") or analyst.get("target_mean")
+                ),
+                "Street context",
+                "Useful context, not a guarantee.",
+            ),
+        ]
+    )
     filing_points = []
-    for item in filings.get("recent_filings", [])[:4] if isinstance(filings, dict) else []:
-        filing_points.append(f"{item.get('form')} filed {item.get('filing_date')} (accession {item.get('accession')}).")
+    for item in (
+        filings.get("recent_filings", [])[:4] if isinstance(filings, dict) else []
+    ):
+        filing_points.append(
+            f"{item.get('form')} filed {item.get('filing_date')} (accession {item.get('accession')})."
+        )
     markdown = (
         f"# Fundamentals Report\n\n"
         f"**Ticker:** {snapshot.ticker}  \n**Company:** {snapshot.company_name or 'Unavailable'}  \n**Analysis Date:** {snapshot.analysis_date}\n\n"
@@ -1024,7 +1707,14 @@ def _risky_report(run, snapshot, previous):
         "High-risk opportunity is only attractive when volatility is compensated by evidence quality.",
         f"Main upside: {decision.main_upside}",
     ]
-    markdown = _markdown("Risk Debate - Risky Analyst", run, snapshot, points, [decision.main_risk] if decision.confidence < 0.55 else [], ["Bull case, market report, sentiment report."])
+    markdown = _markdown(
+        "Risk Debate - Risky Analyst",
+        run,
+        snapshot,
+        points,
+        [decision.main_risk] if decision.confidence < 0.55 else [],
+        ["Bull case, market report, sentiment report."],
+    )
     return markdown, points, [], 0.62
 
 
@@ -1035,7 +1725,14 @@ def _neutral_report(run, snapshot, previous):
         "The preferred decision should remain conditional, not absolute.",
         "More confidence requires cleaner trend/fundamental alignment.",
     ]
-    markdown = _markdown("Risk Debate - Neutral Analyst", run, snapshot, points, risk, ["All prior reports."])
+    markdown = _markdown(
+        "Risk Debate - Neutral Analyst",
+        run,
+        snapshot,
+        points,
+        risk,
+        ["All prior reports."],
+    )
     return markdown, points, risk, 0.68
 
 
@@ -1046,7 +1743,14 @@ def _safe_report(run, snapshot, previous):
         "Delay or downgrade if data is missing, volatility spikes, or support fails.",
         "Risk controls take priority over a bullish narrative.",
     ]
-    markdown = _markdown("Risk Debate - Safe Analyst", run, snapshot, points, risk, ["Risk metrics and conservative review."])
+    markdown = _markdown(
+        "Risk Debate - Safe Analyst",
+        run,
+        snapshot,
+        points,
+        risk,
+        ["Risk metrics and conservative review."],
+    )
     return markdown, points, risk, 0.72
 
 
@@ -1127,7 +1831,11 @@ def _investment_final_markdown(
     f = snapshot.fundamentals
     analyst = snapshot.analyst_context
     label = _final_label(ReportType.INVESTMENT, decision)
-    time_horizon = "6-18 months" if decision.recommendation != Recommendation.INSUFFICIENT_DATA else "Unavailable until evidence improves"
+    time_horizon = (
+        "6-18 months"
+        if decision.recommendation != Recommendation.INSUFFICIENT_DATA
+        else "Unavailable until evidence improves"
+    )
     adjacent = _investment_adjacent_explanation(decision)
     points = [
         f"Final Investment View: {label}",
@@ -1180,7 +1888,14 @@ def _investment_final_markdown(
     return markdown, points
 
 
-def _markdown(title: str, run: EquityResearchRun, snapshot: EquityResearchSnapshot, points: list[str], risk: list[str], evidence: list[str]) -> str:
+def _markdown(
+    title: str,
+    run: EquityResearchRun,
+    snapshot: EquityResearchSnapshot,
+    points: list[str],
+    risk: list[str],
+    evidence: list[str],
+) -> str:
     limitations = []
     limitations.extend(snapshot.technical_indicators.get("limitations", []))
     limitations.extend(snapshot.sentiment_summary.get("limitations", []))
@@ -1231,7 +1946,11 @@ def _investment_adjacent_explanation(decision: FinalDecision) -> str:
     return "The decision is constrained by incomplete evidence and should be refreshed when better data is available."
 
 
-def _legacy_recommendation(decision: InvestmentDecision | None, trading_bias: TradingBias | None, missing_price: bool) -> Recommendation:
+def _legacy_recommendation(
+    decision: InvestmentDecision | None,
+    trading_bias: TradingBias | None,
+    missing_price: bool,
+) -> Recommendation:
     if missing_price:
         return Recommendation.INSUFFICIENT_DATA
     if trading_bias == TradingBias.BULLISH:
@@ -1247,9 +1966,20 @@ def _legacy_recommendation(decision: InvestmentDecision | None, trading_bias: Tr
     return Recommendation.HOLD
 
 
-def _investment_decision_for(score: int, confidence: float, risks: list[str], missing_fundamentals: bool, depth: ResearchDepth) -> InvestmentDecision:
+def _investment_decision_for(
+    score: int,
+    confidence: float,
+    risks: list[str],
+    missing_fundamentals: bool,
+    depth: ResearchDepth,
+) -> InvestmentDecision:
     severe_risk = len(risks) >= 4 or missing_fundamentals
-    if score >= 4 and confidence >= 0.75 and not severe_risk and depth != ResearchDepth.SHALLOW:
+    if (
+        score >= 4
+        and confidence >= 0.75
+        and not severe_risk
+        and depth != ResearchDepth.SHALLOW
+    ):
         return InvestmentDecision.STRONG_BUY
     if score >= 3 and confidence >= 0.60:
         return InvestmentDecision.BUY
@@ -1272,13 +2002,23 @@ def _trading_bias_for(score: int, confidence: float, risks: list[str]) -> Tradin
     return TradingBias.NEUTRAL
 
 
-def _final_decision(run: EquityResearchRun, snapshot: EquityResearchSnapshot, previous: dict[str, EquityResearchReport]) -> FinalDecision:
+def _final_decision(
+    run: EquityResearchRun,
+    snapshot: EquityResearchSnapshot,
+    previous: dict[str, EquityResearchReport],
+) -> FinalDecision:
     risks = _collect_risks(previous)
     score = _score(snapshot)
     missing_penalty = 1 if not snapshot.latest_price or not snapshot.fundamentals else 0
     if not snapshot.latest_price:
-        investment_decision = InvestmentDecision.AVOID if run.report_type == ReportType.INVESTMENT else None
-        trading_bias = TradingBias.NEUTRAL if run.report_type == ReportType.TRADING else None
+        investment_decision = (
+            InvestmentDecision.AVOID
+            if run.report_type == ReportType.INVESTMENT
+            else None
+        )
+        trading_bias = (
+            TradingBias.NEUTRAL if run.report_type == ReportType.TRADING else None
+        )
         return FinalDecision(
             recommendation=Recommendation.INSUFFICIENT_DATA,
             investment_decision=investment_decision,
@@ -1289,7 +2029,16 @@ def _final_decision(run: EquityResearchRun, snapshot: EquityResearchSnapshot, pr
             summary="The run cannot support a directional verdict without reliable price data. Avoid new action until the data gap is resolved.",
         )
 
-    confidence = max(0.35, min(0.86, 0.55 + abs(score) * 0.06 - missing_penalty * 0.12 - min(len(risks), 4) * 0.03))
+    confidence = max(
+        0.35,
+        min(
+            0.86,
+            0.55
+            + abs(score) * 0.06
+            - missing_penalty * 0.12
+            - min(len(risks), 4) * 0.03,
+        ),
+    )
     confidence = round(confidence, 2)
     missing_fundamentals = not bool(snapshot.fundamentals)
     investment_decision = None
@@ -1297,10 +2046,20 @@ def _final_decision(run: EquityResearchRun, snapshot: EquityResearchSnapshot, pr
     if run.report_type == ReportType.TRADING:
         trading_bias = _trading_bias_for(score, confidence, risks)
     else:
-        investment_decision = _investment_decision_for(score, confidence, risks, missing_fundamentals, run.research_depth)
+        investment_decision = _investment_decision_for(
+            score, confidence, risks, missing_fundamentals, run.research_depth
+        )
     rec = _legacy_recommendation(investment_decision, trading_bias, missing_price=False)
-    upside = "Constructive price/fundamental alignment could support upside continuation." if score > 0 else "Upside requires fresh confirmation from price action or fundamentals."
-    risk = risks[0] if risks else "The decision is sensitive to new data and near-term volatility."
+    upside = (
+        "Constructive price/fundamental alignment could support upside continuation."
+        if score > 0
+        else "Upside requires fresh confirmation from price action or fundamentals."
+    )
+    risk = (
+        risks[0]
+        if risks
+        else "The decision is sensitive to new data and near-term volatility."
+    )
     label = _final_label(run.report_type, investment_decision or trading_bias or rec)
     summary = (
         f"Quanfora 2.1 assigns a {label} view because the shared evidence is "
@@ -1308,4 +2067,6 @@ def _final_decision(run: EquityResearchRun, snapshot: EquityResearchSnapshot, pr
         "The portfolio manager treats the output as a research verdict, "
         "not a guaranteed trading signal."
     )
-    return FinalDecision(rec, investment_decision, trading_bias, confidence, upside, risk, summary)
+    return FinalDecision(
+        rec, investment_decision, trading_bias, confidence, upside, risk, summary
+    )

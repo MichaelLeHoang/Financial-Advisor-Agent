@@ -8,7 +8,6 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
-
 DISCLAIMER = "Not investment advice. For educational and informational use only."
 
 
@@ -93,7 +92,9 @@ class EquityResearchRunCreate(BaseModel):
     ticker: str = Field(min_length=1, max_length=20)
     analysis_date: date | None = None
     report_type: ReportType = ReportType.INVESTMENT
-    selected_analysts: list[AnalystKey] = Field(default_factory=lambda: ["market", "social", "news", "fundamentals"])
+    selected_analysts: list[AnalystKey] = Field(
+        default_factory=lambda: ["market", "social", "news", "fundamentals"]
+    )
     research_depth: ResearchDepth = ResearchDepth.SHALLOW
     quick_model: str = "default-fast"
     deep_model: str = "default-research"
@@ -178,6 +179,42 @@ class EquityResearchEvent(BaseModel):
     token_output: int | None = None
 
 
+class DecisionWorkspaceMetric(BaseModel):
+    label: str
+    value: str
+    tone: Literal["positive", "neutral", "negative", "info"] = "neutral"
+
+
+class DecisionWorkspaceSection(BaseModel):
+    summary: str
+    metrics: list[DecisionWorkspaceMetric] = Field(default_factory=list)
+    bullets: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class DecisionWorkspaceBacktest(BaseModel):
+    summary: str
+    assumptions: list[str] = Field(default_factory=list)
+    metrics: list[DecisionWorkspaceMetric] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class DecisionWorkspaceNextStep(BaseModel):
+    label: str
+    detail: str
+    trigger: str | None = None
+
+
+class DecisionWorkspace(BaseModel):
+    overview: DecisionWorkspaceSection
+    evidence: DecisionWorkspaceSection
+    signals: DecisionWorkspaceSection
+    backtest: DecisionWorkspaceBacktest
+    regime: DecisionWorkspaceSection
+    agent_debate: DecisionWorkspaceSection
+    next_steps: list[DecisionWorkspaceNextStep] = Field(default_factory=list)
+
+
 class EquityResearchRun(BaseModel):
     run_id: UUID = Field(default_factory=uuid4)
     user_id: UUID | None = None
@@ -214,6 +251,7 @@ class EquityResearchRunDetail(BaseModel):
     snapshot: EquityResearchSnapshot | None = None
     reports: list[EquityResearchReport] = Field(default_factory=list)
     latest_events: list[EquityResearchEvent] = Field(default_factory=list)
+    decision_workspace: DecisionWorkspace | None = None
 
 
 class EquityResearchShareUpdate(BaseModel):
@@ -224,3 +262,4 @@ class PublicEquityResearchReport(BaseModel):
     run: EquityResearchRun
     reports: list[EquityResearchReport]
     snapshot: EquityResearchSnapshot | None = None
+    decision_workspace: DecisionWorkspace | None = None

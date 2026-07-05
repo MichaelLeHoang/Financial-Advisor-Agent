@@ -22,6 +22,10 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import type {
+  DecisionWorkspace,
+  DecisionWorkspaceBacktest,
+  DecisionWorkspaceMetric,
+  DecisionWorkspaceSection,
   EquityResearchEvent,
   EquityResearchReport,
   EquityResearchRun,
@@ -618,10 +622,154 @@ export function ReportFileList({
   );
 }
 
+type WorkspaceTab = "overview" | "evidence" | "signals" | "backtest" | "regime" | "debate" | "next" | "reports";
+
+const WORKSPACE_TABS: Array<{ key: WorkspaceTab; label: string }> = [
+  { key: "overview", label: "Overview" },
+  { key: "evidence", label: "Evidence" },
+  { key: "signals", label: "Signals" },
+  { key: "backtest", label: "Backtest" },
+  { key: "regime", label: "Regime" },
+  { key: "debate", label: "Agent Debate" },
+  { key: "next", label: "Next Steps" },
+  { key: "reports", label: "Reports" },
+];
+
+function WorkspaceTabBar({
+  activeTab,
+  onChange,
+  hasWorkspace,
+}: {
+  activeTab: WorkspaceTab;
+  onChange: (tab: WorkspaceTab) => void;
+  hasWorkspace: boolean;
+}) {
+  const tabs = hasWorkspace ? WORKSPACE_TABS : WORKSPACE_TABS.filter((tab) => tab.key === "reports");
+  return (
+    <div className="flex gap-2 overflow-x-auto pb-1">
+      {tabs.map((tab) => (
+        <button
+          key={tab.key}
+          type="button"
+          onClick={() => onChange(tab.key)}
+          className={cn(
+            "shrink-0 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors",
+            activeTab === tab.key
+              ? "border-indigo-primary/50 bg-indigo-primary/18 text-white"
+              : "border-white/[0.08] bg-white/[0.025] text-white/55 hover:bg-white/[0.055]"
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function metricToneClass(tone: DecisionWorkspaceMetric["tone"]) {
+  if (tone === "positive") return "border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-100";
+  if (tone === "negative") return "border-rose-400/20 bg-rose-400/[0.08] text-rose-100";
+  if (tone === "info") return "border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-100";
+  return "border-white/[0.08] bg-white/[0.025] text-white/72";
+}
+
+function WorkspaceMetricGrid({ metrics }: { metrics: DecisionWorkspaceMetric[] }) {
+  if (metrics.length === 0) return null;
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {metrics.map((metric) => (
+        <div key={`${metric.label}-${metric.value}`} className={cn("rounded-xl border p-3", metricToneClass(metric.tone))}>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-white/38">{metric.label}</p>
+          <p className="mt-1 text-lg font-semibold text-current">{metric.value}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WorkspaceBullets({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-widest text-indigo-primary">{title}</p>
+      <ul className="mt-2 space-y-2 text-sm leading-6 text-white/62">
+        {items.map((item) => (
+          <li key={item} className="flex gap-2">
+            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-indigo-primary/70" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function WorkspaceSectionView({ title, section }: { title: string; section: DecisionWorkspaceSection }) {
+  return (
+    <article className="min-h-[30rem] rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
+      <h2 className="text-lg font-semibold text-white">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-white/62">{section.summary}</p>
+      <div className="mt-5">
+        <WorkspaceMetricGrid metrics={section.metrics} />
+      </div>
+      <div className="mt-5 grid gap-5 xl:grid-cols-2">
+        <WorkspaceBullets title="Key Points" items={section.bullets} />
+        <WorkspaceBullets title="Limitations" items={section.limitations} />
+      </div>
+    </article>
+  );
+}
+
+function WorkspaceBacktestView({ backtest }: { backtest: DecisionWorkspaceBacktest }) {
+  return (
+    <article className="min-h-[30rem] rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
+      <h2 className="text-lg font-semibold text-white">Backtest</h2>
+      <p className="mt-2 text-sm leading-6 text-white/62">{backtest.summary}</p>
+      <div className="mt-5">
+        <WorkspaceMetricGrid metrics={backtest.metrics} />
+      </div>
+      <div className="mt-5 grid gap-5 xl:grid-cols-2">
+        <WorkspaceBullets title="Assumptions" items={backtest.assumptions} />
+        <WorkspaceBullets title="Limitations" items={backtest.limitations} />
+      </div>
+    </article>
+  );
+}
+
+function WorkspaceNextStepsView({ workspace }: { workspace: DecisionWorkspace }) {
+  return (
+    <article className="min-h-[30rem] rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
+      <h2 className="text-lg font-semibold text-white">Next Steps</h2>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {workspace.next_steps.map((step) => (
+          <div key={`${step.label}-${step.detail}`} className="rounded-xl border border-white/[0.08] bg-black/15 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm font-semibold text-indigo-primary">{step.label}</p>
+              {step.trigger && <span className="rounded-lg border border-white/[0.08] px-2 py-1 text-xs font-semibold text-white/55">{step.trigger}</span>}
+            </div>
+            <p className="mt-2 text-sm leading-6 text-white/62">{step.detail}</p>
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function DecisionWorkspaceView({ workspace, activeTab }: { workspace: DecisionWorkspace; activeTab: WorkspaceTab }) {
+  if (activeTab === "overview") return <WorkspaceSectionView title="Overview" section={workspace.overview} />;
+  if (activeTab === "evidence") return <WorkspaceSectionView title="Evidence" section={workspace.evidence} />;
+  if (activeTab === "signals") return <WorkspaceSectionView title="Signals" section={workspace.signals} />;
+  if (activeTab === "backtest") return <WorkspaceBacktestView backtest={workspace.backtest} />;
+  if (activeTab === "regime") return <WorkspaceSectionView title="Regime" section={workspace.regime} />;
+  if (activeTab === "debate") return <WorkspaceSectionView title="Agent Debate" section={workspace.agent_debate} />;
+  return <WorkspaceNextStepsView workspace={workspace} />;
+}
+
 export function AnalysisWorkspace({ runId }: { runId: string }) {
   const [detail, setDetail] = useState<EquityResearchRunDetail | null>(null);
   const [events, setEvents] = useState<EquityResearchEvent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("overview");
   const [error, setError] = useState<string | null>(null);
   const visibleEvents = useSequentialEvents(events);
   const visibleKeys = useMemo(() => visibleReportKeys(visibleEvents), [visibleEvents]);
@@ -666,6 +814,8 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
 
   const selectedReport = visibleReports.find((report) => report.agent_key === selectedAgent) ?? visibleReports.find((report) => report.agent_key === "pm") ?? visibleReports[0];
   const hasFinalDecision = visibleReports.some((report) => report.agent_key === "pm");
+  const hasWorkspace = Boolean(detail.decision_workspace);
+  const activeTab = hasWorkspace ? activeWorkspaceTab : "reports";
 
   return (
     <div className="grid min-h-[calc(100vh-5rem)] gap-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
@@ -674,21 +824,28 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
       </aside>
       <main className="min-w-0 space-y-4">
         <FinalDecisionCard run={detail.run} />
-        <ReportFileList run={detail.run} reports={visibleReports} selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} />
-        <article className="min-h-[30rem] rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
-          {selectedReport ? (
-            <>
-              <Markdown content={selectedReport.markdown} />
-              {selectedReport.agent_key === "pm" && detail.run.status === "completed" && (
-                <FinalDecisionDownloadGate detail={detail} />
+        <WorkspaceTabBar activeTab={activeTab} onChange={setActiveWorkspaceTab} hasWorkspace={hasWorkspace} />
+        {detail.decision_workspace && activeTab !== "reports" ? (
+          <DecisionWorkspaceView workspace={detail.decision_workspace} activeTab={activeTab} />
+        ) : (
+          <>
+            <ReportFileList run={detail.run} reports={visibleReports} selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} />
+            <article className="min-h-[30rem] rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
+              {selectedReport ? (
+                <>
+                  <Markdown content={selectedReport.markdown} />
+                  {selectedReport.agent_key === "pm" && detail.run.status === "completed" && (
+                    <FinalDecisionDownloadGate detail={detail} />
+                  )}
+                </>
+              ) : (
+                <div className="flex min-h-[20rem] items-center justify-center text-center text-white/42">
+                  Agent reports will appear here as the run progresses.
+                </div>
               )}
-            </>
-          ) : (
-            <div className="flex min-h-[20rem] items-center justify-center text-center text-white/42">
-              Agent reports will appear here as the run progresses.
-            </div>
-          )}
-        </article>
+            </article>
+          </>
+        )}
       </main>
       <aside className="space-y-4 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">

@@ -175,11 +175,50 @@ export interface EquityResearchEvent {
   token_output?: number | null;
 }
 
+export type DecisionWorkspaceTone = "positive" | "neutral" | "negative" | "info";
+
+export interface DecisionWorkspaceMetric {
+  label: string;
+  value: string;
+  tone: DecisionWorkspaceTone;
+}
+
+export interface DecisionWorkspaceSection {
+  summary: string;
+  metrics: DecisionWorkspaceMetric[];
+  bullets: string[];
+  limitations: string[];
+}
+
+export interface DecisionWorkspaceBacktest {
+  summary: string;
+  assumptions: string[];
+  metrics: DecisionWorkspaceMetric[];
+  limitations: string[];
+}
+
+export interface DecisionWorkspaceNextStep {
+  label: string;
+  detail: string;
+  trigger?: string | null;
+}
+
+export interface DecisionWorkspace {
+  overview: DecisionWorkspaceSection;
+  evidence: DecisionWorkspaceSection;
+  signals: DecisionWorkspaceSection;
+  backtest: DecisionWorkspaceBacktest;
+  regime: DecisionWorkspaceSection;
+  agent_debate: DecisionWorkspaceSection;
+  next_steps: DecisionWorkspaceNextStep[];
+}
+
 export interface EquityResearchRunDetail {
   run: EquityResearchRun;
   snapshot?: EquityResearchSnapshot | null;
   reports: EquityResearchReport[];
   latest_events: EquityResearchEvent[];
+  decision_workspace?: DecisionWorkspace | null;
 }
 
 export interface EquityResearchEventsList {
@@ -191,6 +230,7 @@ export interface PublicEquityResearchReport {
   run: EquityResearchRun;
   snapshot?: EquityResearchSnapshot | null;
   reports: EquityResearchReport[];
+  decision_workspace?: DecisionWorkspace | null;
 }
 
 export interface ChatMessage {
