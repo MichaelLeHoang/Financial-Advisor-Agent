@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils";
 import Markdown from "@/components/ui/markdown";
 import { useAuth } from "@/components/auth/AuthProvider";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 
 const AGENT_GROUPS = [
   { title: "Analyst Agents", agents: [["market", "Market Analyst"], ["social", "Social Media Analyst"], ["news", "News Analyst"], ["fundamentals", "Fundamentals Analyst"]] },
@@ -602,7 +603,7 @@ export function ReportFileList({
   onSelectAgent: (agent: string) => void;
 }) {
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1">
+    <HorizontalScroll className="flex gap-2 pb-1">
       {reports.map((report) => (
         <button
           key={report.report_id}
@@ -618,7 +619,7 @@ export function ReportFileList({
           <span className="mt-1 block text-[10px] text-white/34">{report.agent_name}</span>
         </button>
       ))}
-    </div>
+    </HorizontalScroll>
   );
 }
 
@@ -646,7 +647,7 @@ function WorkspaceTabBar({
 }) {
   const tabs = hasWorkspace ? WORKSPACE_TABS : WORKSPACE_TABS.filter((tab) => tab.key === "reports");
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1">
+    <HorizontalScroll className="flex gap-2 pb-1">
       {tabs.map((tab) => (
         <button
           key={tab.key}
@@ -662,7 +663,7 @@ function WorkspaceTabBar({
           {tab.label}
         </button>
       ))}
-    </div>
+    </HorizontalScroll>
   );
 }
 

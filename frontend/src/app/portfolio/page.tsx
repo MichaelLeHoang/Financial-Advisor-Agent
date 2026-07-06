@@ -31,6 +31,7 @@ import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
 import { ThinSlider } from "@/components/ui/thin-slider";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1536,7 +1537,7 @@ export default function PortfolioPage() {
                       Loading holdings…
                     </div>
                   ) : sortedHoldings.length > 0 ? (
-                    <div className="w-full overflow-x-auto [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/14 [&::-webkit-scrollbar-track]:bg-transparent">
+                    <HorizontalScroll className="w-full">
                       <table className="w-full min-w-[700px] table-fixed text-xs sm:text-sm">
                         <thead>
                           <tr className="border-b border-white/10 text-xs text-white/60">
@@ -1623,7 +1624,7 @@ export default function PortfolioPage() {
                           })}
                         </tbody>
                       </table>
-                    </div>
+                    </HorizontalScroll>
                   ) : (
                     <div className="flex min-h-80 flex-col items-center justify-center gap-3 text-center">
                       <p className="text-sm text-white/40">No holdings yet.</p>

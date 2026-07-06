@@ -36,6 +36,7 @@ import {
   X,
 } from "lucide-react";
 import { COMPARISON_TABLE, PLANS } from "@/config/plans";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 
 type DocsView = "guide" | "reference";
 type DocsTheme = "dark" | "light";
@@ -210,9 +211,9 @@ function CodeBlock({ code, language = "json", title }: { code: string; language?
           <span className="font-mono text-[10px] uppercase tracking-wider text-white/25">{language}</span>
         </div>
       ) : null}
-      <pre className="overflow-x-auto p-4 text-[13px] leading-6 text-white/68">
+      <HorizontalScroll as="pre" className="p-4 text-[13px] leading-6 text-white/68">
         <code>{code}</code>
-      </pre>
+      </HorizontalScroll>
       <button
         type="button"
         onClick={handleCopy}
@@ -251,7 +252,7 @@ function Callout({
 
 function DocTable({ headers, rows }: { headers: string[]; rows: ReactNode[][] }) {
   return (
-    <div className="my-5 overflow-x-auto rounded-lg border border-white/[0.08]">
+    <HorizontalScroll className="my-5 rounded-lg border border-white/[0.08]">
       <table className="w-full min-w-[620px] text-sm">
         <thead>
           <tr className="border-b border-white/[0.06] bg-white/[0.035]">
@@ -274,7 +275,7 @@ function DocTable({ headers, rows }: { headers: string[]; rows: ReactNode[][] })
           ))}
         </tbody>
       </table>
-    </div>
+    </HorizontalScroll>
   );
 }
 
@@ -425,7 +426,7 @@ function PlanAccessMatrix() {
   );
 
   return (
-    <div className="my-6 overflow-x-auto rounded-lg border border-white/[0.08]">
+    <HorizontalScroll className="my-6 rounded-lg border border-white/[0.08]">
       <table className="w-full min-w-[760px] text-sm">
         <thead>
           <tr className="border-b border-white/[0.06] bg-white/[0.035]">
@@ -450,7 +451,7 @@ function PlanAccessMatrix() {
           ))}
         </tbody>
       </table>
-    </div>
+    </HorizontalScroll>
   );
 }
 

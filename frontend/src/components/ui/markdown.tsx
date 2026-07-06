@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 import type React from "react";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 
 function textFromChildren(children: React.ReactNode): string {
   if (typeof children === "string") return children;
@@ -93,14 +94,14 @@ const components: Components = {
     );
   },
   pre: ({ children }) => (
-    <pre className="my-3 overflow-x-auto rounded-xl bg-[var(--surface-card)] border border-[var(--theme-border)] p-4 text-[13px] leading-relaxed">
+    <HorizontalScroll as="pre" className="my-3 rounded-xl bg-[var(--surface-card)] border border-[var(--theme-border)] p-4 text-[13px] leading-relaxed">
       {children}
-    </pre>
+    </HorizontalScroll>
   ),
   table: ({ children }) => (
-    <div className="my-3 overflow-x-auto rounded-xl border border-[var(--theme-border)]">
+    <HorizontalScroll className="my-3 rounded-xl border border-[var(--theme-border)]">
       <table className="w-full table-fixed text-sm">{children}</table>
-    </div>
+    </HorizontalScroll>
   ),
   thead: ({ children }) => (
     <thead className="border-b border-[var(--theme-border)] bg-[var(--surface-card-hover)] text-left text-[var(--text-secondary)]">

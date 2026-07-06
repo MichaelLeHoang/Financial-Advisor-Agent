@@ -10,6 +10,7 @@ import { LockedFeature } from "@/components/LockedFeature";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { cn } from "@/lib/utils";
 
 const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, trader: 2, quant: 3, execution_addon: 4 };
@@ -139,18 +140,20 @@ export default function RiskPage() {
 
             {symbols.length > 0 && (
               <Card className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] py-0 text-[var(--text-primary)] shadow-[var(--shadow-card)]">
-                <CardContent className="overflow-x-auto p-5">
+                <CardContent className="p-5">
                   <div className="mb-4 text-sm font-semibold">Correlation matrix</div>
-                  <div className="grid w-max gap-1" style={{ gridTemplateColumns: `96px repeat(${symbols.length}, 72px)` }}>
-                    <div />
-                    {symbols.map((symbol) => <Cell key={symbol} label={symbol} header />)}
-                    {symbols.map((row) => (
-                      <div key={`${row}-row`} className="contents">
-                        <Cell key={`${row}-label`} label={row} header />
-                        {symbols.map((col) => <Cell key={`${row}-${col}`} label={formatCorrelation(correlations[row]?.[col])} tone={correlations[row]?.[col] ?? 0} />)}
-                      </div>
-                    ))}
-                  </div>
+                  <HorizontalScroll>
+                    <div className="grid w-max gap-1" style={{ gridTemplateColumns: `96px repeat(${symbols.length}, 72px)` }}>
+                      <div />
+                      {symbols.map((symbol) => <Cell key={symbol} label={symbol} header />)}
+                      {symbols.map((row) => (
+                        <div key={`${row}-row`} className="contents">
+                          <Cell key={`${row}-label`} label={row} header />
+                          {symbols.map((col) => <Cell key={`${row}-${col}`} label={formatCorrelation(correlations[row]?.[col])} tone={correlations[row]?.[col] ?? 0} />)}
+                        </div>
+                      ))}
+                    </div>
+                  </HorizontalScroll>
                 </CardContent>
               </Card>
             )}

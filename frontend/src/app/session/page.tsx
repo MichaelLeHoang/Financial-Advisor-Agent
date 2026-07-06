@@ -17,6 +17,7 @@ import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import Plan from "@/components/ui/agent-plan";
 import Markdown from "@/components/ui/markdown";
 import { showToast } from "@/components/ui/toast";
@@ -1409,7 +1410,7 @@ function ConsensusMessageTabs({ content, opinions }: { content: string; opinions
 
 function ResponseTabs({ tabs, active, onChange }: { tabs: Array<{ id: string; label: string }>; active: string; onChange: (id: string) => void }) {
   return (
-    <div className="flex gap-2 overflow-x-auto rounded-xl border border-white/[0.08] bg-black/15 p-1">
+    <HorizontalScroll className="flex gap-2 rounded-xl border border-white/[0.08] bg-black/15 p-1">
       {tabs.map((tab) => (
         <button
           key={tab.id}
@@ -1423,7 +1424,7 @@ function ResponseTabs({ tabs, active, onChange }: { tabs: Array<{ id: string; la
           {tab.label}
         </button>
       ))}
-    </div>
+    </HorizontalScroll>
   );
 }
 

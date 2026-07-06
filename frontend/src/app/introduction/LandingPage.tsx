@@ -12,6 +12,7 @@ import { PLANS, COMPARISON_TABLE, type PlanId, type CheckState } from "@/config/
 import { IntroductionFooter, IntroductionNav } from "./components";
 import Markdown from "@/components/ui/markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { TestimonialsMinimal } from "@/components/ui/minimal-testimonial";
 
 /* ───── data ───── */
@@ -1193,7 +1194,7 @@ function ComparisonTable() {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="landing-comparison mt-24">
       <h3 className="mb-8 text-center font-heading text-2xl font-bold text-white">Compare plans</h3>
-      <div className="overflow-x-auto rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+      <HorizontalScroll className="rounded-2xl border border-white/[0.06] bg-white/[0.02]">
         <table className="w-full min-w-[700px] text-sm">
           <thead>
             <tr className="border-b border-white/[0.06]">
@@ -1216,7 +1217,7 @@ function ComparisonTable() {
             ))}
           </tbody>
         </table>
-      </div>
+      </HorizontalScroll>
     </motion.div>
   );
 }
