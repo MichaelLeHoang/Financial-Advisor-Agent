@@ -1,4 +1,5 @@
 from datetime import date
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -9,6 +10,7 @@ from src.agent.equity_research.entitlements import (
     research_deep_report_limit,
     research_report_limit,
 )
+from src.agent.equity_research.snapshot import build_data_snapshot
 from src.agent.equity_research.orchestrator import (
     MAX_REPORT_LINE_CHARS,
     MAX_TABLE_CELL_CHARS,
@@ -102,6 +104,78 @@ def test_final_decision_returns_insufficient_data_without_price():
     assert decision.investment_decision == InvestmentDecision.AVOID
     assert decision.confidence == 0.25
     assert "Price data" in decision.main_risk
+
+
+def test_build_data_snapshot_resolves_alias_via_market_candidates(monkeypatch):
+    import src.agent.equity_research.snapshot as snapshot_module
+
+    blank_snapshot = SimpleNamespace(
+        ticker="SPACEX",
+        company_name=None,
+        exchange=None,
+        latest_price=None,
+        previous_close=None,
+        daily_change=None,
+        volume=None,
+        market_cap=None,
+        fundamentals={},
+        technical_indicators={},
+        news_items=[],
+        sentiment_summary={"signal": "limited", "score": 0},
+        risk_metrics={},
+        data_sources=[],
+        source_quality={},
+        provider_status=[],
+        evidence_items=[],
+        analyst_context={},
+        filing_context={},
+        sector=None,
+        industry=None,
+        pe_ratio=None,
+    )
+    resolved_snapshot = SimpleNamespace(
+        ticker="SPCX",
+        company_name="SpaceX",
+        exchange="NASDAQ",
+        latest_price=185.0,
+        previous_close=180.0,
+        daily_change=2.78,
+        volume=1_000_000,
+        market_cap=2_100_000_000_000,
+        fundamentals={"sector": "Industrials", "industry": "Aerospace"},
+        technical_indicators={"trend": "uptrend"},
+        news_items=[],
+        sentiment_summary={"signal": "bullish", "score": 1},
+        risk_metrics={"max_drawdown_window": 0.08},
+        data_sources=["yfinance"],
+        source_quality={},
+        provider_status=[],
+        evidence_items=[],
+        analyst_context={},
+        filing_context={},
+        sector="Industrials",
+        industry="Aerospace",
+        pe_ratio=42.0,
+    )
+    calls: list[str] = []
+
+    def fake_fetch_snapshot(ticker, *args, **kwargs):
+        calls.append(ticker)
+        return blank_snapshot if ticker == "SPACEX" else resolved_snapshot
+
+    monkeypatch.setattr(snapshot_module.market_data_service, "fetch_snapshot", fake_fetch_snapshot)
+    monkeypatch.setattr(
+        snapshot_module,
+        "resolve_market_entity",
+        lambda entity, limit=3: [SimpleNamespace(ticker="SPCX", confidence=0.98)],
+    )
+
+    result = build_data_snapshot(uuid4(), "SpaceX", date.today())
+
+    assert calls == ["SPACEX", "SPCX"]
+    assert result.ticker == "SPCX"
+    assert result.company_name == "SpaceX"
+    assert result.latest_price == 185.0
 
 
 def test_pm_report_uses_trading_structure():

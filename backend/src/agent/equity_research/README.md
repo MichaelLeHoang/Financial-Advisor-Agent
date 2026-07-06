@@ -23,4 +23,4 @@ API transport stays in `api/equity_research.py`; shared request and response mod
 Test entitlement normalization, report objective gating, report limits, invalid tickers, missing prices, deterministic final decisions, decision workspace tabs, and run-state transitions without live providers.
 
 ## Latest Change
-- Added deterministic ROI Forecast fields to Portfolio Manager final reports, including Horizon, Expected ROI, and Downside Risk derived from existing snapshot, analyst target, technical, and risk evidence.
+- Added deterministic ROI Forecast fields to Portfolio Manager final reports, and taught snapshot building to retry through market-symbol resolution when a prompt resolves to a company alias like SpaceX instead of a public ticker.

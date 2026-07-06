@@ -208,16 +208,17 @@ function extractResearchSearchQuery(message: string) {
   return cleaned.split(/\s+/).length <= 4 ? cleaned : null;
 }
 
-async function resolveResearchTicker(message: string) {
-  const query = extractResearchSearchQuery(message);
-  if (!query) return null;
+async function resolveResearchTicker(input: string) {
+  const directTicker = normalizeTickerCandidate(input);
+  const query = directTicker ?? extractResearchSearchQuery(input);
+  if (!query) return directTicker;
 
   try {
     const matches = await api.marketSearch(query, 6);
     const candidate = matches.find((item) => RESEARCH_PUBLIC_QUOTE_TYPES.has((item.quote_type ?? "").toLowerCase())) ?? matches[0];
-    return normalizeTickerCandidate(candidate?.ticker);
+    return normalizeTickerCandidate(candidate?.ticker) ?? directTicker;
   } catch {
-    return null;
+    return directTicker;
   }
 }
 
@@ -677,7 +678,11 @@ export default function ChatPage() {
     const investmentTicker = researchCommand?.ticker ?? extractInvestmentTicker(text);
 
     if (researchCommand || version === "2.1") {
-      const ticker = researchCommand?.ticker ?? extractTickerForResearch(text) ?? await resolveResearchTicker(text);
+      const seedTicker = researchCommand?.ticker ?? extractTickerForResearch(text);
+      let ticker = await resolveResearchTicker(seedTicker ?? text);
+      if (!ticker && seedTicker) {
+        ticker = await resolveResearchTicker(text);
+      }
       if (!ticker) {
         setMessages((prev) => [...prev, userMsg, {
           id: getUniqueId(),
@@ -960,180 +965,181 @@ export default function ChatPage() {
     event.target.value = "";
   };
 
-  const isWelcomeState = messages.length === 1 && messages[0].id === "welcome";
+  const hasConversation = messages.some((message) => message.id !== "welcome");
+  const isStarterState = !hasConversation && !isHistoryLoading;
 
   const renderComposer = (placement: "center" | "dock") => {
     const composerExpanded = Boolean(input);
 
     return (
-    <div className={cn("shrink-0", placement === "dock" ? "px-3 pb-3 pt-1 sm:px-8 sm:pb-6 sm:pt-0" : "w-full")}>
-      <div className="relative mx-auto w-full max-w-4xl">
-        <AnimatePresence>
-          {isActive && !input && !uploadMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: 12, filter: "blur(8px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: 10, filter: "blur(8px)" }}
-              transition={{ duration: 0.22 }}
-              className="absolute bottom-full left-0 right-0 z-30 mb-3 flex flex-wrap justify-center gap-2 px-2"
-            >
-              {SUGGESTIONS.map((suggestion) => (
-                <SuggestionBubble
-                  key={suggestion.title}
-                  suggestion={suggestion}
-                  onClick={() => {
-                    setInput(suggestion.prompt);
-                    window.requestAnimationFrame(() => textareaRef.current?.focus());
-                  }}
-                />
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <motion.div
-          layout
-          ref={wrapperRef}
-          onClick={() => {
-            setIsActive(true);
-            textareaRef.current?.focus();
-          }}
-          className="relative mx-auto w-full overflow-visible border border-white/[0.06] bg-white/[0.045] text-white transition-colors cursor-text"
-          animate={{
-            borderRadius: composerExpanded ? 28 : 999,
-            borderColor: isActive || input ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)",
-            backgroundColor: isActive || input ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.04)",
-            boxShadow: isActive || input ? "0 14px 42px rgba(0,0,0,0.24)" : "var(--shadow-accent-composer)",
-            minHeight: composerExpanded ? 64 : 52,
-            padding: composerExpanded ? 8 : 6,
-          }}
-          transition={{ type: "spring", stiffness: 120, damping: 18 }}
-        >
-          <div className="relative flex items-center gap-2">
-            <button
-              type="button"
-              aria-label="Add files"
-              aria-expanded={uploadMenuOpen}
-              onClick={(event) => {
-                event.stopPropagation();
-                setUploadMenuOpen((open) => !open);
-                setIsActive(true);
-              }}
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-white/62 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
-            >
-              <Paperclip className="size-5" />
-            </button>
-            <div className="relative min-w-0 flex-1">
-              <Textarea
-                ref={textareaRef}
-                value={input}
-                onChange={handleInput}
-                onFocus={() => setIsActive(true)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                rows={1}
-                className={cn(
-                  "relative z-10 w-full resize-none overflow-y-auto border-0 bg-transparent px-3 text-sm leading-5 text-white shadow-none outline-none focus-visible:border-transparent focus-visible:ring-0",
-                  composerExpanded ? "max-h-[180px] min-h-12 py-3.5" : "max-h-10 min-h-10 py-2.5"
-                )}
-              />
-              <div className="absolute inset-0 pointer-events-none flex items-center px-3">
-                <AnimatePresence mode="wait">
-                  {showPlaceholder && !isActive && !input && (
-                    <motion.span
-                      key={placeholderIndex}
-                      className="max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-5 text-white/24"
-                      variants={placeholderContainerVariants}
-                      initial="initial"
-                      animate="animate"
-                      exit="exit"
-                    >
-                      {PLACEHOLDERS[placeholderIndex].split("").map((char, i) => (
-                        <motion.span key={i} variants={letterVariants} style={{ display: "inline-block" }}>
-                          {char === " " ? "\u00A0" : char}
-                        </motion.span>
-                      ))}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-2">
-              <ResearchModeSelector
-                plan={user.plan}
-                value={researchDepth}
-                onChange={setResearchDepth}
-                visible={version === "2.1"}
-              />
-              <ModelSelector placement={placement === "dock" ? "top" : "bottom"} compact />
-              <Button
-                onClick={handleSend}
-                disabled={isLoading || !input.trim()}
-                size="icon"
-                className="on-accent accent-gradient-surface h-10 w-10 shrink-0 rounded-full shadow-[var(--shadow-primary-action)] hover:shadow-[var(--shadow-primary-action-hover)] disabled:opacity-45"
-                aria-label="Send message"
-              >
-                <Send className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
+      <div className={cn("shrink-0", placement === "dock" ? "px-3 pb-3 pt-1 sm:px-8 sm:pb-6 sm:pt-0" : "w-full")}>
+        <div className="relative mx-auto w-full max-w-4xl">
           <AnimatePresence>
-            {uploadMenuOpen && (
+            {isActive && !input && !uploadMenuOpen && (
               <motion.div
-                initial={{ opacity: 0, y: -8, scale: 0.98, filter: "blur(8px)" }}
-                animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -8, scale: 0.98, filter: "blur(8px)" }}
-                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                className="absolute left-0 right-0 top-[calc(100%+0.75rem)] z-40 rounded-[1.45rem] border border-white/[0.08] bg-[#202124]/95 p-2 shadow-[0_24px_70px_rgba(0,0,0,0.46)] backdrop-blur-xl"
-                onClick={(event) => event.stopPropagation()}
+                initial={{ opacity: 0, y: 12, filter: "blur(8px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: 10, filter: "blur(8px)" }}
+                transition={{ duration: 0.22 }}
+                className="absolute bottom-full left-0 right-0 z-30 mb-3 flex flex-wrap justify-center gap-2 px-2"
               >
-                <UploadMenuItem
-                  icon={Paperclip}
-                  label="Add photos & files"
-                  accept=".pdf,.txt,.md,.csv,.json,image/*"
-                  onChange={(event) => handleUpload(event, "auto")}
-                />
-                <UploadMenuItem
-                  icon={FileText}
-                  label="Add PDF or notes"
-                  accept=".pdf,.txt,.md"
-                  onChange={(event) => handleUpload(event, "document")}
-                />
-                <UploadMenuItem
-                  icon={TableProperties}
-                  label="Add data file"
-                  accept=".csv,.json,.txt"
-                  onChange={(event) => handleUpload(event, "data")}
-                />
-                <UploadMenuItem
-                  icon={Image}
-                  label="Add image"
-                  accept="image/*"
-                  onChange={(event) => handleUpload(event, "image")}
-                />
-                <div className="px-3 pb-1 pt-2 text-sm text-white/34">
-                  Attach files for the advisor to reference in your next message.
-                </div>
+                {SUGGESTIONS.map((suggestion) => (
+                  <SuggestionBubble
+                    key={suggestion.title}
+                    suggestion={suggestion}
+                    onClick={() => {
+                      setInput(suggestion.prompt);
+                      window.requestAnimationFrame(() => textareaRef.current?.focus());
+                    }}
+                  />
+                ))}
               </motion.div>
             )}
           </AnimatePresence>
-        </motion.div>
+          <motion.div
+            layout
+            ref={wrapperRef}
+            onClick={() => {
+              setIsActive(true);
+              textareaRef.current?.focus();
+            }}
+            className="relative mx-auto w-full overflow-visible border border-white/[0.06] bg-white/[0.045] text-white transition-colors cursor-text"
+            animate={{
+              borderRadius: composerExpanded ? 28 : 999,
+              borderColor: isActive || input ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)",
+              backgroundColor: isActive || input ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.04)",
+              boxShadow: isActive || input ? "0 14px 42px rgba(0,0,0,0.24)" : "var(--shadow-accent-composer)",
+              minHeight: composerExpanded ? 64 : 52,
+              padding: composerExpanded ? 8 : 6,
+            }}
+            transition={{ type: "spring", stiffness: 120, damping: 18 }}
+          >
+            <div className="relative flex items-center gap-2">
+              <button
+                type="button"
+                aria-label="Add files"
+                aria-expanded={uploadMenuOpen}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setUploadMenuOpen((open) => !open);
+                  setIsActive(true);
+                }}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-white/62 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+              >
+                <Paperclip className="size-5" />
+              </button>
+              <div className="relative min-w-0 flex-1">
+                <Textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={handleInput}
+                  onFocus={() => setIsActive(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  rows={1}
+                  className={cn(
+                    "relative z-10 w-full resize-none overflow-y-auto border-0 bg-transparent px-3 text-sm leading-5 text-white shadow-none outline-none focus-visible:border-transparent focus-visible:ring-0",
+                    composerExpanded ? "max-h-[180px] min-h-12 py-3.5" : "max-h-10 min-h-10 py-2.5"
+                  )}
+                />
+                <div className="absolute inset-0 pointer-events-none flex items-center px-3">
+                  <AnimatePresence mode="wait">
+                    {showPlaceholder && !isActive && !input && (
+                      <motion.span
+                        key={placeholderIndex}
+                        className="max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-5 text-white/24"
+                        variants={placeholderContainerVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                      >
+                        {PLACEHOLDERS[placeholderIndex].split("").map((char, i) => (
+                          <motion.span key={i} variants={letterVariants} style={{ display: "inline-block" }}>
+                            {char === " " ? "\u00A0" : char}
+                          </motion.span>
+                        ))}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <ResearchModeSelector
+                  plan={user.plan}
+                  value={researchDepth}
+                  onChange={setResearchDepth}
+                  visible={version === "2.1"}
+                />
+                <ModelSelector placement={placement === "dock" ? "top" : "bottom"} compact />
+                <Button
+                  onClick={handleSend}
+                  disabled={isLoading || !input.trim()}
+                  size="icon"
+                  className="on-accent accent-gradient-surface h-10 w-10 shrink-0 rounded-full shadow-[var(--shadow-primary-action)] hover:shadow-[var(--shadow-primary-action-hover)] disabled:opacity-45"
+                  aria-label="Send message"
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+            <AnimatePresence>
+              {uploadMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.98, filter: "blur(8px)" }}
+                  animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, y: -8, scale: 0.98, filter: "blur(8px)" }}
+                  transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                  className="absolute left-0 right-0 top-[calc(100%+0.75rem)] z-40 rounded-[1.45rem] border border-white/[0.08] bg-[#202124]/95 p-2 shadow-[0_24px_70px_rgba(0,0,0,0.46)] backdrop-blur-xl"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <UploadMenuItem
+                    icon={Paperclip}
+                    label="Add photos & files"
+                    accept=".pdf,.txt,.md,.csv,.json,image/*"
+                    onChange={(event) => handleUpload(event, "auto")}
+                  />
+                  <UploadMenuItem
+                    icon={FileText}
+                    label="Add PDF or notes"
+                    accept=".pdf,.txt,.md"
+                    onChange={(event) => handleUpload(event, "document")}
+                  />
+                  <UploadMenuItem
+                    icon={TableProperties}
+                    label="Add data file"
+                    accept=".csv,.json,.txt"
+                    onChange={(event) => handleUpload(event, "data")}
+                  />
+                  <UploadMenuItem
+                    icon={Image}
+                    label="Add image"
+                    accept="image/*"
+                    onChange={(event) => handleUpload(event, "image")}
+                  />
+                  <div className="px-3 pb-1 pt-2 text-sm text-white/34">
+                    Attach files for the advisor to reference in your next message.
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </div>
+        <p className="mt-2 text-center text-[11px] text-white/20 sm:mt-3 sm:text-xs">
+          AI-generated analysis only. Not professional financial advice.
+        </p>
       </div>
-      <p className="mt-2 text-center text-[11px] text-white/20 sm:mt-3 sm:text-xs">
-        AI-generated analysis only. Not professional financial advice.
-      </p>
-    </div>
     );
   };
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden">
       {/* Messages */}
-      <div ref={scrollRef} className="relative flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-4 sm:space-y-6 sm:px-8 sm:pb-4 sm:pt-6">
+      <div ref={scrollRef} className="relative flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-4 sm:px-8 sm:pb-4 sm:pt-6">
         {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
         {isHistoryLoading && (
           <Card className="mx-auto max-w-fit rounded-xl border-indigo-primary/30 bg-indigo-primary/10 px-4 py-2 text-sm text-indigo-primary shadow-none">
@@ -1143,115 +1149,133 @@ export default function ChatPage() {
             </CardContent>
           </Card>
         )}
-        {isWelcomeState && (
-          <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-col items-center justify-center gap-7 py-8 sm:gap-8 lg:min-h-full">
-            <motion.div
-              animate={{ y: isActive && !input && !uploadMenuOpen ? -46 : 0 }}
-              transition={{ type: "spring", stiffness: 140, damping: 22 }}
-              className="w-full max-w-3xl text-center"
-            >
-              <motion.h1
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-3xl font-semibold text-white sm:text-4xl md:text-5xl"
-              >
-                {welcomeGreeting}{firstName ? <> <span className="gradient-highlight">{firstName}</span></> : null}
-              </motion.h1>
-              <motion.p
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.06 }}
-                className="mt-3 text-2xl font-medium leading-snug text-white/70 sm:text-3xl sm:leading-tight md:text-4xl"
-              >
-                What do you want to know today?
-              </motion.p>
-            </motion.div>
-            <div className="w-full">
-              {renderComposer("center")}
-            </div>
-            <div className="grid w-full grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
-              {WORKFLOW_STEPS.map((step) => (
-                <WorkflowStep key={step.title} step={step} />
-              ))}
-            </div>
-          </div>
-        )}
 
-        <AnimatePresence>
-          {messages.filter((msg) => !(isWelcomeState && msg.id === "welcome")).map((msg) => (
+        <AnimatePresence mode="wait">
+          {isStarterState ? (
             <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={cn("flex w-full min-w-0", msg.role === "user" ? "justify-end" : "justify-start")}
+              key="starter"
+              initial={{ opacity: 0, y: 16, filter: "blur(8px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: -12, filter: "blur(8px)" }}
+              transition={{ duration: 0.22 }}
+              className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-5xl flex-col items-center justify-center gap-7 py-8 sm:gap-8 lg:min-h-[calc(100vh-12rem)]"
             >
-              {msg.status === "fetching" ? (
-                <div className="w-full max-w-[92%] sm:max-w-[75%]">
-                  <Plan
-                    mode={version === "2.1" ? "research" : version === "2.0" ? "consensus" : "single"}
-                    isActive={true}
-                    activeTool={activeTool}
-                    completedTools={completedTools}
-                    runState={version === "2.1" ? "running" : agentRunState}
-                    runStartedAt={version === "2.1" ? null : agentRunStartedAt}
-                    useSyntheticFallback={useAgentSyntheticProgress}
-                  />
-                </div>
-              ) : (
-                <div
-                  className={cn(
-                    "min-w-0 max-w-[92%] break-words rounded-2xl px-4 py-3 text-[15px] leading-relaxed sm:max-w-[75%] sm:px-5 sm:py-4",
-                    msg.role === "user"
-                      ? "on-accent accent-gradient-surface glow-indigo whitespace-pre-wrap"
-                      : "glass text-white/90"
-                  )}
+              <motion.div
+                animate={{ y: isActive && !input && !uploadMenuOpen ? -46 : 0 }}
+                transition={{ type: "spring", stiffness: 140, damping: 22 }}
+                className="w-full max-w-3xl text-center"
+              >
+                <motion.h1
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-3xl font-semibold text-white sm:text-4xl md:text-5xl"
                 >
-                  {msg.role === "assistant" ? (
-                    msg.researchTicker ? (
-                      <div className="space-y-3">
-                        <ResearchMessageTabs content={msg.content} reports={msg.researchReports} />
-                        <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
-                          <p className="text-sm font-semibold text-white">
-                            {msg.researchRunId ? "Quanfora 2.1 Agent Reports" : "Generate a full Quanfora 2.1 Research Report?"}
-                          </p>
-                          <p className="mt-1 text-xs leading-5 text-white/55">
-                            {msg.researchRunId
-                              ? `Open the full workspace to review each analyst report, tool event, and the shared data snapshot for ${msg.researchTicker}.`
-                              : `Run market, news, sentiment, fundamentals, trading, and risk-management agents for ${msg.researchTicker}.`}
-                          </p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <Link
-                              href={msg.researchRunId ? `/research/${msg.researchRunId}?from=ai_advisor` : `/research?ticker=${encodeURIComponent(msg.researchTicker)}&source=ai_advisor&report_type=investment`}
-                              className="inline-flex h-9 items-center rounded-lg bg-indigo-primary px-3 text-xs font-semibold text-white hover:bg-indigo-primary/90"
-                            >
-                              {msg.researchRunId ? "View full agent reports" : "Generate Full Report"}
-                            </Link>
-                            {!msg.researchRunId && (
-                              <button
-                                type="button"
-                                onClick={() => setInput(`Give me a quick answer on ${msg.researchTicker}.`)}
-                                className="inline-flex h-9 items-center rounded-lg border border-white/[0.10] px-3 text-xs font-semibold text-white/60 hover:text-white"
-                              >
-                                Quick Answer
-                              </button>
-                            )}
-                          </div>
-                        </div>
+                  {welcomeGreeting}{firstName ? <> <span className="gradient-highlight">{firstName}</span></> : null}
+                </motion.h1>
+                <motion.p
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.06 }}
+                  className="mt-3 text-2xl font-medium leading-snug text-white/70 sm:text-3xl sm:leading-tight md:text-4xl"
+                >
+                  What do you want to know today?
+                </motion.p>
+              </motion.div>
+              <div className="w-full">
+                {renderComposer("center")}
+              </div>
+              <div className="grid w-full grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+                {WORKFLOW_STEPS.map((step) => (
+                  <WorkflowStep key={step.title} step={step} />
+                ))}
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="conversation"
+              initial={{ opacity: 0, y: 12, filter: "blur(6px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: 8, filter: "blur(6px)" }}
+              transition={{ duration: 0.2 }}
+              className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-5xl flex-col gap-4"
+            >
+              <AnimatePresence>
+                {messages.filter((msg) => msg.id !== "welcome").map((msg) => (
+                  <motion.div
+                    key={msg.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={cn("flex w-full min-w-0", msg.role === "user" ? "justify-end" : "justify-start")}
+                  >
+                    {msg.status === "fetching" ? (
+                      <div className="w-full max-w-[92%] sm:max-w-[75%]">
+                        <Plan
+                          mode={version === "2.1" ? "research" : version === "2.0" ? "consensus" : "single"}
+                          isActive={true}
+                          activeTool={activeTool}
+                          completedTools={completedTools}
+                          runState={version === "2.1" ? "running" : agentRunState}
+                          runStartedAt={version === "2.1" ? null : agentRunStartedAt}
+                          useSyntheticFallback={useAgentSyntheticProgress}
+                        />
                       </div>
                     ) : (
-                      <AssistantMessageContent content={msg.content} consensusOpinions={msg.consensusOpinions} />
-                    )
-                  ) : (
-                    msg.content
-                  )}
-                </div>
-              )}
+                      <div
+                        className={cn(
+                          "min-w-0 max-w-[92%] break-words rounded-2xl px-4 py-3 text-[15px] leading-relaxed sm:max-w-[75%] sm:px-5 sm:py-4",
+                          msg.role === "user"
+                            ? "on-accent accent-gradient-surface glow-indigo whitespace-pre-wrap"
+                            : "glass text-white/90"
+                        )}
+                      >
+                        {msg.role === "assistant" ? (
+                          msg.researchTicker ? (
+                            <div className="space-y-3">
+                              <ResearchMessageTabs content={msg.content} reports={msg.researchReports} />
+                              <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
+                                <p className="text-sm font-semibold text-white">
+                                  {msg.researchRunId ? "Quanfora 2.1 Agent Reports" : "Generate a full Quanfora 2.1 Research Report?"}
+                                </p>
+                                <p className="mt-1 text-xs leading-5 text-white/55">
+                                  {msg.researchRunId
+                                    ? `Open the full workspace to review each analyst report, tool event, and the shared data snapshot for ${msg.researchTicker}.`
+                                    : `Run market, news, sentiment, fundamentals, trading, and risk-management agents for ${msg.researchTicker}.`}
+                                </p>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <Link
+                                    href={msg.researchRunId ? `/research/${msg.researchRunId}?from=ai_advisor` : `/research?ticker=${encodeURIComponent(msg.researchTicker)}&source=ai_advisor&report_type=investment`}
+                                    className="inline-flex h-9 items-center rounded-lg bg-indigo-primary px-3 text-xs font-semibold text-white hover:bg-indigo-primary/90"
+                                  >
+                                    {msg.researchRunId ? "View full agent reports" : "Generate Full Report"}
+                                  </Link>
+                                  {!msg.researchRunId && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setInput(`Give me a quick answer on ${msg.researchTicker}.`)}
+                                      className="inline-flex h-9 items-center rounded-lg border border-white/[0.10] px-3 text-xs font-semibold text-white/60 hover:text-white"
+                                    >
+                                      Quick Answer
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <AssistantMessageContent content={msg.content} consensusOpinions={msg.consensusOpinions} />
+                          )
+                        ) : (
+                          msg.content
+                        )}
+                      </div>
+                    )}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+              {renderComposer("dock")}
             </motion.div>
-          ))}
+          )}
         </AnimatePresence>
       </div>
-
-      {!isWelcomeState && renderComposer("dock")}
     </div>
   );
 }
