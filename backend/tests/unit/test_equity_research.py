@@ -120,17 +120,25 @@ def test_pm_report_uses_trading_structure():
             "trend": "uptrend",
             "support_20d": 95,
             "resistance_20d": 110,
+            "annualized_volatility": 0.3,
         },
         fundamentals={"revenue_growth": 0.1},
         sentiment_summary={"signal": "bullish", "score": 0.3},
+        risk_metrics={"max_drawdown_window": 0.08},
     )
     markdown, points, _, _ = _pm_report(run, snapshot, {})
     assert "# Final Trading Bias" in markdown
     assert "## Technical Setup" in markdown
     assert "## Trade Plan" in markdown
+    assert "## ROI Forecast" in markdown
+    assert "**Horizon:** 1-20 trading days" in markdown
+    assert "**Expected ROI:** 10.00%" in markdown
+    assert "**Downside Risk:** -8.00%" in markdown
     assert "Bullish / Neutral / Bearish" not in markdown
     assert "**Final Trading Bias:** Bullish" in markdown
     assert any("Final Trading Bias" in point for point in points)
+    assert any("Expected ROI" in point for point in points)
+    assert any("Downside Risk" in point for point in points)
 
 
 def test_pm_report_uses_investment_structure():
@@ -147,21 +155,34 @@ def test_pm_report_uses_investment_structure():
         analysis_date=date.today(),
         latest_price=100,
         market_cap=3_000_000_000_000,
-        technical_indicators={"trend": "uptrend"},
+        technical_indicators={
+            "trend": "uptrend",
+            "support_20d": 90,
+            "resistance_20d": 112,
+            "annualized_volatility": 0.28,
+        },
         fundamentals={
             "sector": "Technology",
             "industry": "Consumer Electronics",
             "revenue_growth": 0.1,
         },
         sentiment_summary={"signal": "neutral", "score": 0},
+        risk_metrics={"max_drawdown_window": 0.12},
+        analyst_context={"target_mean": 125},
     )
     markdown, points, _, _ = _pm_report(run, snapshot, {})
     assert "# Final Investment View" in markdown
     assert "## Long-Term Thesis" in markdown
     assert "## Portfolio Fit" in markdown
+    assert "## ROI Forecast" in markdown
+    assert "**Horizon:** 6-18 months" in markdown
+    assert "**Expected ROI:** 25.00%" in markdown
+    assert "**Downside Risk:** -12.00%" in markdown
     assert "Accumulate / Watchlist / Avoid" not in markdown
     assert "**Final Investment View:**" in markdown
     assert any("Final Investment View" in point for point in points)
+    assert any("Expected ROI" in point for point in points)
+    assert any("Downside Risk" in point for point in points)
 
 
 def test_trading_final_decision_sets_bias_field():

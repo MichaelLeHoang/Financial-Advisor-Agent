@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from threading import Lock
+from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
@@ -170,6 +171,16 @@ MAX_REPORT_LINE_CHARS = 1400
 MAX_TABLE_CELL_CHARS = 220
 MAX_TABLE_COLUMNS = 6
 MAX_TABLE_ROWS = 120
+
+
+@dataclass(frozen=True)
+class ROIForecast:
+    horizon: str
+    expected_roi: str
+    downside_risk: str
+    target_context: str
+    downside_context: str
+    method: str
 
 
 class EquityResearchStore:
@@ -709,6 +720,85 @@ def _pct(value: float | None) -> str:
     return f"{value * 100:,.2f}%" if abs(value) <= 1 else f"{value:,.2f}%"
 
 
+def _number(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _return_between(start: object, end: object) -> float | None:
+    start_value = _number(start)
+    end_value = _number(end)
+    if start_value is None or end_value is None or start_value <= 0:
+        return None
+    return (end_value - start_value) / start_value
+
+
+def _roi_forecast(snapshot: EquityResearchSnapshot, horizon: str) -> ROIForecast:
+    tech = snapshot.technical_indicators
+    analyst = snapshot.analyst_context
+    risk = snapshot.risk_metrics
+    latest = _number(snapshot.latest_price)
+    analyst_target = _number(
+        analyst.get("analyst_target_price") or analyst.get("target_mean")
+    )
+    resistance = _number(tech.get("resistance_20d"))
+    support = _number(tech.get("support_20d"))
+    drawdown = _number(risk.get("max_drawdown_window"))
+    volatility = _number(tech.get("annualized_volatility")) or _number(
+        risk.get("annualized_volatility")
+    )
+
+    target = analyst_target or (resistance if latest and resistance and resistance > latest else None)
+    target_source = (
+        "analyst target context"
+        if analyst_target
+        else "20-day resistance from the market report"
+        if target
+        else "unavailable target context"
+    )
+    expected_roi = _return_between(latest, target)
+
+    support_roi = _return_between(latest, support)
+    downside_candidates = [
+        candidate
+        for candidate in (support_roi, -abs(drawdown) if drawdown is not None else None)
+        if candidate is not None
+    ]
+    downside_risk = min(downside_candidates) if downside_candidates else None
+    downside_source = (
+        "support level and drawdown risk"
+        if support_roi is not None and drawdown is not None
+        else "support level from the market report"
+        if support_roi is not None
+        else "risk report drawdown"
+        if drawdown is not None
+        else "unavailable downside context"
+    )
+    if downside_risk is None and volatility is not None:
+        downside_source = "volatility only; price downside not estimated"
+
+    method_parts = [
+        f"Expected ROI uses {target_source} versus latest price.",
+        f"Downside Risk uses {downside_source}.",
+    ]
+    if volatility is not None:
+        method_parts.append(f"Annualized volatility context is {_pct(volatility)}.")
+    if latest is None:
+        method_parts.append("Latest price is missing, so ROI percentages are unavailable.")
+
+    return ROIForecast(
+        horizon=horizon,
+        expected_roi=_pct(expected_roi),
+        downside_risk=_pct(downside_risk),
+        target_context=_money(target),
+        downside_context=_money(support) if support is not None else _pct(drawdown),
+        method=" ".join(method_parts),
+    )
+
+
 def _metric_rows(rows: list[tuple[str, str, str, str]]) -> str:
     body = "\n".join(_table_row([a, b, c, d]) for a, b, c, d in rows)
     return (
@@ -765,10 +855,10 @@ def _sanitize_llm_report_markdown(markdown: str) -> str | None:
 def _source_quality(snapshot: EquityResearchSnapshot) -> str:
     statuses = snapshot.provider_status or []
     rows = []
-    for status in statuses:
-        provider = status.get("provider", "unknown")
-        state = status.get("status", "unknown")
-        detail = status.get("detail") or ""
+    for provider_status in statuses:
+        provider = provider_status.get("provider", "unknown")
+        state = provider_status.get("status", "unknown")
+        detail = provider_status.get("detail") or ""
         detail_text = (
             detail[:90] if detail else ("Available" if state == "ok" else "No detail")
         )
@@ -1167,12 +1257,12 @@ def _maybe_enhance_with_llm(
         )
         section_policy = (
             "For the Portfolio Manager final report, use exactly these top-level sections: Market Snapshot; "
-            "Technical Setup; Catalyst & Sentiment; Trade Plan; Risk / Invalidation; Bull vs Bear Scenario; "
+            "Technical Setup; Catalyst & Sentiment; Trade Plan; ROI Forecast; Risk / Invalidation; Bull vs Bear Scenario; "
             "Final Trading Bias; Confidence + What Would Change The View. The Final Trading Bias section must choose exactly one of bullish, neutral, or bearish."
             if agent.key == "pm" and run.report_type == ReportType.TRADING
             else (
                 "For the Portfolio Manager final report, use exactly these top-level sections: Company / Asset Overview; "
-                "Long-Term Thesis; Fundamentals; Valuation Context; Growth Drivers; Key Risks; Portfolio Fit; "
+                "Long-Term Thesis; Fundamentals; Valuation Context; Growth Drivers; ROI Forecast; Key Risks; Portfolio Fit; "
                 "Final Investment View; Confidence + Time Horizon. The Final Investment View section must choose exactly one allowed investment decision."
                 if agent.key == "pm"
                 else "Keep the report aligned to the run objective and do not imply brokerage execution."
@@ -1205,6 +1295,7 @@ Include:
 - Executive summary
 - Key metrics and evidence
 - Interpretation
+- ROI Forecast with the exact labels Horizon, Expected ROI, and Downside Risk when this is the Portfolio Manager final report
 - Risks and caveats
 - What would change the view
 - Source quality notes
@@ -1774,9 +1865,14 @@ def _trading_final_markdown(
     resistance = tech.get("resistance_20d")
     sentiment = snapshot.sentiment_summary
     label = _final_label(ReportType.TRADING, decision)
+    roi = _roi_forecast(snapshot, "1-20 trading days")
+    agent_risk_context = "; ".join(risk_flags[:3]) if risk_flags else "No agent risk flags."
     points = [
         f"Final Trading Bias: {label}",
         f"Confidence: {decision.confidence:.0%}",
+        f"Horizon: {roi.horizon}",
+        f"Expected ROI: {roi.expected_roi}",
+        f"Downside Risk: {roi.downside_risk}",
         f"Main upside: {decision.main_upside}",
         f"Main invalidation risk: {decision.main_risk}",
     ]
@@ -1786,7 +1882,10 @@ def _trading_final_markdown(
         f"**Company:** {snapshot.company_name or 'Unavailable'}  \n"
         f"**Analysis Date:** {snapshot.analysis_date}  \n"
         f"**Final Trading Bias:** {label}  \n"
-        f"**Confidence:** {decision.confidence:.0%}\n\n"
+        f"**Confidence:** {decision.confidence:.0%}  \n"
+        f"**Horizon:** {roi.horizon}  \n"
+        f"**Expected ROI:** {roi.expected_roi}  \n"
+        f"**Downside Risk:** {roi.downside_risk}\n\n"
         f"## Market Snapshot\n"
         f"- Latest price: **{_money(snapshot.latest_price)}**; daily change: **{_pct(snapshot.daily_change)}**.\n"
         f"- Volume: **{_fmt(snapshot.volume)}**; market cap: **{_money(snapshot.market_cap)}**.\n"
@@ -1804,6 +1903,12 @@ def _trading_final_markdown(
         f"- **Entry area:** Prefer confirmation near support at **{_money(support)}** or a clean break above **{_money(resistance)}**.\n"
         f"- **Target context:** Upside depends on {decision.main_upside.lower()}.\n"
         f"- **Sizing:** Use conservative sizing; this is a research plan, not an execution order.\n\n"
+        f"## ROI Forecast\n"
+        f"- **Horizon:** {roi.horizon}.\n"
+        f"- **Expected ROI:** {roi.expected_roi} using target context **{roi.target_context}**.\n"
+        f"- **Downside Risk:** {roi.downside_risk} using downside context **{roi.downside_context}**.\n"
+        f"- **Agent risk context:** {agent_risk_context}\n"
+        f"- **Method:** {roi.method}\n\n"
         f"## Risk / Invalidation\n"
         f"- Primary invalidation: {decision.main_risk}\n"
         f"- Risk flags: {_bullets(risk_flags)}\n\n"
@@ -1836,11 +1941,15 @@ def _investment_final_markdown(
         if decision.recommendation != Recommendation.INSUFFICIENT_DATA
         else "Unavailable until evidence improves"
     )
+    roi = _roi_forecast(snapshot, time_horizon)
+    agent_risk_context = "; ".join(risk_flags[:3]) if risk_flags else "No agent risk flags."
     adjacent = _investment_adjacent_explanation(decision)
     points = [
         f"Final Investment View: {label}",
         f"Confidence: {decision.confidence:.0%}",
-        f"Time horizon: {time_horizon}",
+        f"Horizon: {roi.horizon}",
+        f"Expected ROI: {roi.expected_roi}",
+        f"Downside Risk: {roi.downside_risk}",
         f"Main risk: {decision.main_risk}",
     ]
     markdown = (
@@ -1850,7 +1959,9 @@ def _investment_final_markdown(
         f"**Analysis Date:** {snapshot.analysis_date}  \n"
         f"**Final Investment View:** {label}  \n"
         f"**Confidence:** {decision.confidence:.0%}  \n"
-        f"**Time Horizon:** {time_horizon}\n\n"
+        f"**Horizon:** {roi.horizon}  \n"
+        f"**Expected ROI:** {roi.expected_roi}  \n"
+        f"**Downside Risk:** {roi.downside_risk}\n\n"
         f"## Company / Asset Overview\n"
         f"{snapshot.company_name or snapshot.ticker} operates in **{f.get('sector') or 'Unavailable'} / {f.get('industry') or 'Unavailable'}**. "
         f"Market capitalization is **{_money(snapshot.market_cap)}** and latest price is **{_money(snapshot.latest_price)}**.\n\n"
@@ -1869,6 +1980,12 @@ def _investment_final_markdown(
         f"## Growth Drivers\n"
         f"- {decision.main_upside}\n"
         f"- Growth driver evidence improves with stronger revenue, margin, guidance, or source-backed catalyst data.\n\n"
+        f"## ROI Forecast\n"
+        f"- **Horizon:** {roi.horizon}.\n"
+        f"- **Expected ROI:** {roi.expected_roi} using target context **{roi.target_context}**.\n"
+        f"- **Downside Risk:** {roi.downside_risk} using downside context **{roi.downside_context}**.\n"
+        f"- **Agent risk context:** {agent_risk_context}\n"
+        f"- **Method:** {roi.method}\n\n"
         f"## Key Risks\n"
         f"{_bullets(risk_flags)}\n\n"
         f"## Portfolio Fit\n"

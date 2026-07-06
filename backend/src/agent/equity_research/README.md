@@ -23,4 +23,4 @@ API transport stays in `api/equity_research.py`; shared request and response mod
 Test entitlement normalization, report objective gating, report limits, invalid tickers, missing prices, deterministic final decisions, decision workspace tabs, and run-state transitions without live providers.
 
 ## Latest Change
-- Added a saved Quanfora 2.1 decision workspace derived from completed research runs, including overview, evidence, signals, assumption-based backtest, regime, agent debate, next steps, and original reports.
+- Added deterministic ROI Forecast fields to Portfolio Manager final reports, including Horizon, Expected ROI, and Downside Risk derived from existing snapshot, analyst target, technical, and risk evidence.
