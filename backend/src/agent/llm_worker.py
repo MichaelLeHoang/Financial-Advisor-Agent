@@ -5,8 +5,13 @@ import traceback
 from typing import Any, Callable
 
 from src.agent.agent import FinancialAdvisorAgent
-from src.agent.history import append_message, load_history, session_claimed_by_another_user
+from src.agent.history import (
+    append_message,
+    load_history,
+    session_claimed_by_another_user,
+)
 from src.agent.llm_queue import LLMJobQueue, QueuedJob
+from src.agent.overview import build_single_response_overview, overview_to_metadata
 from src.config import settings
 from src.core.cache import cached_value
 from src.core.redis_client import RedisUnavailable
@@ -36,7 +41,9 @@ CONSENSUS_COMPLETED_TOOLS = [
 ]
 
 
-def execute_llm_job(job: QueuedJob, progress_callback: ProgressCallback | None = None) -> dict[str, Any]:
+def execute_llm_job(
+    job: QueuedJob, progress_callback: ProgressCallback | None = None
+) -> dict[str, Any]:
     payload = job.payload
     user_id = str(payload["user_id"])
     plan = Plan(payload.get("plan", Plan.FREE.value))
@@ -44,7 +51,10 @@ def execute_llm_job(job: QueuedJob, progress_callback: ProgressCallback | None =
     message = str(payload["message"])
     mode = str(payload.get("mode", "single"))
     remember = bool(payload.get("remember", True))
-    is_guest = bool(payload.get("is_guest")) or user_id == "00000000-0000-0000-0000-000000000001"
+    is_guest = (
+        bool(payload.get("is_guest"))
+        or user_id == "00000000-0000-0000-0000-000000000001"
+    )
     preferred_mode = payload.get("preferred_mode")
     if not is_guest and session_claimed_by_another_user(session_id, user_id):
         raise PermissionError("Chat session not found")
@@ -53,13 +63,21 @@ def execute_llm_job(job: QueuedJob, progress_callback: ProgressCallback | None =
         user_id=user_id,
         plan=plan,
         task_type="chat",
-        preferred_mode=preferred_mode if preferred_mode in {"fast", "balanced", "deep_research", "coding_export"} else None,
+        preferred_mode=(
+            preferred_mode
+            if preferred_mode in {"fast", "balanced", "deep_research", "coding_export"}
+            else None
+        ),
     )
     history = [] if is_guest else load_history(session_id, user_id)
-    agent._history = [{"role": item["role"], "content": item["content"]} for item in history]
+    agent._history = [
+        {"role": item["role"], "content": item["content"]} for item in history
+    ]
 
     def compute_response() -> str:
-        return agent.chat(message, remember=False, mode=mode, progress_callback=progress_callback)
+        return agent.chat(
+            message, remember=False, mode=mode, progress_callback=progress_callback
+        )
 
     if history or job.kind == "consensus":
         response = compute_response()
@@ -77,6 +95,10 @@ def execute_llm_job(job: QueuedJob, progress_callback: ProgressCallback | None =
             compute_response,
         )
     metadata = agent.last_response_metadata or None
+    if metadata is None and job.kind == "single":
+        metadata = overview_to_metadata(
+            build_single_response_overview(message, response, [])
+        )
     if remember and not is_guest:
         append_message(session_id, "user", message, user_id)
         append_message(session_id, "assistant", response, user_id, metadata=metadata)
@@ -88,7 +110,9 @@ def execute_llm_job(job: QueuedJob, progress_callback: ProgressCallback | None =
 
 
 class LLMWorker:
-    def __init__(self, queue: LLMJobQueue | None = None, *, idle_sleep_seconds: float = 1.0) -> None:
+    def __init__(
+        self, queue: LLMJobQueue | None = None, *, idle_sleep_seconds: float = 1.0
+    ) -> None:
         self.queue = queue or LLMJobQueue()
         self.idle_sleep_seconds = idle_sleep_seconds
 
@@ -113,9 +137,15 @@ class LLMWorker:
             self.queue.update_progress(
                 job.job_id,
                 mode=job.kind,
-                active_tool="single_scope" if job.kind == "single" else "quant_researcher",
+                active_tool=(
+                    "single_scope" if job.kind == "single" else "quant_researcher"
+                ),
                 completed_tools=[],
-                active_label="Identify Market Scope" if job.kind == "single" else "Quant Researcher",
+                active_label=(
+                    "Identify Market Scope"
+                    if job.kind == "single"
+                    else "Quant Researcher"
+                ),
                 message=(
                     "Identifying market scope..."
                     if job.kind == "single"

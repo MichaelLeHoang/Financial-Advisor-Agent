@@ -9,6 +9,7 @@ export interface ChatResponse {
   session_id: string;
   mode?: "single" | "consensus" | "auto";
   consensus?: ConsensusMetadata;
+  overview?: Overview | null;
 }
 
 export type ChatJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
@@ -175,6 +176,40 @@ export interface EquityResearchEvent {
   token_output?: number | null;
 }
 
+export type OverviewTone = "positive" | "neutral" | "negative" | "info";
+export type OverviewVerdict = "buy" | "hold" | "sell" | "bullish" | "neutral" | "bearish" | "insufficient_data";
+
+export interface OverviewMetric {
+  label: string;
+  value: string;
+  tone: OverviewTone;
+}
+
+export interface OverviewSource {
+  label: string;
+  source: string;
+  url?: string | null;
+}
+
+export interface OverviewPoint {
+  title: string;
+  detail: string;
+  sources: OverviewSource[];
+  tone: OverviewTone;
+}
+
+export interface Overview {
+  title: string;
+  verdict: OverviewVerdict;
+  summary: string;
+  metrics: OverviewMetric[];
+  catalysts: OverviewPoint[];
+  risks: OverviewPoint[];
+  sources: OverviewSource[];
+  next_questions: string[];
+  disclaimer: string;
+}
+
 export type DecisionWorkspaceTone = "positive" | "neutral" | "negative" | "info";
 
 export interface DecisionWorkspaceMetric {
@@ -219,6 +254,7 @@ export interface EquityResearchRunDetail {
   reports: EquityResearchReport[];
   latest_events: EquityResearchEvent[];
   decision_workspace?: DecisionWorkspace | null;
+  overview?: Overview | null;
 }
 
 export interface EquityResearchEventsList {
@@ -231,6 +267,7 @@ export interface PublicEquityResearchReport {
   snapshot?: EquityResearchSnapshot | null;
   reports: EquityResearchReport[];
   decision_workspace?: DecisionWorkspace | null;
+  overview?: Overview | null;
 }
 
 export interface ChatMessage {
@@ -241,9 +278,11 @@ export interface ChatMessage {
   metadata?: {
     consensus?: ConsensusMetadata;
     researchReports?: EquityResearchReport[];
+    overview?: Overview | null;
   } | null;
   consensusOpinions?: ConsensusOpinion[];
   researchReports?: EquityResearchReport[];
+  overview?: Overview | null;
 }
 
 export interface ChatSession {

@@ -18,13 +18,20 @@ from typing import Any, Callable
 from langgraph.prebuilt import create_react_agent
 
 from src.agent.market_grounding import ground_market_query, is_market_quote_query
+from src.agent.overview import (
+    build_consensus_overview,
+    build_market_quote_overview,
+    build_single_response_overview,
+    overview_to_metadata,
+)
 from src.agent.tools import ALL_TOOLS
 from src.llm.gateway import LLMGateway, RoutedChatModel, llm_gateway
 from src.llm.routing_policy import LLMMode
 from src.saas.models import Plan
 
+
 def _consensus_result_metadata(result: Any) -> dict:
-    return {
+    metadata = {
         "consensus": {
             "verdict": result.verdict.value,
             "confidence": result.confidence,
@@ -46,6 +53,10 @@ def _consensus_result_metadata(result: Any) -> dict:
             ],
         }
     }
+    overview = build_consensus_overview("", result)
+    metadata.update(overview_to_metadata(overview) or {})
+    return metadata
+
 
 SYSTEM_PROMPT = """You are a professional Financial Advisor AI Agent with access to real-time tools.
 
@@ -71,6 +82,9 @@ RULES:
 11. For prediction requests, resolve company names to current public tickers with market_search/market_quote when needed, then call predict_stock_price with model="ensemble" unless the user explicitly asks for Random Forest or LSTM only. Do not say a company is private from memory.
 12. When reporting prediction output, include RF, LSTM, weighted ensemble, confidence, validation metrics when returned, and the tool's caveats. Do not invent metrics.
 13. For stock price, ticker lookup, public/private, or "how is [company/ticker] doing today" questions, call market_search and/or market_quote before answering. Never answer those questions from model memory.
+14. For direct decision prompts such as "should I buy/sell/hold/invest in [ticker]", answer the asked question in the first sentence before any market recap. Start with one of: "Yes", "No", "Hold/Wait", or "Insufficient data", followed by the ticker, verdict, and one concise reason.
+15. After the first-sentence verdict, keep the existing evidence structure: current quote, news/sentiment, catalysts, risks, and next steps. Do not replace the detailed answer with only a summary.
+16. If the available tools only provide quote/news/sentiment and do not support a strong buy or sell call, say "Hold/Wait" or "Insufficient data" rather than inventing a recommendation.
 """
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -196,17 +210,23 @@ class FinancialAdvisorAgent:
         """
         self.last_response_metadata = None
 
-        if is_market_quote_query(message) and not _is_deep_market_analysis_query(message):
+        if is_market_quote_query(message) and not _is_deep_market_analysis_query(
+            message
+        ):
             grounded = ground_market_query(message, progress_callback=progress_callback)
             if grounded.handled and grounded.response:
+                self.last_response_metadata = overview_to_metadata(
+                    build_market_quote_overview(message, grounded)
+                )
                 if remember:
                     self._history.append({"role": "user", "content": message})
-                    self._history.append({"role": "assistant", "content": grounded.response})
+                    self._history.append(
+                        {"role": "assistant", "content": grounded.response}
+                    )
                 return grounded.response
 
-        use_consensus = (
-            mode == "consensus"
-            or (mode == "auto" and _is_consensus_query(message))
+        use_consensus = mode == "consensus" or (
+            mode == "auto" and _is_consensus_query(message)
         )
 
         if use_consensus:
@@ -226,12 +246,14 @@ class FinancialAdvisorAgent:
         """Single-agent ReAct path (fast, original behavior)."""
         print(f"\n Agent processing: '{message[:60]}...'")
         if progress_callback:
-            progress_callback({
-                "active_tool": "single_scope",
-                "completed_tools": [],
-                "active_label": "Identify Market Scope",
-                "message": "Identifying market scope...",
-            })
+            progress_callback(
+                {
+                    "active_tool": "single_scope",
+                    "completed_tools": [],
+                    "active_label": "Identify Market Scope",
+                    "message": "Identifying market scope...",
+                }
+            )
 
         # Build message list: history + new user message
         messages = self._history + [{"role": "user", "content": message}]
@@ -240,39 +262,50 @@ class FinancialAdvisorAgent:
         result = None
 
         if progress_callback:
+
             async def collect_events() -> None:
                 nonlocal result
-                async for event in self._agent.astream_events({"messages": messages}, version="v2"):
+                async for event in self._agent.astream_events(
+                    {"messages": messages}, version="v2"
+                ):
                     kind = event.get("event")
                     name = event.get("name")
 
                     if kind == "on_tool_start" and name:
                         if "single_scope" not in completed_tools:
                             completed_tools.append("single_scope")
-                        progress_callback({
-                            "active_tool": name,
-                            "completed_tools": list(completed_tools),
-                            "active_label": str(name).replace("_", " ").title(),
-                            "message": f"{str(name).replace('_', ' ').title()} is running...",
-                        })
+                        progress_callback(
+                            {
+                                "active_tool": name,
+                                "completed_tools": list(completed_tools),
+                                "active_label": str(name).replace("_", " ").title(),
+                                "message": f"{str(name).replace('_', ' ').title()} is running...",
+                            }
+                        )
 
                     elif kind == "on_tool_end" and name:
                         if name not in completed_tools:
                             completed_tools.append(name)
-                        progress_callback({
-                            "active_tool": None,
-                            "completed_tools": list(completed_tools),
-                            "active_label": str(name).replace("_", " ").title(),
-                            "message": f"{str(name).replace('_', ' ').title()} completed.",
-                        })
+                        progress_callback(
+                            {
+                                "active_tool": None,
+                                "completed_tools": list(completed_tools),
+                                "active_label": str(name).replace("_", " ").title(),
+                                "message": f"{str(name).replace('_', ' ').title()} completed.",
+                            }
+                        )
 
-                    elif kind == "on_chat_model_start" and any(tool != "single_scope" for tool in completed_tools):
-                        progress_callback({
-                            "active_tool": "single_synthesis",
-                            "completed_tools": list(completed_tools),
-                            "active_label": "Synthesize Findings",
-                            "message": "Synthesizing findings...",
-                        })
+                    elif kind == "on_chat_model_start" and any(
+                        tool != "single_scope" for tool in completed_tools
+                    ):
+                        progress_callback(
+                            {
+                                "active_tool": "single_synthesis",
+                                "completed_tools": list(completed_tools),
+                                "active_label": "Synthesize Findings",
+                                "message": "Synthesizing findings...",
+                            }
+                        )
 
                     elif kind == "on_chain_end":
                         output = event.get("data", {}).get("output")
@@ -284,12 +317,14 @@ class FinancialAdvisorAgent:
             for tool in ("single_synthesis", "single_final"):
                 if tool not in completed_tools:
                     completed_tools.append(tool)
-            progress_callback({
-                "active_tool": None,
-                "completed_tools": list(completed_tools),
-                "active_label": "Agent Execution",
-                "message": "Agent response completed.",
-            })
+            progress_callback(
+                {
+                    "active_tool": None,
+                    "completed_tools": list(completed_tools),
+                    "active_label": "Agent Execution",
+                    "message": "Agent response completed.",
+                }
+            )
         else:
             result = self._agent.invoke({"messages": messages})
 
@@ -307,6 +342,12 @@ class FinancialAdvisorAgent:
                 for part in response_text
             )
 
+        self.last_response_metadata = overview_to_metadata(
+            build_single_response_overview(
+                message, str(response_text), result["messages"]
+            )
+        )
+
         # Update conversation history for next turn
         if remember:
             self._history.append({"role": "user", "content": message})
@@ -317,7 +358,9 @@ class FinancialAdvisorAgent:
             task_type=self.task_type,
             routed_model=self._routed_model,
             input_text="\n".join(str(item.get("content", "")) for item in messages),
-            output_text=response_text if isinstance(response_text, str) else str(response_text),
+            output_text=(
+                response_text if isinstance(response_text, str) else str(response_text)
+            ),
         )
 
         return response_text
@@ -332,22 +375,28 @@ class FinancialAdvisorAgent:
         orchestrator = self._get_orchestrator()
         result = orchestrator.analyze(message)
         self.last_response_metadata = _consensus_result_metadata(result)
+        overview = build_consensus_overview(message, result)
+        self.last_response_metadata.update(overview_to_metadata(overview) or {})
         completed_tools = [opinion.agent_name for opinion in result.opinions]
         if progress_callback:
-            progress_callback({
-                "active_tool": "consensus_synthesis",
-                "completed_tools": completed_tools,
-                "active_label": "Consensus Synthesis",
-                "message": "Synthesizing consensus response...",
-            })
+            progress_callback(
+                {
+                    "active_tool": "consensus_synthesis",
+                    "completed_tools": completed_tools,
+                    "active_label": "Consensus Synthesis",
+                    "message": "Synthesizing consensus response...",
+                }
+            )
         response_text = orchestrator._synthesize_response(message, result)
         if progress_callback:
-            progress_callback({
-                "active_tool": None,
-                "completed_tools": [*completed_tools, "consensus_synthesis"],
-                "active_label": "Consensus Complete",
-                "message": "Consensus response completed.",
-            })
+            progress_callback(
+                {
+                    "active_tool": None,
+                    "completed_tools": [*completed_tools, "consensus_synthesis"],
+                    "active_label": "Consensus Complete",
+                    "message": "Consensus response completed.",
+                }
+            )
 
         if remember:
             self._history.append({"role": "user", "content": message})

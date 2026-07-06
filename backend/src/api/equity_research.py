@@ -210,4 +210,5 @@ async def get_shared_report(share_slug: str):
         reports=detail.reports,
         snapshot=detail.snapshot,
         decision_workspace=detail.decision_workspace,
+        overview=detail.overview,
     )

@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import type { PublicEquityResearchReport } from "@/lib/api";
 import Markdown from "@/components/ui/markdown";
 import { FinalDecisionCard, ReportFileList } from "@/components/equity-research/ResearchComponents";
+import { OverviewCard } from "@/components/ui/overview-card";
 
 export default function SharedResearchReportPage({ params }: { params: Promise<{ shareSlug: string }> }) {
   const { shareSlug } = use(params);
@@ -45,6 +46,7 @@ export default function SharedResearchReportPage({ params }: { params: Promise<{
         ) : (
           <div className="space-y-4">
             <FinalDecisionCard run={data.run} />
+            {data.overview && <OverviewCard overview={data.overview} />}
             <ReportFileList run={data.run} reports={data.reports} selectedAgent={selected} onSelectAgent={setSelected} />
             <article className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
               <Markdown content={report?.markdown ?? "No public report content is available."} />

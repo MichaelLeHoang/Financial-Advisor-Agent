@@ -7,7 +7,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Brain, Check, ChevronDown, ClipboardList, FileText, Image, Loader2, Paperclip, PieChart, Send, SlidersHorizontal, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
-import type { ChatJobProgress, ChatJobStatusResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, ResearchDepth, ResearchReportType } from "@/lib/api";
+import type { ChatJobProgress, ChatJobStatusResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, Overview, ResearchDepth, ResearchReportType } from "@/lib/api";
 import { notifyCompletion, requestCompletionNotification } from "@/lib/completion-notifications";
 import { loadLocalChatMessages, saveLocalChatMessages } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
+import { OverviewCard } from "@/components/ui/overview-card";
 import Plan from "@/components/ui/agent-plan";
 import Markdown from "@/components/ui/markdown";
 import { showToast } from "@/components/ui/toast";
@@ -31,6 +32,7 @@ interface Message {
   researchRunId?: string;
   researchReports?: EquityResearchReport[];
   consensusOpinions?: ConsensusOpinion[];
+  overview?: Overview | null;
 }
 
 const GREETING: Message = {
@@ -43,9 +45,10 @@ function messageFromChatHistory(message: {
   id: number | string;
   role: "user" | "assistant";
   content: string;
-  metadata?: { consensus?: { opinions?: ConsensusOpinion[] }; researchReports?: EquityResearchReport[] } | null;
+  metadata?: { consensus?: { opinions?: ConsensusOpinion[] }; researchReports?: EquityResearchReport[]; overview?: Overview | null } | null;
   consensusOpinions?: ConsensusOpinion[];
   researchReports?: EquityResearchReport[];
+  overview?: Overview | null;
 }): Message {
   return {
     id: String(message.id),
@@ -53,6 +56,7 @@ function messageFromChatHistory(message: {
     content: message.content,
     consensusOpinions: message.consensusOpinions ?? message.metadata?.consensus?.opinions,
     researchReports: message.researchReports ?? message.metadata?.researchReports,
+    overview: message.overview ?? message.metadata?.overview,
   };
 }
 
@@ -770,7 +774,7 @@ export default function ChatPage() {
 
         if (!user.is_guest) {
           await api.appendChatSessionMessage(targetSessionId, "user", text);
-          await api.appendChatSessionMessage(targetSessionId, "assistant", finalMarkdown, { researchReports: latestDetail.reports });
+          await api.appendChatSessionMessage(targetSessionId, "assistant", finalMarkdown, { researchReports: latestDetail.reports, overview: latestDetail.overview });
         }
         setMessages((prev) =>
           prev.filter((m) => m.status !== "fetching").concat({
@@ -780,6 +784,7 @@ export default function ChatPage() {
             researchTicker: latestDetail.run.ticker,
             researchRunId: latestDetail.run.run_id,
             researchReports: latestDetail.reports,
+            overview: latestDetail.overview,
           })
         );
         finishLongRunningToast(
@@ -886,6 +891,7 @@ export default function ChatPage() {
         res = await api.chat(text, targetSessionId, remember, mode);
       }
       const consensusOpinions = res.consensus?.opinions;
+      const overview = res.overview;
 
       const minimumPlanDuration = mode === "consensus" ? 3200 : 1800;
       const elapsedBeforeAnswer = Date.now() - loadingStartedAt;
@@ -900,6 +906,7 @@ export default function ChatPage() {
           role: "assistant",
           content: res.response || "I'm sorry, I couldn't process that request.",
           consensusOpinions,
+          overview,
         }).concat(investmentTicker ? [{
           id: getUniqueId(),
           role: "assistant",
@@ -970,12 +977,13 @@ export default function ChatPage() {
 
   const renderComposer = (placement: "center" | "dock") => {
     const composerExpanded = Boolean(input);
+    const showStarterSuggestions = placement === "center" && isStarterState && isActive && !input && !uploadMenuOpen;
 
     return (
       <div className={cn("shrink-0", placement === "dock" ? "px-3 pb-3 pt-1 sm:px-8 sm:pb-6 sm:pt-0" : "w-full")}>
         <div className="relative mx-auto w-full max-w-4xl">
           <AnimatePresence>
-            {isActive && !input && !uploadMenuOpen && (
+            {showStarterSuggestions && (
               <motion.div
                 initial={{ opacity: 0, y: 12, filter: "blur(8px)" }}
                 animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
@@ -1094,7 +1102,10 @@ export default function ChatPage() {
                   animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
                   exit={{ opacity: 0, y: -8, scale: 0.98, filter: "blur(8px)" }}
                   transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute left-0 right-0 top-[calc(100%+0.75rem)] z-40 rounded-[1.45rem] border border-white/[0.08] bg-[#202124]/95 p-2 shadow-[0_24px_70px_rgba(0,0,0,0.46)] backdrop-blur-xl"
+                  className={cn(
+                    "absolute left-0 right-0 z-40 rounded-[1.45rem] border border-white/[0.08] bg-[#202124]/95 p-2 shadow-[0_24px_70px_rgba(0,0,0,0.46)] backdrop-blur-xl",
+                    placement === "dock" ? "bottom-[calc(100%+0.75rem)]" : "top-[calc(100%+0.75rem)]"
+                  )}
                   onClick={(event) => event.stopPropagation()}
                 >
                   <UploadMenuItem
@@ -1231,7 +1242,7 @@ export default function ChatPage() {
                         {msg.role === "assistant" ? (
                           msg.researchTicker ? (
                             <div className="space-y-3">
-                              <ResearchMessageTabs content={msg.content} reports={msg.researchReports} />
+                              <ResearchMessageTabs content={msg.content} reports={msg.researchReports} overview={msg.overview} />
                               <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
                                 <p className="text-sm font-semibold text-white">
                                   {msg.researchRunId ? "Quanfora 2.1 Agent Reports" : "Generate a full Quanfora 2.1 Research Report?"}
@@ -1261,7 +1272,7 @@ export default function ChatPage() {
                               </div>
                             </div>
                           ) : (
-                            <AssistantMessageContent content={msg.content} consensusOpinions={msg.consensusOpinions} />
+                            <AssistantMessageContent content={msg.content} consensusOpinions={msg.consensusOpinions} overview={msg.overview} />
                           )
                         ) : (
                           msg.content
@@ -1271,11 +1282,15 @@ export default function ChatPage() {
                   </motion.div>
                 ))}
               </AnimatePresence>
-              {renderComposer("dock")}
             </motion.div>
           )}
         </AnimatePresence>
       </div>
+      {!isStarterState && (
+        <div className="sticky bottom-0 z-20 shrink-0 border-t border-white/[0.04] bg-[#050608]/95 pt-2 shadow-[0_-24px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+          {renderComposer("dock")}
+        </div>
+      )}
     </div>
   );
 }
@@ -1385,14 +1400,22 @@ function ResearchModeSelector({
   );
 }
 
-function ResearchMessageTabs({ content, reports }: { content: string; reports?: EquityResearchReport[] }) {
+function ResearchMessageTabs({ content, reports, overview }: { content: string; reports?: EquityResearchReport[]; overview?: Overview | null }) {
   const [active, setActive] = useState("final");
   const reportTabs = (reports ?? []).filter((report) => report.markdown && report.markdown.trim());
-  if (reportTabs.length === 0) return <Markdown content={content} />;
+  if (reportTabs.length === 0) {
+    return (
+      <div className="space-y-3">
+        {overview && <OverviewCard overview={overview} />}
+        <Markdown content={content} />
+      </div>
+    );
+  }
   const currentReport = reportTabs.find((report) => report.report_id === active);
 
   return (
     <div className="space-y-3">
+      {overview && <OverviewCard overview={overview} />}
       <ResponseTabs
         tabs={[{ id: "final", label: "Report" }, ...reportTabs.map((report) => ({ id: report.report_id, label: report.agent_name }))]}
         active={active}
@@ -1452,15 +1475,25 @@ function ResponseTabs({ tabs, active, onChange }: { tabs: Array<{ id: string; la
   );
 }
 
-function AssistantMessageContent({ content, consensusOpinions }: { content: string; consensusOpinions?: ConsensusOpinion[] }) {
+function AssistantMessageContent({ content, consensusOpinions, overview }: { content: string; consensusOpinions?: ConsensusOpinion[]; overview?: Overview | null }) {
   const prediction = parsePredictionSummary(content);
 
   if (consensusOpinions?.length) {
-    return <ConsensusMessageTabs content={content} opinions={consensusOpinions} />;
+    return (
+      <div className="space-y-3">
+        {overview && <OverviewCard overview={overview} />}
+        <ConsensusMessageTabs content={content} opinions={consensusOpinions} />
+      </div>
+    );
   }
 
   if (!prediction) {
-    return <Markdown content={content} />;
+    return (
+      <div className="space-y-3">
+        {overview && <OverviewCard overview={overview} />}
+        <Markdown content={content} />
+      </div>
+    );
   }
 
   const rows = [
@@ -1473,6 +1506,7 @@ function AssistantMessageContent({ content, consensusOpinions }: { content: stri
 
   return (
     <div className="space-y-3">
+      {overview && <OverviewCard overview={overview} />}
       <div className="rounded-xl border border-white/[0.10] bg-white/[0.04] p-3">
         <div className="grid gap-2 sm:grid-cols-2">
           {rows.map(([label, value]) => (

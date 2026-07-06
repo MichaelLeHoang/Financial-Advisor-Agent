@@ -16,6 +16,7 @@ from src.agent.equity_research.entitlements import (
     research_report_limit,
 )
 from src.agent.equity_research.snapshot import build_data_snapshot
+from src.agent.overview import build_research_overview
 from src.models.equity_research import (
     DISCLAIMER,
     AgentStatus,
@@ -40,6 +41,7 @@ from src.models.equity_research import (
     TradingBias,
 )
 from src.llm.gateway import llm_gateway
+from src.models.overview import Overview
 from src.saas.models import AuthenticatedUser
 
 
@@ -191,6 +193,7 @@ class EquityResearchStore:
         self.reports: dict[UUID, list[EquityResearchReport]] = {}
         self.events: dict[UUID, list[EquityResearchEvent]] = {}
         self.workspaces: dict[UUID, DecisionWorkspace] = {}
+        self.overviews: dict[UUID, Overview] = {}
         self.share_index: dict[str, UUID] = {}
         self._versions: dict[UUID, int] = {}
 
@@ -200,6 +203,7 @@ class EquityResearchStore:
             self.reports[run.run_id] = []
             self.events[run.run_id] = []
             self.workspaces.pop(run.run_id, None)
+            self.overviews.pop(run.run_id, None)
             self._versions[run.run_id] = 0
         return run
 
@@ -235,6 +239,11 @@ class EquityResearchStore:
             self.workspaces[run_id] = workspace
             self._versions[run_id] = self._versions.get(run_id, 0) + 1
 
+    def add_overview(self, run_id: UUID, overview: Overview) -> None:
+        with self._lock:
+            self.overviews[run_id] = overview
+            self._versions[run_id] = self._versions.get(run_id, 0) + 1
+
     def add_event(self, event: EquityResearchEvent) -> None:
         with self._lock:
             self.events.setdefault(event.run_id, []).append(event)
@@ -255,6 +264,7 @@ class EquityResearchStore:
                 ),
                 latest_events=self.events.get(run_id, [])[-30:],
                 decision_workspace=self.workspaces.get(run_id),
+                overview=self.overviews.get(run_id),
             )
 
     def list_reports(self, run_id: UUID) -> list[EquityResearchReport] | None:
@@ -283,6 +293,7 @@ class EquityResearchStore:
             self.reports.pop(run_id, None)
             self.events.pop(run_id, None)
             self.workspaces.pop(run_id, None)
+            self.overviews.pop(run_id, None)
             self._versions.pop(run_id, None)
             return True
 
@@ -522,7 +533,16 @@ async def execute_research_run(run_id: UUID) -> None:
         workspace = _build_decision_workspace(
             run, snapshot, list(outputs.values()), decision
         )
+        final_label = _final_label(run.report_type, decision)
+        overview = build_research_overview(
+            run,
+            snapshot,
+            list(outputs.values()),
+            label=final_label,
+            summary=decision.summary,
+        )
         store.add_workspace(run_id, workspace)
+        store.add_overview(run_id, overview)
         store.update_run(
             run_id,
             status=ResearchRunStatus.COMPLETED,
@@ -535,7 +555,6 @@ async def execute_research_run(run_id: UUID) -> None:
             main_risk=decision.main_risk,
             final_summary=decision.summary,
         )
-        final_label = _final_label(run.report_type, decision)
         store.add_event(
             EquityResearchEvent(
                 run_id=run_id,
@@ -751,13 +770,17 @@ def _roi_forecast(snapshot: EquityResearchSnapshot, horizon: str) -> ROIForecast
         risk.get("annualized_volatility")
     )
 
-    target = analyst_target or (resistance if latest and resistance and resistance > latest else None)
+    target = analyst_target or (
+        resistance if latest and resistance and resistance > latest else None
+    )
     target_source = (
         "analyst target context"
         if analyst_target
-        else "20-day resistance from the market report"
-        if target
-        else "unavailable target context"
+        else (
+            "20-day resistance from the market report"
+            if target
+            else "unavailable target context"
+        )
     )
     expected_roi = _return_between(latest, target)
 
@@ -771,11 +794,15 @@ def _roi_forecast(snapshot: EquityResearchSnapshot, horizon: str) -> ROIForecast
     downside_source = (
         "support level and drawdown risk"
         if support_roi is not None and drawdown is not None
-        else "support level from the market report"
-        if support_roi is not None
-        else "risk report drawdown"
-        if drawdown is not None
-        else "unavailable downside context"
+        else (
+            "support level from the market report"
+            if support_roi is not None
+            else (
+                "risk report drawdown"
+                if drawdown is not None
+                else "unavailable downside context"
+            )
+        )
     )
     if downside_risk is None and volatility is not None:
         downside_source = "volatility only; price downside not estimated"
@@ -787,7 +814,9 @@ def _roi_forecast(snapshot: EquityResearchSnapshot, horizon: str) -> ROIForecast
     if volatility is not None:
         method_parts.append(f"Annualized volatility context is {_pct(volatility)}.")
     if latest is None:
-        method_parts.append("Latest price is missing, so ROI percentages are unavailable.")
+        method_parts.append(
+            "Latest price is missing, so ROI percentages are unavailable."
+        )
 
     return ROIForecast(
         horizon=horizon,
@@ -1866,7 +1895,9 @@ def _trading_final_markdown(
     sentiment = snapshot.sentiment_summary
     label = _final_label(ReportType.TRADING, decision)
     roi = _roi_forecast(snapshot, "1-20 trading days")
-    agent_risk_context = "; ".join(risk_flags[:3]) if risk_flags else "No agent risk flags."
+    agent_risk_context = (
+        "; ".join(risk_flags[:3]) if risk_flags else "No agent risk flags."
+    )
     points = [
         f"Final Trading Bias: {label}",
         f"Confidence: {decision.confidence:.0%}",
@@ -1942,7 +1973,9 @@ def _investment_final_markdown(
         else "Unavailable until evidence improves"
     )
     roi = _roi_forecast(snapshot, time_horizon)
-    agent_risk_context = "; ".join(risk_flags[:3]) if risk_flags else "No agent risk flags."
+    agent_risk_context = (
+        "; ".join(risk_flags[:3]) if risk_flags else "No agent risk flags."
+    )
     adjacent = _investment_adjacent_explanation(decision)
     points = [
         f"Final Investment View: {label}",

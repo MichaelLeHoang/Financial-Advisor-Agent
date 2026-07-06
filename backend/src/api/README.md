@@ -5,7 +5,7 @@ Provides the FastAPI application and thin transport adapters for Quanfora backen
 
 ## Responsibilities
 - Register routers, middleware, authentication dependencies, and health/status endpoints.
-- Expose agent chat, queued jobs, market quote/search, prediction, portfolio, watchlist, and service endpoints.
+- Expose agent chat, structured overview metadata, queued jobs, market quote/search, prediction, portfolio, watchlist, and service endpoints.
 - Delegate domain behavior to dedicated modules and normalize HTTP errors/timeouts.
 
 ## Key Files
@@ -18,7 +18,7 @@ Provides the FastAPI application and thin transport adapters for Quanfora backen
 Route handlers should validate and translate requests only. Business logic belongs in agent, data, SaaS, billing, risk, backtesting, or service modules.
 
 ## Testing
-Use FastAPI `TestClient` with mocked dependencies for route contracts, authorization, provider timeouts, workspace payloads, status rollups, and error responses.
+Use FastAPI `TestClient` with mocked dependencies for route contracts, authorization, provider timeouts, overview/workspace payloads, status rollups, and error responses.
 
 ## Latest Change
-- Exposed the saved Quanfora 2.1 decision workspace on shared equity research reports alongside the existing run, snapshot, and agent reports.
+- Exposed optional structured Overview metadata through chat and shared equity research responses while preserving existing markdown payloads.

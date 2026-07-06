@@ -8,6 +8,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.models.overview import Overview
+
 DISCLAIMER = "Not investment advice. For educational and informational use only."
 
 
@@ -252,6 +254,7 @@ class EquityResearchRunDetail(BaseModel):
     reports: list[EquityResearchReport] = Field(default_factory=list)
     latest_events: list[EquityResearchEvent] = Field(default_factory=list)
     decision_workspace: DecisionWorkspace | None = None
+    overview: Overview | None = None
 
 
 class EquityResearchShareUpdate(BaseModel):
@@ -263,3 +266,4 @@ class PublicEquityResearchReport(BaseModel):
     reports: list[EquityResearchReport]
     snapshot: EquityResearchSnapshot | None = None
     decision_workspace: DecisionWorkspace | None = None
+    overview: Overview | None = None

@@ -31,6 +31,7 @@ import type {
   EquityResearchRun,
   EquityResearchRunDetail,
   InvestmentDecision,
+  Overview,
   ResearchDepth,
   ResearchReportType,
   ResearchRecommendation,
@@ -43,6 +44,7 @@ import Markdown from "@/components/ui/markdown";
 import { useAuth } from "@/components/auth/AuthProvider";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
+import { OverviewCard } from "@/components/ui/overview-card";
 
 const AGENT_GROUPS = [
   { title: "Analyst Agents", agents: [["market", "Market Analyst"], ["social", "Social Media Analyst"], ["news", "News Analyst"], ["fundamentals", "Fundamentals Analyst"]] },
@@ -756,8 +758,10 @@ function WorkspaceNextStepsView({ workspace }: { workspace: DecisionWorkspace })
   );
 }
 
-function DecisionWorkspaceView({ workspace, activeTab }: { workspace: DecisionWorkspace; activeTab: WorkspaceTab }) {
-  if (activeTab === "overview") return <WorkspaceSectionView title="Overview" section={workspace.overview} />;
+function DecisionWorkspaceView({ workspace, activeTab, overview }: { workspace: DecisionWorkspace; activeTab: WorkspaceTab; overview?: Overview | null }) {
+  if (activeTab === "overview") {
+    return overview ? <OverviewCard overview={overview} /> : <WorkspaceSectionView title="Overview" section={workspace.overview} />;
+  }
   if (activeTab === "evidence") return <WorkspaceSectionView title="Evidence" section={workspace.evidence} />;
   if (activeTab === "signals") return <WorkspaceSectionView title="Signals" section={workspace.signals} />;
   if (activeTab === "backtest") return <WorkspaceBacktestView backtest={workspace.backtest} />;
@@ -827,7 +831,7 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
         <FinalDecisionCard run={detail.run} />
         <WorkspaceTabBar activeTab={activeTab} onChange={setActiveWorkspaceTab} hasWorkspace={hasWorkspace} />
         {detail.decision_workspace && activeTab !== "reports" ? (
-          <DecisionWorkspaceView workspace={detail.decision_workspace} activeTab={activeTab} />
+          <DecisionWorkspaceView workspace={detail.decision_workspace} activeTab={activeTab} overview={detail.overview} />
         ) : (
           <>
             <ReportFileList run={detail.run} reports={visibleReports} selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} />
