@@ -926,6 +926,7 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
     {"message": "Should I invest in NVDA?", "mode": "consensus"}
     """
     from src.agent.history import load_history, append_message
+    from src.agent.response_cache import cached_chat_response
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
     _ensure_chat_session_available(req.session_id, user)
@@ -935,16 +936,41 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
         # Guests can chat, but their conversation state must stay client-local.
         history = [] if user.is_guest else load_history(req.session_id, str(user.id))
         agent._history = [{"role": item["role"], "content": item["content"]} for item in history]
-        response = agent.chat(req.message, remember=False, mode=req.mode)  # we handle persistence
+
+        def compute_result() -> dict:
+            response = agent.chat(req.message, remember=False, mode=req.mode)
+            metadata = getattr(agent, "last_response_metadata", None)
+            result = {"response": response, "session_id": req.session_id, "mode": req.mode}
+            if metadata:
+                result.update(metadata)
+            return result
+
+        result = cached_chat_response(
+            user_id=str(user.id),
+            plan=user.plan,
+            mode=req.mode,
+            preferred_mode=req.preferred_mode,
+            message=req.message,
+            history=history,
+            is_guest=user.is_guest,
+            compute=compute_result,
+        )
 
         # Persist both turns
-        metadata = getattr(agent, "last_response_metadata", None)
+        metadata = {
+            key: value
+            for key, value in result.items()
+            if key not in {"response", "session_id", "mode"}
+        } or None
         if req.remember and not user.is_guest:
             append_message(req.session_id, "user", req.message, str(user.id))
-            append_message(req.session_id, "assistant", response, str(user.id), metadata=metadata)
-        result = {"response": response, "session_id": req.session_id, "mode": req.mode}
-        if metadata:
-            result.update(metadata)
+            append_message(
+                req.session_id,
+                "assistant",
+                str(result.get("response", "")),
+                str(user.id),
+                metadata=metadata,
+            )
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

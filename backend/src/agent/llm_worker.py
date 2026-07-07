@@ -12,8 +12,8 @@ from src.agent.history import (
 )
 from src.agent.llm_queue import LLMJobQueue, QueuedJob
 from src.agent.overview import build_single_response_overview, overview_to_metadata
+from src.agent.response_cache import cached_chat_response
 from src.config import settings
-from src.core.cache import cached_value
 from src.core.redis_client import RedisUnavailable
 from src.saas.models import Plan
 
@@ -74,38 +74,45 @@ def execute_llm_job(
         {"role": item["role"], "content": item["content"]} for item in history
     ]
 
-    def compute_response() -> str:
-        return agent.chat(
+    def compute_result() -> dict[str, Any]:
+        response = agent.chat(
             message, remember=False, mode=mode, progress_callback=progress_callback
         )
+        metadata = agent.last_response_metadata or None
+        if metadata is None and job.kind == "single":
+            metadata = overview_to_metadata(
+                build_single_response_overview(message, response, [])
+            )
+        result = {"response": response, "session_id": session_id, "mode": mode}
+        if metadata:
+            result.update(metadata)
+        return result
 
-    if history or job.kind == "consensus":
-        response = compute_response()
-    else:
-        response = cached_value(
-            "ai_analysis",
-            {
-                "user_id": user_id,
-                "plan": plan.value,
-                "mode": mode,
-                "preferred_mode": preferred_mode,
-                "message": message,
-            },
-            settings.llm_cache_ttl_seconds,
-            compute_response,
-        )
-    metadata = agent.last_response_metadata or None
-    if metadata is None and job.kind == "single":
-        metadata = overview_to_metadata(
-            build_single_response_overview(message, response, [])
-        )
+    result = cached_chat_response(
+        user_id=user_id,
+        plan=plan,
+        mode=mode,
+        preferred_mode=preferred_mode,
+        message=message,
+        history=history,
+        is_guest=is_guest,
+        compute=compute_result,
+    )
+    metadata = {
+        key: value
+        for key, value in result.items()
+        if key not in {"response", "session_id", "mode"}
+    } or None
     if remember and not is_guest:
         append_message(session_id, "user", message, user_id)
-        append_message(session_id, "assistant", response, user_id, metadata=metadata)
+        append_message(
+            session_id,
+            "assistant",
+            str(result.get("response", "")),
+            user_id,
+            metadata=metadata,
+        )
 
-    result = {"response": response, "session_id": session_id, "mode": mode}
-    if metadata:
-        result.update(metadata)
     return result
 
 

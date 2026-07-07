@@ -8,6 +8,7 @@ Implements the Quanfora conversational advisor, deterministic market grounding, 
 - Ground market-status and quote questions through market search and quote data.
 - Run specialist consensus and synthesize responses.
 - Derive structured Overview metadata for reader-friendly stock and consensus answers.
+- Reuse cached first-turn chat responses when repeated requests do not depend on conversation history.
 - Persist signed-in conversation history, including structured response metadata, and execute queued LLM jobs.
 
 ## Key Files
@@ -15,6 +16,7 @@ Implements the Quanfora conversational advisor, deterministic market grounding, 
 - `tools.py`: financial tools exposed to agents.
 - `market_grounding.py`: intent detection, entity resolution, quote formatting, and freshness metadata.
 - `overview.py`: structured Overview builders for single-agent, market-grounded, consensus, and equity-research answers.
+- `response_cache.py`: cache-key normalization and cacheability policy for stateless chat responses.
 - `orchestrator.py` / `consensus.py`: Quanfora 2.0 specialist aggregation.
 - `llm_queue.py` / `llm_worker.py`: asynchronous job lifecycle and queued response metadata.
 
@@ -22,7 +24,7 @@ Implements the Quanfora conversational advisor, deterministic market grounding, 
 Reuse `data.market_data_service`, `llm.gateway`, `risk`, `quant`, and `saas` rather than duplicating provider or entitlement logic. Shared response shapes belong in `models/`.
 
 ## Testing
-Cover routing, grounding, overview metadata, consensus, queue state, history ownership, and tool failure behavior with mocked providers.
+Cover routing, grounding, overview metadata, response caching, consensus, queue state, history ownership, and tool failure behavior with mocked providers.
 
 ## Latest Change
-- Added structured Overview metadata for market-grounded, single-agent, consensus, and queued AI answers, with direct buy/sell/hold leads for decision prompts before the detailed markdown evidence.
+- Added stateless chat-response caching for direct and queued AI requests, preserving structured metadata while avoiding cache reuse for guest or history-dependent conversations.

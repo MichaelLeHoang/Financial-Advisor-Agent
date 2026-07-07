@@ -6,7 +6,7 @@ Provides the FastAPI application and thin transport adapters for Quanfora backen
 ## Responsibilities
 - Register routers, middleware, authentication dependencies, and health/status endpoints.
 - Expose agent chat, structured overview metadata, queued jobs, market quote/search, prediction, portfolio, watchlist, and service endpoints.
-- Delegate domain behavior to dedicated modules and normalize HTTP errors/timeouts.
+- Delegate domain behavior, including stateless chat-response caching, to dedicated modules and normalize HTTP errors/timeouts.
 
 ## Key Files
 - `app.py`: application composition and core API surface.
@@ -21,4 +21,4 @@ Route handlers should validate and translate requests only. Business logic belon
 Use FastAPI `TestClient` with mocked dependencies for route contracts, authorization, provider timeouts, overview/workspace payloads, status rollups, and error responses.
 
 ## Latest Change
-- Exposed optional structured Overview metadata through chat and shared equity research responses while preserving existing markdown payloads.
+- Routed direct agent chat through the shared stateless response cache so repeated first-turn prompts can reuse response and metadata payloads.
