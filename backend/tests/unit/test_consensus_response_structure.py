@@ -35,6 +35,10 @@ def test_consensus_synthesis_prompt_uses_reader_facing_structure():
     assert "## Bear / Risk Case" in prompt
     assert "## Agent Consensus" in prompt
     assert "## Current Tape" in prompt
+    assert "preserve the useful consensus/report evidence" in prompt
+    assert "Use `**Label:**` paragraphs" in prompt
+    assert "Use bullets for metrics, headlines, risks, and next questions" in prompt
+    assert "current price/action, sentiment/news, model or technical signals" in prompt
     assert "1. Final Consensus" not in prompt
     assert "3. Specialist Breakdown" not in prompt
     assert "7. Actionable Research Next Steps" not in prompt

@@ -1,10 +1,26 @@
 def test_single_agent_prompt_requires_reader_facing_sections():
     from src.agent.agent import SYSTEM_PROMPT
 
-    assert "Current Snapshot" in SYSTEM_PROMPT
+    assert "Current Stock Price" in SYSTEM_PROMPT
+    assert "Recent News and Sentiment" in SYSTEM_PROMPT
+    assert "Stock Prediction" in SYSTEM_PROMPT
+    assert "Model Performance (Validation summary)" in SYSTEM_PROMPT
+    assert "Conclusion" in SYSTEM_PROMPT
     assert "Driving Catalysts" in SYSTEM_PROMPT
     assert "Current Tape" in SYSTEM_PROMPT
     assert "Practical Takeaway" in SYSTEM_PROMPT
+
+
+def test_single_agent_prompt_preserves_detailed_structure():
+    from src.agent.agent import SYSTEM_PROMPT
+
+    assert "markdown bold labels" in SYSTEM_PROMPT
+    assert "`**Current Stock Price:**`" in SYSTEM_PROMPT
+    assert "`**Recent News and Sentiment:**`" in SYSTEM_PROMPT
+    assert "`**Stock Prediction:**`" in SYSTEM_PROMPT
+    assert "`**Conclusion:**`" in SYSTEM_PROMPT
+    assert "do NOT replace the existing detailed stock-analysis structure" in SYSTEM_PROMPT
+    assert "Enhance it with clearer verdict/catalyst/risk formatting" in SYSTEM_PROMPT
 
 
 def test_follow_up_context_resolves_prior_ticker():
