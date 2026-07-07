@@ -7,7 +7,8 @@ Implements the Quanfora conversational advisor, deterministic market grounding, 
 - Route simple, consensus, and equity-research requests.
 - Ground market-status and quote questions through market search and quote data.
 - Run specialist consensus and synthesize responses.
-- Derive structured Overview metadata for reader-friendly stock and consensus answers.
+- Derive structured Overview metadata and reader-facing answer sections for stock, sector, market, and consensus answers.
+- Resolve ticker-only follow-up language such as "the stock" or "buy more" from recent chat context before consensus analysis.
 - Reuse cached first-turn chat responses when repeated requests do not depend on conversation history.
 - Persist signed-in conversation history, including structured response metadata, and execute queued LLM jobs.
 
@@ -24,7 +25,7 @@ Implements the Quanfora conversational advisor, deterministic market grounding, 
 Reuse `data.market_data_service`, `llm.gateway`, `risk`, `quant`, and `saas` rather than duplicating provider or entitlement logic. Shared response shapes belong in `models/`.
 
 ## Testing
-Cover routing, grounding, overview metadata, response caching, consensus, queue state, history ownership, and tool failure behavior with mocked providers.
+Cover routing, grounding, overview metadata, response structure, follow-up context, response caching, consensus, queue state, history ownership, and tool failure behavior with mocked providers.
 
 ## Latest Change
-- Added stateless chat-response caching for direct and queued AI requests, preserving structured metadata while avoiding cache reuse for guest or history-dependent conversations.
+- Enhanced Quanfora chat response structure across single-agent and consensus modes with direct-answer leads, reader-facing evidence sections, sector-market structure, and ticker context for follow-up questions.

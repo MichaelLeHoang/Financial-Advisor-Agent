@@ -13,6 +13,7 @@ The API defaults to single-agent for speed; consensus mode is opt-in via
 """
 
 import asyncio
+import re
 from typing import Any, Callable
 
 from langgraph.prebuilt import create_react_agent
@@ -72,7 +73,7 @@ RULES:
 1. ALWAYS use your tools to get real data before answering — never guess
 2. For investment questions, check AT LEAST: current price + news + sentiment
 3. If the user does NOT provide specific articles or headlines, ALWAYS call search_financial_news first to get recent headlines, then pass those headlines to analyze_sentiment
-4. For broad-market queries like "market pulse", "market overview", "how is the market today", or "today's market", call research_market to scan major indices (SPY, QQQ, DIA, IWM, VIX) and market-wide news. Then call analyze_sentiment on the market headlines. Synthesize into a concise market pulse with risks and opportunities.
+4. For broad-market queries like "market pulse", "market overview", "how is the market today", "current semiconductors market", or "today's market", call research_market to scan major indices (SPY, QQQ, DIA, IWM, VIX) and market-wide news. Then call analyze_sentiment on the market headlines. Synthesize into a concise market pulse with risks and opportunities.
 5. Cite specific numbers from tool outputs
 6. When citing news, you MUST render the link using the article's headline as the clickable text in markdown format: `[Exact Headline Title](URL)`. Do NOT use numbers like `[1]` for links. Always include the publisher name.
 7. Be concise but thorough
@@ -85,6 +86,9 @@ RULES:
 14. For direct decision prompts such as "should I buy/sell/hold/invest in [ticker]", answer the asked question in the first sentence before any market recap. Start with one of: "Yes", "No", "Hold/Wait", or "Insufficient data", followed by the ticker, verdict, and one concise reason.
 15. After the first-sentence verdict, keep the existing evidence structure: current quote, news/sentiment, catalysts, risks, and next steps. Do not replace the detailed answer with only a summary.
 16. If the available tools only provide quote/news/sentiment and do not support a strong buy or sell call, say "Hold/Wait" or "Insufficient data" rather than inventing a recommendation.
+17. For decision answers, use reader-facing sections after the first sentence: "Current Snapshot", "Driving Catalysts", "Risk Factors", "Consensus / Sentiment", and "Next Questions" when the evidence supports them.
+18. For market or sector answers, use these sections: "Current Tape", "Leadership", "Positive Drivers", "Risks", "Practical Takeaway", and "What to Watch". Keep it concise and source-aware.
+19. Preserve exact numeric formatting from tool output. Do not split prices or percentages across spaces, and do not invent analyst targets or price levels.
 """
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -106,6 +110,79 @@ _CONSENSUS_KEYWORDS = {
     "risk assessment",
     "portfolio review",
 }
+
+_TICKER_STOP_WORDS = {
+    "AI",
+    "API",
+    "BUY",
+    "CEO",
+    "CFO",
+    "EPS",
+    "ETF",
+    "GDP",
+    "HIGH",
+    "HOLD",
+    "I",
+    "IPO",
+    "LLM",
+    "MORE",
+    "PE",
+    "RISK",
+    "SEC",
+    "SELL",
+    "USD",
+    "USA",
+    "VERY",
+}
+
+_FOLLOW_UP_CONTEXT_MARKERS = (
+    "the stock",
+    "this stock",
+    "that stock",
+    "buy more",
+    "sell more",
+    "add more",
+    "more shares",
+    "my position",
+)
+
+
+def _extract_recent_context_ticker(history: list[dict[str, Any]]) -> str | None:
+    for item in reversed(history):
+        text = str(item.get("content", ""))
+        for pattern in (
+            r"\b(?:NASDAQ|NYSE|AMEX|TICKER|STOCK|REPORT):\s*([A-Z][A-Z0-9.-]{0,5})\b",
+            r"\(([A-Z][A-Z0-9.-]{0,5})\)",
+            r"\b([A-Z]{1,5})\b",
+        ):
+            for match in re.finditer(pattern, text):
+                token = match.group(1).upper()
+                if token not in _TICKER_STOP_WORDS:
+                    return token
+    return None
+
+
+def _message_has_explicit_ticker(message: str) -> bool:
+    if re.search(r"\$[A-Za-z][A-Za-z0-9.-]{0,5}\b", message):
+        return True
+    for match in re.finditer(r"\b[A-Z]{1,5}\b", message):
+        if match.group(0).upper() not in _TICKER_STOP_WORDS:
+            return True
+    return False
+
+
+def _contextualize_follow_up(message: str, history: list[dict[str, Any]]) -> str:
+    lower = message.lower()
+    if _message_has_explicit_ticker(message) or not any(
+        marker in lower for marker in _FOLLOW_UP_CONTEXT_MARKERS
+    ):
+        return message
+    ticker = _extract_recent_context_ticker(history)
+    if not ticker:
+        return message
+    return (
+        f"{message}\n\nContext from prior conversation: the stock refers to {ticker}."
+    )
 
 
 def _is_consensus_query(message: str) -> bool:
@@ -373,9 +450,10 @@ class FinancialAdvisorAgent:
     ) -> str:
         """Quanfora 2.0 multi-agent consensus path."""
         orchestrator = self._get_orchestrator()
-        result = orchestrator.analyze(message)
+        analysis_message = _contextualize_follow_up(message, self._history)
+        result = orchestrator.analyze(analysis_message)
         self.last_response_metadata = _consensus_result_metadata(result)
-        overview = build_consensus_overview(message, result)
+        overview = build_consensus_overview(analysis_message, result)
         self.last_response_metadata.update(overview_to_metadata(overview) or {})
         completed_tools = [opinion.agent_name for opinion in result.opinions]
         if progress_callback:
@@ -387,7 +465,7 @@ class FinancialAdvisorAgent:
                     "message": "Synthesizing consensus response...",
                 }
             )
-        response_text = orchestrator._synthesize_response(message, result)
+        response_text = orchestrator._synthesize_response(analysis_message, result)
         if progress_callback:
             progress_callback(
                 {

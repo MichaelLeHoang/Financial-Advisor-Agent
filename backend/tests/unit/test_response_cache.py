@@ -4,6 +4,12 @@ from src.agent.llm_queue import QueuedJob
 from src.saas.models import Plan
 
 
+def test_chat_response_cache_version_bumped_for_response_structure_change():
+    from src.agent.response_cache import CHAT_RESPONSE_CACHE_VERSION
+
+    assert CHAT_RESPONSE_CACHE_VERSION == 2
+
+
 def test_cached_chat_response_reuses_normalized_first_turn_prompt(monkeypatch):
     from src.agent import response_cache
 

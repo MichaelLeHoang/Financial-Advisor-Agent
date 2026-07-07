@@ -26,6 +26,64 @@ from src.saas.models import Plan
 ProgressCallback = Callable[[dict[str, Any]], None]
 
 
+def _build_consensus_synthesis_prompt(
+    query: str, result: ConsensusResult, opinions_text: str
+) -> str:
+    return f"""You are the Quanfora 2.0 Lead Analyst. You have received analysis from 5 specialist agents.
+Your job is to turn their findings into a clear, reader-friendly investment answer.
+
+## User Query
+{query}
+
+## Consensus Summary
+- Overall Verdict: {result.verdict.value.upper()}
+- Confidence: {result.confidence:.0%}
+- Consensus Score: {result.consensus_score:+.4f}
+- Agreement Ratio: {result.agreement_ratio:.0%}
+- Risk Vetoed: {result.risk_vetoed}
+- Dissenting Agents: {', '.join(result.dissenting_agents) or 'None'}
+- Risk Flags: {result.risk_flags}
+
+## Individual Specialist Opinions
+{opinions_text}
+
+## Main Answer Format
+Write the main chat answer for an investor, not an internal audit report.
+
+Start with one direct sentence that answers the user's question:
+- "Yes..." for a buy/add answer
+- "No..." for an avoid/sell answer
+- "Hold/Wait..." when evidence is mixed, risk-heavy, or incomplete
+- "Insufficient data..." when the specialists lack enough evidence
+
+Then use concise markdown sections when applicable:
+- ## Why
+- ## Bull Case
+- ## Bear / Risk Case
+- ## Agent Consensus
+- ## What Would Change The View
+- ## Next Questions
+
+For broad market or sector questions, use:
+- ## Current Tape
+- ## Leadership
+- ## Positive Drivers
+- ## Risks
+- ## Practical Takeaway
+- ## What to Watch
+
+Rules:
+- Be specific with numbers from the specialist outputs.
+- Translate internal mechanics into plain implications. Do not lead with terms like "risk veto", "agreement ratio", "consensus score", or "tool failure" in the main answer unless they materially change the recommendation.
+- Do not use the old report headings "Final Consensus", "Specialist Breakdown", "Disagreement and Dissent", or "Actionable Research Next Steps".
+- Keep specialist disagreements concise in "Agent Consensus"; detailed specialist reasoning is available elsewhere.
+- Do not invent market data, news, prices, or analyst targets.
+- If evidence is missing or a tool failed, say what that means for confidence in plain language.
+- Preserve exact numeric formatting from specialist outputs.
+- End with: "This is AI-generated analysis from Quanfora 2.0's multi-agent consensus system, not professional financial advice."
+"""
+
+
 class QuanforaOrchestrator:
     """
     Quanfora 2.0 multi-agent consensus orchestrator.
@@ -63,7 +121,9 @@ class QuanforaOrchestrator:
             for cls in ALL_SPECIALISTS
         ]
 
-    def analyze(self, query: str, progress_callback: ProgressCallback | None = None) -> ConsensusResult:
+    def analyze(
+        self, query: str, progress_callback: ProgressCallback | None = None
+    ) -> ConsensusResult:
         """
         Run all specialists on the query and return a consensus result.
 
@@ -77,19 +137,23 @@ class QuanforaOrchestrator:
         print(f"\n{'='*60}")
         print("  Quanfora 2.0 — Multi-Agent Consensus Analysis")
         print(f"  Query: {query[:80]}...")
-        print(f"  Dispatching to {len(specialists)} specialists (sequential, rate-limit safe)...")
+        print(
+            f"  Dispatching to {len(specialists)} specialists (sequential, rate-limit safe)..."
+        )
         print(f"{'='*60}\n")
 
         # Run specialists sequentially with a delay between each to stay
         # within Gemini free-tier rate limits (~15 RPM).
         for i, specialist in enumerate(specialists):
             if progress_callback:
-                progress_callback({
-                    "active_tool": specialist.name,
-                    "completed_tools": list(completed_tools),
-                    "active_label": specialist.display_name,
-                    "message": f"{specialist.display_name} is working...",
-                })
+                progress_callback(
+                    {
+                        "active_tool": specialist.name,
+                        "completed_tools": list(completed_tools),
+                        "active_label": specialist.display_name,
+                        "message": f"{specialist.display_name} is working...",
+                    }
+                )
             if i > 0:
                 time.sleep(5)  # 5s delay between specialists to avoid rate limit
             try:
@@ -97,13 +161,17 @@ class QuanforaOrchestrator:
                 opinions.append(opinion)
                 completed_tools.append(specialist.name)
                 if progress_callback:
-                    progress_callback({
-                        "active_tool": None,
-                        "completed_tools": list(completed_tools),
-                        "active_label": specialist.display_name,
-                        "message": f"{specialist.display_name} completed analysis.",
-                    })
-                print(f"  ✓ {specialist.display_name}: {opinion.verdict.value} (confidence: {opinion.confidence:.0%})")
+                    progress_callback(
+                        {
+                            "active_tool": None,
+                            "completed_tools": list(completed_tools),
+                            "active_label": specialist.display_name,
+                            "message": f"{specialist.display_name} completed analysis.",
+                        }
+                    )
+                print(
+                    f"  ✓ {specialist.display_name}: {opinion.verdict.value} (confidence: {opinion.confidence:.0%})"
+                )
             except Exception as exc:
                 print(f"  ✗ {specialist.display_name}: failed — {exc}")
                 opinions.append(
@@ -117,16 +185,20 @@ class QuanforaOrchestrator:
                 )
                 completed_tools.append(specialist.name)
                 if progress_callback:
-                    progress_callback({
-                        "active_tool": None,
-                        "completed_tools": list(completed_tools),
-                        "active_label": specialist.display_name,
-                        "message": f"{specialist.display_name} completed with fallback analysis.",
-                    })
+                    progress_callback(
+                        {
+                            "active_tool": None,
+                            "completed_tools": list(completed_tools),
+                            "active_label": specialist.display_name,
+                            "message": f"{specialist.display_name} completed with fallback analysis.",
+                        }
+                    )
 
         result = self.consensus_engine.aggregate(opinions)
         print(f"\n{'─'*60}")
-        print(f"  Consensus: {result.verdict.value.upper()} | Score: {result.consensus_score:+.2f} | Agreement: {result.agreement_ratio:.0%}")
+        print(
+            f"  Consensus: {result.verdict.value.upper()} | Score: {result.consensus_score:+.2f} | Agreement: {result.agreement_ratio:.0%}"
+        )
         print(f"{'─'*60}\n")
 
         return result
@@ -136,7 +208,12 @@ class QuanforaOrchestrator:
         """Execute a single specialist analysis (runs in thread)."""
         return specialist.analyze(query)
 
-    def chat(self, message: str, remember: bool = True, progress_callback: ProgressCallback | None = None) -> str:
+    def chat(
+        self,
+        message: str,
+        remember: bool = True,
+        progress_callback: ProgressCallback | None = None,
+    ) -> str:
         """
         Full Quanfora 2.0 consensus chat.
 
@@ -147,20 +224,24 @@ class QuanforaOrchestrator:
         result = self.analyze(message, progress_callback=progress_callback)
         completed_tools = [opinion.agent_name for opinion in result.opinions]
         if progress_callback:
-            progress_callback({
-                "active_tool": "consensus_synthesis",
-                "completed_tools": completed_tools,
-                "active_label": "Consensus Synthesis",
-                "message": "Building weighted consensus verdict...",
-            })
+            progress_callback(
+                {
+                    "active_tool": "consensus_synthesis",
+                    "completed_tools": completed_tools,
+                    "active_label": "Consensus Synthesis",
+                    "message": "Building weighted consensus verdict...",
+                }
+            )
         final_response = self._synthesize_response(message, result)
         if progress_callback:
-            progress_callback({
-                "active_tool": None,
-                "completed_tools": [*completed_tools, "consensus_synthesis"],
-                "active_label": "Consensus Synthesis",
-                "message": "Consensus response completed.",
-            })
+            progress_callback(
+                {
+                    "active_tool": None,
+                    "completed_tools": [*completed_tools, "consensus_synthesis"],
+                    "active_label": "Consensus Synthesis",
+                    "message": "Consensus response completed.",
+                }
+            )
 
         if remember:
             self._history.append({"role": "user", "content": message})
@@ -191,41 +272,9 @@ class QuanforaOrchestrator:
                 for o in result.opinions
             )
 
-            synthesis_prompt = f"""You are the Quanfora 2.0 Lead Analyst. You have received analysis from 5 specialist agents.
-Your job is to synthesize their findings into a clear, actionable recommendation.
-
-## User Query
-{query}
-
-## Consensus Summary
-- Overall Verdict: {result.verdict.value.upper()}
-- Consensus Score: {result.consensus_score:+.4f}
-- Agreement Ratio: {result.agreement_ratio:.0%}
-- Risk Vetoed: {result.risk_vetoed}
-- Dissenting Agents: {', '.join(result.dissenting_agents) or 'None'}
-- Risk Flags: {result.risk_flags}
-
-## Individual Specialist Opinions
-{opinions_text}
-
-## Your Task
-Write a professional, source-aware consensus report. Use clear markdown sections:
-
-1. Final Consensus — verdict, confidence, consensus score, agreement ratio
-2. Key Evidence — the most important numbers and facts from the specialists
-3. Specialist Breakdown — concise view from each specialist
-4. Disagreement and Dissent — where agents disagree and why it matters
-5. Risk Flags — especially valuation, drawdown, concentration, volatility, data gaps, and risk-veto issues
-6. What Would Change The View — concrete evidence that would upgrade/downgrade the recommendation
-7. Actionable Research Next Steps — what the user should verify before acting
-
-Rules:
-- Be specific with numbers from the specialist outputs.
-- Do not invent market data, news, prices, or analyst targets.
-- If evidence is missing or tool output failed, say so and lower confidence.
-- Do not imply guaranteed returns or direct brokerage execution.
-- End with: "This is AI-generated analysis from Quanfora 2.0's multi-agent consensus system, not professional financial advice."
-"""
+            synthesis_prompt = _build_consensus_synthesis_prompt(
+                query, result, opinions_text
+            )
 
             response = llm.invoke([{"role": "user", "content": synthesis_prompt}])
 
@@ -242,7 +291,11 @@ Rules:
                 task_type="consensus_synthesis",
                 routed_model=routed,
                 input_text=synthesis_prompt,
-                output_text=response_content if isinstance(response_content, str) else str(response_content),
+                output_text=(
+                    response_content
+                    if isinstance(response_content, str)
+                    else str(response_content)
+                ),
             )
 
             return response_content
@@ -261,19 +314,29 @@ Rules:
         ]
 
         if result.risk_vetoed:
-            parts.append("⚠️ **Risk Veto Activated** — Multiple critical risk flags detected.\n")
+            parts.append(
+                "⚠️ **Risk Veto Activated** — Multiple critical risk flags detected.\n"
+            )
 
         parts.append("### Specialist Opinions")
         for o in result.opinions:
-            parts.append(f"- **{o.agent_name.replace('_', ' ').title()}**: {o.verdict.value} ({o.confidence:.0%}) — {o.reasoning[:150]}")
+            parts.append(
+                f"- **{o.agent_name.replace('_', ' ').title()}**: {o.verdict.value} ({o.confidence:.0%}) — {o.reasoning[:150]}"
+            )
 
         if result.risk_flags:
-            parts.append("\n### Risk Flags\n" + "\n".join(f"- {f}" for f in result.risk_flags))
+            parts.append(
+                "\n### Risk Flags\n" + "\n".join(f"- {f}" for f in result.risk_flags)
+            )
 
         if result.dissenting_agents:
-            parts.append(f"\n### Dissenting Views\n{', '.join(result.dissenting_agents)}")
+            parts.append(
+                f"\n### Dissenting Views\n{', '.join(result.dissenting_agents)}"
+            )
 
-        parts.append("\n---\n*This is AI-generated analysis from Quanfora 2.0's multi-agent consensus system, not professional financial advice.*")
+        parts.append(
+            "\n---\n*This is AI-generated analysis from Quanfora 2.0's multi-agent consensus system, not professional financial advice.*"
+        )
 
         return "\n".join(parts)
 
