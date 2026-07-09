@@ -119,6 +119,10 @@ def test_recurring_buy_syncs_linked_holding_and_delete_removes_both():
             "fill_price": 195.1999,
             "fill_currency": "usd",
             "exchange_rate": 1.446687,
+            "purchase_mode": "amount",
+            "recurrence_frequency": "weekly",
+            "schedule_time": "10:15",
+            "schedule_day_of_week": 2,
             "executed_at": "2026-07-07T16:05:00Z",
         },
     )
@@ -127,6 +131,10 @@ def test_recurring_buy_syncs_linked_holding_and_delete_removes_both():
     assert body["symbol"] == "NVDA"
     assert body["entered_currency"] == "CAD"
     assert body["fill_currency"] == "USD"
+    assert body["purchase_mode"] == "amount"
+    assert body["recurrence_frequency"] == "weekly"
+    assert body["schedule_time"] == "10:15"
+    assert body["schedule_day_of_week"] == 2
     assert body["linked_holding_id"]
 
     holdings = client.get(f"/api/v1/portfolios/{portfolio_id}/holdings")
@@ -174,6 +182,10 @@ def test_recurring_buy_routes_are_user_scoped():
             "filled_quantity": 0.05,
             "fill_price": 200,
             "fill_currency": "USD",
+            "purchase_mode": "shares",
+            "recurrence_frequency": "monthly",
+            "schedule_time": "09:30",
+            "schedule_day_of_month": 15,
         },
     )
     assert recurring.status_code == 201

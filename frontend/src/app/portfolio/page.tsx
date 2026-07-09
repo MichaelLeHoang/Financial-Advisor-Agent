@@ -119,31 +119,30 @@ interface EditState {
 interface RecurringBuyDraft {
   symbol: string;
   account: string;
+  purchaseMode: "amount" | "shares";
   enteredAmount: string;
   enteredCurrency: string;
   filledQuantity: string;
-  fillPrice: string;
-  fillCurrency: string;
-  exchangeRate: string;
-  executedAt: string;
-}
-
-function localDateTimeInputValue(date = new Date()) {
-  const offsetMs = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+  recurrenceFrequency: "daily" | "weekly" | "monthly" | "yearly";
+  scheduleTime: string;
+  scheduleDayOfWeek: string;
+  scheduleDayOfMonth: string;
+  scheduleMonth: string;
 }
 
 function createRecurringBuyDraft(baseCurrency = "USD"): RecurringBuyDraft {
   return {
     symbol: "",
     account: "TFSA",
+    purchaseMode: "amount",
     enteredAmount: "",
     enteredCurrency: normalizeCurrency(baseCurrency),
     filledQuantity: "",
-    fillPrice: "",
-    fillCurrency: "USD",
-    exchangeRate: "",
-    executedAt: localDateTimeInputValue(),
+    recurrenceFrequency: "monthly",
+    scheduleTime: "09:30",
+    scheduleDayOfWeek: "1",
+    scheduleDayOfMonth: "1",
+    scheduleMonth: "1",
   };
 }
 
@@ -380,6 +379,20 @@ function formatRecurringDateTime(value: string) {
   }).format(date);
 }
 
+function formatRecurringSchedule(buy: RecurringBuy) {
+  const time = buy.schedule_time || "09:30";
+  if (buy.recurrence_frequency === "daily") return `Daily at ${time}`;
+  if (buy.recurrence_frequency === "weekly") {
+    const day = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][buy.schedule_day_of_week ?? 1];
+    return `${day} at ${time}`;
+  }
+  if (buy.recurrence_frequency === "yearly") {
+    const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][(buy.schedule_month ?? 1) - 1];
+    return `${month} ${buy.schedule_day_of_month ?? 1} at ${time}`;
+  }
+  return `Day ${buy.schedule_day_of_month ?? 1} at ${time}`;
+}
+
 export default function PortfolioPage() {
   const { loading: authLoading, token } = useAuth();
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
@@ -451,7 +464,6 @@ export default function PortfolioPage() {
     setRecurringBuyDraft((draft) => ({
       ...draft,
       enteredCurrency: portfolioBaseCurrency,
-      fillCurrency: draft.fillCurrency || "USD",
     }));
   }, [portfolioBaseCurrency]);
 
@@ -782,36 +794,65 @@ export default function PortfolioPage() {
   const addRecurringBuy = async () => {
     if (!activeId) return;
     const symbol = recurringBuyDraft.symbol.trim().toUpperCase();
-    const enteredAmount = parseFloat(recurringBuyDraft.enteredAmount);
-    const filledQuantity = parseFloat(recurringBuyDraft.filledQuantity);
-    const fillPrice = parseFloat(recurringBuyDraft.fillPrice);
-    const exchangeRate = recurringBuyDraft.exchangeRate.trim()
-      ? parseFloat(recurringBuyDraft.exchangeRate)
-      : undefined;
+    const inputAmount = parseFloat(recurringBuyDraft.enteredAmount);
+    const inputShares = parseFloat(recurringBuyDraft.filledQuantity);
 
-    if (!symbol || !Number.isFinite(enteredAmount) || enteredAmount <= 0 || !Number.isFinite(filledQuantity) || filledQuantity <= 0 || !Number.isFinite(fillPrice) || fillPrice <= 0) {
-      setError("Enter a valid recurring buy symbol, amount, quantity, and fill price.");
+    if (!symbol) {
+      setError("Select a recurring buy symbol.");
       return;
     }
-    if (exchangeRate !== undefined && (!Number.isFinite(exchangeRate) || exchangeRate <= 0)) {
-      setError("Enter a positive exchange rate or leave it blank.");
+    if (recurringBuyDraft.purchaseMode === "amount" && (!Number.isFinite(inputAmount) || inputAmount <= 0)) {
+      setError("Enter a positive recurring buy amount.");
+      return;
+    }
+    if (recurringBuyDraft.purchaseMode === "shares" && (!Number.isFinite(inputShares) || inputShares <= 0)) {
+      setError("Enter a positive recurring share quantity.");
       return;
     }
 
     setSaving(true);
     setError(null);
     try {
+      const quote = await fetchQuote(symbol);
+      if (!quote.price || quote.price <= 0) {
+        throw new Error(`Unable to get a live price for ${symbol}.`);
+      }
+      const fillCurrency = normalizeCurrency(quote.currency, activeBaseCurrency);
+      const enteredCurrency = normalizeCurrency(recurringBuyDraft.enteredCurrency, activeBaseCurrency);
+      const exchangeRate = await fetchCurrencyRate(fillCurrency, enteredCurrency);
+      const fillPrice = quote.price;
+      const enteredAmount = recurringBuyDraft.purchaseMode === "amount"
+        ? inputAmount
+        : inputShares * fillPrice * exchangeRate;
+      const filledQuantity = recurringBuyDraft.purchaseMode === "amount"
+        ? inputAmount / exchangeRate / fillPrice
+        : inputShares;
+      const scheduleDayOfWeek = ["weekly"].includes(recurringBuyDraft.recurrenceFrequency)
+        ? Number(recurringBuyDraft.scheduleDayOfWeek)
+        : null;
+      const scheduleDayOfMonth = ["monthly", "yearly"].includes(recurringBuyDraft.recurrenceFrequency)
+        ? Number(recurringBuyDraft.scheduleDayOfMonth)
+        : null;
+      const scheduleMonth = recurringBuyDraft.recurrenceFrequency === "yearly"
+        ? Number(recurringBuyDraft.scheduleMonth)
+        : null;
       const recurringBuy = await api.addRecurringBuy(activeId, {
         symbol,
         account: recurringBuyDraft.account.trim() || null,
         status: "completed",
+        purchase_mode: recurringBuyDraft.purchaseMode,
         entered_amount: enteredAmount,
-        entered_currency: normalizeCurrency(recurringBuyDraft.enteredCurrency, activeBaseCurrency),
+        entered_currency: enteredCurrency,
         filled_quantity: filledQuantity,
         fill_price: fillPrice,
-        fill_currency: normalizeCurrency(recurringBuyDraft.fillCurrency, "USD"),
+        fill_currency: fillCurrency,
         exchange_rate: exchangeRate,
-        executed_at: new Date(recurringBuyDraft.executedAt).toISOString(),
+        recurrence_frequency: recurringBuyDraft.recurrenceFrequency,
+        schedule_time: recurringBuyDraft.scheduleTime,
+        schedule_day_of_week: scheduleDayOfWeek,
+        schedule_day_of_month: scheduleDayOfMonth,
+        schedule_month: scheduleMonth,
+        executed_at: new Date().toISOString(),
       });
       setRecurringBuyDraft(createRecurringBuyDraft(activeBaseCurrency));
       setRecurringTickerInput("");
@@ -820,7 +861,7 @@ export default function PortfolioPage() {
       setResult(null);
       showToast({
         title: "Recurring buy saved",
-        message: `${symbol} was synced into ${activePortfolio?.name ?? "this portfolio"}.`,
+        message: `${symbol} was priced at ${formatMoney(fillPrice, fillCurrency, 2)} and synced into ${activePortfolio?.name ?? "this portfolio"}.`,
         variant: "success",
       });
     } catch (e: any) {
@@ -1513,7 +1554,7 @@ export default function PortfolioPage() {
                 </span>
               </div>
 
-              <div className="mt-4 grid gap-3 rounded-2xl border border-white/[0.07] bg-black/18 p-3 lg:grid-cols-4 xl:grid-cols-[minmax(150px,1fr)_96px_110px_90px_110px_110px_90px_110px_170px_auto]">
+              <div className="mt-4 grid gap-3 rounded-2xl border border-white/[0.07] bg-black/18 p-3 lg:grid-cols-4 xl:grid-cols-[minmax(150px,1fr)_96px_160px_130px_90px_120px_120px_120px_auto]">
                 {recurringBuyDraft.symbol ? (
                   <span className="flex h-10 items-center justify-between gap-1.5 rounded-xl bg-white/[0.06] px-3 text-xs font-semibold text-white ring-1 ring-white/10">
                     {recurringBuyDraft.symbol}
@@ -1542,15 +1583,47 @@ export default function PortfolioPage() {
                   placeholder="Account"
                   className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
                 />
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={recurringBuyDraft.enteredAmount}
-                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, enteredAmount: event.target.value }))}
-                  placeholder="Amount"
-                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
-                />
+                <div className="flex h-10 rounded-xl border border-white/[0.10] bg-black/20 p-1">
+                  {(["amount", "shares"] as const).map((buyMode) => (
+                    <button
+                      key={buyMode}
+                      type="button"
+                      onClick={() => setRecurringBuyDraft((draft) => ({
+                        ...draft,
+                        purchaseMode: buyMode,
+                        enteredAmount: buyMode === "amount" ? draft.enteredAmount : "",
+                        filledQuantity: buyMode === "shares" ? draft.filledQuantity : "",
+                      }))}
+                      className={cn(
+                        "flex-1 rounded-lg px-3 text-xs font-semibold capitalize transition-colors",
+                        recurringBuyDraft.purchaseMode === buyMode ? "bg-white text-black" : "text-white/54 hover:text-white"
+                      )}
+                    >
+                      {buyMode === "amount" ? "Amount" : "Shares"}
+                    </button>
+                  ))}
+                </div>
+                {recurringBuyDraft.purchaseMode === "amount" ? (
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={recurringBuyDraft.enteredAmount}
+                    onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, enteredAmount: event.target.value }))}
+                    placeholder="Amount"
+                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
+                  />
+                ) : (
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={recurringBuyDraft.filledQuantity}
+                    onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, filledQuantity: event.target.value }))}
+                    placeholder="Shares"
+                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
+                  />
+                )}
                 <select
                   value={recurringBuyDraft.enteredCurrency}
                   onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, enteredCurrency: event.target.value }))}
@@ -1563,58 +1636,75 @@ export default function PortfolioPage() {
                     </option>
                   ))}
                 </select>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={recurringBuyDraft.filledQuantity}
-                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, filledQuantity: event.target.value }))}
-                  placeholder="Shares"
-                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
-                />
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={recurringBuyDraft.fillPrice}
-                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, fillPrice: event.target.value }))}
-                  placeholder="Fill price"
-                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
-                />
                 <select
-                  value={recurringBuyDraft.fillCurrency}
-                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, fillCurrency: event.target.value }))}
+                  value={recurringBuyDraft.recurrenceFrequency}
+                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, recurrenceFrequency: event.target.value as RecurringBuyDraft["recurrenceFrequency"] }))}
                   className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none focus:border-white/35"
-                  aria-label="Fill price currency"
+                  aria-label="Recurring buy frequency"
                 >
-                  {SUPPORTED_BASE_CURRENCIES.map((currency) => (
-                    <option key={currency} value={currency} className="bg-space-black text-white">
-                      {currency}
+                  {(["daily", "weekly", "monthly", "yearly"] as const).map((frequency) => (
+                    <option key={frequency} value={frequency} className="bg-space-black text-white">
+                      {frequency[0].toUpperCase() + frequency.slice(1)}
                     </option>
                   ))}
                 </select>
                 <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={recurringBuyDraft.exchangeRate}
-                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, exchangeRate: event.target.value }))}
-                  placeholder="FX rate"
-                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
-                />
-                <input
-                  type="datetime-local"
-                  value={recurringBuyDraft.executedAt}
-                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, executedAt: event.target.value }))}
+                  type="time"
+                  value={recurringBuyDraft.scheduleTime}
+                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, scheduleTime: event.target.value }))}
                   className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white outline-none [color-scheme:dark] focus:border-white/35"
-                  aria-label="Recurring buy completed time"
+                  aria-label="Recurring buy time"
                 />
+                {recurringBuyDraft.recurrenceFrequency === "weekly" && (
+                  <select
+                    value={recurringBuyDraft.scheduleDayOfWeek}
+                    onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, scheduleDayOfWeek: event.target.value }))}
+                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none focus:border-white/35"
+                    aria-label="Recurring buy day of week"
+                  >
+                    {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day, index) => (
+                      <option key={day} value={index} className="bg-space-black text-white">
+                        {day}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {["monthly", "yearly"].includes(recurringBuyDraft.recurrenceFrequency) && (
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={recurringBuyDraft.scheduleDayOfMonth}
+                    onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, scheduleDayOfMonth: event.target.value }))}
+                    placeholder="Day"
+                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
+                    aria-label="Recurring buy day of month"
+                  />
+                )}
+                {recurringBuyDraft.recurrenceFrequency === "yearly" && (
+                  <select
+                    value={recurringBuyDraft.scheduleMonth}
+                    onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, scheduleMonth: event.target.value }))}
+                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none focus:border-white/35"
+                    aria-label="Recurring buy month"
+                  >
+                    {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((month, index) => (
+                      <option key={month} value={index + 1} className="bg-space-black text-white">
+                        {month}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <Button
                   onClick={addRecurringBuy}
-                  disabled={saving || !recurringBuyDraft.symbol || !recurringBuyDraft.enteredAmount || !recurringBuyDraft.filledQuantity || !recurringBuyDraft.fillPrice}
+                  disabled={
+                    saving
+                    || !recurringBuyDraft.symbol
+                    || (recurringBuyDraft.purchaseMode === "amount" ? !recurringBuyDraft.enteredAmount : !recurringBuyDraft.filledQuantity)
+                  }
                   className="h-10 rounded-xl bg-white px-4 text-sm font-bold text-black hover:bg-white/86"
                 >
-                  {saving ? <Loader2 className="size-4 animate-spin" /> : "Sync buy"}
+                  {saving ? <Loader2 className="size-4 animate-spin" /> : "Price & sync"}
                 </Button>
               </div>
 
@@ -1669,14 +1759,20 @@ export default function PortfolioPage() {
                                 <dd className="text-right capitalize text-white/82">{buy.status}</dd>
                               </div>
                               <div className="flex items-start justify-between gap-4">
-                                <dt className="font-semibold text-white">Date</dt>
+                                <dt className="font-semibold text-white">Schedule</dt>
+                                <dd className="text-right text-white/82">{formatRecurringSchedule(buy)}</dd>
+                              </div>
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Last priced</dt>
                                 <dd className="text-right text-white/82">{formatRecurringDateTime(buy.executed_at)}</dd>
                               </div>
                             </dl>
                             <dl className="grid gap-3 text-sm">
                               <div className="flex items-start justify-between gap-4">
                                 <dt className="font-semibold text-white">Type</dt>
-                                <dd className="text-right text-white/82">Recurring buy</dd>
+                                <dd className="text-right text-white/82">
+                                  Recurring buy by {buy.purchase_mode === "shares" ? "shares" : "amount"}
+                                </dd>
                               </div>
                               <div className="flex items-start justify-between gap-4">
                                 <dt className="font-semibold text-white">Entered amount</dt>

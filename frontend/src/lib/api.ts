@@ -449,12 +449,18 @@ export interface RecurringBuy {
   symbol: string;
   account?: string | null;
   status: string;
+  purchase_mode: "amount" | "shares";
   entered_amount: number;
   entered_currency: string;
   filled_quantity: number;
   fill_price: number;
   fill_currency: string;
   exchange_rate?: number | null;
+  recurrence_frequency: "daily" | "weekly" | "monthly" | "yearly";
+  schedule_time: string;
+  schedule_day_of_week?: number | null;
+  schedule_day_of_month?: number | null;
+  schedule_month?: number | null;
   executed_at: string;
   created_at: string;
 }
@@ -463,12 +469,18 @@ export interface RecurringBuyRequest {
   symbol: string;
   account?: string | null;
   status?: string;
+  purchase_mode?: "amount" | "shares";
   entered_amount: number;
   entered_currency: string;
   filled_quantity: number;
   fill_price: number;
   fill_currency: string;
   exchange_rate?: number | null;
+  recurrence_frequency?: "daily" | "weekly" | "monthly" | "yearly";
+  schedule_time?: string;
+  schedule_day_of_week?: number | null;
+  schedule_day_of_month?: number | null;
+  schedule_month?: number | null;
   executed_at?: string;
 }
 

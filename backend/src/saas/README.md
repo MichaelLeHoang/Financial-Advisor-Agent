@@ -23,4 +23,4 @@ Authentication comes from `auth/`; billing provider logic stays in `billing/`; d
 Cover plan matrices, user isolation, guest restrictions, resource limits, upgrade errors, portfolio sync behavior, and repository fallback behavior.
 
 ## Latest Change
-- Added portfolio recurring buys that sync completed buy records into linked holdings.
+- Added amount/share recurring buy modes and schedule metadata for portfolio recurring buys.
