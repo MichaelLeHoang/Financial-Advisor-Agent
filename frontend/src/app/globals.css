@@ -212,6 +212,16 @@
   background-color: rgba(255, 255, 255, 0.85);
 }
 
+.intro-secondary-action {
+  border-color: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.intro-secondary-action:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.96);
+}
+
 .profile-modal {
   border-color: var(--theme-border);
   background-color: var(--surface-dialog);
@@ -924,8 +934,89 @@ body[data-theme="White"] .intro-primary-action:hover {
   background-color: #4338ca !important;
 }
 
+body[data-theme="White"] .intro-secondary-action {
+  border-color: rgba(79, 70, 229, 0.22) !important;
+  background-color: rgba(79, 70, 229, 0.035) !important;
+  color: var(--color-indigo-primary) !important;
+}
+
+body[data-theme="White"] .intro-secondary-action:hover {
+  border-color: rgba(79, 70, 229, 0.42) !important;
+  background-color: rgba(79, 70, 229, 0.08) !important;
+  color: #3730a3 !important;
+}
+
+body[data-theme="White"] .intro-secondary-action svg {
+  color: currentColor !important;
+  stroke: currentColor !important;
+}
+
 body[data-theme="White"] .hero-morphing-highlight {
   color: #3730a3 !important;
+}
+
+body[data-theme="White"] .contact-sales-page {
+  background-color: #050506 !important;
+  color: rgba(255, 255, 255, 0.94) !important;
+  color-scheme: dark;
+}
+
+body[data-theme="White"] .contact-sales-page .introduction-nav nav [data-slot="navigation-menu-link"],
+body[data-theme="White"] .contact-sales-page .introduction-nav nav [data-slot="navigation-menu-trigger"],
+body[data-theme="White"] .contact-sales-page .introduction-nav a,
+body[data-theme="White"] .contact-sales-page .introduction-nav button {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+body[data-theme="White"] .contact-sales-page .introduction-nav nav [data-slot="navigation-menu-link"]:hover,
+body[data-theme="White"] .contact-sales-page .introduction-nav nav [data-slot="navigation-menu-trigger"]:hover,
+body[data-theme="White"] .contact-sales-page .introduction-nav a:hover,
+body[data-theme="White"] .contact-sales-page .introduction-nav button:hover {
+  color: rgba(255, 255, 255, 0.96) !important;
+}
+
+body[data-theme="White"] .contact-sales-page h1,
+body[data-theme="White"] .contact-sales-page [class~="text-white"] {
+  color: rgba(255, 255, 255, 0.94) !important;
+}
+
+body[data-theme="White"] .contact-sales-page [class*="text-white/"] {
+  color: rgba(255, 255, 255, 0.58) !important;
+}
+
+body[data-theme="White"] .contact-sales-page label,
+body[data-theme="White"] .contact-sales-page legend {
+  color: rgba(255, 255, 255, 0.58) !important;
+}
+
+body[data-theme="White"] .contact-sales-page input,
+body[data-theme="White"] .contact-sales-page select,
+body[data-theme="White"] .contact-sales-page textarea {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  background-color: rgba(0, 0, 0, 0.32) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+body[data-theme="White"] .contact-sales-page input::placeholder,
+body[data-theme="White"] .contact-sales-page textarea::placeholder {
+  color: rgba(255, 255, 255, 0.34) !important;
+}
+
+body[data-theme="White"] .contact-sales-page .contact-product-option,
+body[data-theme="White"] .contact-sales-page [class*="bg-white/"],
+body[data-theme="White"] .contact-sales-page [class*="bg-white\\["] {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: rgba(255, 255, 255, 0.055) !important;
+  color: rgba(255, 255, 255, 0.76) !important;
+}
+
+body[data-theme="White"] .contact-sales-page .contact-product-option:hover {
+  background-color: rgba(255, 255, 255, 0.09) !important;
+}
+
+body[data-theme="White"] .contact-sales-page .intro-primary-action,
+body[data-theme="White"] .contact-sales-page .intro-primary-action * {
+  color: #ffffff !important;
 }
 
 body[data-theme="White"] .pricing-theme-lock {
@@ -1229,29 +1320,35 @@ body[data-theme="White"] .research-intro-demo > div > div:first-child h2 {
   color: var(--text-primary) !important;
 }
 
+body[data-theme="White"] .research-intro-demo .research-heading-accent {
+  color: #6366f1 !important;
+}
+
 body[data-theme="White"] .research-intro-demo > div > div:first-child [class*="text-white/"] {
   color: var(--text-muted) !important;
 }
 
-body[data-theme="White"] .research-intro-demo > div > div:first-child a:first-of-type {
+body[data-theme="White"] .research-intro-demo > div > div:first-child .intro-primary-action {
   background-color: var(--color-indigo-primary) !important;
   color: #ffffff !important;
   box-shadow: var(--shadow-primary-action) !important;
 }
 
-body[data-theme="White"] .research-intro-demo > div > div:first-child a:first-of-type:hover {
+body[data-theme="White"] .research-intro-demo > div > div:first-child .intro-primary-action:hover {
   background-color: #4338ca !important;
   box-shadow: var(--shadow-primary-action-hover) !important;
 }
 
-body[data-theme="White"] .research-intro-demo > div > div:first-child a:last-of-type {
-  border-color: var(--theme-border) !important;
-  color: var(--text-muted) !important;
+body[data-theme="White"] .research-intro-demo > div > div:first-child .research-docs-link {
+  border-color: rgba(79, 70, 229, 0.22) !important;
+  background-color: rgba(79, 70, 229, 0.035) !important;
+  color: var(--color-indigo-primary) !important;
 }
 
 body[data-theme="White"] .research-intro-demo > div > div:first-child .research-docs-link:hover {
-  border-color: var(--theme-border-strong) !important;
-  color: var(--text-primary) !important;
+  border-color: rgba(79, 70, 229, 0.42) !important;
+  background-color: rgba(79, 70, 229, 0.08) !important;
+  color: #3730a3 !important;
 }
 
 body[data-theme="White"] .research-window-demo {
@@ -1374,13 +1471,13 @@ body[data-theme="White"] .research-demo-progress .text-white {
 }
 
 body[data-theme="White"] .research-journey-step {
-  border-color: var(--theme-border) !important;
-  background-color: #fbfaf8 !important;
+  border-color: rgba(18, 26, 44, 0.1) !important;
+  background-color: #fffefe !important;
 }
 
 body[data-theme="White"] .research-journey-step.border-indigo-primary\/34 {
-  border-color: #c7d2fe !important;
-  background-color: #f4f2ff !important;
+  border-color: rgba(129, 140, 248, 0.48) !important;
+  background-color: #f3f1ff !important;
 }
 
 body[data-theme="White"] .research-journey-step h3 {
@@ -1397,6 +1494,103 @@ body[data-theme="White"] .research-journey-step [class*="bg-white"] {
 
 body[data-theme="White"] .research-journey-step [class*="border-white"] {
   border-color: var(--theme-border) !important;
+}
+
+body[data-theme="White"] .research-journey-step .text-indigo-200 {
+  color: #4f46e5 !important;
+}
+
+body[data-theme="White"] .research-journey-line {
+  background-color: rgba(18, 26, 44, 0.1) !important;
+}
+
+body[data-theme="White"] .research-journey-line-progress {
+  background-color: var(--color-indigo-primary) !important;
+}
+
+body[data-theme="White"] .research-journey-node {
+  border-color: rgba(18, 26, 44, 0.12) !important;
+  background-color: #050506 !important;
+  color: rgba(199, 210, 254, 0.9) !important;
+}
+
+body[data-theme="White"] .research-journey-node svg {
+  color: currentColor !important;
+  stroke: currentColor !important;
+}
+
+body[data-theme="White"] .help-page {
+  background-color: #f7f5f0 !important;
+  color: var(--text-primary) !important;
+}
+
+body[data-theme="White"] .help-page [class~="text-white"],
+body[data-theme="White"] .help-page :is(h1, h2, h3) {
+  color: var(--text-primary) !important;
+}
+
+body[data-theme="White"] .help-page [class~="text-white/88"],
+body[data-theme="White"] .help-page [class~="text-white/86"],
+body[data-theme="White"] .help-page [class~="text-white/70"] {
+  color: var(--text-primary) !important;
+}
+
+body[data-theme="White"] .help-page [class~="text-white/55"],
+body[data-theme="White"] .help-page [class~="text-white/50"],
+body[data-theme="White"] .help-page [class~="text-white/48"],
+body[data-theme="White"] .help-page [class~="text-white/45"],
+body[data-theme="White"] .help-page [class~="text-white/35"] {
+  color: var(--text-muted) !important;
+}
+
+body[data-theme="White"] .help-page [class*="border-white/"],
+body[data-theme="White"] .help-page [class*="border-white\\["] {
+  border-color: rgba(18, 26, 44, 0.1) !important;
+}
+
+body[data-theme="White"] .help-page [class*="bg-white/"],
+body[data-theme="White"] .help-page [class*="bg-white\\["] {
+  background-color: rgba(255, 255, 255, 0.72) !important;
+}
+
+body[data-theme="White"] .help-page .group:hover {
+  border-color: rgba(79, 70, 229, 0.36) !important;
+  background-color: rgba(255, 255, 255, 0.92) !important;
+}
+
+body[data-theme="White"] .help-page .text-indigo-300,
+body[data-theme="White"] .help-page .group-hover\:text-indigo-200:hover {
+  color: var(--color-indigo-primary) !important;
+}
+
+body[data-theme="White"] .help-page .text-cyan-300 {
+  color: #0891b2 !important;
+}
+
+body[data-theme="White"] .help-page a.bg-indigo-500 {
+  background-color: var(--color-indigo-primary) !important;
+  color: #ffffff !important;
+  box-shadow: var(--shadow-primary-action) !important;
+}
+
+body[data-theme="White"] .help-page a.bg-indigo-500:hover {
+  background-color: #4338ca !important;
+}
+
+body[data-theme="White"] .help-page a[href="#faq"] {
+  border-color: rgba(79, 70, 229, 0.22) !important;
+  background-color: rgba(79, 70, 229, 0.035) !important;
+  color: var(--color-indigo-primary) !important;
+}
+
+body[data-theme="White"] .help-page a[href="#faq"]:hover {
+  border-color: rgba(79, 70, 229, 0.42) !important;
+  background-color: rgba(79, 70, 229, 0.08) !important;
+  color: #3730a3 !important;
+}
+
+body[data-theme="White"] .help-page [class*="ring-white"] {
+  --tw-ring-color: rgba(18, 26, 44, 0.1) !important;
 }
 
 body[data-theme="White"] .landing-pricing-frame,

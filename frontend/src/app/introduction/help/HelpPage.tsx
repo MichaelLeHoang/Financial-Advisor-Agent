@@ -112,7 +112,7 @@ const FAQS: FaqProItem[] = [
 
 export default function HelpPage() {
   return (
-    <main className="min-h-screen bg-[#050507] text-white">
+    <main className="help-page min-h-screen bg-[#050507] text-white">
       <IntroductionNav />
 
       <section className="mx-auto max-w-6xl px-6 pb-16 pt-28 sm:pb-20 sm:pt-32">

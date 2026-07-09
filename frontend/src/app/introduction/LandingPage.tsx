@@ -192,7 +192,7 @@ function SamplesSection() {
       <div className="mx-auto max-w-3xl">
         <SectionReveal className="mb-10 text-center">
           <span className="inline-flex rounded-full border border-white/[0.10] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/38">
-            Illustrative demo
+            Demo
           </span>
           <h2 className="mt-5 font-heading text-4xl font-medium tracking-tight text-white sm:text-5xl">Sample Research</h2>
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-white/42">

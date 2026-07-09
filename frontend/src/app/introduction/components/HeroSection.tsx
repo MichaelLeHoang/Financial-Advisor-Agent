@@ -62,7 +62,7 @@ export function HeroSection() {
             href="/pricing"
             data-analytics-id="landing-hero-see-plans"
             onClick={() => trackLandingEvent("landing_pricing_click", { location: "hero_secondary" })}
-            className="group inline-flex h-12 items-center gap-2 rounded-full border border-white/[0.14] px-6 text-sm font-medium text-white/66 transition-colors hover:border-white/28 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+            className="intro-secondary-action group inline-flex h-12 items-center gap-2 rounded-full border border-white/[0.14] px-6 text-sm font-medium text-white/66 transition-colors hover:border-white/28 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
           >
             See our plan
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />

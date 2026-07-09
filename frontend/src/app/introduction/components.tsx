@@ -35,7 +35,12 @@ const NAV_LINKS = [
   { href: "/help", label: "Help" },
 ];
 
-export function IntroductionNav() {
+type IntroductionNavProps = {
+  staticFull?: boolean;
+  forceTheme?: "Deep Space" | "White";
+};
+
+export function IntroductionNav({ staticFull = false, forceTheme }: IntroductionNavProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, loading, signOut } = useAuth();
@@ -46,11 +51,18 @@ export function IntroductionNav() {
   const avatarColor = getAvatarColor(user?.id || user?.email);
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [theme, setTheme] = useState<"Deep Space" | "White">("Deep Space");
+  const [theme, setTheme] = useState<"Deep Space" | "White">(forceTheme ?? "Deep Space");
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
+  const currentTheme = forceTheme ?? theme;
+  const navExpanded = staticFull || isScrolled || mobileOpen;
 
   useEffect(() => {
+    if (forceTheme) {
+      setTheme(forceTheme);
+      return;
+    }
+
     try {
       const stored = JSON.parse(window.localStorage.getItem(SETTINGS_STORAGE_KEY) || "{}");
       setTheme(stored.theme === "White" ? "White" : "Deep Space");
@@ -86,7 +98,7 @@ export function IntroductionNav() {
       window.removeEventListener("scroll", handleScroll);
       observer?.disconnect();
     };
-  }, []);
+  }, [forceTheme]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -99,6 +111,8 @@ export function IntroductionNav() {
   };
 
   const toggleTheme = () => {
+    if (forceTheme) return;
+
     const nextTheme = theme === "White" ? "Deep Space" : "White";
     let settings: Record<string, unknown> = {};
 
@@ -140,43 +154,43 @@ export function IntroductionNav() {
     <header className="introduction-nav fixed inset-x-0 top-0 z-50 px-4 py-3 sm:px-8 sm:py-4">
       <div
         className={`mx-auto flex max-w-6xl items-center justify-between rounded-full px-4 py-2.5 transition-[background-color,box-shadow,backdrop-filter] duration-200 sm:px-5 ${
-          isScrolled || mobileOpen
-            ? theme === "White"
+          navExpanded
+            ? currentTheme === "White"
               ? "bg-[#e9e6e0]/84 shadow-[0_10px_30px_rgba(18,26,44,0.10)] backdrop-blur-xl"
               : "bg-black/72 shadow-[0_12px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl"
             : "bg-transparent shadow-none backdrop-blur-none"
         }`}
         style={
           {
-            "--intro-nav-primary": isScrolled || mobileOpen
-              ? theme === "White"
+            "--intro-nav-primary": navExpanded
+              ? currentTheme === "White"
                 ? "var(--text-primary)"
                 : "rgba(255,255,255,0.92)"
               : "var(--text-primary)",
-            "--intro-nav-muted": isScrolled || mobileOpen
-              ? theme === "White"
+            "--intro-nav-muted": navExpanded
+              ? currentTheme === "White"
                 ? "var(--text-muted)"
                 : "rgba(255,255,255,0.55)"
               : "var(--text-muted)",
-            "--intro-nav-hover": isScrolled || mobileOpen
-              ? theme === "White"
+            "--intro-nav-hover": navExpanded
+              ? currentTheme === "White"
                 ? "rgba(18,26,44,0.05)"
                 : "rgba(255,255,255,0.08)"
               : "var(--surface-card-hover)",
-            "--intro-nav-action-bg": theme === "White"
+            "--intro-nav-action-bg": currentTheme === "White"
               ? "#4f46e5"
-              : isScrolled || mobileOpen
+              : navExpanded
                 ? "rgba(255,255,255,0.96)"
                 : "rgba(255,255,255,0.96)",
-            "--intro-nav-action-text": theme === "White"
+            "--intro-nav-action-text": currentTheme === "White"
               ? "rgb(255,255,255)"
-              : isScrolled || mobileOpen
+              : navExpanded
                 ? "rgb(0,0,0)"
                 : "rgb(0,0,0)",
           } as CSSProperties
         }
       >
-        <motion.div animate={{ x: isScrolled || mobileOpen ? -2 : 0 }} transition={{ type: "spring", stiffness: 260, damping: 28 }}>
+        <motion.div animate={{ x: navExpanded ? -2 : 0 }} transition={{ type: "spring", stiffness: 260, damping: 28 }}>
           <Link
             href="/"
             aria-label="Quanfora home"
@@ -275,21 +289,23 @@ export function IntroductionNav() {
             aria-label="Search (⌘K)"
             onClick={() => setSearchOpen(true)}
             initial={false}
-            animate={isScrolled || mobileOpen ? { opacity: 1, x: 0 } : { opacity: 0, x: 12 }}
+            animate={navExpanded ? { opacity: 1, x: 0 } : { opacity: 0, x: 12 }}
             transition={{ type: "spring", stiffness: 260, damping: 24 }}
             className="flex size-9 items-center justify-center rounded-full text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
           >
             <Search className="size-4" />
           </motion.button>
-          <button
-            type="button"
-            aria-label={theme === "White" ? "Switch to dark theme" : "Switch to light theme"}
-            aria-pressed={theme === "White"}
-            onClick={toggleTheme}
-            className="flex size-9 items-center justify-center rounded-full text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
-          >
-            {theme === "White" ? <Moon className="size-4" /> : <Sun className="size-4" />}
-          </button>
+          {!forceTheme && (
+            <button
+              type="button"
+              aria-label={currentTheme === "White" ? "Switch to dark theme" : "Switch to light theme"}
+              aria-pressed={currentTheme === "White"}
+              onClick={toggleTheme}
+              className="flex size-9 items-center justify-center rounded-full text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+            >
+              {currentTheme === "White" ? <Moon className="size-4" /> : <Sun className="size-4" />}
+            </button>
+          )}
           {isSignedIn ? (
             <>
               <DropdownMenu>
@@ -335,7 +351,7 @@ export function IntroductionNav() {
             <>
               <motion.div
                 initial={false}
-                animate={isScrolled || mobileOpen ? { opacity: 1, x: 0 } : { opacity: 0, x: 12 }}
+                animate={navExpanded ? { opacity: 1, x: 0 } : { opacity: 0, x: 12 }}
                 transition={{ type: "spring", stiffness: 260, damping: 24 }}
                 className="hidden sm:block"
               >
@@ -348,7 +364,7 @@ export function IntroductionNav() {
               </motion.div>
               <motion.div
                 initial={false}
-                animate={isScrolled || mobileOpen ? { opacity: 1, x: 0 } : { opacity: 0, x: 12 }}
+                animate={navExpanded ? { opacity: 1, x: 0 } : { opacity: 0, x: 12 }}
                 transition={{ type: "spring", stiffness: 260, damping: 24 }}
                 className="hidden sm:block"
               >
@@ -376,7 +392,7 @@ export function IntroductionNav() {
       {mobileOpen && (
         <div
           className={`mx-auto mt-2 max-w-6xl rounded-2xl p-3 backdrop-blur-xl lg:hidden ${
-            theme === "White"
+            currentTheme === "White"
               ? "bg-[#f1efeb]/95 text-[#121a2c] shadow-[0_12px_36px_rgba(18,26,44,0.12)]"
               : "on-accent bg-black/80 shadow-[0_12px_40px_rgba(0,0,0,0.28)]"
           }`}
@@ -388,7 +404,7 @@ export function IntroductionNav() {
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
                 className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  theme === "White"
+                  currentTheme === "White"
                     ? "text-[#667085] hover:bg-black/[0.04] hover:text-[#121a2c]"
                     : "text-white/70 hover:bg-white/[0.08] hover:text-white"
                 }`}
@@ -396,8 +412,8 @@ export function IntroductionNav() {
                 {item.label}
               </Link>
             ))}
-            <div className={`my-2 border-t pt-2 ${theme === "White" ? "border-black/[0.08]" : "border-white/[0.08]"}`}>
-              <div className={`px-3 pb-1 text-[11px] font-semibold uppercase ${theme === "White" ? "text-[#98a2b3]" : "text-white/40"}`}>
+            <div className={`my-2 border-t pt-2 ${currentTheme === "White" ? "border-black/[0.08]" : "border-white/[0.08]"}`}>
+              <div className={`px-3 pb-1 text-[11px] font-semibold uppercase ${currentTheme === "White" ? "text-[#98a2b3]" : "text-white/40"}`}>
                 Resources
               </div>
               {isSignedIn && (
@@ -405,7 +421,7 @@ export function IntroductionNav() {
                   href="/news"
                   onClick={() => setMobileOpen(false)}
                   className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                    theme === "White"
+                    currentTheme === "White"
                       ? "text-[#667085] hover:bg-black/[0.04] hover:text-[#121a2c]"
                       : "text-white/70 hover:bg-white/[0.08] hover:text-white"
                   }`}
@@ -417,7 +433,7 @@ export function IntroductionNav() {
                 href="/docs"
                 onClick={() => setMobileOpen(false)}
                 className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  theme === "White"
+                  currentTheme === "White"
                     ? "text-[#667085] hover:bg-black/[0.04] hover:text-[#121a2c]"
                     : "text-white/70 hover:bg-white/[0.08] hover:text-white"
                 }`}
@@ -428,7 +444,7 @@ export function IntroductionNav() {
                 href="/blog"
                 onClick={() => setMobileOpen(false)}
                 className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  theme === "White"
+                  currentTheme === "White"
                     ? "text-[#667085] hover:bg-black/[0.04] hover:text-[#121a2c]"
                     : "text-white/70 hover:bg-white/[0.08] hover:text-white"
                 }`}
@@ -442,7 +458,7 @@ export function IntroductionNav() {
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
                 className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  theme === "White"
+                  currentTheme === "White"
                     ? "text-[#667085] hover:bg-black/[0.04] hover:text-[#121a2c]"
                     : "text-white/70 hover:bg-white/[0.08] hover:text-white"
                 }`}
@@ -455,7 +471,7 @@ export function IntroductionNav() {
                 href="/contact-sales"
                 onClick={() => setMobileOpen(false)}
                 className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  theme === "White"
+                  currentTheme === "White"
                     ? "text-[#667085] hover:bg-black/[0.04] hover:text-[#121a2c]"
                     : "text-white/70 hover:bg-white/[0.08] hover:text-white"
                 }`}
@@ -484,7 +500,7 @@ export function IntroductionNav() {
                   href="/login"
                   onClick={() => setMobileOpen(false)}
                   className={`inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 ${
-                    theme === "White"
+                    currentTheme === "White"
                       ? "bg-[#4f46e5] text-white focus-visible:ring-[#4f46e5]"
                       : "bg-white text-black focus-visible:ring-white"
                   }`}
@@ -532,12 +548,14 @@ export function IntroductionFooter() {
   return (
     <footer className="introduction-footer relative z-10 border-t border-white/[0.06] px-6 py-10">
       <div className="mx-auto grid max-w-6xl gap-8 md:grid-cols-[1.1fr_1fr]">
-        <div className="flex items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.svg" alt="" className="size-8 object-contain" />
+        <div>
+          <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="" className="size-8 object-contain" />
+            <div className="text-sm font-semibold text-indigo-primary">Quanfora</div>
+          </div>
           <div>
-            <div className="text-sm text-white/50">Quanfora</div>
-            <p className="mt-1 max-w-md text-xs leading-5 text-white/25">
+            <p className="mt-3 max-w-md text-xs leading-5 text-white/25">
               AI-generated analysis only. Not professional financial advice. © 2026 Michael Le.
             </p>
           </div>

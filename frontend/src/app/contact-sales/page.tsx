@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { FormEvent } from "react";
+import { useEffect, type FormEvent } from "react";
 import { ArrowRight, CheckCircle2, Mail, ShieldCheck, Sparkles } from "lucide-react";
 import { IntroductionFooter, IntroductionNav } from "../introduction/components";
 
@@ -36,6 +36,28 @@ function inputClassName(extra = "") {
 }
 
 export default function ContactSalesPage() {
+  useEffect(() => {
+    const previousTheme = document.body.dataset.theme;
+    const applyDarkTheme = () => {
+      if (document.body.dataset.theme !== "Deep Space") {
+        document.body.dataset.theme = "Deep Space";
+      }
+    };
+
+    applyDarkTheme();
+    const observer = new MutationObserver(applyDarkTheme);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["data-theme"] });
+
+    return () => {
+      observer.disconnect();
+      if (previousTheme) {
+        document.body.dataset.theme = previousTheme;
+      } else {
+        delete document.body.dataset.theme;
+      }
+    };
+  }, []);
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -76,8 +98,8 @@ export default function ContactSalesPage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#050506] text-white">
-      <IntroductionNav />
+    <div className="contact-sales-page relative min-h-screen bg-[#050506] text-white">
+      <IntroductionNav staticFull forceTheme="Deep Space" />
 
       <main className="relative z-10 mx-auto grid min-h-screen w-full max-w-6xl gap-12 px-6 pb-20 pt-28 sm:px-8 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20 lg:pt-40">
         <section className="lg:sticky lg:top-36 lg:h-fit">
@@ -118,7 +140,7 @@ export default function ContactSalesPage() {
           </div>
         </section>
 
-        <form onSubmit={handleSubmit} className="grid gap-6" aria-label="Contact and feedback form">
+        <form onSubmit={handleSubmit} className="contact-sales-form grid gap-6" aria-label="Contact and feedback form">
           <label className="grid gap-2 text-sm font-medium text-white/42">
             Inquiry Type *
             <select name="inquiryType" required defaultValue="Feedback" className={inputClassName("appearance-none text-white/68")}>
@@ -176,7 +198,7 @@ export default function ContactSalesPage() {
               {PRODUCT_AREAS.map((area) => (
                 <label
                   key={area}
-                  className="flex h-11 items-center gap-3 rounded-xl border border-white/[0.04] bg-white/[0.065] px-4 text-sm font-medium text-white/76 transition-colors hover:bg-white/[0.09]"
+                  className="contact-product-option flex h-11 items-center gap-3 rounded-xl border border-white/[0.04] bg-white/[0.065] px-4 text-sm font-medium text-white/76 transition-colors hover:bg-white/[0.09]"
                 >
                   <input
                     name="productAreas"

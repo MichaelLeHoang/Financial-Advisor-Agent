@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, CheckCircle2, FileText, Search, Shield, TrendingUp } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { CheckCircle2, FileText, Search, Shield, TrendingUp } from "lucide-react";
 import { AnimatePresence, motion, useInView, useReducedMotion } from "motion/react";
 
 import { trackLandingEvent } from "./landing-analytics";
@@ -54,7 +54,32 @@ type JourneyStep = (typeof JOURNEY_STEPS)[number];
 export function ResearchJourney() {
   const reduceMotion = useReducedMotion();
   const [activeIndex, setActiveIndex] = useState(0);
+  const [timeline, setTimeline] = useState({ top: 0, height: 0 });
+  const stepsContainerRef = useRef<HTMLDivElement>(null);
+  const stepRefs = useRef<(HTMLDivElement | null)[]>([]);
   const trackedSteps = useRef(new Set<string>());
+
+  const measureTimeline = useCallback(() => {
+    const container = stepsContainerRef.current;
+    const cards = stepRefs.current.filter((card): card is HTMLDivElement => Boolean(card));
+    if (!container || cards.length < 2) return;
+
+    const containerTop = container.getBoundingClientRect().top;
+    const centers = cards.map((card) => {
+      const rect = card.getBoundingClientRect();
+      return rect.top - containerTop + rect.height / 2;
+    });
+    const top = centers[0];
+    const height = centers[centers.length - 1] - centers[0];
+
+    setTimeline((current) => {
+      if (Math.abs(current.top - top) < 0.5 && Math.abs(current.height - height) < 0.5) {
+        return current;
+      }
+
+      return { top, height };
+    });
+  }, []);
 
   const handleStepVisible = useCallback((index: number) => {
     const step = JOURNEY_STEPS[index];
@@ -70,6 +95,31 @@ export function ResearchJourney() {
   }, []);
 
   const activeStep = JOURNEY_STEPS[activeIndex];
+  const timelineProgress =
+    timeline.height > 0
+      ? activeIndex / (JOURNEY_STEPS.length - 1)
+      : 0;
+
+  useLayoutEffect(() => {
+    measureTimeline();
+  }, [measureTimeline]);
+
+  useEffect(() => {
+    const container = stepsContainerRef.current;
+    if (!container) return;
+
+    const observer = new ResizeObserver(measureTimeline);
+    observer.observe(container);
+    stepRefs.current.forEach((card) => {
+      if (card) observer.observe(card);
+    });
+    window.addEventListener("resize", measureTimeline);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measureTimeline);
+    };
+  }, [measureTimeline]);
 
   return (
     <section id="equity-research-demo" className="research-intro-demo relative z-10 px-4 py-16 sm:px-6 sm:py-20">
@@ -80,7 +130,7 @@ export function ResearchJourney() {
             <h2 className="mt-5 font-heading text-4xl font-normal leading-[1.02] tracking-tight text-white sm:text-5xl lg:text-6xl">
               Ask. Evidence. Risk.
               <br />
-              <span className="text-white/45">Decision.</span>
+              <span className="research-heading-accent text-white/45">Decision.</span>
             </h2>
             <p className="mt-7 max-w-xl text-base leading-8 text-white/44">
               One disciplined path from market question to evidence-backed conclusion. No second workflow, no ornamental motion, no unsupported live-data claims.
@@ -94,15 +144,15 @@ export function ResearchJourney() {
                   window.localStorage.setItem("financial-advisor.coverSeen", "true");
                   window.location.href = "/session";
                 }}
-                className="intro-primary-action inline-flex h-11 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
+                className="intro-primary-action inline-flex h-11 items-center justify-center rounded-full px-6 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
               >
-                Launch App <ArrowRight className="h-4 w-4" />
+                Launch App
               </button>
               <a
                 href="#samples"
                 data-analytics-id="landing-journey-view-samples"
                 onClick={() => trackLandingEvent("landing_sample_research_click", { location: "journey_secondary" })}
-                className="research-docs-link inline-flex h-11 items-center justify-center rounded-full border border-white/[0.14] px-6 text-sm font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
+                className="intro-secondary-action research-docs-link inline-flex h-11 items-center justify-center rounded-full border border-white/[0.14] px-6 text-sm font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
               >
                 View sample research
               </a>
@@ -110,11 +160,15 @@ export function ResearchJourney() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[0.74fr_1fr] lg:items-start">
-            <div className="relative order-2 grid gap-4 lg:order-1 lg:pb-[18vh]">
-              <div className="absolute bottom-8 left-5 top-8 hidden w-px bg-white/[0.08] lg:block" aria-hidden="true">
+            <div ref={stepsContainerRef} className="relative order-2 grid gap-4 lg:order-1 lg:pb-[18vh] lg:pl-20">
+              <div
+                className="research-journey-line absolute left-9 hidden w-px bg-white/[0.08] lg:block"
+                style={{ top: timeline.top, height: timeline.height }}
+                aria-hidden="true"
+              >
                 <motion.div
-                  className="h-full origin-top bg-indigo-primary"
-                  animate={{ scaleY: (activeIndex + 1) / JOURNEY_STEPS.length }}
+                  className="research-journey-line-progress h-full origin-top bg-indigo-primary"
+                  animate={{ scaleY: timelineProgress }}
                   transition={reduceMotion ? { duration: 0 } : { duration: 0.28, ease: "easeOut" }}
                 />
               </div>
@@ -124,6 +178,9 @@ export function ResearchJourney() {
                   step={step}
                   index={index}
                   active={index === activeIndex}
+                  cardRef={(node) => {
+                    stepRefs.current[index] = node;
+                  }}
                   onVisible={handleStepVisible}
                 />
               ))}
@@ -143,11 +200,13 @@ function JourneyStepCard({
   step,
   index,
   active,
+  cardRef,
   onVisible,
 }: {
   step: JourneyStep;
   index: number;
   active: boolean;
+  cardRef: (node: HTMLDivElement | null) => void;
   onVisible: (index: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -160,15 +219,18 @@ function JourneyStepCard({
 
   return (
     <div
-      ref={ref}
+      ref={(node) => {
+        ref.current = node;
+        cardRef(node);
+      }}
       data-analytics-id={`landing-journey-step-${step.id}`}
-      className={`research-journey-step relative rounded-2xl border p-5 transition-colors duration-200 lg:ml-10 ${
+      className={`research-journey-step relative rounded-2xl border p-5 transition-colors duration-200 ${
         active
           ? "border-indigo-primary/34 bg-indigo-primary/[0.08]"
           : "border-white/[0.08] bg-white/[0.025]"
       }`}
     >
-      <div className="absolute -left-[2.35rem] top-5 hidden size-10 place-items-center rounded-full border border-white/[0.10] bg-[#07080b] text-white/50 lg:grid">
+      <div className="research-journey-node absolute -left-[3.85rem] top-1/2 hidden size-10 -translate-y-1/2 place-items-center rounded-full border border-white/[0.10] bg-[#07080b] text-white/50 lg:grid">
         <Icon className={`h-4 w-4 ${active ? "text-indigo-200" : ""}`} />
       </div>
       <div className="flex items-center gap-3">
