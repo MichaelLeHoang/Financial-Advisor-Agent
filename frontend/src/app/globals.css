@@ -924,6 +924,10 @@ body[data-theme="White"] .intro-primary-action:hover {
   background-color: #4338ca !important;
 }
 
+body[data-theme="White"] .hero-morphing-highlight {
+  color: #3730a3 !important;
+}
+
 body[data-theme="White"] .pricing-theme-lock {
   background: #050507 !important;
   color: rgba(255, 255, 255, 0.96) !important;

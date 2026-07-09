@@ -1,8 +1,17 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { ArrowRight, FileText } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { trackLandingEvent } from "./landing-analytics";
+
+const heroMorphingPhrases = [
+  "structured AI research",
+  "evidence-first analysis",
+  "measured portfolio risk",
+  "disciplined market decisions",
+];
 
 export function HeroSection() {
   const handleLaunchApp = () => {
@@ -22,9 +31,7 @@ export function HeroSection() {
         <h1 className="mt-6 font-heading text-[2.5rem] font-normal leading-none text-white sm:text-5xl md:text-6xl lg:text-7xl">
           Quantum Financial Advisor Platform
         </h1>
-        <p className="mx-auto mt-5 max-w-3xl text-base leading-7 text-white/50 sm:text-lg">
-          The art of structured AI research, risk analysis, and portfolio workflows for disciplined market decisions.
-        </p>
+        <HeroMorphingStatement />
         <div className="mt-7 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
           <button
             type="button"
@@ -46,5 +53,56 @@ export function HeroSection() {
         </div>
       </div>
     </section>
+  );
+}
+
+function HeroMorphingStatement() {
+  const reduceMotion = useReducedMotion();
+
+  return (
+    <p className="mx-auto mt-5 max-w-3xl text-base leading-7 text-white/50 sm:text-lg">
+      <span className="sr-only">The art of disciplined market decisions.</span>
+      <span
+        aria-hidden="true"
+        className="flex min-h-[3.25rem] flex-col items-center justify-center gap-1 text-left sm:min-h-[1.75rem] sm:flex-row sm:gap-1.5"
+      >
+        <span className="shrink-0">The art of</span>
+        <span className="hero-morphing-highlight relative inline-grid max-w-full justify-items-start text-indigo-200">
+          <span aria-hidden="true" className="invisible col-start-1 row-start-1 whitespace-nowrap">
+            disciplined market decisions
+          </span>
+          <span className="col-start-1 row-start-1 whitespace-nowrap text-left">
+            {reduceMotion ? "disciplined market decisions" : <MorphingText phrases={heroMorphingPhrases} />}
+          </span>
+        </span>
+      </span>
+    </p>
+  );
+}
+
+function MorphingText({ phrases }: { phrases: string[] }) {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setIndex((current) => (current + 1) % phrases.length);
+    }, index === 0 ? 2200 : 2100);
+
+    return () => window.clearTimeout(timeout);
+  }, [index, phrases.length]);
+
+  return (
+    <AnimatePresence mode="wait">
+      <motion.span
+        key={phrases[index]}
+        initial={{ opacity: 0, y: 8, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+        transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
+        className="block"
+      >
+        {phrases[index]}
+      </motion.span>
+    </AnimatePresence>
   );
 }
