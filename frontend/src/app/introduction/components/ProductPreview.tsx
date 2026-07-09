@@ -2,13 +2,23 @@
 
 import { useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, RefreshCw, RotateCcw, Sidebar, Terminal } from "lucide-react";
-import { animate as motionAnimate, motion, useDragControls, useMotionValue, useReducedMotion } from "motion/react";
+import {
+  animate as motionAnimate,
+  motion,
+  useDragControls,
+  useMotionValue,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+} from "motion/react";
 
 const INITIAL_TERMINAL_X = 320;
 const INITIAL_TERMINAL_Y = 170;
 
 export function ProductPreview() {
   const reduceMotion = useReducedMotion();
+  const sectionRef = useRef<HTMLElement>(null);
+  const containerRevealRef = useRef<HTMLDivElement>(null);
   const dragBoundsRef = useRef<HTMLDivElement>(null);
   const mainControls = useDragControls();
   const terminalControls = useDragControls();
@@ -18,6 +28,25 @@ export function ProductPreview() {
   const terminalY = useMotionValue(INITIAL_TERMINAL_Y);
   const [activeWindow, setActiveWindow] = useState<"main" | "terminal">("terminal");
   const [terminalPrompt, setTerminalPrompt] = useState("");
+  const { scrollYProgress: sectionProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start end", "end start"],
+  });
+  const { scrollYProgress: containerProgress } = useScroll({
+    target: containerRevealRef,
+    offset: ["start 0.9", "center 0.6"],
+  });
+  const backgroundY = useTransform(sectionProgress, [0, 1], reduceMotion ? [0, 0] : [-42, 42]);
+  const backgroundScale = useTransform(sectionProgress, [0, 1], reduceMotion ? [1, 1] : [1.08, 1.02]);
+  const revealClipPath = useTransform(
+    containerProgress,
+    [0, 1],
+    reduceMotion
+      ? ["inset(0% 0% 0% 0% round 1.45rem)", "inset(0% 0% 0% 0% round 1.45rem)"]
+      : ["inset(0% 47% 0% 47% round 1.45rem)", "inset(0% 0% 0% 0% round 1.45rem)"],
+  );
+  const revealScale = useTransform(containerProgress, [0, 1], reduceMotion ? [1, 1] : [0.98, 1]);
+  const revealY = useTransform(containerProgress, [0, 1], reduceMotion ? [0, 0] : [8, 0]);
 
   const resetWindows = () => {
     if (reduceMotion) {
@@ -36,12 +65,27 @@ export function ProductPreview() {
   };
 
   return (
-    <section className="landing-fixed-demo relative z-10 p-4 sm:p-6">
+    <section ref={sectionRef} className="landing-fixed-demo relative z-10 p-4 sm:p-6">
       <div className="mx-auto max-w-[1360px]">
-        <div className="relative isolate h-[550px] overflow-hidden rounded-[1.45rem] bg-[radial-gradient(circle_at_18%_8%,rgba(255,255,255,0.54),transparent_28%),linear-gradient(135deg,#d7d0c4,#aaa08f_48%,#d6cab8)] shadow-[0_38px_120px_rgba(0,0,0,0.42)] sm:h-[650px] sm:bg-[url('/art-background.webp')] sm:bg-cover sm:bg-center lg:h-[730px]">
+        <motion.div
+          ref={containerRevealRef}
+          className="relative isolate h-[550px] overflow-hidden rounded-[1.45rem] bg-[radial-gradient(circle_at_18%_8%,rgba(255,255,255,0.54),transparent_28%),linear-gradient(135deg,#d7d0c4,#aaa08f_48%,#d6cab8)] shadow-[0_38px_120px_rgba(0,0,0,0.42)] sm:h-[650px] lg:h-[730px]"
+          style={{ clipPath: revealClipPath, scale: revealScale, y: revealY }}
+        >
           <div className="sr-only" aria-live="polite">
             Interactive demo showing draggable Quanfora desktop and terminal windows over a fixed macOS-style background.
           </div>
+          <motion.div
+            aria-hidden="true"
+            className="absolute inset-0 hidden sm:block"
+            style={{
+              y: backgroundY,
+              scale: backgroundScale,
+              backgroundImage: "url('/art-background.webp')",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }}
+          />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_8%,rgba(255,255,255,0.52),transparent_26%),linear-gradient(180deg,rgba(20,18,12,0.05),rgba(20,18,12,0.18))]" aria-hidden="true" />
           <div ref={dragBoundsRef} className="pointer-events-none absolute inset-5 sm:inset-8" aria-hidden="true" />
 
@@ -177,7 +221,7 @@ export function ProductPreview() {
           >
             <RotateCcw className="size-5" />
           </button>
-        </div>
+        </motion.div>
       </div>
     </section>
   );

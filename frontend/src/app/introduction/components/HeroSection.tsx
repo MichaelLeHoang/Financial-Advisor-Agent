@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, FileText } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { trackLandingEvent } from "./landing-analytics";
@@ -14,6 +14,11 @@ const heroMorphingPhrases = [
 ];
 
 export function HeroSection() {
+  const reduceMotion = useReducedMotion();
+  const entranceInitial = reduceMotion ? false : { opacity: 0, y: 18, scale: 0.985 };
+  const entranceAnimate = { opacity: 1, y: 0, scale: 1 };
+  const entranceTransition = { duration: 0.58, ease: [0.16, 1, 0.3, 1] as const };
+
   const handleLaunchApp = () => {
     trackLandingEvent("landing_launch_app_click", { location: "hero_primary" });
     window.localStorage.setItem("financial-advisor.coverSeen", "true");
@@ -23,34 +28,46 @@ export function HeroSection() {
   return (
     <section className="relative z-10 flex min-h-[70dvh] items-center justify-center px-6 pb-2 pt-24 text-center sm:min-h-[58dvh] sm:px-8 sm:pb-4 sm:pt-28">
       <div className="mx-auto w-full max-w-5xl">
-        <div>
+        <motion.div initial={entranceInitial} animate={entranceAnimate} transition={entranceTransition}>
           <span className="inline-flex items-center rounded-full border border-white/[0.12] px-4 py-1.5 text-xs font-medium text-white/55">
             AI + Quantum Finance
           </span>
-        </div>
-        <h1 className="mt-6 font-heading text-[2.5rem] font-normal leading-none text-white sm:text-5xl md:text-6xl lg:text-7xl">
+        </motion.div>
+        <motion.h1
+          initial={entranceInitial}
+          animate={entranceAnimate}
+          transition={{ ...entranceTransition, delay: reduceMotion ? 0 : 0.08 }}
+          className="mt-6 font-heading text-[2.5rem] font-normal leading-none text-white sm:text-5xl md:text-6xl lg:text-7xl"
+        >
           Quantum Financial Advisor Platform
-        </h1>
-        <HeroMorphingStatement />
-        <div className="mt-7 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+        </motion.h1>
+        <motion.div initial={entranceInitial} animate={entranceAnimate} transition={{ ...entranceTransition, delay: reduceMotion ? 0 : 0.16 }}>
+          <HeroMorphingStatement />
+        </motion.div>
+        <motion.div
+          initial={entranceInitial}
+          animate={entranceAnimate}
+          transition={{ ...entranceTransition, delay: reduceMotion ? 0 : 0.24 }}
+          className="mt-7 flex flex-col items-center gap-3 sm:flex-row sm:justify-center"
+        >
           <button
             type="button"
             onClick={handleLaunchApp}
             data-analytics-id="landing-hero-launch-app"
-            className="intro-primary-action group inline-flex h-12 items-center gap-2.5 rounded-full px-7 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+            className="intro-primary-action inline-flex h-12 items-center rounded-full px-7 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
           >
-            Launch App <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            Launch App
           </button>
           <a
-            href="#samples"
-            data-analytics-id="landing-hero-sample-research"
-            onClick={() => trackLandingEvent("landing_sample_research_click", { location: "hero_secondary" })}
-            className="inline-flex h-12 items-center gap-2 rounded-full border border-white/[0.14] px-6 text-sm font-medium text-white/66 transition-colors hover:border-white/28 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+            href="/pricing"
+            data-analytics-id="landing-hero-see-plans"
+            onClick={() => trackLandingEvent("landing_pricing_click", { location: "hero_secondary" })}
+            className="group inline-flex h-12 items-center gap-2 rounded-full border border-white/[0.14] px-6 text-sm font-medium text-white/66 transition-colors hover:border-white/28 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
           >
-            <FileText className="h-4 w-4" />
-            View Sample Research
+            See our plan
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </a>
-        </div>
+        </motion.div>
       </div>
     </section>
   );
