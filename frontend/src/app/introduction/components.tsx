@@ -2,7 +2,8 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { LayoutGroup, motion } from "motion/react";
 import { BookOpen, BookOpenText, LogOut, Menu, Moon, Newspaper, Search, Sun, User, X } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,6 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { HighlightPill } from "@/components/ui/highlight-pill";
 import { getAvatarColor, getAvatarInitials } from "@/lib/avatar";
 import SearchModal from "@/components/SearchModal";
 import {
@@ -35,6 +37,7 @@ const NAV_LINKS = [
 
 export function IntroductionNav() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, loading, signOut } = useAuth();
   const isSignedIn = Boolean(user && !user.is_guest);
   const showSignedOutActions = !loading && !isSignedIn;
@@ -45,6 +48,7 @@ export function IntroductionNav() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [theme, setTheme] = useState<"Deep Space" | "White">("Deep Space");
   const [isScrolled, setIsScrolled] = useState(false);
+  const [activeSection, setActiveSection] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -62,13 +66,25 @@ export function IntroductionNav() {
     };
 
     const handleScroll = () => setIsScrolled(window.scrollY > 16);
+    const samplesSection = window.document.getElementById("samples");
+    const observer = samplesSection
+      ? new IntersectionObserver(
+          (entries) => {
+            const entry = entries[0];
+            setActiveSection(entry?.isIntersecting ? "samples" : null);
+          },
+          { threshold: 0.35 },
+        )
+      : null;
 
     handleScroll();
+    if (samplesSection && observer) observer.observe(samplesSection);
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("scroll", handleScroll);
+      observer?.disconnect();
     };
   }, []);
 
@@ -101,14 +117,33 @@ export function IntroductionNav() {
     window.dispatchEvent(new CustomEvent("financial-advisor:theme-change", { detail: nextTheme }));
   };
 
+  useEffect(() => {
+    if (pathname.startsWith("/pricing")) {
+      setActiveSection("pricing");
+      return;
+    }
+
+    if (pathname.startsWith("/help")) {
+      setActiveSection("help");
+      return;
+    }
+
+    if (pathname === "/") {
+      setActiveSection(null);
+      return;
+    }
+
+    setActiveSection(null);
+  }, [pathname]);
+
   return (
     <header className="introduction-nav fixed inset-x-0 top-0 z-50 px-4 py-3 sm:px-8 sm:py-4">
       <div
-        className={`mx-auto flex max-w-6xl items-center justify-between rounded-2xl px-4 py-2.5 transition-[background-color,box-shadow,backdrop-filter] duration-200 sm:px-5 ${
+        className={`mx-auto flex max-w-6xl items-center justify-between rounded-full px-4 py-2.5 transition-[background-color,box-shadow,backdrop-filter] duration-200 sm:px-5 ${
           isScrolled || mobileOpen
             ? theme === "White"
-              ? "bg-[#e9e6e0]/80 shadow-[0_10px_30px_rgba(18,26,44,0.10)] backdrop-blur-xl"
-              : "bg-black/70 shadow-[0_12px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl"
+              ? "bg-[#e9e6e0]/84 shadow-[0_10px_30px_rgba(18,26,44,0.10)] backdrop-blur-xl"
+              : "bg-black/72 shadow-[0_12px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl"
             : "bg-transparent shadow-none backdrop-blur-none"
         }`}
         style={
@@ -141,120 +176,117 @@ export function IntroductionNav() {
           } as CSSProperties
         }
       >
-        <Link
-          href="/"
-          aria-label="Quanfora home"
-          className="flex shrink-0 items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.svg" alt="" className="size-8 object-contain" />
-          <span className="hidden text-sm font-semibold text-[var(--intro-nav-primary)] sm:block">
-            Quanfora
-          </span>
-        </Link>
+        <motion.div animate={{ x: isScrolled || mobileOpen ? -2 : 0 }} transition={{ type: "spring", stiffness: 260, damping: 28 }}>
+          <Link
+            href="/"
+            aria-label="Quanfora home"
+            className="flex shrink-0 items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="" className="size-8 object-contain" />
+            <span className="hidden text-sm font-semibold text-[var(--intro-nav-primary)] sm:block">
+              Quanfora
+            </span>
+          </Link>
+        </motion.div>
 
         <nav className="hidden items-center lg:flex" aria-label="Primary navigation">
           <NavigationMenu viewport={false}>
-            <NavigationMenuList className="gap-1">
-              {NAV_LINKS.slice(0, 2).map((item) => (
-                <NavigationMenuItem key={item.href}>
-                  <NavigationMenuLink
-                    asChild
-                    className={`${navigationMenuTriggerStyle()} text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[active=true]:bg-transparent`}
-                  >
-                    <Link href={item.href}>{item.label}</Link>
-                  </NavigationMenuLink>
-                </NavigationMenuItem>
-              ))}
-              <NavigationMenuItem>
-                <NavigationMenuTrigger className="text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[state=open]:bg-transparent data-[state=open]:text-[var(--intro-nav-primary)]">
-                  Resources
-                </NavigationMenuTrigger>
-                <NavigationMenuContent>
-                  <ul className="grid w-[220px] gap-1 p-2">
-                    {isSignedIn && (
+            <NavigationMenuList className="gap-2">
+              <LayoutGroup id="landing-nav-highlight">
+                {NAV_LINKS.slice(0, 2).map((item) => (
+                  <NavigationMenuItem key={item.href}>
+                    <LandingNavItem item={item} activeSection={activeSection} />
+                  </NavigationMenuItem>
+                ))}
+                <NavigationMenuItem>
+                  <NavigationMenuTrigger className="text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[state=open]:bg-transparent data-[state=open]:text-[var(--intro-nav-primary)]">
+                    Resources
+                  </NavigationMenuTrigger>
+                  <NavigationMenuContent>
+                    <ul className="grid w-[220px] gap-1 p-2">
+                      {isSignedIn && (
+                        <li>
+                          <NavigationMenuLink asChild>
+                            <Link href="/news" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
+                              <div className="intro-resource-icon flex size-8 items-center justify-center rounded-md bg-white/5 text-white/70 transition-colors">
+                                <Newspaper className="size-4" />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="intro-resource-title text-sm font-medium text-white/90 transition-colors">News</span>
+                                <span className="intro-resource-subtitle text-xs text-white/40 transition-colors">Market insights</span>
+                              </div>
+                            </Link>
+                          </NavigationMenuLink>
+                        </li>
+                      )}
                       <li>
                         <NavigationMenuLink asChild>
-                          <Link href="/news" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
+                          <Link href="/docs" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
                             <div className="intro-resource-icon flex size-8 items-center justify-center rounded-md bg-white/5 text-white/70 transition-colors">
-                              <Newspaper className="size-4" />
+                              <BookOpenText className="size-4" />
                             </div>
                             <div className="flex flex-col">
-                              <span className="intro-resource-title text-sm font-medium text-white/90 transition-colors">News</span>
-                              <span className="intro-resource-subtitle text-xs text-white/40 transition-colors">Market insights</span>
+                              <span className="intro-resource-title text-sm font-medium text-white/90 transition-colors">Docs</span>
+                              <span className="intro-resource-subtitle text-xs text-white/40 transition-colors">Product guide</span>
                             </div>
                           </Link>
                         </NavigationMenuLink>
                       </li>
-                    )}
-                    <li>
-                      <NavigationMenuLink asChild>
-                        <Link href="/docs" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
-                          <div className="intro-resource-icon flex size-8 items-center justify-center rounded-md bg-white/5 text-white/70 transition-colors">
-                            <BookOpenText className="size-4" />
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="intro-resource-title text-sm font-medium text-white/90 transition-colors">Docs</span>
-                            <span className="intro-resource-subtitle text-xs text-white/40 transition-colors">Product guide</span>
-                          </div>
-                        </Link>
-                      </NavigationMenuLink>
-                    </li>
-                    <li>
-                      <NavigationMenuLink asChild>
-                        <Link href="/blog" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
-                          <div className="intro-resource-icon flex size-8 items-center justify-center rounded-md bg-white/5 text-white/70 transition-colors">
-                            <BookOpen className="size-4" />
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="intro-resource-title text-sm font-medium text-white/90 transition-colors">Blog</span>
-                            <span className="intro-resource-subtitle text-xs text-white/40 transition-colors">Our articles</span>
-                          </div>
-                        </Link>
-                      </NavigationMenuLink>
-                    </li>
-                  </ul>
-                </NavigationMenuContent>
-              </NavigationMenuItem>
-              {NAV_LINKS.slice(2).map((item) => (
-                <NavigationMenuItem key={item.href}>
-                  <NavigationMenuLink
-                    asChild
-                    className={`${navigationMenuTriggerStyle()} text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[active=true]:bg-transparent`}
-                  >
-                    <Link href={item.href}>{item.label}</Link>
-                  </NavigationMenuLink>
+                      <li>
+                        <NavigationMenuLink asChild>
+                          <Link href="/blog" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
+                            <div className="intro-resource-icon flex size-8 items-center justify-center rounded-md bg-white/5 text-white/70 transition-colors">
+                              <BookOpen className="size-4" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="intro-resource-title text-sm font-medium text-white/90 transition-colors">Blog</span>
+                              <span className="intro-resource-subtitle text-xs text-white/40 transition-colors">Our articles</span>
+                            </div>
+                          </Link>
+                        </NavigationMenuLink>
+                      </li>
+                    </ul>
+                  </NavigationMenuContent>
                 </NavigationMenuItem>
-              ))}
-              {isSignedIn && (
-                <NavigationMenuItem>
-                  <NavigationMenuLink
-                    asChild
-                    className={`${navigationMenuTriggerStyle()} text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[active=true]:bg-transparent`}
-                  >
-                    <Link href="/contact-sales">Contact</Link>
-                  </NavigationMenuLink>
-                </NavigationMenuItem>
-              )}
+                {NAV_LINKS.slice(2).map((item) => (
+                  <NavigationMenuItem key={item.href}>
+                    <LandingNavItem item={item} activeSection={activeSection} />
+                  </NavigationMenuItem>
+                ))}
+                {isSignedIn && (
+                  <NavigationMenuItem>
+                    <NavigationMenuLink
+                      asChild
+                      className={`${navigationMenuTriggerStyle()} text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[active=true]:bg-transparent`}
+                    >
+                      <Link href="/contact-sales">Contact</Link>
+                    </NavigationMenuLink>
+                  </NavigationMenuItem>
+                )}
+              </LayoutGroup>
             </NavigationMenuList>
           </NavigationMenu>
         </nav>
 
         <div className="flex items-center gap-2">
-          <button
+          <motion.button
             type="button"
             aria-label="Search (⌘K)"
             onClick={() => setSearchOpen(true)}
-            className="flex size-9 items-center justify-center rounded-lg text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+            initial={false}
+            animate={isScrolled || mobileOpen ? { opacity: 1, x: 0 } : { opacity: 0, x: 12 }}
+            transition={{ type: "spring", stiffness: 260, damping: 24 }}
+            className="flex size-9 items-center justify-center rounded-full text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
           >
             <Search className="size-4" />
-          </button>
+          </motion.button>
           <button
             type="button"
             aria-label={theme === "White" ? "Switch to dark theme" : "Switch to light theme"}
             aria-pressed={theme === "White"}
             onClick={toggleTheme}
-            className="flex size-9 items-center justify-center rounded-lg text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+            className="flex size-9 items-center justify-center rounded-full text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
           >
             {theme === "White" ? <Moon className="size-4" /> : <Sun className="size-4" />}
           </button>
@@ -301,18 +333,32 @@ export function IntroductionNav() {
             </>
           ) : showSignedOutActions ? (
             <>
-              <Link
-                href="/contact-sales"
-                className="hidden h-9 items-center rounded-full border border-white/[0.14] px-4 text-sm font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:inline-flex"
+              <motion.div
+                initial={false}
+                animate={isScrolled || mobileOpen ? { opacity: 1, x: 0 } : { opacity: 0, x: 12 }}
+                transition={{ type: "spring", stiffness: 260, damping: 24 }}
+                className="hidden sm:block"
               >
-                Contact Sales
-              </Link>
-              <Link
-                href="/login"
-                className="hidden h-9 items-center rounded-full bg-[var(--intro-nav-action-bg)] px-4 text-sm font-semibold text-[var(--intro-nav-action-text)] transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 sm:inline-flex"
+                <Link
+                  href="/contact-sales"
+                  className="flex h-9 items-center rounded-full border border-white/[0.14] px-4 text-sm font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  Contact Sales
+                </Link>
+              </motion.div>
+              <motion.div
+                initial={false}
+                animate={isScrolled || mobileOpen ? { opacity: 1, x: 0 } : { opacity: 0, x: 12 }}
+                transition={{ type: "spring", stiffness: 260, damping: 24 }}
+                className="hidden sm:block"
               >
-                Sign in
-              </Link>
+                <Link
+                  href="/login"
+                  className="flex h-9 items-center rounded-full bg-[var(--intro-nav-action-bg)] px-4 text-sm font-semibold text-[var(--intro-nav-action-text)] transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                >
+                  Sign in
+                </Link>
+              </motion.div>
             </>
           ) : null}
           <button
@@ -320,7 +366,7 @@ export function IntroductionNav() {
             aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
             aria-expanded={mobileOpen}
             onClick={() => setMobileOpen((open) => !open)}
-            className="flex size-9 items-center justify-center rounded-lg text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 lg:hidden"
+            className="flex size-9 items-center justify-center rounded-full text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 lg:hidden"
           >
             {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
           </button>
@@ -452,6 +498,33 @@ export function IntroductionNav() {
       )}
       <SearchModal open={searchOpen} onOpenChange={setSearchOpen} />
     </header>
+  );
+}
+
+function LandingNavItem({
+  item,
+  activeSection,
+}: {
+  item: (typeof NAV_LINKS)[number];
+  activeSection: string | null;
+}) {
+  const isActive =
+    (item.href === "/#samples" && activeSection === "samples")
+    || (item.href === "/pricing" && activeSection === "pricing")
+    || (item.href === "/help" && activeSection === "help");
+
+  return (
+    <div className="relative">
+      {isActive ? (
+        <HighlightPill layoutId="landing-nav-pill" className="absolute inset-0 rounded-full bg-white/[0.08]" />
+      ) : null}
+      <NavigationMenuLink
+        asChild
+        className={`${navigationMenuTriggerStyle()} relative z-10 rounded-full bg-transparent text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[active=true]:bg-transparent`}
+      >
+        <Link href={item.href}>{item.label}</Link>
+      </NavigationMenuLink>
+    </div>
   );
 }
 

@@ -7,6 +7,7 @@ import { Atom, Brain, MessageSquare, PieChart, Shield, TrendingUp, X } from "luc
 import Markdown from "@/components/ui/markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TestimonialsMinimal } from "@/components/ui/minimal-testimonial";
+import { HighlightPill } from "@/components/ui/highlight-pill";
 
 import { IntroductionFooter, IntroductionNav } from "./components";
 import { HeroSection } from "./components/HeroSection";
@@ -198,29 +199,33 @@ function SamplesSection() {
         </SectionReveal>
 
         <nav className="mb-8 flex justify-center" role="tablist" aria-label="Sample tabs">
-          <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-white/[0.08] p-1">
+          <div className="relative inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] p-1">
             {SAMPLES.map((sample) => (
-              <button
-                key={sample.id}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === sample.id}
-                data-analytics-id={`landing-sample-tab-${sample.id}`}
-                onClick={() => {
-                  setActiveTab(sample.id);
-                  trackLandingEvent("landing_sample_research_click", {
-                    location: "sample_tabs",
-                    sample_id: sample.id,
-                  });
-                }}
-                className={`rounded-full px-4 py-2.5 text-sm font-medium transition-colors duration-200 ${
-                  activeTab === sample.id
-                    ? "bg-white/[0.08] text-white"
-                    : "text-white/40 hover:bg-white/[0.04] hover:text-white/60"
-                }`}
-              >
-                {sample.label}
-              </button>
+              <div key={sample.id} className="relative">
+                {activeTab === sample.id && (
+                  <HighlightPill layoutId="landing-samples-pill" className="absolute inset-0 rounded-full bg-white/[0.08]" />
+                )}
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === sample.id}
+                  data-analytics-id={`landing-sample-tab-${sample.id}`}
+                  onClick={() => {
+                    setActiveTab(sample.id);
+                    trackLandingEvent("landing_sample_research_click", {
+                      location: "sample_tabs",
+                      sample_id: sample.id,
+                    });
+                  }}
+                  className={`relative z-10 rounded-full px-4 py-2.5 text-sm font-medium transition-colors duration-200 ${
+                    activeTab === sample.id
+                      ? "text-white"
+                      : "text-white/40 hover:bg-white/[0.04] hover:text-white/60"
+                  }`}
+                >
+                  {sample.label}
+                </button>
+              </div>
             ))}
           </div>
         </nav>

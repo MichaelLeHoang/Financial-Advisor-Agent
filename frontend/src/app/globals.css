@@ -924,6 +924,39 @@ body[data-theme="White"] .intro-primary-action:hover {
   background-color: #4338ca !important;
 }
 
+body[data-theme="White"] .pricing-theme-lock {
+  background: #050507 !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+  color-scheme: dark;
+}
+
+body[data-theme="White"] .pricing-theme-lock [class*="bg-white/"],
+body[data-theme="White"] .pricing-theme-lock [class*="bg-white\\["] {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+  backdrop-filter: inherit !important;
+}
+
+body[data-theme="White"] .pricing-theme-lock [class~="bg-white"] {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+}
+
+body[data-theme="White"] .pricing-theme-lock [class*="border-white/"],
+body[data-theme="White"] .pricing-theme-lock [class*="border-white\\["] {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+body[data-theme="White"] .pricing-theme-lock [class~="text-white"] {
+  color: rgba(255, 255, 255, 0.96) !important;
+}
+
+body[data-theme="White"] .pricing-theme-lock [class*="text-white/"] {
+  color: rgba(255, 255, 255, 0.62) !important;
+}
+
+body[data-theme="White"] .pricing-theme-lock [class~="text-black"] {
+  color: #000000 !important;
+}
+
 body[data-theme="White"] .introduction-nav nav [data-slot="navigation-menu-link"],
 body[data-theme="White"] .introduction-nav nav [data-slot="navigation-menu-trigger"] {
   background-color: transparent !important;

@@ -24,6 +24,7 @@ import {
   type PlanId,
 } from "@/config/plans";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { HighlightPill } from "@/components/ui/highlight-pill";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { api, type AuthUser as ApiAuthUser, type BillingSubscription } from "@/lib/api";
 
@@ -52,6 +53,28 @@ export default function PricingPage() {
   const [loadingPlan, setLoadingPlan] = useState<PlanId | "portal" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    const previousTheme = document.body.dataset.theme;
+    const applyDarkTheme = () => {
+      if (document.body.dataset.theme !== "Deep Space") {
+        document.body.dataset.theme = "Deep Space";
+      }
+    };
+
+    applyDarkTheme();
+    const observer = new MutationObserver(applyDarkTheme);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["data-theme"] });
+
+    return () => {
+      observer.disconnect();
+      if (previousTheme) {
+        document.body.dataset.theme = previousTheme;
+      } else {
+        delete document.body.dataset.theme;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -127,7 +150,7 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="dark relative min-h-screen overflow-hidden bg-[#050507] text-white" data-theme="Deep Space">
+    <div className="pricing-theme-lock dark relative min-h-screen overflow-hidden bg-[#050507] text-white" data-theme="Deep Space">
       <div className="pointer-events-none fixed inset-0 z-0">
         <div className="absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(circle_at_50%_0%,rgba(99,102,241,0.16),transparent_56%)]" />
         <div className="absolute bottom-0 right-0 h-[520px] w-[520px] translate-x-1/4 translate-y-1/4 rounded-full bg-cyan-500/[0.045] blur-[110px]" />
@@ -239,16 +262,19 @@ export default function PricingPage() {
 function PricingNav({ isGuest }: { isGuest: boolean }) {
   return (
     <header className="fixed inset-x-0 top-0 z-50 px-4 py-4">
-      <nav className="mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center justify-center gap-6 rounded-full bg-[#1f2024]/86 px-4 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl sm:gap-8">
+      <nav className="mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center justify-center gap-6 rounded-full bg-black/72 px-4 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl sm:gap-8">
         <Link href="/" className="flex shrink-0 items-center gap-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.svg" alt="" aria-hidden="true" className="size-6 object-contain" />
           <span className="hidden text-sm font-semibold text-white/92 sm:block">Quanfora</span>
         </Link>
         <div className="flex items-center gap-1 text-sm font-semibold text-white/58">
-          <Link href="/pricing" className="rounded-full px-2.5 py-1.5 text-white/92 transition-colors hover:bg-white/[0.08] hover:text-white">
-            Pricing
-          </Link>
+          <div className="relative">
+            <HighlightPill layoutId="pricing-nav-pill" className="absolute inset-0 rounded-full bg-white/[0.08]" />
+            <Link href="/pricing" className="relative z-10 block rounded-full px-2.5 py-1.5 text-white/92 transition-colors hover:text-white">
+              Pricing
+            </Link>
+          </div>
           <Link href="/help" className="hidden rounded-full px-2.5 py-1.5 transition-colors hover:bg-white/[0.08] hover:text-white sm:inline-flex">
             Help
           </Link>
@@ -276,27 +302,31 @@ function BillingCycleToggle({
 }) {
   return (
     <div
-      className="inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.035] p-1 text-sm font-semibold text-white/44 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+      className="relative inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.035] p-1 text-sm font-semibold text-white/44 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
       role="radiogroup"
       aria-label="Billing cycle"
     >
       {(["monthly", "yearly"] as const).map((cycle) => {
         const isSelected = value === cycle;
         return (
-          <button
-            key={cycle}
-            type="button"
-            role="radio"
-            aria-checked={isSelected}
-            onClick={() => onChange(cycle)}
-            className={`min-w-24 rounded-full px-5 py-2.5 transition-all duration-200 ${
-              isSelected
-                ? "bg-white/[0.10] text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)]"
-                : "text-white/42 hover:bg-white/[0.04] hover:text-white/68"
-            }`}
-          >
-            {cycle === "monthly" ? "Monthly" : "Yearly"}
-          </button>
+          <div key={cycle} className="relative">
+            {isSelected && (
+              <HighlightPill layoutId="pricing-billing-cycle-pill" className="absolute inset-0 rounded-full bg-white/[0.10] shadow-[0_8px_24px_rgba(0,0,0,0.18)]" />
+            )}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={isSelected}
+              onClick={() => onChange(cycle)}
+              className={`relative z-10 min-w-24 rounded-full px-5 py-2.5 transition-colors duration-200 ${
+                isSelected
+                  ? "text-white"
+                  : "text-white/42 hover:bg-white/[0.04] hover:text-white/68"
+              }`}
+            >
+              {cycle === "monthly" ? "Monthly" : "Yearly"}
+            </button>
+          </div>
         );
       })}
     </div>
