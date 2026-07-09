@@ -28,4 +28,4 @@ Reuse `data.market_data_service`, `llm.gateway`, `risk`, `quant`, and `saas` rat
 Cover routing, grounding, overview metadata, response structure, follow-up context, response caching, consensus, queue state, history ownership, and tool failure behavior with mocked providers.
 
 ## Latest Change
-- Refined Quanfora chat response structure so decision answers lead with a direct verdict while preserving the detailed stock-analysis blocks and markdown formatting for current price, news/sentiment, prediction, model performance, and conclusion.
+- Added stock-specific Market Overall response guidance across single-agent, consensus, and full equity-research answers; renamed the combined chat tab to Overall and bumped the chat-response cache version so prior formatted answers are not reused.

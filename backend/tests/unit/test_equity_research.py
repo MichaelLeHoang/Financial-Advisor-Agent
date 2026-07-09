@@ -202,6 +202,8 @@ def test_pm_report_uses_trading_structure():
     )
     markdown, points, _, _ = _pm_report(run, snapshot, {})
     assert "# Final Trading Bias" in markdown
+    assert "## Market Overall" in markdown
+    assert "broad index direction" in markdown
     assert "## Technical Setup" in markdown
     assert "## Trade Plan" in markdown
     assert "## ROI Forecast" in markdown
@@ -246,6 +248,8 @@ def test_pm_report_uses_investment_structure():
     )
     markdown, points, _, _ = _pm_report(run, snapshot, {})
     assert "# Final Investment View" in markdown
+    assert "## Market Overall" in markdown
+    assert "broad index direction" in markdown
     assert "## Long-Term Thesis" in markdown
     assert "## Portfolio Fit" in markdown
     assert "## ROI Forecast" in markdown

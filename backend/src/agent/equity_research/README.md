@@ -23,4 +23,4 @@ API transport stays in `api/equity_research.py`; shared request and response mod
 Test entitlement normalization, report objective gating, report limits, invalid tickers, missing prices, deterministic final decisions, structured overviews, decision workspace tabs, and run-state transitions without live providers.
 
 ## Latest Change
-- Added structured Overview payloads to completed equity research runs so chat, saved workspaces, and shared reports can render a reader-friendly first screen before the detailed reports.
+- Added a deterministic Market Overall section to investment and trading final reports so Quanfora 2.1 responses explain the broader market, sector, macro, and risk-appetite backdrop around the stock.

@@ -7,7 +7,7 @@ from src.config import settings
 from src.core.cache import cached_value
 from src.saas.models import Plan
 
-CHAT_RESPONSE_CACHE_VERSION = 2
+CHAT_RESPONSE_CACHE_VERSION = 4
 
 
 def normalized_chat_message(message: str) -> str:

@@ -110,25 +110,52 @@ type PredictionSummary = {
 };
 
 function parsePredictionSummary(content: string): PredictionSummary | null {
-  if (!content.includes("ML Direction:") || !content.includes("Final Signal:")) return null;
-
-  const lines = content.split("\n").map((line) => line.trim()).filter(Boolean);
-  const findValue = (label: string) => {
-    const line = lines.find((item) => item.startsWith(label) || item.startsWith(`- ${label}`));
-    return line?.replace(/^- /, "").replace(label, "").trim() || "Unavailable";
+  const normalizeLine = (line: string) =>
+    line
+      .trim()
+      .replace(/^[-*]\s+/, "")
+      .replace(/\*\*/g, "")
+      .replace(/`/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const lines = content.split("\n").map(normalizeLine).filter(Boolean);
+  const findValue = (labels: string[]) => {
+    for (const line of lines) {
+      for (const label of labels) {
+        const match = line.match(new RegExp(`^${escapeRegExp(label)}\\s*:?\\s*(.+)$`, "i"));
+        if (match?.[1]?.trim()) return match[1].trim();
+      }
+    }
+    return "Unavailable";
   };
-  const performanceLine = lines.find((line) => line.startsWith("- Weighted Ensemble:")) || lines.find((line) => line.startsWith("- Random Forest:")) || "";
-  const confidenceLine = lines.find((line) => line.startsWith("Confidence:"))?.replace(/\.$/, "") || "";
+
+  const mlDirection = findValue(["ML Direction"]);
+  const valuationTarget = findValue(["Valuation Target"]);
+  const impliedUpside = findValue(["Implied Upside/Downside", "Expected move", "Expected Move"]);
+  const finalSignal = findValue(["Final Signal"]);
+  const performanceLine =
+    lines.find((line) => /^Weighted Ensemble:/i.test(line))
+    || lines.find((line) => /^Random Forest:/i.test(line))
+    || lines.find((line) => /^LSTM:/i.test(line))
+    || lines.find((line) => /^Model Performance:/i.test(line) && !line.endsWith(":"))
+    || lines.find((line) => /^Model Breakdown:/i.test(line) && !line.endsWith(":"))
+    || "";
+  const confidenceLine = lines.find((line) => /^Confidence:/i.test(line))?.replace(/\.$/, "") || "";
   const disclaimer =
     lines.find((line) => line.includes("not professional financial advice") || line.includes("not financial advice")) ||
     "This is educational analysis, not financial advice.";
+  const modelPerformance = [confidenceLine, performanceLine].filter(Boolean).join(" | ") || "Unavailable";
+  const hasPredictionData = [mlDirection, valuationTarget, impliedUpside, finalSignal, modelPerformance].some((value) => value !== "Unavailable");
+
+  if (!hasPredictionData) return null;
 
   return {
-    mlDirection: findValue("ML Direction:"),
-    valuationTarget: findValue("Valuation Target:"),
-    impliedUpside: findValue("Implied Upside/Downside:"),
-    finalSignal: findValue("Final Signal:"),
-    modelPerformance: [confidenceLine, performanceLine.replace(/^- /, "")].filter(Boolean).join(" | ") || "Unavailable",
+    mlDirection,
+    valuationTarget,
+    impliedUpside,
+    finalSignal,
+    modelPerformance,
     disclaimer,
   };
 }
@@ -1439,7 +1466,7 @@ function ConsensusMessageTabs({ content, opinions }: { content: string; opinions
   return (
     <div className="space-y-3">
       <ResponseTabs
-        tabs={[{ id: "combined", label: "Combined" }, ...opinions.map((opinion) => ({ id: opinion.agent, label: opinion.agent.replaceAll("_", " ") }))]}
+        tabs={[{ id: "combined", label: "Overall" }, ...opinions.map((opinion) => ({ id: opinion.agent, label: opinion.agent.replaceAll("_", " ") }))]}
         active={active}
         onChange={setActive}
       />
@@ -1514,11 +1541,11 @@ function AssistantMessageContent({ content, consensusOpinions, overview }: { con
     <div className="space-y-3">
       {overview && <OverviewCard overview={overview} />}
       <div className="rounded-xl border border-white/[0.10] bg-white/[0.04] p-3">
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
           {rows.map(([label, value]) => (
             <div key={label} className={cn(label === "Model Performance" ? "sm:col-span-2" : "", "min-w-0")}>
-              <div className="text-[11px] font-medium uppercase tracking-normal text-white/45">{label}</div>
-              <div className="mt-1 break-words text-sm font-semibold text-white/90">{value}</div>
+              <div className="text-[11px] font-semibold uppercase tracking-normal text-white/38">{label}</div>
+              <div className="mt-1 break-words text-sm font-semibold text-white/88">{value}</div>
             </div>
           ))}
         </div>

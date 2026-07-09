@@ -63,6 +63,7 @@ Then preserve the useful consensus/report evidence instead of replacing it with 
 
 Use concise markdown sections when applicable:
 - ## Why
+- ## Market Overall
 - ## Bull Case
 - ## Bear / Risk Case
 - ## Agent Consensus
@@ -79,6 +80,7 @@ For broad market or sector questions, use:
 
 Rules:
 - Be specific with numbers from the specialist outputs.
+- For ticker-specific stock answers, include "Market Overall" to explain what the broader market, sector, and macro tape are doing around the stock when available.
 - Keep the strongest details from the specialists: current price/action, sentiment/news, model or technical signals, validation quality, risk metrics, and portfolio implications when provided.
 - Translate internal mechanics into plain implications. Do not lead with terms like "risk veto", "agreement ratio", "consensus score", or "tool failure" in the main answer unless they materially change the recommendation.
 - Do not use the old report headings "Final Consensus", "Specialist Breakdown", "Disagreement and Dissent", or "Actionable Research Next Steps".

@@ -1285,12 +1285,12 @@ def _maybe_enhance_with_llm(
             else "longer-horizon investment thesis"
         )
         section_policy = (
-            "For the Portfolio Manager final report, use exactly these top-level sections: Market Snapshot; "
+            "For the Portfolio Manager final report, use exactly these top-level sections: Market Snapshot; Market Overall; "
             "Technical Setup; Catalyst & Sentiment; Trade Plan; ROI Forecast; Risk / Invalidation; Bull vs Bear Scenario; "
             "Final Trading Bias; Confidence + What Would Change The View. The Final Trading Bias section must choose exactly one of bullish, neutral, or bearish."
             if agent.key == "pm" and run.report_type == ReportType.TRADING
             else (
-                "For the Portfolio Manager final report, use exactly these top-level sections: Company / Asset Overview; "
+                "For the Portfolio Manager final report, use exactly these top-level sections: Company / Asset Overview; Market Overall; "
                 "Long-Term Thesis; Fundamentals; Valuation Context; Growth Drivers; ROI Forecast; Key Risks; Portfolio Fit; "
                 "Final Investment View; Confidence + Time Horizon. The Final Investment View section must choose exactly one allowed investment decision."
                 if agent.key == "pm"
@@ -1921,6 +1921,8 @@ def _trading_final_markdown(
         f"- Latest price: **{_money(snapshot.latest_price)}**; daily change: **{_pct(snapshot.daily_change)}**.\n"
         f"- Volume: **{_fmt(snapshot.volume)}**; market cap: **{_money(snapshot.market_cap)}**.\n"
         f"- Source quality: {_source_quality(snapshot)}\n\n"
+        f"## Market Overall\n"
+        f"{_market_overall_context(snapshot)}\n\n"
         f"## Technical Setup\n"
         f"- Trend: **{tech.get('trend', 'Unavailable')}**.\n"
         f"- RSI (14): **{_fmt(tech.get('rsi_14'))}**; MACD: **{_fmt(tech.get('macd'))}**.\n"
@@ -1998,6 +2000,8 @@ def _investment_final_markdown(
         f"## Company / Asset Overview\n"
         f"{snapshot.company_name or snapshot.ticker} operates in **{f.get('sector') or 'Unavailable'} / {f.get('industry') or 'Unavailable'}**. "
         f"Market capitalization is **{_money(snapshot.market_cap)}** and latest price is **{_money(snapshot.latest_price)}**.\n\n"
+        f"## Market Overall\n"
+        f"{_market_overall_context(snapshot)}\n\n"
         f"## Long-Term Thesis\n"
         f"{decision.summary}\n\n"
         f"## Fundamentals\n"
@@ -2036,6 +2040,23 @@ def _investment_final_markdown(
         f"## Disclaimer\n{DISCLAIMER}\n"
     )
     return markdown, points
+
+
+def _market_overall_context(snapshot: EquityResearchSnapshot) -> str:
+    fundamentals = snapshot.fundamentals
+    technical = snapshot.technical_indicators
+    sentiment = snapshot.sentiment_summary
+    sector = fundamentals.get("sector") or "the relevant sector"
+    industry = fundamentals.get("industry") or "the stock's industry"
+    trend = technical.get("trend") or "Unavailable"
+    signal = sentiment.get("signal") or "limited"
+    daily = _pct(snapshot.daily_change)
+    return (
+        f"{snapshot.ticker} should be read against **{sector} / {industry}** conditions, "
+        f"with the stock's daily move at **{daily}**, technical trend at **{trend}**, "
+        f"and news/sentiment signal at **{signal}**. Treat the market backdrop as a live input: "
+        "broad index direction, sector rotation, rates, earnings, liquidity, and risk appetite can change this setup before company-specific evidence does."
+    )
 
 
 def _markdown(
