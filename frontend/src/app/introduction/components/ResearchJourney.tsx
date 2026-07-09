@@ -75,7 +75,7 @@ export function ResearchJourney() {
     <section id="equity-research-demo" className="research-intro-demo relative z-10 px-4 py-16 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-10 lg:grid-cols-[0.86fr_1.14fr] lg:items-start">
-          <div className="lg:sticky lg:top-28">
+          <div className="lg:sticky lg:top-28 lg:self-start">
             <p className="text-sm font-semibold uppercase text-white/34">Research journey</p>
             <h2 className="mt-5 font-heading text-4xl font-normal leading-[1.02] tracking-tight text-white sm:text-5xl lg:text-6xl">
               Ask. Evidence. Risk.
@@ -109,8 +109,8 @@ export function ResearchJourney() {
             </div>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-[0.74fr_1fr]">
-            <div className="relative order-2 grid gap-4 lg:order-1">
+          <div className="grid gap-6 lg:grid-cols-[0.74fr_1fr] lg:items-start">
+            <div className="relative order-2 grid gap-4 lg:order-1 lg:pb-[18vh]">
               <div className="absolute bottom-8 left-5 top-8 hidden w-px bg-white/[0.08] lg:block" aria-hidden="true">
                 <motion.div
                   className="h-full origin-top bg-indigo-primary"
@@ -129,7 +129,7 @@ export function ResearchJourney() {
               ))}
             </div>
 
-            <div className="order-1 lg:sticky lg:top-28 lg:order-2">
+            <div className="order-1 lg:sticky lg:top-28 lg:order-2 lg:self-start">
               <ResearchJourneyFrame step={activeStep} reduceMotion={Boolean(reduceMotion)} />
             </div>
           </div>

@@ -155,11 +155,31 @@ export default function IntroductionPage() {
       <ProductPreview />
       <ResearchJourney />
       <SamplesSection />
+      <WhyQuanforaSection />
       <TestimonialsMinimal />
       <FeaturesSection />
       <PricingSection />
       <IntroductionFooter />
     </div>
+  );
+}
+
+function WhyQuanforaSection() {
+  return (
+    <section className="why-quantora-section relative z-10 px-6 py-14 sm:py-16">
+      <SectionReveal className="mx-auto max-w-4xl">
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/28">Why Quanfora</p>
+        <h2 className="mt-7 max-w-3xl font-heading text-2xl font-normal leading-tight tracking-tight text-white sm:text-3xl">
+          Built for active traders, investors, and builders managing their own capital with cleaner risk analysis, and better-documented decisions.
+        </h2>
+        <p className="mt-12 max-w-5xl text-2xl leading-[1.45] tracking-tight text-white/36 sm:text-3xl">
+          Turn market data, news, sentiment, fundamentals, backtests, and portfolio signals into one structured research workflow.
+        </p>
+        <p className="mt-12 max-w-3xl font-heading text-2xl font-normal leading-tight tracking-tight text-white sm:text-3xl">
+          No noise. No hype. All in one disciplined workspace.
+        </p>
+      </SectionReveal>
+    </section>
   );
 }
 
