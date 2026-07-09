@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "motion/react";
 
 import { Separator } from "@/components/ui/separator";
 
@@ -41,13 +40,7 @@ export function TestimonialsMinimal() {
   }, []);
 
   return (
-    <motion.section
-      className="landing-testimonials relative z-10 px-6 py-16 sm:py-20"
-      initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-100px" }}
-      transition={{ duration: 0.55, ease: "easeOut" }}
-    >
+    <section className="landing-testimonials relative z-10 px-6 py-16 sm:py-20">
       <Separator className="mx-auto mb-14 max-w-5xl" />
       <div className="mx-auto w-full max-w-xl">
         <div className="relative mb-12 min-h-[132px] sm:min-h-[112px]">
@@ -84,7 +77,7 @@ export function TestimonialsMinimal() {
                 `}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={testimonial.image} alt="" className="h-full w-full object-cover" />
+                <img src={testimonial.image} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
               </button>
             ))}
           </div>
@@ -109,6 +102,6 @@ export function TestimonialsMinimal() {
         </div>
       </div>
       <Separator className="mx-auto mt-14 max-w-5xl" />
-    </motion.section>
+    </section>
   );
 }

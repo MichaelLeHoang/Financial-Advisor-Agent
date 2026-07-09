@@ -1051,6 +1051,15 @@ body[data-theme="White"] .landing-samples h2 {
   color: var(--text-primary) !important;
 }
 
+body[data-theme="White"] .landing-samples > div > div:first-child > span {
+  border-color: var(--theme-border) !important;
+  color: var(--text-subtle) !important;
+}
+
+body[data-theme="White"] .landing-samples > div > div:first-child > p {
+  color: var(--text-muted) !important;
+}
+
 body[data-theme="White"] .landing-sample-message {
   border: 1px solid var(--theme-border);
   color: var(--text-secondary) !important;
@@ -1285,6 +1294,32 @@ body[data-theme="White"] .research-demo-progress [class*="text-white"] {
 
 body[data-theme="White"] .research-demo-progress .text-white {
   color: var(--text-primary) !important;
+}
+
+body[data-theme="White"] .research-journey-step {
+  border-color: var(--theme-border) !important;
+  background-color: #fbfaf8 !important;
+}
+
+body[data-theme="White"] .research-journey-step.border-indigo-primary\/34 {
+  border-color: #c7d2fe !important;
+  background-color: #f4f2ff !important;
+}
+
+body[data-theme="White"] .research-journey-step h3 {
+  color: var(--text-primary) !important;
+}
+
+body[data-theme="White"] .research-journey-step p:not(:first-child) {
+  color: var(--text-muted) !important;
+}
+
+body[data-theme="White"] .research-journey-step [class*="bg-white"] {
+  background-color: #ffffff !important;
+}
+
+body[data-theme="White"] .research-journey-step [class*="border-white"] {
+  border-color: var(--theme-border) !important;
 }
 
 body[data-theme="White"] .landing-pricing-frame,
