@@ -13,6 +13,7 @@ import { IntroductionFooter, IntroductionNav } from "./components";
 import { HeroSection } from "./components/HeroSection";
 import { ProductPreview } from "./components/ProductPreview";
 import { ResearchJourney } from "./components/ResearchJourney";
+import { ScatteredWorkspaceSection } from "./components/ScatteredWorkspaceSection";
 import { SectionReveal } from "./components/SectionReveal";
 import { trackLandingEvent } from "./components/landing-analytics";
 
@@ -154,6 +155,7 @@ export default function IntroductionPage() {
       <ProductPreview />
       <ResearchJourney />
       <SamplesSection />
+      <ScatteredWorkspaceSection />
       <WhyQuanforaSection />
       <TestimonialsMinimal />
       <FeaturesSection />

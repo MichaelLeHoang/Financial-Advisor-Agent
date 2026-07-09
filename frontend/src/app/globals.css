@@ -1159,6 +1159,46 @@ body[data-theme="White"] .landing-sample-markdown td span {
   color: var(--text-secondary) !important;
 }
 
+body[data-theme="White"] .landing-scattered-workspace h2,
+body[data-theme="White"] .landing-scattered-workspace .workflow-card-title {
+  color: var(--text-primary) !important;
+}
+
+body[data-theme="White"] .landing-scattered-workspace p,
+body[data-theme="White"] .landing-scattered-workspace [class*="text-white/"] {
+  color: var(--text-muted) !important;
+}
+
+body[data-theme="White"] .landing-scattered-workspace .scattered-heading-accent {
+  color: #6366f1 !important;
+}
+
+body[data-theme="White"] .landing-scattered-workspace .text-indigo-200,
+body[data-theme="White"] .landing-scattered-workspace .text-indigo-200\/72,
+body[data-theme="White"] .landing-scattered-workspace .workflow-card-icon {
+  color: var(--color-indigo-primary) !important;
+}
+
+body[data-theme="White"] .landing-scattered-workspace .workflow-card {
+  border-color: var(--theme-border) !important;
+  background-color: #fbfaf8 !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 14px 34px rgba(18, 26, 44, 0.08) !important;
+}
+
+body[data-theme="White"] .landing-scattered-workspace .workflow-card-icon {
+  border-color: #dedbf2 !important;
+  background-color: #f4f2ff !important;
+}
+
+body[data-theme="White"] .landing-scattered-workspace .workflow-card-detail {
+  color: var(--text-muted) !important;
+}
+
+body[data-theme="White"] .landing-scattered-workspace .bg-indigo-primary {
+  background-color: var(--color-indigo-primary) !important;
+}
+
 body[data-theme="White"] .landing-testimonials p {
   color: var(--text-primary) !important;
 }

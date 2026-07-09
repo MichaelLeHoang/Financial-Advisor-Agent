@@ -4,6 +4,7 @@ export type LandingEventName =
   | "landing_launch_app_click"
   | "landing_sample_research_click"
   | "landing_pricing_click"
+  | "landing_scattered_workspace_view"
   | "landing_journey_step_view";
 
 type LandingEventPayload = Record<string, boolean | number | string | undefined>;
