@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Atom, Brain, Check, Lock, MessageSquare, PieChart, Shield, TrendingUp, X } from "lucide-react";
+import { Atom, Brain, MessageSquare, PieChart, Shield, TrendingUp, X } from "lucide-react";
 
-import { COMPARISON_TABLE, PLANS, type CheckState, type PlanId } from "@/config/plans";
 import Markdown from "@/components/ui/markdown";
-import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TestimonialsMinimal } from "@/components/ui/minimal-testimonial";
 
@@ -158,7 +156,6 @@ export default function IntroductionPage() {
       <WhyQuanforaSection />
       <TestimonialsMinimal />
       <FeaturesSection />
-      <PricingSection />
       <IntroductionFooter />
     </div>
   );
@@ -337,157 +334,5 @@ function FeaturesSection() {
         )}
       </AnimatePresence>
     </section>
-  );
-}
-
-function PricingSection() {
-  const executionPlan = PLANS.find((plan) => plan.id === "execution")!;
-
-  return (
-    <section id="pricing" className="landing-pricing relative z-10 px-4 py-6 sm:px-6">
-      <div className="landing-pricing-frame relative mx-auto max-w-[1360px] overflow-hidden rounded-[1.45rem] px-6 py-20 shadow-[0_38px_120px_rgba(0,0,0,0.36)] sm:px-10 sm:py-24">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/pay-background.webp" alt="" aria-hidden="true" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover opacity-60" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/pay-background-2.webp" alt="" aria-hidden="true" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover opacity-35" />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,8,11,0.58),rgba(7,8,11,0.80)),radial-gradient(circle_at_50%_0%,rgba(99,102,241,0.18),transparent_42%)]" aria-hidden="true" />
-
-        <div className="relative mx-auto max-w-7xl">
-          <SectionReveal className="mb-16 text-center">
-            <span className="text-xs font-semibold uppercase tracking-widest text-indigo-400">Pricing</span>
-            <h2 className="mt-4 font-heading text-4xl font-medium tracking-tight text-white sm:text-5xl">Choose your plan</h2>
-            <p className="mx-auto mt-4 max-w-xl text-base text-white/40">
-              Research, analytics, backtesting, journaling, and risk-management tools - pick the tier that fits your workflow.
-            </p>
-          </SectionReveal>
-
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {PLANS.filter((plan) => plan.id !== "execution").map((plan) => (
-              <PlanCard key={plan.id} plan={plan} />
-            ))}
-          </div>
-
-          <div className="landing-execution-card mx-auto mt-8 max-w-2xl rounded-2xl border border-white/[0.10] bg-[#0f1117] p-6 text-center shadow-[0_20px_70px_rgba(0,0,0,0.28)]">
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400">
-              <Lock className="h-3 w-3" /> Invite Only
-            </div>
-            <h3 className="text-lg font-bold text-white">
-              {executionPlan.name} <span className="text-white/40">- {executionPlan.subtitle}</span>
-            </h3>
-            <p className="mt-2 text-sm text-white/40">{executionPlan.description}</p>
-            <div className="mt-4 flex flex-wrap justify-center gap-3">
-              {executionPlan.features.map((feature) => (
-                <span key={feature} className="rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-xs text-white/50">
-                  {feature}
-                </span>
-              ))}
-            </div>
-            <button type="button" className="mt-6 inline-flex h-10 items-center rounded-xl border border-white/[0.10] bg-[#171a23] px-6 text-sm font-medium text-white/70 transition-all hover:bg-[#202432] hover:text-white">
-              {executionPlan.ctaLabel}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-7xl px-2 sm:px-4">
-        <ComparisonTable />
-        <div className="landing-disclaimer mx-auto mt-16 max-w-3xl rounded-xl border border-white/[0.06] bg-white/[0.02] px-6 py-4 text-center text-xs leading-relaxed text-white/30">
-          This platform provides research, analytics, backtesting, journaling, and risk-management tools. It does not provide personalized financial advice, does not guarantee returns, and should not be used as the sole basis for investment decisions.
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function PlanCard({ plan }: { plan: typeof PLANS[number] }) {
-  const isRecommended = plan.highlighted;
-
-  return (
-    <div
-      className={`landing-plan-card relative flex flex-col rounded-2xl border p-6 transition-all duration-300 ${
-        isRecommended
-          ? "border-indigo-500/55 bg-[#101225] shadow-[0_0_0_1px_rgba(99,102,241,0.24),0_20px_60px_rgba(99,102,241,0.16)] hover:-translate-y-1 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.48),0_28px_82px_rgba(99,102,241,0.28)]"
-          : "border-white/[0.10] bg-[#0f1117] shadow-[0_18px_58px_rgba(0,0,0,0.18)] hover:-translate-y-1 hover:border-indigo-primary/45 hover:bg-[#141827] hover:shadow-[0_24px_76px_rgba(0,0,0,0.28),0_0_32px_rgba(99,102,241,0.12)]"
-      }`}
-    >
-      {isRecommended && (
-        <div className="on-accent absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-indigo-500 px-4 py-1 text-xs font-semibold text-white shadow-[0_4px_14px_rgba(99,102,241,0.4)]">
-          Popular
-        </div>
-      )}
-      <div className="mb-4">
-        <h3 className="text-lg font-bold text-white">{plan.name}</h3>
-        <p className="text-sm text-white/40">{plan.subtitle}</p>
-      </div>
-      <div className="mb-4">
-        <span className="text-4xl font-bold text-white">{plan.priceLabel}</span>
-        {plan.priceNote && <span className="ml-2 text-sm text-white/35">{plan.priceNote}</span>}
-      </div>
-      <p className="mb-6 text-sm leading-relaxed text-white/40">{plan.description}</p>
-      <ul className="mb-8 flex-1 space-y-3">
-        {plan.features.map((feature) => (
-          <li key={feature} className="flex items-start gap-2.5 text-sm text-white/60">
-            <Check className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" /> {feature}
-          </li>
-        ))}
-      </ul>
-      <button
-        type="button"
-        className={`landing-plan-cta h-11 w-full rounded-xl text-sm font-semibold transition-all active:scale-[0.98] ${
-          isRecommended
-            ? "on-accent bg-indigo-500 text-white shadow-[0_0_0_1px_rgba(99,102,241,0.5),0_6px_18px_rgba(99,102,241,0.3)] hover:bg-indigo-400"
-            : "border border-white/[0.10] bg-[#171a23] text-white/70 hover:bg-[#202432] hover:text-white"
-        }`}
-      >
-        {plan.ctaLabel}
-      </button>
-    </div>
-  );
-}
-
-function ComparisonTable() {
-  const planIds: PlanId[] = ["free", "pro", "trader", "quant", "execution"];
-  const planLabels = ["Free", "Pro", "Trader", "Quant", "Execution"];
-
-  return (
-    <div className="landing-comparison mt-24">
-      <h3 className="mb-8 text-center font-heading text-2xl font-bold text-white">Compare plans</h3>
-      <HorizontalScroll className="rounded-2xl border border-white/[0.06] bg-white/[0.02]">
-        <table className="w-full min-w-[700px] text-sm">
-          <thead>
-            <tr className="border-b border-white/[0.06]">
-              <th className="px-5 py-4 text-left font-medium text-white/50">Feature</th>
-              {planLabels.map((label, index) => (
-                <th key={label} className={`px-4 py-4 text-center font-semibold ${planIds[index] === "trader" ? "text-indigo-400" : "text-white/70"}`}>
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {COMPARISON_TABLE.map((row, index) => (
-              <tr key={row.feature} className={`border-b border-white/[0.04] ${index % 2 === 0 ? "" : "bg-white/[0.01]"}`}>
-                <td className="px-5 py-3 text-white/55">{row.feature}</td>
-                {planIds.map((planId) => {
-                  const value = row[planId] as CheckState;
-
-                  return (
-                    <td key={planId} className="px-4 py-3 text-center">
-                      {value === true ? (
-                        <Check className="mx-auto h-4 w-4 text-indigo-400" />
-                      ) : value === false ? (
-                        <span className="text-white/15">-</span>
-                      ) : (
-                        <span className="text-white/50">{value}</span>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </HorizontalScroll>
-    </div>
   );
 }

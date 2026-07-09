@@ -29,7 +29,7 @@ import {
 const SETTINGS_STORAGE_KEY = "financial-advisor.settings";
 const NAV_LINKS = [
   { href: "/#samples", label: "Samples" },
-  { href: "/#pricing", label: "Pricing" },
+  { href: "/pricing", label: "Pricing" },
   { href: "/help", label: "Help" },
 ];
 
