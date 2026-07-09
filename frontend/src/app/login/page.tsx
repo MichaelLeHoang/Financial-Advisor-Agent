@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "motion/react";
 import type { Provider } from "@supabase/supabase-js";
 import { ChevronDown, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { HighlightPill } from "@/components/ui/highlight-pill";
 import { cn } from "@/lib/utils";
 
 const QUOTES = [
@@ -243,33 +244,33 @@ export default function LoginPage() {
                   className="overflow-hidden"
                 >
                   <div className="pt-5">
-                    <div className="mb-4 grid grid-cols-2 border border-white/[0.08] bg-white/[0.035] p-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthMode("signin");
-                          setFormError(null);
-                        }}
-                        className={cn(
-                          "h-10 text-sm font-medium transition-colors",
-                          authMode === "signin" ? "bg-white text-black" : "text-white/46 hover:text-white"
-                        )}
-                      >
-                        Sign in
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthMode("signup");
-                          setFormError(null);
-                        }}
-                        className={cn(
-                          "h-10 text-sm font-medium transition-colors",
-                          authMode === "signup" ? "bg-white text-black" : "text-white/46 hover:text-white"
-                        )}
-                      >
-                        Sign up
-                      </button>
+                    <div className="mb-4 grid grid-cols-2 border border-white/[0.08] bg-white/[0.035] p-1" role="tablist" aria-label="Authentication mode">
+                      {(["signin", "signup"] as const).map((mode) => {
+                        const isActive = authMode === mode;
+
+                        return (
+                          <div key={mode} className="relative">
+                            {isActive && (
+                              <HighlightPill layoutId="login-auth-mode-pill" className="absolute inset-0 bg-white" />
+                            )}
+                            <button
+                              type="button"
+                              role="tab"
+                              aria-selected={isActive}
+                              onClick={() => {
+                                setAuthMode(mode);
+                                setFormError(null);
+                              }}
+                              className={cn(
+                                "relative z-10 h-10 w-full text-sm font-medium transition-colors",
+                                isActive ? "text-black" : "text-white/46 hover:text-white"
+                              )}
+                            >
+                              {mode === "signin" ? "Sign in" : "Sign up"}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <form noValidate onSubmit={submitAuth} className="space-y-4">
@@ -307,36 +308,50 @@ export default function LoginPage() {
                         </button>
                       </label>
 
-                      {authMode === "signin" && (
-                        <div className="text-right">
-                          <button type="button" className="text-sm text-indigo-300 transition-colors hover:text-indigo-100">
-                            Forgot password?
-                          </button>
-                        </div>
-                      )}
-
-                      {authMode === "signup" && (
-                        <label className="flex items-start gap-3 border border-white/[0.08] bg-white/[0.025] p-3 text-left">
-                          <input
-                            type="checkbox"
-                            checked={policyAccepted}
-                            onChange={(event) => setPolicyAccepted(event.target.checked)}
-                            className="mt-1 size-4 border-white/15 bg-transparent accent-white"
-                            aria-describedby="signup-policy-consent"
-                          />
-                          <span id="signup-policy-consent" className="text-xs leading-5 text-white/46">
-                            I agree to the{" "}
-                            <Link href="/terms" target="_blank" className="text-white/78 underline underline-offset-2 hover:text-white">
-                              Terms of Service
-                            </Link>{" "}
-                            and{" "}
-                            <Link href="/privacy" target="_blank" className="text-white/78 underline underline-offset-2 hover:text-white">
-                              Privacy Policy
-                            </Link>
-                            .
-                          </span>
-                        </label>
-                      )}
+                      <AnimatePresence mode="wait" initial={false}>
+                        {authMode === "signin" ? (
+                          <motion.div
+                            key="signin-options"
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                            className="text-right"
+                          >
+                            <button type="button" className="text-sm text-indigo-300 transition-colors hover:text-indigo-100">
+                              Forgot password?
+                            </button>
+                          </motion.div>
+                        ) : (
+                          <motion.label
+                            key="signup-policy"
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                            className="flex items-start gap-3 border border-white/[0.08] bg-white/[0.025] p-3 text-left"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={policyAccepted}
+                              onChange={(event) => setPolicyAccepted(event.target.checked)}
+                              className="mt-1 size-4 border-white/15 bg-transparent accent-white"
+                              aria-describedby="signup-policy-consent"
+                            />
+                            <span id="signup-policy-consent" className="text-xs leading-5 text-white/46">
+                              I agree to the{" "}
+                              <Link href="/terms" target="_blank" className="text-white/78 underline underline-offset-2 hover:text-white">
+                                Terms of Service
+                              </Link>{" "}
+                              and{" "}
+                              <Link href="/privacy" target="_blank" className="text-white/78 underline underline-offset-2 hover:text-white">
+                                Privacy Policy
+                              </Link>
+                              .
+                            </span>
+                          </motion.label>
+                        )}
+                      </AnimatePresence>
 
                       {(formError || authError) && (
                         <p className="border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
