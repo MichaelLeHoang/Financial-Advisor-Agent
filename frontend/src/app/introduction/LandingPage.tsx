@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, animate as motionAnimate, motion, useDragControls, useMotionValue } from "motion/react";
 import {
   ArrowLeft, ArrowRight, Brain, Atom, TrendingUp, PieChart, MessageSquare,
-  Shield, ExternalLink, Check, Lock, Search, Radio, Circle,
+  Shield, Check, Lock, Search, Radio, Circle,
   CircleDotDashed, CheckCircle2, FileText, RefreshCw, RotateCcw,
   Sidebar, Terminal, X,
 } from "lucide-react";
@@ -163,14 +163,6 @@ export default function IntroductionPage() {
             >
               Launch App <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </button>
-            <a
-              href="https://github.com/MichaelLeHoang/Financial-Advisor-Agent"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-12 items-center gap-2.5 rounded-full border border-white/[0.14] px-7 text-sm font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-            >
-              View on GitHub <ExternalLink className="h-4 w-4" />
-            </a>
           </motion.div>
         </div>
       </section>

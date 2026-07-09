@@ -87,6 +87,89 @@ class HoldingRead(BaseModel):
         return str(value or "USD").strip().upper()
 
 
+class RecurringBuyCreate(BaseModel):
+    symbol: str = Field(min_length=1, max_length=20)
+    account: str | None = Field(default=None, max_length=80)
+    status: str = Field(default="completed", min_length=1, max_length=40)
+    entered_amount: float = Field(gt=0)
+    entered_currency: str = Field(default="USD", min_length=3, max_length=3)
+    filled_quantity: float = Field(gt=0)
+    fill_price: float = Field(gt=0)
+    fill_currency: str = Field(default="USD", min_length=3, max_length=3)
+    exchange_rate: float | None = Field(default=None, gt=0)
+    executed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_validator("symbol", mode="before")
+    @classmethod
+    def normalize_symbol(cls, value: Any) -> str:
+        return str(value).strip().upper()
+
+    @field_validator("entered_currency", "fill_currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, value: Any) -> str:
+        return str(value or "USD").strip().upper()
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, value: Any) -> str:
+        return str(value or "completed").strip().lower()
+
+
+class RecurringBuyUpdate(BaseModel):
+    symbol: str | None = Field(default=None, min_length=1, max_length=20)
+    account: str | None = Field(default=None, max_length=80)
+    status: str | None = Field(default=None, min_length=1, max_length=40)
+    entered_amount: float | None = Field(default=None, gt=0)
+    entered_currency: str | None = Field(default=None, min_length=3, max_length=3)
+    filled_quantity: float | None = Field(default=None, gt=0)
+    fill_price: float | None = Field(default=None, gt=0)
+    fill_currency: str | None = Field(default=None, min_length=3, max_length=3)
+    exchange_rate: float | None = Field(default=None, gt=0)
+    executed_at: datetime | None = None
+
+    @field_validator("symbol", mode="before")
+    @classmethod
+    def normalize_symbol(cls, value: Any) -> str | None:
+        return str(value).strip().upper() if value else value
+
+    @field_validator("entered_currency", "fill_currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, value: Any) -> str | None:
+        return str(value).strip().upper() if value else value
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, value: Any) -> str | None:
+        return str(value).strip().lower() if value else value
+
+
+class RecurringBuyRead(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    portfolio_id: UUID
+    linked_holding_id: UUID | None = None
+    symbol: str
+    account: str | None = None
+    status: str = "completed"
+    entered_amount: float
+    entered_currency: str = "USD"
+    filled_quantity: float
+    fill_price: float
+    fill_currency: str = "USD"
+    exchange_rate: float | None = None
+    executed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_validator("symbol", mode="before")
+    @classmethod
+    def normalize_symbol(cls, value: Any) -> str:
+        return str(value).strip().upper()
+
+    @field_validator("entered_currency", "fill_currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, value: Any) -> str:
+        return str(value or "USD").strip().upper()
+
+
 class WatchlistCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
 

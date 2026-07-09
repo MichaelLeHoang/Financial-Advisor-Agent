@@ -442,6 +442,36 @@ export interface Holding {
   created_at: string;
 }
 
+export interface RecurringBuy {
+  id: string;
+  portfolio_id: string;
+  linked_holding_id?: string | null;
+  symbol: string;
+  account?: string | null;
+  status: string;
+  entered_amount: number;
+  entered_currency: string;
+  filled_quantity: number;
+  fill_price: number;
+  fill_currency: string;
+  exchange_rate?: number | null;
+  executed_at: string;
+  created_at: string;
+}
+
+export interface RecurringBuyRequest {
+  symbol: string;
+  account?: string | null;
+  status?: string;
+  entered_amount: number;
+  entered_currency: string;
+  filled_quantity: number;
+  fill_price: number;
+  fill_currency: string;
+  exchange_rate?: number | null;
+  executed_at?: string;
+}
+
 export interface Watchlist {
   id: string;
   user_id: string;
@@ -1026,6 +1056,21 @@ export const api = {
 
   removeHolding: (portfolioId: string, holdingId: string) =>
     del<void>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings/${encodeURIComponent(holdingId)}`),
+
+  recurringBuys: (portfolioId: string) =>
+    get<RecurringBuy[]>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/recurring-buys`),
+
+  addRecurringBuy: (portfolioId: string, payload: RecurringBuyRequest) =>
+    post<RecurringBuy>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/recurring-buys`, payload),
+
+  updateRecurringBuy: (portfolioId: string, recurringBuyId: string, payload: Partial<RecurringBuyRequest>) =>
+    patch<RecurringBuy>(
+      `/api/v1/portfolios/${encodeURIComponent(portfolioId)}/recurring-buys/${encodeURIComponent(recurringBuyId)}`,
+      payload
+    ),
+
+  removeRecurringBuy: (portfolioId: string, recurringBuyId: string) =>
+    del<void>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/recurring-buys/${encodeURIComponent(recurringBuyId)}`),
 
   watchlists: () => get<Watchlist[]>("/api/v1/watchlists"),
 

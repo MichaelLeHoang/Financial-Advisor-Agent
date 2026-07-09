@@ -6,6 +6,9 @@ import { ArrowRight, CheckCircle2, Mail, ShieldCheck, Sparkles } from "lucide-re
 import { IntroductionFooter, IntroductionNav } from "../introduction/components";
 
 const PRODUCT_AREAS = [
+  "General feedback",
+  "Bug report",
+  "Product suggestion",
   "AI research workspace",
   "Portfolio optimization",
   "Risk and validation",
@@ -15,6 +18,7 @@ const PRODUCT_AREAS = [
 ];
 
 const HEADCOUNT_OPTIONS = [
+  "Just me",
   "1-10",
   "11-50",
   "51-200",
@@ -48,9 +52,10 @@ export default function ContactSalesPage() {
       return;
     }
     const fields = [
+      ["Inquiry type", formData.get("inquiryType")],
       ["First name", formData.get("firstName")],
       ["Last name", formData.get("lastName")],
-      ["Work email", formData.get("email")],
+      ["Email", formData.get("email")],
       ["Phone", formData.get("phone")],
       ["Job title", formData.get("jobTitle")],
       ["Company", formData.get("company")],
@@ -58,7 +63,7 @@ export default function ContactSalesPage() {
       ["Product areas", products],
       ["Headcount", formData.get("headcount")],
       ["Expected usage", formData.get("usage")],
-      ["Needs", formData.get("needs")],
+      ["Message", formData.get("needs")],
     ];
     const body = fields
       .filter(([, value]) => typeof value === "string" && value.trim().length > 0)
@@ -66,7 +71,7 @@ export default function ContactSalesPage() {
       .join("\n");
 
     window.location.href = `mailto:sales@quantumadvisor.app?subject=${encodeURIComponent(
-      "Quanfora sales inquiry"
+      `Quanfora ${String(formData.get("inquiryType") || "contact").toLowerCase()} inquiry`
     )}&body=${encodeURIComponent(body)}`;
   };
 
@@ -76,17 +81,17 @@ export default function ContactSalesPage() {
 
       <main className="relative z-10 mx-auto grid min-h-screen w-full max-w-6xl gap-12 px-6 pb-20 pt-28 sm:px-8 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20 lg:pt-40">
         <section className="lg:sticky lg:top-36 lg:h-fit">
-          <p className="text-sm font-medium text-white/38">Sales</p>
-          <h1 className="mt-5 font-heading text-4xl font-normal tracking-normal text-white sm:text-5xl">
-            Contact Sales
-          </h1>
-          <p className="mt-6 max-w-md text-base leading-7 text-white/48">
-            Tell us about your organization, research workflows, and usage needs. We will follow up with the best path for your team.
-          </p>
+            <p className="text-sm font-medium text-white/38">Contact</p>
+            <h1 className="mt-5 font-heading text-4xl font-normal tracking-normal text-white sm:text-5xl">
+              Contact & Feedback
+            </h1>
+            <p className="mt-6 max-w-md text-base leading-7 text-white/48">
+              Send product feedback, report issues, ask questions, or reach out about sales and team workflows.
+            </p>
 
           <div className="mt-10 rounded-2xl border border-white/[0.06] bg-white/[0.055] p-5">
             <p className="text-sm leading-6 text-white/58">
-              Running a smaller team and want to get started right away?
+              Want to try Quanfora before sending a note?
             </p>
             <Link
               href="/session"
@@ -100,11 +105,11 @@ export default function ContactSalesPage() {
           <div className="mt-8 grid gap-4 text-sm text-white/46">
             <div className="flex items-center gap-3">
               <ShieldCheck className="size-4 text-green-positive" />
-              Enterprise onboarding and plan guidance
+              Feedback from every user and team
             </div>
             <div className="flex items-center gap-3">
               <Sparkles className="size-4 text-cyan-secondary" />
-              Workflow review for research, risk, and portfolios
+              Sales, onboarding, and workflow guidance
             </div>
             <div className="flex items-center gap-3">
               <Mail className="size-4 text-indigo-primary" />
@@ -113,7 +118,18 @@ export default function ContactSalesPage() {
           </div>
         </section>
 
-        <form onSubmit={handleSubmit} className="grid gap-6" aria-label="Contact sales form">
+        <form onSubmit={handleSubmit} className="grid gap-6" aria-label="Contact and feedback form">
+          <label className="grid gap-2 text-sm font-medium text-white/42">
+            Inquiry Type *
+            <select name="inquiryType" required defaultValue="Feedback" className={inputClassName("appearance-none text-white/68")}>
+              {["Feedback", "Support", "Bug report", "Feature request", "Sales"].map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="grid gap-2 text-sm font-medium text-white/42">
               First Name *
@@ -126,7 +142,7 @@ export default function ContactSalesPage() {
           </div>
 
           <label className="grid gap-2 text-sm font-medium text-white/42">
-            Work Email *
+              Email *
             <input name="email" type="email" required autoComplete="email" className={inputClassName()} />
           </label>
 
@@ -143,8 +159,8 @@ export default function ContactSalesPage() {
 
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="grid gap-2 text-sm font-medium text-white/42">
-              Company Name *
-              <input name="company" required autoComplete="organization" className={inputClassName()} />
+              Company Name
+              <input name="company" autoComplete="organization" className={inputClassName()} />
             </label>
             <label className="grid gap-2 text-sm font-medium text-white/42">
               Company Website
@@ -154,7 +170,7 @@ export default function ContactSalesPage() {
 
           <fieldset className="grid gap-3">
             <legend className="mb-1 text-sm font-medium text-white/42">
-              Which Quanfora product area are you interested in? *
+              What is this about? *
             </legend>
             <div className="grid gap-2">
               {PRODUCT_AREAS.map((area) => (
@@ -175,8 +191,8 @@ export default function ContactSalesPage() {
           </fieldset>
 
           <label className="grid gap-2 text-sm font-medium text-white/42">
-            Company / Organization Headcount *
-            <select name="headcount" required defaultValue="" className={inputClassName("appearance-none text-white/68")}>
+              Company / Organization Headcount
+              <select name="headcount" defaultValue="" className={inputClassName("appearance-none text-white/68")}>
               <option value="" disabled>
                 Select size
               </option>
@@ -194,12 +210,12 @@ export default function ContactSalesPage() {
           </label>
 
           <label className="grid gap-2 text-sm font-medium text-white/42">
-            Specific Product Requests or Feature Needs *
+            Message *
             <textarea
               name="needs"
               required
               rows={5}
-              placeholder="Any products, features, integrations, or compliance needs you're interested in"
+              placeholder="Share feedback, a question, a bug report, or sales context"
               className={inputClassName("h-auto min-h-28 resize-y py-3 leading-6")}
             />
           </label>
@@ -208,7 +224,7 @@ export default function ContactSalesPage() {
             type="submit"
             className="intro-primary-action inline-flex h-11 w-fit items-center gap-2 rounded-full px-5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
           >
-            Contact Sales <CheckCircle2 className="size-4" />
+            Send message <CheckCircle2 className="size-4" />
           </button>
         </form>
       </main>

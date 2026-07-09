@@ -4,7 +4,7 @@
 Provides account plans, entitlements, usage limits, persistence, and user-scoped portfolio/watchlist resources.
 
 ## Responsibilities
-- Define authenticated users, plans, subscriptions, portfolios, watchlists, alerts, journals, and related records.
+- Define authenticated users, plans, subscriptions, portfolios, recurring buys, watchlists, alerts, journals, and related records.
 - Enforce feature access and usage limits.
 - Provide in-memory/Supabase-aware repository behavior.
 - Expose user-scoped SaaS routes.
@@ -20,7 +20,7 @@ Provides account plans, entitlements, usage limits, persistence, and user-scoped
 Authentication comes from `auth/`; billing provider logic stays in `billing/`; domain calculations remain in their domain modules.
 
 ## Testing
-Cover plan matrices, user isolation, guest restrictions, resource limits, upgrade errors, and repository fallback behavior.
+Cover plan matrices, user isolation, guest restrictions, resource limits, upgrade errors, portfolio sync behavior, and repository fallback behavior.
 
 ## Latest Change
-- Added monthly Quanfora 2.1 research report and deep research report limits to plan entitlements.
+- Added portfolio recurring buys that sync completed buy records into linked holdings.

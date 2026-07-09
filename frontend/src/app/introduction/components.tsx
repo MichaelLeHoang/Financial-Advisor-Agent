@@ -3,7 +3,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, LogOut, Menu, Moon, Newspaper, Search, Sun, User, X } from "lucide-react";
+import { BookOpen, BookOpenText, LogOut, Menu, Moon, Newspaper, Search, Sun, User, X } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -176,7 +176,7 @@ export function IntroductionNav() {
                       <li>
                         <NavigationMenuLink asChild>
                           <Link href="/news" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
-                            <div className="intro-resource-icon flex size-8 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-400 transition-colors">
+                            <div className="intro-resource-icon flex size-8 items-center justify-center rounded-md bg-white/5 text-white/70 transition-colors">
                               <Newspaper className="size-4" />
                             </div>
                             <div className="flex flex-col">
@@ -190,8 +190,8 @@ export function IntroductionNav() {
                     <li>
                       <NavigationMenuLink asChild>
                         <Link href="/docs" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
-                          <div className="intro-resource-icon flex size-8 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-400 transition-colors">
-                            <BookOpen className="size-4" />
+                          <div className="intro-resource-icon flex size-8 items-center justify-center rounded-md bg-white/5 text-white/70 transition-colors">
+                            <BookOpenText className="size-4" />
                           </div>
                           <div className="flex flex-col">
                             <span className="intro-resource-title text-sm font-medium text-white/90 transition-colors">Docs</span>

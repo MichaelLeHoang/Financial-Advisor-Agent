@@ -28,6 +28,9 @@ from src.saas.models import (
     NotificationChannelRead,
     QuantValidationRunCreate,
     QuantValidationRunRead,
+    RecurringBuyCreate,
+    RecurringBuyRead,
+    RecurringBuyUpdate,
     ReplaySessionCreate,
     ReplaySessionRead,
     ReplaySessionUpdate,
@@ -56,6 +59,7 @@ class UserScopedStore:
         self._lock = Lock()
         self._portfolios: dict[UUID, PortfolioRead] = {}
         self._holdings: dict[UUID, list[HoldingRead]] = {}
+        self._recurring_buys: dict[UUID, list[RecurringBuyRead]] = {}
         self._watchlists: dict[UUID, WatchlistRead] = {}
         self._watchlist_assets: dict[UUID, list[WatchlistAssetRead]] = {}
         self._subscriptions: dict[UUID, SubscriptionRead] = {}
@@ -76,6 +80,7 @@ class UserScopedStore:
         with self._lock:
             self._portfolios.clear()
             self._holdings.clear()
+            self._recurring_buys.clear()
             self._watchlists.clear()
             self._watchlist_assets.clear()
             self._subscriptions.clear()
@@ -163,6 +168,7 @@ class UserScopedStore:
                 return False
             del self._portfolios[portfolio_id]
             self._holdings.pop(portfolio_id, None)
+            self._recurring_buys.pop(portfolio_id, None)
             return True
 
     def add_holding(self, user_id: UUID, portfolio_id: UUID, payload: HoldingCreate) -> HoldingRead | None:
@@ -210,6 +216,105 @@ class UserScopedStore:
             if len(after) == len(before):
                 return False
             self._holdings[portfolio_id] = after
+            return True
+
+    def _sync_holding_for_recurring_buy(
+        self,
+        portfolio: PortfolioRead,
+        recurring: RecurringBuyRead,
+    ) -> HoldingRead:
+        holdings = self._holdings.setdefault(portfolio.id, [])
+        target_index = next(
+            (
+                i
+                for i, holding in enumerate(holdings)
+                if holding.id == recurring.linked_holding_id
+                or (recurring.linked_holding_id is None and holding.symbol.upper() == recurring.symbol.upper())
+            ),
+            None,
+        )
+        holding = HoldingRead(
+            id=holdings[target_index].id if target_index is not None else uuid4(),
+            portfolio_id=portfolio.id,
+            symbol=recurring.symbol.upper(),
+            asset_type="equity",
+            quantity=recurring.filled_quantity,
+            average_cost=recurring.fill_price,
+            cost_currency=recurring.fill_currency or portfolio.base_currency,
+            created_at=holdings[target_index].created_at if target_index is not None else datetime.now(timezone.utc),
+        )
+        if target_index is None:
+            holdings.append(holding)
+        else:
+            holdings[target_index] = holding
+        return holding
+
+    def list_recurring_buys(self, user_id: UUID, portfolio_id: UUID) -> list[RecurringBuyRead] | None:
+        if self.get_portfolio(user_id, portfolio_id) is None:
+            return None
+        with self._lock:
+            return list(self._recurring_buys.get(portfolio_id, []))
+
+    def add_recurring_buy(self, user_id: UUID, portfolio_id: UUID, payload: RecurringBuyCreate) -> RecurringBuyRead | None:
+        portfolio = self.get_portfolio(user_id, portfolio_id)
+        if portfolio is None:
+            return None
+
+        recurring = RecurringBuyRead(
+            id=uuid4(),
+            portfolio_id=portfolio_id,
+            symbol=payload.symbol,
+            account=payload.account,
+            status=payload.status,
+            entered_amount=payload.entered_amount,
+            entered_currency=payload.entered_currency,
+            filled_quantity=payload.filled_quantity,
+            fill_price=payload.fill_price,
+            fill_currency=payload.fill_currency,
+            exchange_rate=payload.exchange_rate,
+            executed_at=payload.executed_at,
+        )
+        with self._lock:
+            holding = self._sync_holding_for_recurring_buy(portfolio, recurring)
+            recurring = recurring.model_copy(update={"linked_holding_id": holding.id})
+            self._recurring_buys.setdefault(portfolio_id, []).append(recurring)
+        return recurring
+
+    def update_recurring_buy(
+        self,
+        user_id: UUID,
+        portfolio_id: UUID,
+        recurring_buy_id: UUID,
+        payload: RecurringBuyUpdate,
+    ) -> RecurringBuyRead | None:
+        portfolio = self.get_portfolio(user_id, portfolio_id)
+        if portfolio is None:
+            return None
+        updates = payload.model_dump(exclude_none=True)
+        with self._lock:
+            recurring_buys = self._recurring_buys.get(portfolio_id, [])
+            for i, recurring in enumerate(recurring_buys):
+                if recurring.id == recurring_buy_id:
+                    updated = recurring.model_copy(update=updates)
+                    holding = self._sync_holding_for_recurring_buy(portfolio, updated)
+                    updated = updated.model_copy(update={"linked_holding_id": holding.id})
+                    recurring_buys[i] = updated
+                    return updated
+        return None
+
+    def delete_recurring_buy(self, user_id: UUID, portfolio_id: UUID, recurring_buy_id: UUID) -> bool:
+        if self.get_portfolio(user_id, portfolio_id) is None:
+            return False
+        with self._lock:
+            recurring_buys = self._recurring_buys.get(portfolio_id, [])
+            recurring = next((row for row in recurring_buys if row.id == recurring_buy_id), None)
+            if recurring is None:
+                return False
+            self._recurring_buys[portfolio_id] = [row for row in recurring_buys if row.id != recurring_buy_id]
+            if recurring.linked_holding_id is not None:
+                self._holdings[portfolio_id] = [
+                    holding for holding in self._holdings.get(portfolio_id, []) if holding.id != recurring.linked_holding_id
+                ]
             return True
 
     def list_watchlists(self, user_id: UUID) -> list[WatchlistRead]:
@@ -639,6 +744,149 @@ class SupabaseRestStore:
         if self.get_portfolio(user_id, portfolio_id) is None:
             return False
         self._request("DELETE", "holdings", {"id": f"eq.{holding_id}", "portfolio_id": f"eq.{portfolio_id}"})
+        return True
+
+    def _sync_holding_for_recurring_buy(
+        self,
+        portfolio: PortfolioRead,
+        recurring: RecurringBuyRead,
+    ) -> HoldingRead:
+        rows = []
+        if recurring.linked_holding_id is not None:
+            rows = self._request(
+                "GET",
+                "holdings",
+                {"select": "*", "id": f"eq.{recurring.linked_holding_id}", "portfolio_id": f"eq.{portfolio.id}", "limit": "1"},
+            )
+        if not rows:
+            rows = self._request(
+                "GET",
+                "holdings",
+                {"select": "*", "portfolio_id": f"eq.{portfolio.id}", "symbol": f"eq.{recurring.symbol.upper()}", "limit": "1"},
+            )
+
+        body = {
+            "portfolio_id": str(portfolio.id),
+            "symbol": recurring.symbol.upper(),
+            "asset_type": "equity",
+            "quantity": recurring.filled_quantity,
+            "average_cost": recurring.fill_price,
+            "cost_currency": (recurring.fill_currency or portfolio.base_currency).upper(),
+        }
+        if rows:
+            updated = self._request("PATCH", "holdings", {"id": f"eq.{rows[0]['id']}", "portfolio_id": f"eq.{portfolio.id}"}, body=body)
+            return HoldingRead.model_validate(updated[0])
+        created = self._request("POST", "holdings", body=body)
+        return HoldingRead.model_validate(created[0])
+
+    def list_recurring_buys(self, user_id: UUID, portfolio_id: UUID) -> list[RecurringBuyRead] | None:
+        if self.get_portfolio(user_id, portfolio_id) is None:
+            return None
+        rows = self._request(
+            "GET",
+            "portfolio_recurring_buys",
+            {"select": "*", "portfolio_id": f"eq.{portfolio_id}", "order": "executed_at.desc"},
+        )
+        return [RecurringBuyRead.model_validate(row) for row in rows]
+
+    def add_recurring_buy(self, user_id: UUID, portfolio_id: UUID, payload: RecurringBuyCreate) -> RecurringBuyRead | None:
+        portfolio = self.get_portfolio(user_id, portfolio_id)
+        if portfolio is None:
+            return None
+        recurring = RecurringBuyRead(
+            portfolio_id=portfolio_id,
+            symbol=payload.symbol,
+            account=payload.account,
+            status=payload.status,
+            entered_amount=payload.entered_amount,
+            entered_currency=payload.entered_currency,
+            filled_quantity=payload.filled_quantity,
+            fill_price=payload.fill_price,
+            fill_currency=payload.fill_currency,
+            exchange_rate=payload.exchange_rate,
+            executed_at=payload.executed_at,
+        )
+        holding = self._sync_holding_for_recurring_buy(portfolio, recurring)
+        rows = self._request(
+            "POST",
+            "portfolio_recurring_buys",
+            body={
+                "portfolio_id": str(portfolio_id),
+                "linked_holding_id": str(holding.id),
+                "symbol": payload.symbol.upper(),
+                "account": payload.account,
+                "status": payload.status,
+                "entered_amount": payload.entered_amount,
+                "entered_currency": payload.entered_currency,
+                "filled_quantity": payload.filled_quantity,
+                "fill_price": payload.fill_price,
+                "fill_currency": payload.fill_currency,
+                "exchange_rate": payload.exchange_rate,
+                "executed_at": payload.executed_at.isoformat(),
+            },
+        )
+        return RecurringBuyRead.model_validate(rows[0])
+
+    def update_recurring_buy(
+        self,
+        user_id: UUID,
+        portfolio_id: UUID,
+        recurring_buy_id: UUID,
+        payload: RecurringBuyUpdate,
+    ) -> RecurringBuyRead | None:
+        portfolio = self.get_portfolio(user_id, portfolio_id)
+        if portfolio is None:
+            return None
+        existing_rows = self._request(
+            "GET",
+            "portfolio_recurring_buys",
+            {"select": "*", "id": f"eq.{recurring_buy_id}", "portfolio_id": f"eq.{portfolio_id}", "limit": "1"},
+        )
+        if not existing_rows:
+            return None
+        existing = RecurringBuyRead.model_validate(existing_rows[0])
+        updates = payload.model_dump(exclude_none=True)
+        updated = existing.model_copy(update=updates)
+        holding = self._sync_holding_for_recurring_buy(portfolio, updated)
+        body = {
+            **{
+                key: (value.isoformat() if isinstance(value, datetime) else value)
+                for key, value in updates.items()
+            },
+            "linked_holding_id": str(holding.id),
+        }
+        rows = self._request(
+            "PATCH",
+            "portfolio_recurring_buys",
+            {"id": f"eq.{recurring_buy_id}", "portfolio_id": f"eq.{portfolio_id}"},
+            body=body,
+        )
+        if not rows:
+            return None
+        return RecurringBuyRead.model_validate(rows[0])
+
+    def delete_recurring_buy(self, user_id: UUID, portfolio_id: UUID, recurring_buy_id: UUID) -> bool:
+        if self.get_portfolio(user_id, portfolio_id) is None:
+            return False
+        rows = self._request(
+            "GET",
+            "portfolio_recurring_buys",
+            {"select": "*", "id": f"eq.{recurring_buy_id}", "portfolio_id": f"eq.{portfolio_id}", "limit": "1"},
+        )
+        if not rows:
+            return False
+        recurring = RecurringBuyRead.model_validate(rows[0])
+        self._request(
+            "DELETE",
+            "portfolio_recurring_buys",
+            {"id": f"eq.{recurring_buy_id}", "portfolio_id": f"eq.{portfolio_id}"},
+        )
+        if recurring.linked_holding_id is not None:
+            self._request(
+                "DELETE",
+                "holdings",
+                {"id": f"eq.{recurring.linked_holding_id}", "portfolio_id": f"eq.{portfolio_id}"},
+            )
         return True
 
     def list_watchlists(self, user_id: UUID) -> list[WatchlistRead]:

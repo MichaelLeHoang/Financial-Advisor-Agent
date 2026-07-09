@@ -24,7 +24,7 @@ import {
 import { PieChart, Pie, Cell } from "recharts";
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
-import type { Holding, OptimizeResult, Portfolio } from "@/lib/api";
+import type { Holding, OptimizeResult, Portfolio, RecurringBuy } from "@/lib/api";
 import { fetchQuote } from "@/lib/quote-cache";
 import { useAuth } from "@/components/auth/AuthProvider";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
@@ -47,6 +47,7 @@ import {
   ChartContainer,
   ChartTooltip,
 } from "@/components/ui/chart";
+import { showToast } from "@/components/ui/toast";
 
 const PALETTE = [
   "#6366f1",
@@ -113,6 +114,37 @@ interface EditState {
   draft: string;
   currency: string;
   saving: boolean;
+}
+
+interface RecurringBuyDraft {
+  symbol: string;
+  account: string;
+  enteredAmount: string;
+  enteredCurrency: string;
+  filledQuantity: string;
+  fillPrice: string;
+  fillCurrency: string;
+  exchangeRate: string;
+  executedAt: string;
+}
+
+function localDateTimeInputValue(date = new Date()) {
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function createRecurringBuyDraft(baseCurrency = "USD"): RecurringBuyDraft {
+  return {
+    symbol: "",
+    account: "TFSA",
+    enteredAmount: "",
+    enteredCurrency: normalizeCurrency(baseCurrency),
+    filledQuantity: "",
+    fillPrice: "",
+    fillCurrency: "USD",
+    exchangeRate: "",
+    executedAt: localDateTimeInputValue(),
+  };
 }
 
 function normalizeCurrency(currency: string | null | undefined, fallback = "USD") {
@@ -336,11 +368,24 @@ function formatGoalDateDelta(days: number | null) {
   return days > 0 ? `${days} ${unit} remaining` : `${Math.abs(days)} ${unit} past target`;
 }
 
+function formatRecurringDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
 export default function PortfolioPage() {
   const { loading: authLoading, token } = useAuth();
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [holdings, setHoldings] = useState<HoldingRow[]>([]);
+  const [recurringBuys, setRecurringBuys] = useState<RecurringBuy[]>([]);
   const [newPortfolioName, setNewPortfolioName] = useState("");
   const [newBaseCurrency, setNewBaseCurrency] = useState("USD");
   const [showNewForm, setShowNewForm] = useState(false);
@@ -360,6 +405,7 @@ export default function PortfolioPage() {
   const [optimizing, setOptimizing] = useState(false);
   const [portfoliosLoading, setPortfoliosLoading] = useState(true);
   const [holdingsLoading, setHoldingsLoading] = useState(false);
+  const [recurringBuysLoading, setRecurringBuysLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
   const [edit, setEdit] = useState<EditState | null>(null);
@@ -371,6 +417,11 @@ export default function PortfolioPage() {
   const [showNewCurrencySearchMenu, setShowNewCurrencySearchMenu] = useState(false);
   const [newCurrencySearch, setNewCurrencySearch] = useState("");
   const [portfolioToDelete, setPortfolioToDelete] = useState<Portfolio | null>(null);
+  const [holdingToDelete, setHoldingToDelete] = useState<HoldingRow | null>(null);
+  const [recurringBuyToDelete, setRecurringBuyToDelete] = useState<RecurringBuy | null>(null);
+  const [recurringBuyDraft, setRecurringBuyDraft] = useState<RecurringBuyDraft>(() => createRecurringBuyDraft());
+  const [recurringTickerInput, setRecurringTickerInput] = useState("");
+  const [expandedRecurringBuyId, setExpandedRecurringBuyId] = useState<string | null>(null);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [returnPeriod, setReturnPeriod] = useState<"5D" | "1M" | "YTD" | "1Y" | "5Y">("1Y");
   const [sortBy, setSortBy] = useState<"total" | "weight" | "today" | "allTime" | "symbol">("total");
@@ -397,6 +448,11 @@ export default function PortfolioPage() {
       setAddCostCurrency(portfolioBaseCurrency as (typeof SUPPORTED_BASE_CURRENCIES)[number]);
     }
     setCurrencySearch("");
+    setRecurringBuyDraft((draft) => ({
+      ...draft,
+      enteredCurrency: portfolioBaseCurrency,
+      fillCurrency: draft.fillCurrency || "USD",
+    }));
   }, [portfolioBaseCurrency]);
 
   useEffect(() => {
@@ -541,21 +597,45 @@ export default function PortfolioPage() {
   useEffect(() => {
     if (!activeId) return;
     setHoldings([]);
+    setRecurringBuys([]);
     setResult(null);
-    setHoldingsLoading(true);
+  }, [activeId]);
 
-    api.portfolioHoldings(activeId)
-      .then((list) => {
-        const rows: HoldingRow[] = list.map((h) => ({
-          ...h,
-          ...emptyMetrics(activeBaseCurrency),
-        }));
-        setHoldings(rows);
-        setHoldingsLoading(false);
-        fetchPricesForHoldings(list, activeBaseCurrency);
-      })
-      .catch(() => setHoldingsLoading(false));
+  const loadHoldings = useCallback(async () => {
+    if (!activeId) return;
+    setHoldingsLoading(true);
+    try {
+      const list = await api.portfolioHoldings(activeId);
+      const rows: HoldingRow[] = list.map((h) => ({
+        ...h,
+        ...emptyMetrics(activeBaseCurrency),
+      }));
+      setHoldings(rows);
+      fetchPricesForHoldings(list, activeBaseCurrency);
+    } finally {
+      setHoldingsLoading(false);
+    }
   }, [activeId, activeBaseCurrency, fetchPricesForHoldings]);
+
+  const loadRecurringBuys = useCallback(async () => {
+    if (!activeId) return;
+    setRecurringBuysLoading(true);
+    try {
+      const list = await api.recurringBuys(activeId);
+      setRecurringBuys(list);
+      setExpandedRecurringBuyId((current) => list.some((buy) => buy.id === current) ? current : list[0]?.id ?? null);
+    } finally {
+      setRecurringBuysLoading(false);
+    }
+  }, [activeId]);
+
+  useEffect(() => {
+    void loadHoldings().catch(() => setHoldingsLoading(false));
+  }, [loadHoldings]);
+
+  useEffect(() => {
+    void loadRecurringBuys().catch(() => setRecurringBuysLoading(false));
+  }, [loadRecurringBuys]);
 
   const createPortfolio = async () => {
     const name = newPortfolioName.trim();
@@ -587,6 +667,7 @@ export default function PortfolioPage() {
       if (activeId === portfolioId) {
         setActiveId(updated.length > 0 ? updated[0].id : null);
         setHoldings([]);
+        setRecurringBuys([]);
         setResult(null);
       }
     } catch (e: any) {
@@ -675,14 +756,105 @@ export default function PortfolioPage() {
     }
   };
 
-  const removeHolding = async (holdingId: string) => {
+  const removeHolding = async (holding: HoldingRow) => {
     if (!activeId) return;
     try {
-      await api.removeHolding(activeId, holdingId);
-      setHoldings((prev) => prev.filter((h) => h.id !== holdingId));
+      await api.removeHolding(activeId, holding.id);
+      setHoldings((prev) => prev.filter((h) => h.id !== holding.id));
       setResult(null);
+      showToast({
+        title: "Holding deleted",
+        message: `${holding.symbol} was removed from ${activePortfolio?.name ?? "this portfolio"}.`,
+        variant: "success",
+      });
     } catch (e: any) {
       setError(e.message);
+      showToast({
+        title: "Unable to delete holding",
+        message: e instanceof Error ? e.message : "The holding could not be removed.",
+        variant: "error",
+      });
+    } finally {
+      setHoldingToDelete(null);
+    }
+  };
+
+  const addRecurringBuy = async () => {
+    if (!activeId) return;
+    const symbol = recurringBuyDraft.symbol.trim().toUpperCase();
+    const enteredAmount = parseFloat(recurringBuyDraft.enteredAmount);
+    const filledQuantity = parseFloat(recurringBuyDraft.filledQuantity);
+    const fillPrice = parseFloat(recurringBuyDraft.fillPrice);
+    const exchangeRate = recurringBuyDraft.exchangeRate.trim()
+      ? parseFloat(recurringBuyDraft.exchangeRate)
+      : undefined;
+
+    if (!symbol || !Number.isFinite(enteredAmount) || enteredAmount <= 0 || !Number.isFinite(filledQuantity) || filledQuantity <= 0 || !Number.isFinite(fillPrice) || fillPrice <= 0) {
+      setError("Enter a valid recurring buy symbol, amount, quantity, and fill price.");
+      return;
+    }
+    if (exchangeRate !== undefined && (!Number.isFinite(exchangeRate) || exchangeRate <= 0)) {
+      setError("Enter a positive exchange rate or leave it blank.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const recurringBuy = await api.addRecurringBuy(activeId, {
+        symbol,
+        account: recurringBuyDraft.account.trim() || null,
+        status: "completed",
+        entered_amount: enteredAmount,
+        entered_currency: normalizeCurrency(recurringBuyDraft.enteredCurrency, activeBaseCurrency),
+        filled_quantity: filledQuantity,
+        fill_price: fillPrice,
+        fill_currency: normalizeCurrency(recurringBuyDraft.fillCurrency, "USD"),
+        exchange_rate: exchangeRate,
+        executed_at: new Date(recurringBuyDraft.executedAt).toISOString(),
+      });
+      setRecurringBuyDraft(createRecurringBuyDraft(activeBaseCurrency));
+      setRecurringTickerInput("");
+      setExpandedRecurringBuyId(recurringBuy.id);
+      await Promise.all([loadRecurringBuys(), loadHoldings()]);
+      setResult(null);
+      showToast({
+        title: "Recurring buy saved",
+        message: `${symbol} was synced into ${activePortfolio?.name ?? "this portfolio"}.`,
+        variant: "success",
+      });
+    } catch (e: any) {
+      setError(e.message);
+      showToast({
+        title: "Unable to save recurring buy",
+        message: e instanceof Error ? e.message : "The recurring buy could not be saved.",
+        variant: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeRecurringBuy = async (recurringBuy: RecurringBuy) => {
+    if (!activeId) return;
+    try {
+      await api.removeRecurringBuy(activeId, recurringBuy.id);
+      await Promise.all([loadRecurringBuys(), loadHoldings()]);
+      setResult(null);
+      showToast({
+        title: "Recurring buy deleted",
+        message: `${recurringBuy.symbol} and its linked holding were removed.`,
+        variant: "success",
+      });
+    } catch (e: any) {
+      setError(e.message);
+      showToast({
+        title: "Unable to delete recurring buy",
+        message: e instanceof Error ? e.message : "The recurring buy could not be removed.",
+        variant: "error",
+      });
+    } finally {
+      setRecurringBuyToDelete(null);
     }
   };
 
@@ -1330,6 +1502,231 @@ export default function PortfolioPage() {
               </section>
             )}
 
+            <section className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-white">Recurring buys</h2>
+                  <p className="mt-1 text-sm text-white/42">Completed recurring buys automatically keep linked holdings updated.</p>
+                </div>
+                <span className="rounded-full border border-white/10 bg-black/24 px-3 py-1.5 text-xs font-semibold text-white/55">
+                  {recurringBuys.length} synced
+                </span>
+              </div>
+
+              <div className="mt-4 grid gap-3 rounded-2xl border border-white/[0.07] bg-black/18 p-3 lg:grid-cols-4 xl:grid-cols-[minmax(150px,1fr)_96px_110px_90px_110px_110px_90px_110px_170px_auto]">
+                {recurringBuyDraft.symbol ? (
+                  <span className="flex h-10 items-center justify-between gap-1.5 rounded-xl bg-white/[0.06] px-3 text-xs font-semibold text-white ring-1 ring-white/10">
+                    {recurringBuyDraft.symbol}
+                    <button
+                      type="button"
+                      onClick={() => setRecurringBuyDraft((draft) => ({ ...draft, symbol: "" }))}
+                      className="opacity-60 hover:opacity-100"
+                      aria-label="Clear recurring ticker"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ) : (
+                  <TickerSuggestionInput
+                    value={recurringTickerInput}
+                    onValueChange={setRecurringTickerInput}
+                    onSelect={(ticker) => setRecurringBuyDraft((draft) => ({ ...draft, symbol: ticker }))}
+                    existingTickers={recurringBuys.map((buy) => buy.symbol)}
+                    placeholder="Symbol"
+                    inputClassName="h-10 rounded-xl border border-white/[0.10] bg-black/20 text-sm focus-visible:ring-0 focus-visible:border-white/35"
+                  />
+                )}
+                <input
+                  value={recurringBuyDraft.account}
+                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, account: event.target.value }))}
+                  placeholder="Account"
+                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={recurringBuyDraft.enteredAmount}
+                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, enteredAmount: event.target.value }))}
+                  placeholder="Amount"
+                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
+                />
+                <select
+                  value={recurringBuyDraft.enteredCurrency}
+                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, enteredCurrency: event.target.value }))}
+                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none focus:border-white/35"
+                  aria-label="Entered amount currency"
+                >
+                  {SUPPORTED_BASE_CURRENCIES.map((currency) => (
+                    <option key={currency} value={currency} className="bg-space-black text-white">
+                      {currency}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={recurringBuyDraft.filledQuantity}
+                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, filledQuantity: event.target.value }))}
+                  placeholder="Shares"
+                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={recurringBuyDraft.fillPrice}
+                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, fillPrice: event.target.value }))}
+                  placeholder="Fill price"
+                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
+                />
+                <select
+                  value={recurringBuyDraft.fillCurrency}
+                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, fillCurrency: event.target.value }))}
+                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none focus:border-white/35"
+                  aria-label="Fill price currency"
+                >
+                  {SUPPORTED_BASE_CURRENCIES.map((currency) => (
+                    <option key={currency} value={currency} className="bg-space-black text-white">
+                      {currency}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={recurringBuyDraft.exchangeRate}
+                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, exchangeRate: event.target.value }))}
+                  placeholder="FX rate"
+                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
+                />
+                <input
+                  type="datetime-local"
+                  value={recurringBuyDraft.executedAt}
+                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, executedAt: event.target.value }))}
+                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white outline-none [color-scheme:dark] focus:border-white/35"
+                  aria-label="Recurring buy completed time"
+                />
+                <Button
+                  onClick={addRecurringBuy}
+                  disabled={saving || !recurringBuyDraft.symbol || !recurringBuyDraft.enteredAmount || !recurringBuyDraft.filledQuantity || !recurringBuyDraft.fillPrice}
+                  className="h-10 rounded-xl bg-white px-4 text-sm font-bold text-black hover:bg-white/86"
+                >
+                  {saving ? <Loader2 className="size-4 animate-spin" /> : "Sync buy"}
+                </Button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {recurringBuysLoading ? (
+                  <div className="flex min-h-28 items-center justify-center gap-2 rounded-2xl border border-white/[0.07] bg-black/14 text-sm text-white/42">
+                    <Loader2 className="size-4 animate-spin" />
+                    Loading recurring buys…
+                  </div>
+                ) : recurringBuys.length > 0 ? (
+                  recurringBuys.map((buy) => {
+                    const expanded = expandedRecurringBuyId === buy.id;
+                    const totalCost = buy.entered_amount;
+                    return (
+                      <article key={buy.id} className="overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.055]">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedRecurringBuyId(expanded ? null : buy.id)}
+                          className="flex w-full items-center justify-between gap-4 p-4 text-left transition-colors hover:bg-white/[0.025]"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span
+                              className="flex size-10 shrink-0 items-center justify-center rounded-xl text-[10px] font-black text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]"
+                              style={{ backgroundColor: colorForSymbol(buy.symbol) }}
+                            >
+                              {buy.symbol.slice(0, 4)}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-white">{buy.symbol}</p>
+                              <p className="truncate text-sm font-semibold text-white/58">
+                                Recurring buy {buy.account ? <span className="ml-2 font-normal">{buy.account}</span> : null}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-right text-lg font-bold tabular-nums text-white">
+                              {formatPrivateMoney(totalCost, buy.entered_currency, hideAmounts)} {buy.entered_currency}
+                            </span>
+                            <ChevronDown className={cn("size-5 text-white/72 transition-transform", expanded && "rotate-180")} />
+                          </div>
+                        </button>
+
+                        {expanded && (
+                          <div className="grid gap-5 border-t border-white/[0.07] px-5 pb-5 pt-4 md:grid-cols-[1fr_1fr]">
+                            <dl className="grid gap-3 text-sm">
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Account</dt>
+                                <dd className="text-right text-white/82">{buy.account || activePortfolio.name}</dd>
+                              </div>
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Status</dt>
+                                <dd className="text-right capitalize text-white/82">{buy.status}</dd>
+                              </div>
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Date</dt>
+                                <dd className="text-right text-white/82">{formatRecurringDateTime(buy.executed_at)}</dd>
+                              </div>
+                            </dl>
+                            <dl className="grid gap-3 text-sm">
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Type</dt>
+                                <dd className="text-right text-white/82">Recurring buy</dd>
+                              </div>
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Entered amount</dt>
+                                <dd className="text-right tabular-nums text-white/82">
+                                  {formatPrivateMoney(buy.entered_amount, buy.entered_currency, hideAmounts)} {buy.entered_currency}
+                                </dd>
+                              </div>
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Filled quantity</dt>
+                                <dd className="text-right tabular-nums text-white/82">
+                                  {buy.filled_quantity.toLocaleString("en-US", { maximumFractionDigits: 6 })} shares x {formatMoney(buy.fill_price, buy.fill_currency, 4)}
+                                </dd>
+                              </div>
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Exchange rate</dt>
+                                <dd className="text-right tabular-nums text-white/82">{buy.exchange_rate?.toLocaleString("en-US", { maximumFractionDigits: 6 }) ?? "—"}</dd>
+                              </div>
+                            </dl>
+                            <div className="flex items-center justify-between border-t border-white/[0.07] pt-4 md:col-span-2">
+                              <div>
+                                <p className="text-sm font-semibold text-white">Total cost</p>
+                                <p className="mt-1 text-xs text-white/42">Synced to linked holding</p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-lg font-bold tabular-nums text-white">
+                                  {formatPrivateMoney(buy.entered_amount, buy.entered_currency, hideAmounts)} {buy.entered_currency}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setRecurringBuyToDelete(buy)}
+                                  className="flex size-9 items-center justify-center rounded-full border border-red-negative/20 text-red-negative/75 transition-colors hover:bg-red-negative/10 hover:text-red-negative"
+                                  aria-label={`Delete recurring buy for ${buy.symbol}`}
+                                >
+                                  <Trash2 className="size-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })
+                ) : (
+                  <div className="flex min-h-28 items-center justify-center rounded-2xl border border-dashed border-white/[0.10] bg-black/14 text-sm text-white/42">
+                    No recurring buys yet.
+                  </div>
+                )}
+              </div>
+            </section>
+
             <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(280px,420px)_minmax(0,1fr)]">
               <section className="min-w-0 space-y-5">
                 <div className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
@@ -1612,7 +2009,7 @@ export default function PortfolioPage() {
                                 <td className="px-1 py-3">
                                   <button
                                     type="button"
-                                    onClick={() => removeHolding(holding.id)}
+                                    onClick={() => setHoldingToDelete(holding)}
                                     className="flex size-8 items-center justify-center rounded-full text-white/28 opacity-0 transition-all hover:bg-white/[0.07] hover:text-red-negative group-hover:opacity-100"
                                     aria-label={`Remove ${holding.symbol}`}
                                   >
@@ -1884,6 +2281,58 @@ export default function PortfolioPage() {
                 className="bg-red-negative text-white hover:bg-red-negative/85"
               >
                 Delete portfolio
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        <AlertDialog
+          open={Boolean(holdingToDelete)}
+          onOpenChange={(open) => {
+            if (!open) setHoldingToDelete(null);
+          }}
+        >
+          <AlertDialogContent size="sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {holdingToDelete?.symbol}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will remove {holdingToDelete?.symbol} from the current portfolio holdings table. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (holdingToDelete) void removeHolding(holdingToDelete);
+                }}
+                className="bg-red-negative text-white hover:bg-red-negative/85"
+              >
+                Delete holding
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        <AlertDialog
+          open={Boolean(recurringBuyToDelete)}
+          onOpenChange={(open) => {
+            if (!open) setRecurringBuyToDelete(null);
+          }}
+        >
+          <AlertDialogContent size="sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete recurring buy for {recurringBuyToDelete?.symbol}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will remove the recurring buy and its linked holding from the current portfolio. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (recurringBuyToDelete) void removeRecurringBuy(recurringBuyToDelete);
+                }}
+                className="bg-red-negative text-white hover:bg-red-negative/85"
+              >
+                Delete recurring buy
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
