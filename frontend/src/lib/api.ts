@@ -938,11 +938,12 @@ export interface StrategyExportResult {
 
 // ─── API helpers ────────────────────
 
-async function post<T>(path: string, body: unknown): Promise<T> {
+async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
   const res = await request(`${BASE}${path}`, {
     method: "POST",
     headers: requestHeaders(),
     body: JSON.stringify(body),
+    signal,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -951,8 +952,8 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
-async function get<T>(path: string): Promise<T> {
-  const res = await request(`${BASE}${path}`, { headers: requestHeaders(false), cache: "no-store" });
+async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const res = await request(`${BASE}${path}`, { headers: requestHeaders(false), cache: "no-store", signal });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new ApiError(res.status, err.detail ?? err);
@@ -1031,6 +1032,20 @@ function requestHeaders(includeJson = true): HeadersInit {
     // Bypass ngrok free-tier browser interstitial warning page
     "ngrok-skip-browser-warning": "true",
   };
+}
+
+function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Request aborted", "AbortError"));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => {
+      clearTimeout(timer);
+      reject(new DOMException("Request aborted", "AbortError"));
+    }, { once: true });
+  });
 }
 
 // ─── Exported functions ────────────
@@ -1182,19 +1197,22 @@ export const api = {
     post<StrategyExportResult>("/api/v1/quant/export", payload),
 
   /** Chat with the LangGraph agent — mode controls Quanfora version */
-  chat: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single") =>
-    post<ChatResponse>("/api/v1/agent/chat", { message, session_id: sessionId, remember, mode }),
+  chat: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single", signal?: AbortSignal) =>
+    post<ChatResponse>("/api/v1/agent/chat", { message, session_id: sessionId, remember, mode }, signal),
 
   /** Queue AI chat work and poll the job status/result */
-  chatJob: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single") =>
-    post<ChatJobCreateResponse>("/api/v1/agent/chat/jobs", { message, session_id: sessionId, remember, mode }),
+  chatJob: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single", signal?: AbortSignal) =>
+    post<ChatJobCreateResponse>("/api/v1/agent/chat/jobs", { message, session_id: sessionId, remember, mode }, signal),
 
-  chatJobStatus: (jobId: string) =>
-    get<ChatJobStatusResponse>(`/api/v1/agent/chat/jobs/${encodeURIComponent(jobId)}`),
+  chatJobStatus: (jobId: string, signal?: AbortSignal) =>
+    get<ChatJobStatusResponse>(`/api/v1/agent/chat/jobs/${encodeURIComponent(jobId)}`, signal),
 
-  waitForChatJob: async (jobId: string, onUpdate?: (job: ChatJobStatusResponse) => void, intervalMs = 1500) => {
+  waitForChatJob: async (jobId: string, onUpdate?: (job: ChatJobStatusResponse) => void, intervalMs = 1500, signal?: AbortSignal, timeoutMs = 10 * 60 * 1000) => {
+    const deadline = Date.now() + timeoutMs;
     while (true) {
-      const job = await api.chatJobStatus(jobId);
+      signal?.throwIfAborted();
+      if (Date.now() >= deadline) throw new Error("Chat job timed out");
+      const job = await api.chatJobStatus(jobId, signal);
       onUpdate?.(job);
 
       if (job.status === "succeeded") {
@@ -1205,7 +1223,7 @@ export const api = {
         throw new Error(job.error?.message ?? `Chat job ${job.status}`);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      await abortableDelay(intervalMs, signal);
     }
   },
 
@@ -1214,17 +1232,17 @@ export const api = {
     post<ConsensusResponse>("/api/v1/agent/consensus", { message, session_id: sessionId, remember }),
 
   /** Quanfora 2.1 Equity Research Desk */
-  createEquityResearchRun: (payload: EquityResearchRunCreate) =>
-    post<EquityResearchRun>("/api/v1/equity-research/runs", payload),
+  createEquityResearchRun: (payload: EquityResearchRunCreate, signal?: AbortSignal) =>
+    post<EquityResearchRun>("/api/v1/equity-research/runs", payload, signal),
 
-  equityResearchRun: (runId: string) =>
-    get<EquityResearchRunDetail>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}`),
+  equityResearchRun: (runId: string, signal?: AbortSignal) =>
+    get<EquityResearchRunDetail>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}`, signal),
 
   equityResearchReports: (runId: string) =>
     get<EquityResearchReport[]>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/reports`),
 
-  equityResearchEvents: (runId: string, after = 0) =>
-    get<EquityResearchEventsList>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/events/list?after=${after}`),
+  equityResearchEvents: (runId: string, after = 0, signal?: AbortSignal) =>
+    get<EquityResearchEventsList>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/events/list?after=${after}`, signal),
 
   shareEquityResearchRun: (runId: string, shared = true) =>
     patch<EquityResearchRun>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/share`, { shared }),

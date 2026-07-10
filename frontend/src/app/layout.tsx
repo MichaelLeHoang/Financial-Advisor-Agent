@@ -212,7 +212,11 @@ function MainWorkspace({
 
       <main className={`flex-1 flex flex-col relative z-10 overflow-hidden transition-[margin] duration-300 ease-out ${isSidebarOpen ? "md:ml-72" : "md:ml-16"}`}>
         <div className="flex-1 overflow-y-auto">
-          {shouldGate ? <PublicAccessGate /> : children}
+          {loading && !isPublicAppPath ? (
+            <div className="flex min-h-[50vh] items-center justify-center text-sm text-white/45" role="status">
+              Restoring your workspace...
+            </div>
+          ) : shouldGate ? <PublicAccessGate /> : children}
         </div>
       </main>
     </>

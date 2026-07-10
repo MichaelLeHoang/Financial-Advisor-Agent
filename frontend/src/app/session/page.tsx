@@ -299,8 +299,18 @@ function finalResearchMarkdown(detail: EquityResearchRunDetail) {
     ?? "";
 }
 
-function delay(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+function delay(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Request aborted", "AbortError"));
+      return;
+    }
+    const timer = window.setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => {
+      window.clearTimeout(timer);
+      reject(new DOMException("Request aborted", "AbortError"));
+    }, { once: true });
+  });
 }
 
 const WORKFLOW_STEPS = [
@@ -443,6 +453,7 @@ export default function ChatPage() {
   const progressDrainActiveRef = useRef(false);
   const progressDrainPromiseRef = useRef<Promise<void> | null>(null);
   const notifyWhenCompleteRef = useRef(false);
+  const activeRequestControllerRef = useRef<AbortController | null>(null);
   const firstName = getFirstName(user?.display_name || user?.email || "");
   const [welcomeGreeting] = useState(() => (Math.random() > 0.5 ? "Hello" : "Hi"));
 
@@ -490,6 +501,8 @@ export default function ChatPage() {
 
   useEffect(() => {
     const handlePrivacyReset = () => {
+      activeRequestControllerRef.current?.abort();
+      activeRequestControllerRef.current = null;
       isStreamingRef.current = false;
       setMessages([GREETING]);
       setInput("");
@@ -512,6 +525,8 @@ export default function ChatPage() {
     window.addEventListener("chat-privacy:reset", handlePrivacyReset);
     return () => window.removeEventListener("chat-privacy:reset", handlePrivacyReset);
   }, [router]);
+
+  useEffect(() => () => activeRequestControllerRef.current?.abort(), []);
 
   useEffect(() => {
     const handleFocusInput = () => {
@@ -682,18 +697,23 @@ export default function ChatPage() {
     return true;
   };
 
-  const waitForProgressEvents = async () => {
+  const waitForProgressEvents = async (signal?: AbortSignal) => {
     while (progressDrainPromiseRef.current || progressEventQueueRef.current.length > 0) {
+      signal?.throwIfAborted();
       if (progressDrainPromiseRef.current) {
         await progressDrainPromiseRef.current;
       } else {
-        await delay(80);
+        await delay(80, signal);
       }
     }
   };
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
+    const requestController = new AbortController();
+    activeRequestControllerRef.current?.abort();
+    activeRequestControllerRef.current = requestController;
+    const { signal } = requestController;
     const text = input.trim();
     setInput("");
 
@@ -717,8 +737,10 @@ export default function ChatPage() {
     if (researchCommand || version === "2.1") {
       const seedTicker = researchCommand?.ticker ?? extractTickerForResearch(text);
       let ticker = await resolveResearchTicker(seedTicker ?? text);
+      if (signal.aborted) return;
       if (!ticker && seedTicker) {
         ticker = await resolveResearchTicker(text);
+        if (signal.aborted) return;
       }
       if (!ticker) {
         setMessages((prev) => [...prev, userMsg, {
@@ -727,6 +749,7 @@ export default function ChatPage() {
           content: "Quanfora 2.1 needs a public ticker to start a full Equity Research Desk run. I could not resolve one from that prompt. Try `SPCX`, `AAPL`, `NVDA`, or `/analyze MSFT deep`.",
         }]);
         isStreamingRef.current = false;
+        activeRequestControllerRef.current = null;
         return;
       }
       setMessages((prev) => [...prev, userMsg, { id: getUniqueId(), role: "assistant", content: "Creating Quanfora 2.1 research run...", status: "fetching" }]);
@@ -746,15 +769,15 @@ export default function ChatPage() {
           report_type: reportType,
           research_depth: researchCommand?.depth ?? bestResearchModeForPlan(user.plan, researchDepth),
           source_surface: "ai_advisor",
-        });
+        }, signal);
         let cursor = 0;
         let latestDetail: EquityResearchRunDetail | null = null;
         const completed = new Set<string>();
 
         while (true) {
           const [detail, eventList] = await Promise.all([
-            api.equityResearchRun(run.run_id),
-            api.equityResearchEvents(run.run_id, cursor),
+            api.equityResearchRun(run.run_id, signal),
+            api.equityResearchEvents(run.run_id, cursor, signal),
           ]);
           latestDetail = detail;
           cursor = eventList.cursor;
@@ -788,7 +811,7 @@ export default function ChatPage() {
             break;
           }
 
-          await delay(900);
+          await delay(900, signal);
         }
 
         if (!latestDetail || latestDetail.run.status !== "completed") {
@@ -802,7 +825,7 @@ export default function ChatPage() {
 
         const elapsedBeforeAnswer = Date.now() - loadingStartedAt;
         if (elapsedBeforeAnswer < 2200) {
-          await delay(2200 - elapsedBeforeAnswer);
+          await delay(2200 - elapsedBeforeAnswer, signal);
         }
 
         if (!user.is_guest) {
@@ -827,6 +850,7 @@ export default function ChatPage() {
         );
         window.dispatchEvent(new Event("chat-sessions:changed"));
       } catch (err: any) {
+        if (signal.aborted) return;
         setMessages((prev) =>
           prev.filter((m) => m.status !== "fetching").concat({
             id: getUniqueId(),
@@ -840,13 +864,16 @@ export default function ChatPage() {
           err instanceof Error ? err.message : "Quanfora 2.1 research could not be completed."
         );
       } finally {
-        setIsLoading(false);
-        isStreamingRef.current = false;
-        setActiveTool(null);
-        setCompletedTools([]);
-        setAgentRunState("running");
-        setAgentRunStartedAt(null);
-        setUseAgentSyntheticProgress(false);
+        if (activeRequestControllerRef.current === requestController) {
+          activeRequestControllerRef.current = null;
+          setIsLoading(false);
+          isStreamingRef.current = false;
+          setActiveTool(null);
+          setCompletedTools([]);
+          setAgentRunState("running");
+          setAgentRunStartedAt(null);
+          setUseAgentSyntheticProgress(false);
+        }
       }
       return;
     }
@@ -883,7 +910,7 @@ export default function ChatPage() {
       const remember = !user.is_guest;
       let res;
       try {
-        const queued = await api.chatJob(text, targetSessionId, remember, mode);
+        const queued = await api.chatJob(text, targetSessionId, remember, mode, signal);
 
         res = await api.waitForChatJob(queued.job_id, (job) => {
           const appliedProgress = enqueueJobProgress(job, fetchingLabel);
@@ -908,7 +935,7 @@ export default function ChatPage() {
               )
             );
           }
-        });
+        }, 1500, signal);
       } catch (queueError) {
         if (!isRedisUnavailableError(queueError)) throw queueError;
         setAgentRunState("running");
@@ -921,7 +948,7 @@ export default function ChatPage() {
               : m
           )
         );
-        res = await api.chat(text, targetSessionId, remember, mode);
+        res = await api.chat(text, targetSessionId, remember, mode, signal);
       }
       const consensusOpinions = res.consensus?.opinions;
       const overview = res.overview;
@@ -929,9 +956,9 @@ export default function ChatPage() {
       const minimumPlanDuration = mode === "consensus" ? 3200 : 1800;
       const elapsedBeforeAnswer = Date.now() - loadingStartedAt;
       if (elapsedBeforeAnswer < minimumPlanDuration) {
-        await new Promise((resolve) => window.setTimeout(resolve, minimumPlanDuration - elapsedBeforeAnswer));
+        await delay(minimumPlanDuration - elapsedBeforeAnswer, signal);
       }
-      await waitForProgressEvents();
+      await waitForProgressEvents(signal);
 
       setMessages((prev) =>
         prev.filter((m) => m.status !== "fetching").concat({
@@ -952,6 +979,7 @@ export default function ChatPage() {
       }
       window.dispatchEvent(new Event("chat-sessions:changed"));
     } catch (err: any) {
+      if (signal.aborted) return;
       if (isUpgradeRequiredError(err)) {
         setUpgradeMessage(err.detail.message);
       }
@@ -970,13 +998,16 @@ export default function ChatPage() {
         );
       }
     } finally {
-      setIsLoading(false);
-      isStreamingRef.current = false;
-      setActiveTool(null);
-      setCompletedTools([]);
-      setAgentRunState("running");
-      setAgentRunStartedAt(null);
-      setUseAgentSyntheticProgress(false);
+      if (activeRequestControllerRef.current === requestController) {
+        activeRequestControllerRef.current = null;
+        setIsLoading(false);
+        isStreamingRef.current = false;
+        setActiveTool(null);
+        setCompletedTools([]);
+        setAgentRunState("running");
+        setAgentRunStartedAt(null);
+        setUseAgentSyntheticProgress(false);
+      }
     }
   };
 

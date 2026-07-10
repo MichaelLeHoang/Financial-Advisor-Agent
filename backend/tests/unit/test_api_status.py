@@ -242,3 +242,44 @@ def test_guest_cannot_load_or_mutate_saved_chat_sessions(tmp_path, monkeypatch):
     assert client.get("/api/v1/agent/sessions/any/messages").status_code == 401
     assert client.patch("/api/v1/agent/sessions/any", json={"title": "x"}).status_code == 401
     assert client.delete("/api/v1/agent/sessions/any").status_code == 401
+
+
+def test_ingestion_rejects_unauthenticated_callers(monkeypatch):
+    from src.api import app as api_app
+
+    called = False
+
+    def fake_ingest(_tickers):
+        nonlocal called
+        called = True
+        return {}
+
+    monkeypatch.setattr(api_app, "ingest_news", fake_ingest)
+
+    response = TestClient(api_app.app).post("/api/v1/ingest")
+
+    assert response.status_code == 401
+    assert called is False
+
+
+def test_rag_query_uses_ai_quota(monkeypatch):
+    from src.api import app as api_app
+    from src.models.schemas import RAGResponse
+
+    increments = []
+    monkeypatch.setattr(
+        api_app,
+        "rag_ask",
+        lambda question, ticker_filter=None: RAGResponse(
+            answer=f"Answer for {question}",
+            sources=[],
+            query=question,
+            confidence=0.5,
+        ),
+    )
+    monkeypatch.setattr(api_app.usage_tracker, "increment", lambda *args: increments.append(args))
+
+    response = TestClient(api_app.app).post("/api/v1/query", params={"question": "AAPL outlook"})
+
+    assert response.status_code == 200
+    assert len(increments) == 1

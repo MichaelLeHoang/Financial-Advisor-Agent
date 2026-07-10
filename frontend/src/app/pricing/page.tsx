@@ -29,10 +29,6 @@ import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { api, type AuthUser as ApiAuthUser, type BillingSubscription } from "@/lib/api";
 
 type CheckoutPlanId = Extract<ApiAuthUser["plan"], "pro" | "trader" | "quant">;
-type BillingCycle = "monthly" | "yearly";
-
-const YEARLY_DISCOUNT = 0.2;
-
 function checkoutPlanFor(planId: PlanId): CheckoutPlanId | null {
   return planId === "pro" || planId === "trader" || planId === "quant" ? planId : null;
 }
@@ -49,7 +45,6 @@ export default function PricingPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [billing, setBilling] = useState<BillingSubscription | null>(null);
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
   const [loadingPlan, setLoadingPlan] = useState<PlanId | "portal" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -172,12 +167,7 @@ export default function PricingPage() {
             Unlock deeper AI research, portfolio analytics, backtesting, risk controls, and advanced validation for the workflow you actually use.
           </p>
 
-          <div className="mt-7 flex flex-col items-center gap-3">
-            <BillingCycleToggle value={billingCycle} onChange={setBillingCycle} />
-            {billingCycle === "yearly" && (
-              <p className="text-sm font-medium text-indigo-300">Save 20% with yearly billing.</p>
-            )}
-          </div>
+          <p className="mt-7 text-sm font-medium text-white/45">Monthly billing</p>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             {!user.is_guest && (
@@ -239,7 +229,6 @@ export default function PricingPage() {
                   isLoading={loadingPlan === plan.id}
                   isGuest={Boolean(user.is_guest)}
                   loadingPlan={loadingPlan}
-                  billingCycle={billingCycle}
                   onUpgrade={handleUpgrade}
                 />
               ))}
@@ -293,46 +282,6 @@ function PricingNav({ isGuest }: { isGuest: boolean }) {
   );
 }
 
-function BillingCycleToggle({
-  value,
-  onChange,
-}: {
-  value: BillingCycle;
-  onChange: (value: BillingCycle) => void;
-}) {
-  return (
-    <div
-      className="relative inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.035] p-1 text-sm font-semibold text-white/44 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-      role="radiogroup"
-      aria-label="Billing cycle"
-    >
-      {(["monthly", "yearly"] as const).map((cycle) => {
-        const isSelected = value === cycle;
-        return (
-          <div key={cycle} className="relative">
-            {isSelected && (
-              <HighlightPill layoutId="pricing-billing-cycle-pill" className="absolute inset-0 rounded-full bg-white/[0.10] shadow-[0_8px_24px_rgba(0,0,0,0.18)]" />
-            )}
-            <button
-              type="button"
-              role="radio"
-              aria-checked={isSelected}
-              onClick={() => onChange(cycle)}
-              className={`relative z-10 min-w-24 rounded-full px-5 py-2.5 transition-colors duration-200 ${
-                isSelected
-                  ? "text-white"
-                  : "text-white/42 hover:bg-white/[0.04] hover:text-white/68"
-              }`}
-            >
-              {cycle === "monthly" ? "Monthly" : "Yearly"}
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function PlanCard({
   plan,
   index,
@@ -340,7 +289,6 @@ function PlanCard({
   isLoading,
   isGuest,
   loadingPlan,
-  billingCycle,
   onUpgrade,
 }: {
   plan: PlanConfig;
@@ -349,11 +297,10 @@ function PlanCard({
   isLoading: boolean;
   isGuest: boolean;
   loadingPlan: PlanId | "portal" | null;
-  billingCycle: BillingCycle;
   onUpgrade: (planId: PlanId) => void;
 }) {
   const isRecommended = plan.highlighted;
-  const price = getDisplayedPrice(plan, billingCycle);
+  const price = { label: plan.priceLabel, note: plan.priceNote };
 
   return (
     <motion.div
@@ -425,26 +372,6 @@ function PlanCard({
       </ul>
     </motion.div>
   );
-}
-
-function getDisplayedPrice(plan: PlanConfig, billingCycle: BillingCycle) {
-  if (billingCycle === "monthly" || plan.id === "execution") {
-    return { label: plan.priceLabel, note: plan.priceNote };
-  }
-
-  const monthlyPrice = Number(plan.priceLabel.replace(/[^0-9.]/g, ""));
-  if (!Number.isFinite(monthlyPrice)) {
-    return { label: plan.priceLabel, note: plan.priceNote };
-  }
-
-  if (monthlyPrice === 0) {
-    return { label: "$0", note: "per year" };
-  }
-
-  return {
-    label: `$${Math.round(monthlyPrice * 12 * (1 - YEARLY_DISCOUNT))}`,
-    note: "per year",
-  };
 }
 
 function BusinessAccess({ onRequestExecution }: { onRequestExecution: () => void }) {

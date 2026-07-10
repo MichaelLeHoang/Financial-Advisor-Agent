@@ -460,189 +460,6 @@ def _fetch_market_quote_response(normalized: str, period: str, interval: str) ->
         provider_status=[status.__dict__ for status in snapshot.provider_status],
     )
 
-    try:
-        stock = yf.Ticker(normalized)
-        info = stock.info or {}
-        history = stock.history(period=period, interval=interval, auto_adjust=True)
-        if history.empty:
-            raise HTTPException(status_code=404, detail=f"No market data found for {normalized}")
-
-        closes = history["Close"].dropna()
-        if closes.empty:
-            raise HTTPException(status_code=404, detail=f"No price data found for {normalized}")
-
-        latest_price = float(info.get("regularMarketPrice") or closes.iloc[-1])
-        previous_close = float(info.get("regularMarketPreviousClose") or (closes.iloc[-2] if len(closes) > 1 else closes.iloc[0]))
-        change = ((latest_price - previous_close) / previous_close * 100) if previous_close else 0.0
-        volume_series = history["Volume"] if "Volume" in history else None
-
-        point_rows = history.tail(500)
-        points = []
-        for index, row in point_rows.iterrows():
-            if row.get("Close") is None:
-                continue
-
-            if hasattr(index, "strftime"):
-                if interval.endswith("m") or interval.endswith("h"):
-                    label = index.strftime("%H:%M") if period == "1d" else index.strftime("%b %d %H:%M")
-                else:
-                    label = index.strftime("%b %d")
-            else:
-                label = str(index)
-
-            points.append(
-                MarketQuotePoint(
-                    label=label,
-                    price=round(float(row["Close"]), 2),
-                    volume=int(row.get("Volume", 0) or 0),
-                    open=_round_optional(row.get("Open")),
-                    high=_round_optional(row.get("High")),
-                    low=_round_optional(row.get("Low")),
-                )
-            )
-
-        # Quarterly income statement — shared by the earnings revenue match and the financials table
-        fin = None
-        for attr in ("quarterly_income_stmt", "quarterly_financials"):
-            try:
-                candidate = getattr(stock, attr, None)
-                if candidate is not None and not candidate.empty:
-                    fin = candidate
-                    break
-            except Exception:
-                pass
-
-        def _match_quarter_col(year: int, month: int, max_lag_months: int):
-            if fin is None:
-                return None
-            target = year * 12 + month
-            best = None
-            best_lag = None
-            for c in fin.columns:
-                if not hasattr(c, "year"):
-                    continue
-                lag = target - (c.year * 12 + c.month)
-                if 0 <= lag <= max_lag_months and (best_lag is None or lag < best_lag):
-                    best, best_lag = c, lag
-            return best
-
-        def _surprise_pct(actual: float | None, estimate: float | None) -> float | None:
-            if actual is None or estimate is None or estimate == 0:
-                return None
-            return round((actual - estimate) / abs(estimate) * 100, 2)
-
-        def _earnings_point(date_idx, eps_actual: float, eps_estimate: float | None, beat: float | None, max_lag_months: int) -> EarningsPoint:
-            quarter_col = _match_quarter_col(date_idx.year, date_idx.month, max_lag_months) if hasattr(date_idx, "year") else None
-            label_src = quarter_col if quarter_col is not None else date_idx
-            return EarningsPoint(
-                date=label_src.strftime("%b %Y") if hasattr(label_src, "strftime") else str(label_src),
-                eps_actual=eps_actual,
-                eps_estimate=eps_estimate,
-                beat_pct=beat if beat is not None else _surprise_pct(eps_actual, eps_estimate),
-                revenue_actual=_get_fin_metric(fin, "Total Revenue", quarter_col) if quarter_col is not None else None,
-                # yfinance does not expose historical revenue estimates
-                revenue_estimate=None,
-                revenue_beat_pct=None,
-            )
-
-        # Earnings: EPS expected vs reported per fiscal quarter
-        earnings: list[EarningsPoint] = []
-        try:
-            hist_df = stock.earnings_history
-            if hist_df is not None and not hist_df.empty:
-                for date_idx, erow in hist_df.sort_index(ascending=False).iterrows():
-                    eps_actual = _safe_float(erow.get("epsActual"))
-                    if eps_actual is None:
-                        continue
-                    earnings.append(_earnings_point(date_idx, eps_actual, _safe_float(erow.get("epsEstimate")), None, 1))
-                    if len(earnings) >= 6:
-                        break
-        except Exception:
-            pass
-
-        if not earnings:
-            try:
-                earnings_df = stock.earnings_dates
-                if earnings_df is not None and not earnings_df.empty:
-                    for date_idx, erow in earnings_df.iterrows():
-                        eps_actual = _safe_float(erow.get("Reported EPS"))
-                        if eps_actual is None:
-                            continue
-                        earnings.append(_earnings_point(date_idx, eps_actual, _safe_float(erow.get("EPS Estimate")), _safe_float(erow.get("Surprise(%)")), 3))
-                        if len(earnings) >= 6:
-                            break
-            except Exception:
-                pass
-
-        # Quarterly financials
-        quarterly_financials: list[QuarterlyFinancial] = []
-        try:
-            if fin is not None and not fin.empty:
-                cols_desc = sorted(fin.columns, reverse=True)
-                recent_cols = cols_desc[:4]
-
-                for fin_col in recent_cols:
-                    period_label = fin_col.strftime("%b %Y") if hasattr(fin_col, "strftime") else str(fin_col)
-                    rev = _get_fin_metric(fin, "Total Revenue", fin_col)
-                    ni = _get_fin_metric(fin, "Net Income", fin_col)
-                    deps = _get_fin_metric(fin, "Diluted EPS", fin_col)
-                    margin = round(ni / rev * 100, 2) if rev and ni else None
-
-                    yoy_col = None
-                    if hasattr(fin_col, "year") and hasattr(fin_col, "month"):
-                        for c in cols_desc:
-                            if hasattr(c, "year") and c.year == fin_col.year - 1 and abs(c.month - fin_col.month) <= 1:
-                                yoy_col = c
-                                break
-
-                    prev_rev = _get_fin_metric(fin, "Total Revenue", yoy_col) if yoy_col else None
-                    prev_ni = _get_fin_metric(fin, "Net Income", yoy_col) if yoy_col else None
-                    prev_deps = _get_fin_metric(fin, "Diluted EPS", yoy_col) if yoy_col else None
-                    prev_margin = round(prev_ni / prev_rev * 100, 2) if prev_rev and prev_ni else None
-
-                    quarterly_financials.append(QuarterlyFinancial(
-                        period=period_label,
-                        revenue=rev,
-                        net_income=ni,
-                        diluted_eps=round(deps, 2) if deps is not None else None,
-                        net_profit_margin=margin,
-                        revenue_yoy=_yoy_pct(rev, prev_rev),
-                        net_income_yoy=_yoy_pct(ni, prev_ni),
-                        eps_yoy=_yoy_pct(deps, prev_deps),
-                        margin_yoy=round(margin - prev_margin, 2) if margin is not None and prev_margin is not None else None,
-                    ))
-        except Exception:
-            pass
-
-        return MarketQuoteResponse(
-            ticker=normalized,
-            name=info.get("longName") or info.get("shortName") or normalized,
-            exchange=info.get("exchange") or info.get("fullExchangeName"),
-            sector=info.get("sector") or info.get("quoteType"),
-            price=round(latest_price, 2),
-            change=round(change, 2),
-            currency=info.get("currency"),
-            open_price=_round_optional(info.get("regularMarketOpen") or (float(history["Open"].dropna().iloc[-1]) if "Open" in history and not history["Open"].dropna().empty else None)),
-            day_high=_round_optional(info.get("dayHigh") or (float(history["High"].dropna().iloc[-1]) if "High" in history and not history["High"].dropna().empty else None)),
-            day_low=_round_optional(info.get("dayLow") or (float(history["Low"].dropna().iloc[-1]) if "Low" in history and not history["Low"].dropna().empty else None)),
-            market_cap=info.get("marketCap"),
-            volume=int(info.get("regularMarketVolume") or (volume_series.iloc[-1] if volume_series is not None and not volume_series.empty else 0) or 0),
-            pe_ratio=_round_optional(info.get("trailingPE") or info.get("forwardPE")),
-            fifty_two_week_high=_round_optional(info.get("fiftyTwoWeekHigh")),
-            fifty_two_week_low=_round_optional(info.get("fiftyTwoWeekLow")),
-            dividend_yield=_round_optional(info.get("dividendYield")),
-            dividend_rate=_round_optional(info.get("dividendRate")),
-            quarterly_dividend_amount=_round_optional((info.get("dividendRate") / 4) if info.get("dividendRate") else None),
-            history=points,
-            earnings=earnings,
-            quarterly_financials=quarterly_financials,
-        )
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Unable to fetch market data for {normalized}: {exc}")
-
-
 def _fallback_quote_history(snapshot, period: str) -> list[MarketQuotePoint]:
     latest = _round_optional(snapshot.latest_price)
     if latest is None:
@@ -763,13 +580,19 @@ def _get_fin_metric(df, row_key: str, col) -> float | None:
 # Rag Endpoints
 
 @app.post("/api/v1/query")
-async def query(question: str, ticker: str | None = None):
+async def query(
+    question: str = Query(min_length=1, max_length=4_000),
+    ticker: str | None = Query(default=None, min_length=1, max_length=20, pattern=r"^[A-Za-z0-9.^=-]+$"),
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+):
     """
     Ask the financial advisor a question. 
 
     Example: POST /api/v1/query?question=How is Apple doing?&ticker=AAPL
     """
-    response = rag_ask(question, ticker_filter=ticker)
+    enforce_feature(user, FeatureKey.AI_RESEARCH)
+    usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
+    response = await asyncio.to_thread(rag_ask, question, ticker_filter=ticker.upper() if ticker else None)
     return {
         "answer": response.answer, 
         "confidence": response.confidence,
@@ -784,12 +607,25 @@ async def query(question: str, ticker: str | None = None):
     }
 
 @app.post("/api/v1/ingest")
-async def trigger_ingestion(tickers: list[str] = ["AAPL", "NVDA"]):
+async def trigger_ingestion(
+    tickers: list[str] = Query(default=["AAPL", "NVDA"], min_length=1, max_length=20),
+    _user: AuthenticatedUser = Depends(get_current_user),
+):
     """
     Manually trigger news ingestion for specific tickers. 
     """
 
-    stats = ingest_news(tickers)
+    if settings.app_env != "development":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    normalized = []
+    for ticker in tickers:
+        symbol = ticker.strip().upper()
+        if not symbol or len(symbol) > 20 or not all(char.isalnum() or char in ".^=-" for char in symbol):
+            raise HTTPException(status_code=422, detail="Invalid ticker")
+        normalized.append(symbol)
+
+    stats = await asyncio.to_thread(ingest_news, normalized)
     return {
         "status": "completed",
         "stats": stats,

@@ -771,6 +771,7 @@ function DecisionWorkspaceView({ workspace, activeTab, overview }: { workspace: 
 }
 
 export function AnalysisWorkspace({ runId }: { runId: string }) {
+  const { user } = useAuth();
   const [detail, setDetail] = useState<EquityResearchRunDetail | null>(null);
   const [events, setEvents] = useState<EquityResearchEvent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
@@ -784,30 +785,38 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
   );
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    let terminal = false;
     let eventCursor = 0;
     const load = async () => {
       try {
-        const next = await api.equityResearchRun(runId);
-        if (cancelled) return;
+        const next = await api.equityResearchRun(runId, controller.signal);
+        if (controller.signal.aborted) return;
         setDetail(next);
         setEvents((current) => mergeEvents(current, next.latest_events));
-        const listed = await api.equityResearchEvents(runId, eventCursor);
-        if (!cancelled) {
+        const listed = await api.equityResearchEvents(runId, eventCursor, controller.signal);
+        if (!controller.signal.aborted) {
           eventCursor = listed.cursor;
           setEvents((current) => mergeEvents(current, listed.events));
+          terminal = ["completed", "failed", "cancelled"].includes(next.run.status);
         }
       } catch (err: any) {
-        if (!cancelled) setError(err.message ?? "Could not load research run.");
+        if (!controller.signal.aborted) setError(err.message ?? "Could not load research run.");
       }
     };
-    load();
-    const timer = window.setInterval(load, 1500);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
+    const poll = async () => {
+      while (!controller.signal.aborted && !terminal) {
+        await load();
+        if (!terminal && !controller.signal.aborted) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        }
+      }
     };
-  }, [runId]);
+    void poll();
+    return () => {
+      controller.abort();
+    };
+  }, [runId, user.id]);
 
   useEffect(() => {
     if (selectedAgent && visibleReports.some((report) => report.agent_key === selectedAgent)) return;

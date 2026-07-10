@@ -103,7 +103,7 @@ class UserScopedStore:
 
     def get_user_plan(self, user_id: UUID) -> Plan | None:
         subscription = self.get_subscription(user_id)
-        return subscription.plan if subscription.status in {"active", "trialing"} else None
+        return subscription.plan if subscription.status in {"active", "trialing"} else Plan.FREE
 
     def upsert_subscription(
         self,
@@ -1284,14 +1284,7 @@ class SupabaseRestStore:
         subscription = self.get_subscription(user_id)
         if subscription.status in {"active", "trialing"}:
             return subscription.plan
-
-        rows = self._request("GET", "profiles", {"select": "plan", "id": f"eq.{user_id}", "limit": "1"})
-        if rows:
-            try:
-                return Plan(rows[0].get("plan", Plan.FREE.value))
-            except ValueError:
-                return Plan.FREE
-        return None
+        return Plan.FREE
 
     def upsert_subscription(
         self,

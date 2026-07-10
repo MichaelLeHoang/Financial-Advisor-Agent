@@ -167,45 +167,6 @@ const MARKET_SECTIONS: { title: MarketInstrument["category"]; instruments: Marke
   },
 ];
 
-const UPCOMING_EARNINGS: EarningsEvent[] = [
-  {
-    symbol: "EMP.A",
-    company: "Empire Company Limited",
-    exchange: "TSE",
-    day: "Thu",
-    date: "18",
-    time: "8:00 a.m. UTC-4",
-    period: "Fiscal Q4 2026",
-    epsEstimate: "$0.88",
-    revenueEstimate: "7.8B",
-    googlePath: "/quote/EMP.A:TSE?tab=earnings",
-  },
-  {
-    symbol: "ACN",
-    company: "Accenture plc",
-    exchange: "NYSE",
-    day: "Thu",
-    date: "18",
-    time: "7:00 a.m. UTC-4",
-    period: "Fiscal Q3 2026",
-    epsEstimate: "$3.71",
-    revenueEstimate: "18.8B",
-    googlePath: "/quote/ACN:NYSE?tab=earnings",
-  },
-  {
-    symbol: "FDX",
-    company: "FedEx Corporation",
-    exchange: "NYSE",
-    day: "Tue",
-    date: "23",
-    time: "4:00 p.m. UTC-4",
-    period: "Fiscal Q4 2026",
-    epsEstimate: "$5.92",
-    revenueEstimate: "24.0B",
-    googlePath: "/quote/FDX:NYSE?tab=earnings",
-  },
-];
-
 const SUMMARY_CACHE_KEY = "financial-advisor.watchlist-summary";
 const SUMMARY_TTL_MS = 6 * 60 * 60 * 1000;
 const WIKIPEDIA_PROFILE_CACHE_KEY = "financial-advisor.wikipedia-profile";
@@ -690,59 +651,14 @@ function DynamicMarketBrief() {
   );
 }
 
-function UpcomingEarnings({
-  onOpen,
-}: {
-  onOpen: (event: EarningsEvent) => void;
-}) {
+function UpcomingEarnings() {
   return (
     <section>
       <div className="flex items-center justify-between pb-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-white/45">Upcoming earnings</h2>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={() => onOpen(UPCOMING_EARNINGS[0])}
-          className="rounded-lg text-white/40 hover:text-white"
-        >
-          More earnings
-        </Button>
       </div>
-      <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02]">
-        {UPCOMING_EARNINGS.map((event) => (
-          <button
-            key={`${event.symbol}-${event.period}`}
-            type="button"
-            onClick={() => onOpen(event)}
-            className="grid w-full grid-cols-[3.5rem_1fr_auto] items-center gap-4 border-b border-white/[0.06] px-4 py-4 text-left transition-colors last:border-b-0 hover:bg-white/[0.045] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/40"
-          >
-            <span className="flex h-14 w-14 flex-col items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.03]">
-              <span className="text-xs font-semibold uppercase text-white/38">{event.day}</span>
-              <span className="text-lg font-bold text-white">{event.date}</span>
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-white">{event.company}</span>
-              <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/38">
-                <span className="inline-flex items-center gap-1">
-                  <Clock3 className="h-3.5 w-3.5" />
-                  {event.time}
-                </span>
-                <span>{event.period}</span>
-              </span>
-            </span>
-            <span className="hidden min-w-[10rem] grid-cols-2 gap-3 text-xs sm:grid">
-              <span>
-                <span className="block text-white/32">EPS est.</span>
-                <span className="mt-0.5 block font-semibold text-white/82">{event.epsEstimate}</span>
-              </span>
-              <span>
-                <span className="block text-white/32">Rev est.</span>
-                <span className="mt-0.5 block font-semibold text-white/82">{event.revenueEstimate}</span>
-              </span>
-            </span>
-          </button>
-        ))}
+      <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] px-4 py-6 text-sm text-white/45">
+        Live earnings calendar data is currently unavailable.
       </div>
     </section>
   );
@@ -1983,7 +1899,7 @@ export default function WatchlistPage() {
                   <MarketSummary />
                 </section>
 
-                <UpcomingEarnings onOpen={openEarningsPanel} />
+                <UpcomingEarnings />
 
                 <section>
                   <h2 className="pb-3 text-sm font-semibold uppercase tracking-wide text-white/45">Market trends</h2>
