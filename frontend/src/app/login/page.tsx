@@ -9,6 +9,7 @@ import { ChevronDown, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { HighlightPill } from "@/components/ui/highlight-pill";
 import { cn } from "@/lib/utils";
+import { normalizeAppPath, onboardingHref } from "@/lib/workspace-routing";
 
 const QUOTES = [
   {
@@ -30,15 +31,15 @@ const QUOTES = [
 ];
 
 function getSafeNextTarget() {
-  if (typeof window === "undefined") return "/session";
+  if (typeof window === "undefined") return "/home";
   const next = new URLSearchParams(window.location.search).get("next");
-  if (!next?.startsWith("/") || next.startsWith("//")) return "/session";
-  const target = new URL(next, window.location.origin);
+  if (!next) return "/home";
+  const target = new URL(normalizeAppPath(next), window.location.origin);
   if (target.pathname === "/" && target.searchParams.has("session")) {
     const sessionId = target.searchParams.get("session");
-    return sessionId ? `/session/${encodeURIComponent(sessionId)}` : "/session";
+    return sessionId ? `/ai/${encodeURIComponent(sessionId)}` : "/ai";
   }
-  return `${target.pathname}${target.search}${target.hash}`;
+  return normalizeAppPath(`${target.pathname}${target.search}${target.hash}`);
 }
 
 export default function LoginPage() {
@@ -78,7 +79,15 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!loading && !user.is_guest) {
-      router.replace(getSafeNextTarget());
+      window.localStorage.setItem("financial-advisor.coverSeen", "true");
+      const next = getSafeNextTarget();
+      const onboardingIntent = window.sessionStorage.getItem("quanfora.onboarding.intent") === "signup";
+      if (onboardingIntent) {
+        window.sessionStorage.removeItem("quanfora.onboarding.intent");
+        router.replace(onboardingHref(next));
+      } else {
+        router.replace(next);
+      }
     }
   }, [loading, router, user.is_guest]);
 
@@ -112,9 +121,10 @@ export default function LoginPage() {
       if (authMode === "signin") {
         await signIn(email, password);
       } else {
-        await signUp(email, password);
+        window.sessionStorage.setItem("quanfora.onboarding.intent", "signup");
+        await signUp(email, password, getSafeNextTarget());
       }
-      router.replace(getSafeNextTarget());
+      router.replace(authMode === "signup" ? onboardingHref(getSafeNextTarget()) : getSafeNextTarget());
     } finally {
       setSubmitting(false);
     }
@@ -124,6 +134,7 @@ export default function LoginPage() {
     setFormError(null);
     setOauthLoading(provider);
     try {
+      if (authMode === "signup") window.sessionStorage.setItem("quanfora.onboarding.intent", "signup");
       await signInWithOAuth(provider, getSafeNextTarget());
     } catch {
       setOauthLoading(null);

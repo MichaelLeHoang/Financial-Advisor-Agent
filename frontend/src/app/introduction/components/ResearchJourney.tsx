@@ -142,7 +142,7 @@ export function ResearchJourney() {
                 onClick={() => {
                   trackLandingEvent("landing_launch_app_click", { location: "journey_cta" });
                   window.localStorage.setItem("financial-advisor.coverSeen", "true");
-                  window.location.href = "/session";
+                  window.location.href = "/login?next=%2Fhome";
                 }}
                 className="intro-primary-action inline-flex h-11 items-center justify-center rounded-full px-6 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
               >

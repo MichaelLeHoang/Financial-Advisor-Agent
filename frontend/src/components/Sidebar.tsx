@@ -29,6 +29,10 @@ import {
     Sparkles,
     Trash2,
     TrendingUp,
+    Home,
+    Compass,
+    CandlestickChart,
+    BriefcaseBusiness,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { ChatSession } from "@/lib/api";
@@ -48,19 +52,20 @@ type NavItem = {
 };
 
 const NAV: NavItem[] = [
-    { href: "/dashboard", icon: Sparkles, label: "Dashboard" },
-    { href: "/session", icon: MessageSquare, label: "AI Advisor" },
-    { href: "/market", icon: TrendingUp, label: "Market" },
-    { href: "/sentiment", icon: Brain, label: "Sentiment" },
-    { href: "/watchlist", icon: Pin, label: "Watchlist" },
+    { href: "/home", icon: Home, label: "Home" },
     { href: "/portfolio", icon: PieChart, label: "Portfolio" },
-    { href: "/backtest", icon: FlaskConical, label: "Backtest Lab", minPlan: "trader" },
-    { href: "/quantum", icon: Atom, label: "Quantum", minPlan: "quant" },
+    { href: "/invest", icon: BriefcaseBusiness, label: "Invest" },
+    { href: "/trade", icon: CandlestickChart, label: "Trade" },
+    { href: "/discover/markets", icon: Compass, label: "Discover" },
+    { href: "/journal", icon: BookOpen, label: "Journal" },
+    { href: "/ai", icon: MessageSquare, label: "AI Desk" },
 ];
 
 const MORE_NAV: NavItem[] = [
     { href: "/risk", icon: Shield, label: "Risk", minPlan: "pro" },
-    { href: "/journal", icon: BookOpen, label: "Journal", minPlan: "trader" },
+    { href: "/sentiment", icon: Brain, label: "Sentiment" },
+    { href: "/trade/strategies", icon: FlaskConical, label: "Backtest Lab", minPlan: "trader" },
+    { href: "/quantum", icon: Atom, label: "Quantum", minPlan: "quant" },
     { href: "/strategy-compare", icon: LineChart, label: "Strategy Compare", minPlan: "quant" },
     { href: "/validation", icon: BarChart3, label: "Validation", minPlan: "quant" },
     { href: "/signals", icon: Signal, label: "Signals", minPlan: "quant" },
@@ -68,7 +73,8 @@ const MORE_NAV: NavItem[] = [
 ];
 
 function isNavItemActive(path: string, href: string) {
-    return path === href || (href === "/session" && path.startsWith("/session/"));
+    if (href === "/discover/markets") return path.startsWith("/discover/");
+    return path === href || path.startsWith(`${href}/`);
 }
 
 export default function Sidebar({
@@ -94,11 +100,11 @@ export default function Sidebar({
     const [sessionsLoading, setSessionsLoading] = useState(true);
     const isGuest = !authLoading && Boolean(user?.is_guest);
     const visibleNav = isGuest
-        ? NAV.filter((item) => item.href === "/session" || item.href === "/market")
+        ? NAV.filter((item) => item.href === "/ai" || item.href === "/discover/markets")
         : getVisibleNav(user?.plan ?? "free");
     const visibleMoreNav = isGuest ? [] : getVisibleMoreNav(user?.plan ?? "free");
-    const isSessionPath = path === "/session" || path.startsWith("/session/");
-    const routeSessionId = isSessionPath && path !== "/session" ? decodeURIComponent(path.split("/")[2] || "") : null;
+    const isSessionPath = path === "/ai" || path.startsWith("/ai/");
+    const routeSessionId = isSessionPath && path !== "/ai" ? decodeURIComponent(path.split("/")[2] || "") : null;
     const activeSessionId = isSessionPath ? routeSessionId || searchParams.get("session") || "default" : null;
     const displaySessions = useMemo(() => sessions, [sessions]);
     const creatingSessionRef = useRef(false);
@@ -129,7 +135,7 @@ export default function Sidebar({
     const startNewAnalysis = useCallback(() => {
         const activeSessionIsListed = activeSessionId ? sessions.some((session) => session.session_id === activeSessionId) : false;
         if (activeSessionId && !activeSessionIsListed) {
-            router.push(activeSessionId === "default" ? "/session" : `/session/${encodeURIComponent(activeSessionId)}`);
+            router.push(activeSessionId === "default" ? "/ai" : `/ai/${encodeURIComponent(activeSessionId)}`);
             setMobileOpen(false);
             window.setTimeout(() => window.dispatchEvent(new Event("chat-input:focus")), 80);
             return;
@@ -137,7 +143,7 @@ export default function Sidebar({
 
         const reusableBlankSession = sessions.find((session) => session.message_count === 0);
         if (reusableBlankSession) {
-            router.push(`/session/${encodeURIComponent(reusableBlankSession.session_id)}`);
+            router.push(`/ai/${encodeURIComponent(reusableBlankSession.session_id)}`);
             setMobileOpen(false);
             window.setTimeout(() => window.dispatchEvent(new Event("chat-input:focus")), 80);
             return;
@@ -156,7 +162,7 @@ export default function Sidebar({
         };
 
         setSessions((current) => [optimisticSession, ...current.filter((session) => session.session_id !== nextSessionId)]);
-        router.push(`/session/${encodeURIComponent(nextSessionId)}`);
+        router.push(`/ai/${encodeURIComponent(nextSessionId)}`);
         setMobileOpen(false);
         window.setTimeout(() => window.dispatchEvent(new Event("chat-input:focus")), 80);
 
@@ -172,7 +178,7 @@ export default function Sidebar({
             })
             .catch(() => {
                 setSessions((current) => current.filter((session) => session.session_id !== nextSessionId));
-                router.replace("/session");
+                router.replace("/ai");
             })
             .finally(() => {
                 creatingSessionRef.current = false;
@@ -182,7 +188,7 @@ export default function Sidebar({
     const handleSessionDeleted = useCallback((sessionId: string) => {
         refreshSessions();
         if (activeSessionId === sessionId) {
-            router.push("/session");
+            router.push("/ai");
         }
     }, [activeSessionId, refreshSessions, router]);
 
@@ -646,7 +652,7 @@ function SidebarSurface({
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
                 <div className="mb-3 flex h-10 items-center justify-between">
                     <Link
-                        href="/session"
+                        href="/home"
                         aria-label="Quanfora home"
                         className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] shadow-[var(--shadow-brand-mark-strong)] outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
@@ -1063,7 +1069,7 @@ function RecentThreadRow({
                 />
             ) : (
                 <Link
-                    href={`/session/${encodeURIComponent(session.session_id)}`}
+                    href={`/ai/${encodeURIComponent(session.session_id)}`}
                     aria-current={active ? "page" : undefined}
                     className={cn(
                         "flex items-center rounded-xl text-sm outline-none transition-all duration-200 hover:bg-white/[0.05] hover:text-white focus-visible:ring-2 focus-visible:ring-indigo-primary/50",

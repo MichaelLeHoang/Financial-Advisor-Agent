@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useWorkspacePrototype, type JournalEvent } from "@/components/workspace/WorkspacePrototypeProvider";
 
 const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, trader: 2, quant: 3, execution_addon: 4 };
 
@@ -27,6 +28,7 @@ const EMPTY_FORM: JournalEntryRequest = {
 
 export default function JournalPage() {
   const { user } = useAuth();
+  const { state } = useWorkspacePrototype();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [analytics, setAnalytics] = useState<JournalAnalytics | null>(null);
   const [form, setForm] = useState<JournalEntryRequest>(EMPTY_FORM);
@@ -46,12 +48,17 @@ export default function JournalPage() {
 
   if (!canUseJournal) {
     return (
-      <LockedFeature
-        title="Trade Journal is available on Trader"
-        description="Capture trades, reasons, tags, notes, P/L, and review analytics by symbol, tag, strategy, and weekday."
-        requiredPlan="trader"
-        benefits={["Structured trade notes", "P/L and return calculations", "Journal analytics"]}
-      />
+      <div className="flex-1 overflow-y-auto p-5 lg:p-8">
+        <div className="mx-auto max-w-6xl space-y-7">
+          <PrototypeTimeline events={state.journal} />
+          <LockedFeature
+            title="Detailed trade analytics are available on Trader"
+            description="The shared decision timeline is available to every account. Upgrade for manual trade entries and performance analytics."
+            requiredPlan="trader"
+            benefits={["Structured trade notes", "P/L and return calculations", "Journal analytics"]}
+          />
+        </div>
+      </div>
     );
   }
 
@@ -95,9 +102,10 @@ export default function JournalPage() {
   return (
     <div className="flex-1 overflow-y-auto p-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-7">
+        <PrototypeTimeline events={state.journal} />
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-[var(--text-primary)]">Trade Journal</h1>
+            <h2 className="text-2xl font-bold text-[var(--text-primary)]">Detailed trade journal</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-muted)]">
               Record trades with context, tags, and neutral performance analytics.
             </p>
@@ -269,4 +277,24 @@ function formatPercent(value: number) {
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value);
+}
+
+function PrototypeTimeline({ events }: { events: JournalEvent[] }) {
+  return (
+    <section className="border border-[var(--theme-border)] bg-[var(--surface-card)] p-5 text-[var(--text-primary)]">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div><p className="text-xs font-semibold uppercase text-[var(--text-subtle)]">Decision timeline</p><h1 className="mt-2 text-3xl font-semibold">Investment and trading journal</h1><p className="mt-2 text-sm text-[var(--text-muted)]">Consequential reviews stay linked to their original workspace.</p></div>
+        <div className="flex gap-3 text-xs"><span className="text-emerald-400">Investment</span><span className="text-sky-300">Trading</span></div>
+      </div>
+      <div className="mt-6 divide-y divide-[var(--theme-border)] border-t border-[var(--theme-border)]">
+        {events.length ? events.map((event) => (
+          <div key={event.id} className="grid gap-2 py-4 sm:grid-cols-[110px_1fr_auto] sm:items-start">
+            <span className={event.workspace === "investment" ? "text-xs font-semibold text-emerald-400" : "text-xs font-semibold text-sky-300"}>{event.workspace}</span>
+            <div><p className="text-sm font-semibold">{event.symbol} · {event.title}</p><p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{event.detail}</p></div>
+            <time className="text-xs text-[var(--text-subtle)]">{new Date(event.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
+          </div>
+        )) : <div className="py-8 text-sm text-[var(--text-muted)]">No decisions yet. Complete the guided flow in Invest or submit a simulated paper fill in Trade.</div>}
+      </div>
+    </section>
+  );
 }

@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import { clearLocalChatHistory, notifyChatPrivacyReset } from "@/lib/local-chat-history";
 import { clearAccountScopedBrowserState } from "@/lib/privacy-storage";
+import { normalizeAppPath } from "@/lib/workspace-routing";
 
 export type Plan = "free" | "pro" | "trader" | "quant" | "execution_addon";
 
@@ -26,7 +27,7 @@ interface AuthContextValue {
   error: string | null;
   updateProfile: (profile: Partial<Pick<AuthUser, "display_name" | "username" | "avatar_url">>) => void;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, nextPath?: string) => Promise<void>;
   signInWithOAuth: (provider: Provider, nextPath?: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -38,6 +39,14 @@ const GUEST_USER: AuthUser = {
   display_name: "Guest",
   plan: "free",
   is_guest: true,
+};
+const E2E_AUTH_ENABLED = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_E2E_AUTH === "1";
+const E2E_USER: AuthUser = {
+  id: "00000000-0000-0000-0000-000000000099",
+  email: "e2e@quanfora.local",
+  display_name: "E2E Researcher",
+  plan: "trader",
+  is_guest: false,
 };
 
 function normalizeUser(payload: User): AuthUser {
@@ -64,14 +73,19 @@ function isPlan(value: unknown): value is Plan {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authSession, setAuthSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<AuthUser>(GUEST_USER);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser>(E2E_AUTH_ENABLED ? E2E_USER : GUEST_USER);
+  const [loading, setLoading] = useState(!E2E_AUTH_ENABLED);
   const [error, setError] = useState<string | null>(null);
   const previousIdentityRef = useRef<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
     let sessionGeneration = 0;
+    if (E2E_AUTH_ENABLED) {
+      return () => {
+        mounted = false;
+      };
+    }
     if (!isSupabaseConfigured()) {
       setLoading(false);
       return () => {
@@ -173,14 +187,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, nextPath = "/home") => {
     setError(null);
     const supabase = getSupabaseBrowserClient();
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/login`,
+        emailRedirectTo: `${window.location.origin}/login?next=${encodeURIComponent(normalizeAppPath(nextPath))}`,
       },
     });
 
@@ -210,10 +224,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api.setAuthToken(null);
   };
 
-  const signInWithOAuth = async (provider: Provider, nextPath = "/session") => {
+  const signInWithOAuth = async (provider: Provider, nextPath = "/home") => {
     setError(null);
     const supabase = getSupabaseBrowserClient();
-    const safeNext = nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/session";
+    const safeNext = normalizeAppPath(nextPath);
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {

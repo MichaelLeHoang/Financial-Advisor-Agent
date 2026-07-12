@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from "@/components/auth/AuthProvider";
 import PublicAccessGate from "@/components/auth/PublicAccessGate";
 import { ModelProvider } from "@/components/ModelSelector";
 import Toaster from "@/components/ui/toast";
+import { WorkspacePrototypeProvider } from "@/components/workspace/WorkspacePrototypeProvider";
 
 const hankenGrotesk = Hanken_Grotesk({
   subsets: ["latin"],
@@ -36,6 +37,7 @@ const STANDALONE_PUBLIC_PATHS = [
   "/",
   "/help",
   "/login",
+  "/onboarding",
   "/contact-sales",
   "/news",
   "/blog",
@@ -120,10 +122,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <html lang="en" className={`${rootFontClasses} dark`}>
       <body data-theme={settings.theme} className="bg-space-black text-white font-sans antialiased overflow-x-hidden">
           <AuthProvider>
-            <ModelProvider>
-              {children}
-              <Toaster />
-            </ModelProvider>
+            <WorkspacePrototypeProvider>
+              <ModelProvider>
+                {children}
+                <Toaster />
+              </ModelProvider>
+            </WorkspacePrototypeProvider>
           </AuthProvider>
         </body>
       </html>
@@ -142,7 +146,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${rootFontClasses} dark`}>
       <body data-theme={settings.theme} className="flex h-screen overflow-hidden relative">
         <AuthProvider>
-          <ModelProvider>
+          <WorkspacePrototypeProvider>
+            <ModelProvider>
             <MainWorkspace
               isSidebarOpen={isSidebarOpen}
               onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
@@ -172,8 +177,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               isOpen={isAlertsOpen}
               onClose={() => setIsAlertsOpen(false)}
             />
-            <Toaster />
-          </ModelProvider>
+              <Toaster />
+            </ModelProvider>
+          </WorkspacePrototypeProvider>
         </AuthProvider>
       </body>
     </html>
@@ -197,7 +203,7 @@ function MainWorkspace({
 }) {
   const pathname = usePathname();
   const { user, loading } = useAuth();
-  const isPublicAppPath = pathname.startsWith("/session") || pathname.startsWith("/market") || isStandalonePublicPath(pathname);
+  const isPublicAppPath = pathname.startsWith("/ai") || pathname.startsWith("/discover/markets") || isStandalonePublicPath(pathname);
   const shouldGate = !loading && Boolean(user.is_guest) && !isPublicAppPath;
 
   return (

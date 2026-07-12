@@ -72,7 +72,10 @@ export default function ProfileMenu({
             if (authMode === "signin") {
                 await signIn(email, password);
             } else {
-                await signUp(email, password);
+                window.sessionStorage.setItem("quanfora.onboarding.intent", "signup");
+                await signUp(email, password, "/home");
+                window.localStorage.setItem("financial-advisor.coverSeen", "true");
+                router.push("/onboarding?next=/home");
             }
             setSignInOpen(false);
         } finally {
@@ -191,6 +194,7 @@ export default function ProfileMenu({
                     )}
                     <MenuItem icon={Sparkles} label={isGuest ? "Upgrade plan" : "Plans & billing"} onClick={() => router.push("/pricing")} />
                     {!isGuest && <MenuItem icon={User} label="Profile" onClick={() => { onProfileClick?.(); }} />}
+                    {!isGuest && <MenuItem icon={Sparkles} label="Workspace setup" onClick={() => router.push("/onboarding?next=/home")} />}
                     <MenuItem icon={Bell} label="Alerts" onClick={openAlerts} />
                     <MenuItem icon={HelpCircle} label="Help center" onClick={openHelpCenter} />
                     <MenuItem icon={Settings} label="Settings" onClick={openSettings} />

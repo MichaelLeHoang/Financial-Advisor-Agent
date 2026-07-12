@@ -1,0 +1,6 @@
+import Link from "next/link";
+import { ArrowLeft, FlaskConical } from "lucide-react";
+
+export default function NewStrategyPage() {
+  return <main className="flex min-h-full items-center justify-center p-6 text-[var(--text-primary)]"><section className="w-full max-w-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-8"><FlaskConical className="size-6 text-sky-300" /><p className="mt-8 text-xs font-semibold uppercase text-sky-300">Strategy Studio · next milestone</p><h1 className="mt-3 text-3xl font-semibold">Start with the existing Backtest Lab</h1><p className="mt-3 text-sm leading-6 text-[var(--text-muted)]">The first workspace milestone validates Invest and paper Trade. Strategy creation remains deterministic and continues through the existing lab until Studio is implemented.</p><div className="mt-7 flex flex-wrap gap-2"><Link href="/trade/strategies" className="inline-flex h-10 items-center bg-white px-4 text-sm font-semibold text-black">Open Backtest Lab</Link><Link href="/trade" className="inline-flex h-10 items-center gap-2 border border-[var(--theme-border-strong)] px-4 text-sm font-semibold"><ArrowLeft className="size-4" /> Trading Desk</Link></div></section></main>;
+}

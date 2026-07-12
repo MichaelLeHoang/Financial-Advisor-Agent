@@ -124,7 +124,10 @@ export default function Header({
             if (authMode === "signin") {
                 await signIn(email, password);
             } else {
-                await signUp(email, password);
+                window.sessionStorage.setItem("quanfora.onboarding.intent", "signup");
+                await signUp(email, password, "/home");
+                window.localStorage.setItem("financial-advisor.coverSeen", "true");
+                router.push("/onboarding?next=/home");
             }
             setSignInOpen(false);
             setProfileOpen(false);
