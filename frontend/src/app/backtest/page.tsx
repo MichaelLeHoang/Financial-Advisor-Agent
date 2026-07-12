@@ -188,7 +188,7 @@ export default function BacktestPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button render={<Link href="/backtest/sessions" />} nativeButton={false} variant="outline" className="h-10 rounded-xl text-sm">
+            <Button render={<Link href="/trade/strategies/sessions" />} nativeButton={false} variant="outline" className="h-10 rounded-xl text-sm">
               <History className="mr-2 h-4 w-4" />
               Sessions & history
             </Button>

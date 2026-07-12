@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Building2,
@@ -394,6 +395,7 @@ function formatRecurringSchedule(buy: RecurringBuy) {
 }
 
 export default function PortfolioPage() {
+  const pathname = usePathname();
   const { loading: authLoading, token } = useAuth();
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -435,6 +437,21 @@ export default function PortfolioPage() {
   const [recurringBuyDraft, setRecurringBuyDraft] = useState<RecurringBuyDraft>(() => createRecurringBuyDraft());
   const [recurringTickerInput, setRecurringTickerInput] = useState("");
   const [expandedRecurringBuyId, setExpandedRecurringBuyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const targetByPath: Record<string, string> = {
+      "/portfolio/holdings": "portfolio-holdings",
+      "/portfolio/allocation": "portfolio-allocation",
+      "/portfolio/performance": "portfolio-performance",
+      "/portfolio/accounts": "portfolio-accounts",
+      "/portfolio/activity": "portfolio-activity",
+      "/invest/rebalance": "portfolio-rebalance",
+    };
+    const targetId = targetByPath[pathname];
+    if (!targetId) return;
+    const frame = window.requestAnimationFrame(() => document.getElementById(targetId)?.scrollIntoView({ block: "start" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [pathname]);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [returnPeriod, setReturnPeriod] = useState<"5D" | "1M" | "YTD" | "1Y" | "5Y">("1Y");
   const [sortBy, setSortBy] = useState<"total" | "weight" | "today" | "allTime" | "symbol">("total");
@@ -1198,7 +1215,7 @@ export default function PortfolioPage() {
         </div>
 
         {activePortfolio && (
-          <section className="space-y-4">
+          <section id="portfolio-accounts" className="scroll-mt-16 space-y-4">
             <div className="flex items-center justify-between border-b border-white/12 pb-3">
               <button type="button" className="text-sm text-white/86">All</button>
               <div ref={accountMenuRef} className="relative">
@@ -1300,7 +1317,7 @@ export default function PortfolioPage() {
               </div>
             </div>
 
-            <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.85fr)]">
+            <div id="portfolio-allocation" className="scroll-mt-16 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.85fr)]">
               <div className="min-w-0 rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-3 shadow-[var(--shadow-card)]">
                 {holdingsLoading || portfoliosLoading ? (
                   <div className="flex min-h-[270px] items-center justify-center gap-2 text-sm text-white/45">
@@ -1543,7 +1560,7 @@ export default function PortfolioPage() {
               </section>
             )}
 
-            <section className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
+            <section id="portfolio-activity" className="scroll-mt-16 rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-semibold text-white">Recurring buys</h2>
@@ -1823,7 +1840,7 @@ export default function PortfolioPage() {
               </div>
             </section>
 
-            <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(280px,420px)_minmax(0,1fr)]">
+            <div id="portfolio-performance" className="scroll-mt-16 grid min-w-0 gap-6 xl:grid-cols-[minmax(280px,420px)_minmax(0,1fr)]">
               <section className="min-w-0 space-y-5">
                 <div className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
                   <div className="flex items-center justify-between gap-4">
@@ -1972,7 +1989,7 @@ export default function PortfolioPage() {
                 </div>
               </section>
 
-              <section className="min-w-0">
+              <section id="portfolio-holdings" className="scroll-mt-16 min-w-0">
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <h2 className="text-xl font-semibold">Holdings</h2>
@@ -2144,7 +2161,7 @@ export default function PortfolioPage() {
             </div>
 
             {uniqueSymbols.length >= 2 && (
-              <section className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-6 shadow-[var(--shadow-card)]">
+              <section id="portfolio-rebalance" className="scroll-mt-16 rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-6 shadow-[var(--shadow-card)]">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
                     <h2 className="text-lg font-semibold text-white">Optimizer</h2>

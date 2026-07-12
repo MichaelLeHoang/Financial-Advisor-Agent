@@ -49,7 +49,7 @@ export default function Header({
     const profileRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        router.prefetch("/market?focus=search");
+        router.prefetch("/discover/markets?focus=search");
     }, [router]);
 
     useEffect(() => {
@@ -100,11 +100,11 @@ export default function Header({
         setAccountSwitcherOpen(false);
         setSignInOpen(false);
 
-        if (pathname === "/market") {
+        if (pathname === "/discover/markets") {
             window.dispatchEvent(new Event("market-search:focus"));
             return;
         }
-        router.push("/market?focus=search");
+        router.push("/discover/markets?focus=search");
     };
 
     const currentUserName = user?.display_name || user?.email?.split("@")[0] || "Researcher";

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { BookOpen, Plus, TrendingUp } from "lucide-react";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { JournalAnalytics, JournalEntry, JournalEntryRequest } from "@/lib/api";
@@ -27,6 +28,7 @@ const EMPTY_FORM: JournalEntryRequest = {
 };
 
 export default function JournalPage() {
+  const pathname = usePathname();
   const { user } = useAuth();
   const { state } = useWorkspacePrototype();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
@@ -37,20 +39,27 @@ export default function JournalPage() {
   const [error, setError] = useState<string | null>(null);
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
   const canUseJournal = PLAN_RANK[user.plan] >= PLAN_RANK.trader;
+  const view = pathname === "/journal/investments" ? "investments" : pathname === "/journal/trades" ? "trades" : pathname === "/journal/strategies" ? "strategies" : pathname === "/journal/agent-actions" ? "agent-actions" : "all";
+  const visibleEvents = state.journal.filter((event) => view === "all" || (view === "investments" && event.workspace === "investment") || (view === "trades" && event.workspace === "trading"));
 
   useEffect(() => {
-    if (!canUseJournal) return;
+    if (!canUseJournal || view !== "trades") return;
     void refresh();
-  }, [canUseJournal]);
+  }, [canUseJournal, view]);
 
   const topSymbols = useMemo(() => Object.entries(analytics?.by_symbol ?? {}).slice(0, 4), [analytics]);
   const topTags = useMemo(() => Object.entries(analytics?.by_tag ?? {}).slice(0, 4), [analytics]);
+
+  if (view !== "trades") {
+    const emptyMessage = view === "investments" ? "Investment decisions will appear after an Invest review is recorded." : view === "strategies" ? "Strategy validation and deployment events will appear after Strategy Studio is connected." : view === "agent-actions" ? "Auditable agent actions will appear after automatic journal events are connected." : "Decisions from Invest and Trade will appear here.";
+    return <div className="flex-1 overflow-y-auto p-5 lg:p-8"><div className="mx-auto max-w-6xl"><PrototypeTimeline events={visibleEvents} emptyMessage={emptyMessage} /></div></div>;
+  }
 
   if (!canUseJournal) {
     return (
       <div className="flex-1 overflow-y-auto p-5 lg:p-8">
         <div className="mx-auto max-w-6xl space-y-7">
-          <PrototypeTimeline events={state.journal} />
+          <PrototypeTimeline events={visibleEvents} />
           <LockedFeature
             title="Detailed trade analytics are available on Trader"
             description="The shared decision timeline is available to every account. Upgrade for manual trade entries and performance analytics."
@@ -102,7 +111,7 @@ export default function JournalPage() {
   return (
     <div className="flex-1 overflow-y-auto p-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-7">
-        <PrototypeTimeline events={state.journal} />
+        <PrototypeTimeline events={visibleEvents} />
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-2xl font-bold text-[var(--text-primary)]">Detailed trade journal</h2>
@@ -279,7 +288,7 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value);
 }
 
-function PrototypeTimeline({ events }: { events: JournalEvent[] }) {
+function PrototypeTimeline({ events, emptyMessage = "No decisions yet. Complete the guided flow in Invest or submit a simulated paper fill in Trade." }: { events: JournalEvent[]; emptyMessage?: string }) {
   return (
     <section className="border border-[var(--theme-border)] bg-[var(--surface-card)] p-5 text-[var(--text-primary)]">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -293,7 +302,7 @@ function PrototypeTimeline({ events }: { events: JournalEvent[] }) {
             <div><p className="text-sm font-semibold">{event.symbol} · {event.title}</p><p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{event.detail}</p></div>
             <time className="text-xs text-[var(--text-subtle)]">{new Date(event.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
           </div>
-        )) : <div className="py-8 text-sm text-[var(--text-muted)]">No decisions yet. Complete the guided flow in Invest or submit a simulated paper fill in Trade.</div>}
+        )) : <div className="py-8 text-sm text-[var(--text-muted)]">{emptyMessage}</div>}
       </div>
     </section>
   );

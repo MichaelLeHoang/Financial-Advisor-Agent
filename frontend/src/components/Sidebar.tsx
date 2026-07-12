@@ -43,6 +43,7 @@ import type { Plan } from "@/components/auth/AuthProvider";
 import ChatSearchDialog from "@/components/ChatSearchDialog";
 import ProfileMenu from "@/components/ProfileMenu";
 import { showToast } from "@/components/ui/toast";
+import { PRIMARY_NAVIGATION } from "@/config/workspace-navigation";
 
 type NavItem = {
     href: string;
@@ -51,24 +52,14 @@ type NavItem = {
     minPlan?: Plan;
 };
 
-const NAV: NavItem[] = [
-    { href: "/home", icon: Home, label: "Home" },
-    { href: "/portfolio", icon: PieChart, label: "Portfolio" },
-    { href: "/invest", icon: BriefcaseBusiness, label: "Invest" },
-    { href: "/trade", icon: CandlestickChart, label: "Trade" },
-    { href: "/discover/markets", icon: Compass, label: "Discover" },
-    { href: "/journal", icon: BookOpen, label: "Journal" },
-    { href: "/ai", icon: MessageSquare, label: "AI Desk" },
-];
+const PRIMARY_ICONS = { home: Home, portfolio: PieChart, invest: BriefcaseBusiness, trade: CandlestickChart, discover: Compass, journal: BookOpen, ai: MessageSquare };
+const NAV: NavItem[] = PRIMARY_NAVIGATION.map((item) => ({ ...item, icon: PRIMARY_ICONS[item.id] }));
 
 const MORE_NAV: NavItem[] = [
-    { href: "/risk", icon: Shield, label: "Risk", minPlan: "pro" },
     { href: "/sentiment", icon: Brain, label: "Sentiment" },
-    { href: "/trade/strategies", icon: FlaskConical, label: "Backtest Lab", minPlan: "trader" },
     { href: "/quantum", icon: Atom, label: "Quantum", minPlan: "quant" },
     { href: "/strategy-compare", icon: LineChart, label: "Strategy Compare", minPlan: "quant" },
     { href: "/validation", icon: BarChart3, label: "Validation", minPlan: "quant" },
-    { href: "/signals", icon: Signal, label: "Signals", minPlan: "quant" },
     { href: "/export", icon: Code2, label: "Export", minPlan: "quant" },
 ];
 

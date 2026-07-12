@@ -17,6 +17,37 @@ test("legacy dashboard redirects to the unified Home", async ({ page }) => {
   await expect(page.getByText("Trading Book", { exact: true })).toBeVisible();
 });
 
+test("workspace subnavigation exposes focused Portfolio and Discover routes", async ({ page }) => {
+  await page.goto("/portfolio");
+  await waitForWorkspace(page);
+  const portfolioNav = page.getByRole("navigation", { name: "Portfolio navigation" });
+  await expect(portfolioNav.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
+  await portfolioNav.getByRole("link", { name: "Holdings" }).click();
+  await expect(page).toHaveURL(/\/portfolio\/holdings$/);
+  await expect(portfolioNav.getByRole("link", { name: "Holdings" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Portfolio", exact: true })).toBeVisible();
+
+  await page.goto("/discover/picks");
+  await waitForWorkspace(page);
+  const discoverNav = page.getByRole("navigation", { name: "Discover navigation" });
+  await expect(discoverNav.getByRole("link", { name: "Picks" })).toHaveAttribute("aria-current", "page");
+  await expect(page.locator("header.introduction-nav")).toHaveCount(0);
+});
+
+test("locked workspace destinations remain visible and use canonical redirects", async ({ page }) => {
+  await page.goto("/signals");
+  await waitForWorkspace(page);
+  await expect(page).toHaveURL(/\/discover\/screeners$/);
+  const screenersLink = page.getByRole("navigation", { name: "Discover navigation" }).getByRole("link", { name: /Screeners/ });
+  await expect(screenersLink).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: /Signal Ranking is available on Quant/ })).toBeVisible();
+
+  await page.goto("/risk");
+  await expect(page).toHaveURL(/\/portfolio\/risk$/);
+  await page.goto("/news?tab=picks");
+  await expect(page).toHaveURL(/\/discover\/picks/);
+});
+
 test("external next destinations are rejected", async ({ page }) => {
   await page.goto("/login?next=https%3A%2F%2Fevil.example%2Fcollect");
   await waitForWorkspace(page);
@@ -46,6 +77,9 @@ test("investment decision is recorded in the shared journal", async ({ page }) =
   await page.getByRole("button", { name: "Trim", exact: true }).click();
   await page.getByRole("button", { name: "Record decision" }).click();
   await page.goto("/journal");
+  await expect(page.getByText("NVDA · Trim decision recorded")).toBeVisible();
+  await page.getByRole("navigation", { name: "Journal navigation" }).getByRole("link", { name: "Investments" }).click();
+  await expect(page).toHaveURL(/\/journal\/investments$/);
   await expect(page.getByText("NVDA · Trim decision recorded")).toBeVisible();
 });
 

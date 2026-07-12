@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle,
@@ -282,10 +282,13 @@ function riskToneClass(tone: RiskTone) {
 
 function NewsPageContent() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const isSignedIn = !authLoading && !user?.is_guest;
-  const activeTab = sanitizeTab(searchParams.get("tab"));
+  const embedded = pathname.startsWith("/discover/");
+  const routeTab: IntelligenceTab | null = pathname === "/discover/picks" ? "picks" : pathname === "/discover/reports" ? "reports" : null;
+  const activeTab = routeTab ?? sanitizeTab(searchParams.get("tab"));
   const [selected, setSelected] = useState<string[]>([]);
   const [hasSetPrefs, setHasSetPrefs] = useState(false);
   const [rawNews, setRawNews] = useState<NewsResponse | null>(null);
@@ -295,8 +298,8 @@ function NewsPageContent() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!isSignedIn) router.replace("/login?next=/news");
-  }, [authLoading, isSignedIn, router]);
+    if (!isSignedIn) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+  }, [authLoading, isSignedIn, pathname, router]);
 
   useEffect(() => {
     if (!isSignedIn || !user?.id) return;
@@ -363,10 +366,15 @@ function NewsPageContent() {
     setRawNews(null);
     setWorkspace(null);
     setHasSetPrefs(false);
-    router.replace("/news", { scroll: false });
+    router.replace(embedded ? "/discover/news" : "/news", { scroll: false });
   };
 
   const setTab = (tab: IntelligenceTab) => {
+    if (embedded) {
+      const destination = tab === "picks" ? "/discover/picks" : tab === "reports" ? "/discover/reports" : tab === "briefing" ? "/discover/news?tab=briefing" : "/discover/news";
+      router.replace(destination, { scroll: false });
+      return;
+    }
     router.replace(`/news?tab=${tab}`, { scroll: false });
   };
 
@@ -377,7 +385,7 @@ function NewsPageContent() {
 
   return (
     <main className="news-page min-h-screen">
-      <IntroductionNav />
+      {!embedded && <IntroductionNav />}
 
       {(authLoading || !isSignedIn) && (
         <section className="mx-auto flex min-h-[calc(100dvh-6rem)] max-w-3xl flex-col items-center justify-center px-6 pb-16 pt-32">
@@ -505,7 +513,7 @@ function NewsPageContent() {
         </section>
       )}
 
-      {isSignedIn && <IntroductionFooter />}
+      {isSignedIn && !embedded && <IntroductionFooter />}
     </main>
   );
 }

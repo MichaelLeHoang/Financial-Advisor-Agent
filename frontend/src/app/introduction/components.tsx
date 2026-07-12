@@ -235,7 +235,7 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
                       {isSignedIn && (
                         <li>
                           <NavigationMenuLink asChild>
-                            <Link href="/news" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
+                            <Link href="/discover/news" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
                               <div className="intro-resource-icon flex size-8 items-center justify-center rounded-md bg-white/5 text-white/70 transition-colors">
                                 <Newspaper className="size-4" />
                               </div>
@@ -437,7 +437,7 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
               </div>
               {isSignedIn && (
                 <Link
-                  href="/news"
+                  href="/discover/news"
                   onClick={() => setMobileOpen(false)}
                   className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                     currentTheme === "White"

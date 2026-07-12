@@ -29,6 +29,7 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: "/dashboard", destination: "/home", permanent: false },
+      { source: "/discover", destination: "/discover/markets", permanent: false },
       { source: "/research", destination: "/invest/research", permanent: false },
       { source: "/research/:runId", destination: "/invest/research/:runId", permanent: false },
       { source: "/backtest", destination: "/trade/strategies", permanent: false },
@@ -37,6 +38,12 @@ const nextConfig: NextConfig = {
       { source: "/backtest/replay/:id", destination: "/trade/strategies/replay/:id", permanent: false },
       { source: "/market", destination: "/discover/markets", permanent: false },
       { source: "/watchlist", destination: "/discover/watchlists", permanent: false },
+      { source: "/risk", destination: "/portfolio/risk", permanent: false },
+      { source: "/signals", destination: "/discover/screeners", permanent: false },
+      { source: "/news", has: [{ type: "query", key: "tab", value: "picks" }], destination: "/discover/picks", permanent: false },
+      { source: "/news", has: [{ type: "query", key: "tab", value: "reports" }], destination: "/discover/reports", permanent: false },
+      { source: "/news", destination: "/discover/news", permanent: false },
+      { source: "/trade/desk", destination: "/trade", permanent: false },
       { source: "/session", destination: "/ai", permanent: false },
       { source: "/session/:sessionId", destination: "/ai/:sessionId", permanent: false },
     ];
