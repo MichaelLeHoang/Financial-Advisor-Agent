@@ -32,7 +32,7 @@ const nextConfig: NextConfig = {
       { source: "/discover", destination: "/discover/markets", permanent: false },
       { source: "/research", destination: "/invest/research", permanent: false },
       { source: "/research/:runId", destination: "/invest/research/:runId", permanent: false },
-      { source: "/backtest", destination: "/trade/strategies", permanent: false },
+      { source: "/backtest", destination: "/trade/strategies/backtest", permanent: false },
       { source: "/backtest/sessions", destination: "/trade/strategies/sessions", permanent: false },
       { source: "/backtest/runs/:id", destination: "/trade/strategies/runs/:id", permanent: false },
       { source: "/backtest/replay/:id", destination: "/trade/strategies/replay/:id", permanent: false },

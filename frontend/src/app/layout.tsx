@@ -13,6 +13,7 @@ import PublicAccessGate from "@/components/auth/PublicAccessGate";
 import { ModelProvider } from "@/components/ModelSelector";
 import Toaster from "@/components/ui/toast";
 import { WorkspacePrototypeProvider } from "@/components/workspace/WorkspacePrototypeProvider";
+import { StrategyStudioProvider } from "@/components/strategy-studio/StrategyStudioProvider";
 
 const hankenGrotesk = Hanken_Grotesk({
   subsets: ["latin"],
@@ -123,10 +124,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body data-theme={settings.theme} className="bg-space-black text-white font-sans antialiased overflow-x-hidden">
           <AuthProvider>
             <WorkspacePrototypeProvider>
-              <ModelProvider>
-                {children}
-                <Toaster />
-              </ModelProvider>
+              <StrategyStudioProvider>
+                <ModelProvider>
+                  {children}
+                  <Toaster />
+                </ModelProvider>
+              </StrategyStudioProvider>
             </WorkspacePrototypeProvider>
           </AuthProvider>
         </body>
@@ -147,38 +150,35 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body data-theme={settings.theme} className="flex h-screen overflow-hidden relative">
         <AuthProvider>
           <WorkspacePrototypeProvider>
-            <ModelProvider>
-            <MainWorkspace
-              isSidebarOpen={isSidebarOpen}
-              onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
-              onSettingsClick={() => setIsSettingsOpen(true)}
-              onProfileClick={() => setIsProfileOpen(true)}
-              onAlertsClick={() => setIsAlertsOpen(true)}
-            >
-              {children}
-            </MainWorkspace>
+            <StrategyStudioProvider>
+              <ModelProvider>
+                <MainWorkspace
+                  isSidebarOpen={isSidebarOpen}
+                  onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
+                  onSettingsClick={() => setIsSettingsOpen(true)}
+                  onProfileClick={() => setIsProfileOpen(true)}
+                  onAlertsClick={() => setIsAlertsOpen(true)}
+                >
+                  {children}
+                </MainWorkspace>
 
-            {/* Settings Modal */}
-            <SettingsModal
-              isOpen={isSettingsOpen}
-              onClose={() => setIsSettingsOpen(false)}
-              settings={settings}
-              setSettings={updateSettings}
-            />
-
-            {/* Edit Profile Modal */}
-            <EditProfileModal
-              isOpen={isProfileOpen}
-              onClose={() => setIsProfileOpen(false)}
-            />
-
-            {/* Alerts Modal */}
-            <AlertsModal
-              isOpen={isAlertsOpen}
-              onClose={() => setIsAlertsOpen(false)}
-            />
-              <Toaster />
-            </ModelProvider>
+                <SettingsModal
+                  isOpen={isSettingsOpen}
+                  onClose={() => setIsSettingsOpen(false)}
+                  settings={settings}
+                  setSettings={updateSettings}
+                />
+                <EditProfileModal
+                  isOpen={isProfileOpen}
+                  onClose={() => setIsProfileOpen(false)}
+                />
+                <AlertsModal
+                  isOpen={isAlertsOpen}
+                  onClose={() => setIsAlertsOpen(false)}
+                />
+                <Toaster />
+              </ModelProvider>
+            </StrategyStudioProvider>
           </WorkspacePrototypeProvider>
         </AuthProvider>
       </body>

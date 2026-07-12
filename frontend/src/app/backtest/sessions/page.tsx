@@ -88,7 +88,7 @@ export default function BacktestSessionsPage() {
         end_date: form.end_date,
         initial_balance: form.initial_balance,
       });
-      router.push(`/backtest/replay/${session.id}`);
+      router.push(`/trade/strategies/replay/${session.id}`);
     } catch (err) {
       if (isUpgradeRequiredError(err)) setUpgradeMessage(err.detail.message);
       else setError(err instanceof Error ? err.message : "Unable to create the replay session.");
@@ -131,7 +131,7 @@ export default function BacktestSessionsPage() {
   return (
     <div className="flex-1 overflow-y-auto p-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-6">
-        <Link href="/trade/strategies" className="inline-flex w-fit items-center gap-2 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">
+        <Link href="/trade/strategies/backtest" className="inline-flex w-fit items-center gap-2 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">
           <ArrowLeft className="h-4 w-4" />
           Back to Backtest Lab
         </Link>
@@ -257,7 +257,7 @@ export default function BacktestSessionsPage() {
                         >
                           {session.status}
                         </span>
-                        <Button render={<Link href={`/backtest/replay/${session.id}`} />} nativeButton={false} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
+                        <Button render={<Link href={`/trade/strategies/replay/${session.id}`} />} nativeButton={false} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
                           {session.status === "completed" ? "Review" : "Resume"}
                         </Button>
                         <button type="button" onClick={() => void deleteSession(session)} aria-label={`Delete ${session.name}`} className="text-[var(--text-muted)] hover:text-red-negative">
@@ -294,7 +294,7 @@ export default function BacktestSessionsPage() {
               {runs.map((run) => (
                 <div key={run.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card-hover)] px-4 py-3">
                   <div className="min-w-0">
-                    <Link href={`/backtest/runs/${run.id}`} className="truncate text-sm font-semibold hover:text-indigo-primary">
+                    <Link href={`/trade/strategies/runs/${run.id}`} className="truncate text-sm font-semibold hover:text-indigo-primary">
                       {run.strategy_name}
                     </Link>
                     <div className="mt-1 text-xs text-[var(--text-muted)]">
@@ -305,10 +305,10 @@ export default function BacktestSessionsPage() {
                     <span className={cn("text-xs font-semibold", run.metrics.total_return >= 0 ? "text-green-positive" : "text-red-negative")}>
                       {formatPercent(run.metrics.total_return)}
                     </span>
-                    <Button render={<Link href={`/backtest/runs/${run.id}`} />} nativeButton={false} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
+                    <Button render={<Link href={`/trade/strategies/runs/${run.id}`} />} nativeButton={false} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
                       Open
                     </Button>
-                    <Button render={<Link href={`/backtest?rerun=${run.id}`} />} nativeButton={false} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
+                    <Button render={<Link href={`/trade/strategies/backtest?rerun=${run.id}`} />} nativeButton={false} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
                       <RefreshCcw className="mr-1 h-3 w-3" />
                       Re-run
                     </Button>

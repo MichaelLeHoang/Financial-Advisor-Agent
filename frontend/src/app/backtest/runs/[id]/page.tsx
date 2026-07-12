@@ -137,7 +137,7 @@ export default function BacktestRunPage({ params }: { params: Promise<{ id: stri
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button render={<Link href={`/backtest?rerun=${run.id}`} />} nativeButton={false} variant="outline" className="h-10 rounded-xl text-sm">
+                <Button render={<Link href={`/trade/strategies/backtest?rerun=${run.id}`} />} nativeButton={false} variant="outline" className="h-10 rounded-xl text-sm">
                   <RefreshCcw className="mr-2 h-4 w-4" />
                   Re-run
                 </Button>

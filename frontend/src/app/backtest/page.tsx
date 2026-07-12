@@ -78,6 +78,22 @@ export default function BacktestPage() {
   const positionProgress = `${positionSize * 100}%`;
 
   useEffect(() => {
+    if (rerunId) return;
+    const template = searchParams.get("template");
+    const supported = STRATEGIES.find((item) => item.type === template);
+    if (!supported) return;
+    const requestedSymbols = (searchParams.get("symbols") ?? "").split(",").map((symbol) => symbol.trim().toUpperCase()).filter(Boolean);
+    const numericParameters = Object.fromEntries(Object.keys(supported.default_parameters).flatMap((key) => {
+      const value = searchParams.get(key);
+      return value !== null && Number.isFinite(Number(value)) ? [[key, Number(value)]] : [];
+    }));
+    setStrategy(supported.type);
+    setStrategyName(searchParams.get("name")?.slice(0, 120) || supported.name);
+    if (requestedSymbols.length > 0) setSymbols([...new Set(requestedSymbols)].slice(0, 10));
+    setParameters({ ...supported.default_parameters, ...numericParameters } as Record<string, number>);
+  }, [rerunId, searchParams]);
+
+  useEffect(() => {
     if (!canUseBacktesting) return;
     void refreshHistory();
   }, [canUseBacktesting]);
@@ -355,7 +371,7 @@ export default function BacktestPage() {
                         {recentRuns.slice(0, 3).map((run) => (
                           <Link
                             key={run.id}
-                            href={`/backtest/runs/${run.id}`}
+                            href={`/trade/strategies/runs/${run.id}`}
                             className="block rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card-hover)] px-3 py-2 text-sm transition-colors hover:bg-[var(--surface-control-hover)]"
                           >
                             <div className="flex items-center justify-between gap-3">
@@ -377,7 +393,7 @@ export default function BacktestPage() {
             {result ? (
               <>
                 <Link
-                  href={`/backtest/runs/${result.run.id}`}
+                  href={`/trade/strategies/runs/${result.run.id}`}
                   className="inline-flex items-center gap-2 rounded-xl border border-indigo-primary/30 bg-indigo-primary/10 px-4 py-3 text-sm font-semibold text-indigo-primary transition-colors hover:bg-indigo-primary/15"
                 >
                   View full results with price chart

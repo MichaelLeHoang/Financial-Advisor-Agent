@@ -95,3 +95,55 @@ test("paper trade requires review and creates a simulated fill", async ({ page }
   await page.goto("/journal");
   await expect(page.getByText("AMD · Paper order filled")).toBeVisible();
 });
+
+test("Strategy Studio validates changes, versions a draft, and records paper approval", async ({ page }) => {
+  await page.goto("/trade/strategies");
+  await waitForWorkspace(page);
+  await page.getByRole("link", { name: /Daily Trend Discipline/ }).click();
+  await expect(page.getByRole("heading", { name: "Visual Strategy Tree" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Remove Risk budget" }).click();
+  await page.getByRole("button", { name: "Validate" }).click();
+  await expect(page.getByText("Add a deterministic risk rule before validation.")).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+
+  const architectTab = page.getByRole("tab", { name: "architect" });
+  if (await architectTab.isVisible()) await architectTab.click();
+  await page.getByRole("button", { name: "Accept change" }).click();
+  await page.getByRole("button", { name: "Save version" }).click();
+  await page.getByRole("button", { name: "Paper deploy" }).click();
+  await expect(page.getByRole("dialog", { name: /Deploy Daily Trend Discipline/ })).toBeVisible();
+  await page.getByRole("button", { name: "Confirm paper deployment" }).click();
+
+  await page.goto("/journal/strategies");
+  await expect(page.getByText("Daily Trend Discipline · Paper deployment approved")).toBeVisible();
+});
+
+test("Strategy Studio hands compatible definitions to the deterministic Backtest Lab", async ({ page }) => {
+  await page.goto("/trade/strategies/trading-starter");
+  await waitForWorkspace(page);
+  const previewTab = page.getByRole("tab", { name: "preview" });
+  if (await previewTab.isVisible()) await previewTab.click();
+  await page.getByRole("link", { name: "Open deterministic Backtest Lab" }).click();
+  await expect(page).toHaveURL(/\/trade\/strategies\/backtest\?template=moving_average_crossover/);
+  await expect(page.getByRole("heading", { name: "Backtest Lab" })).toBeVisible();
+  await expect(page.locator('input[value="Daily Trend Discipline"]')).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remove AAPL" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remove MSFT" })).toBeVisible();
+});
+
+test("Strategy Studio keeps its editing surface within desktop and mobile viewports", async ({ page }, testInfo) => {
+  await page.goto("/trade/strategies/trading-starter");
+  await waitForWorkspace(page);
+  await expect(page.getByRole("heading", { name: "Visual Strategy Tree" })).toBeVisible();
+
+  if (testInfo.project.name === "desktop") {
+    await expect(page.getByRole("heading", { name: "Strategy Architect" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Backtest Preview" })).toBeVisible();
+  } else {
+    await page.getByRole("tab", { name: "preview" }).click();
+    await expect(page.getByRole("heading", { name: "Backtest Preview" })).toBeVisible();
+  }
+
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});

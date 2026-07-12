@@ -9,7 +9,7 @@ export type DecisionAction = "hold" | "trim";
 
 export interface JournalEvent {
   id: string;
-  workspace: "investment" | "trading";
+  workspace: "investment" | "trading" | "strategy";
   symbol: string;
   title: string;
   detail: string;
@@ -65,6 +65,7 @@ type WorkspaceContextValue = {
   recordInvestmentDecision: (action: DecisionAction) => void;
   previewPaperOrder: () => void;
   fillPaperOrder: (plan: TradePlanInput, result: TradePlanResult) => void;
+  recordStrategyEvent: (symbol: string, title: string, detail: string) => void;
   resetPrototype: () => void;
 };
 
@@ -182,6 +183,17 @@ export function WorkspacePrototypeProvider({ children }: { children: React.React
         symbol: plan.symbol,
         title: "Paper order filled",
         detail: `${result.quantity} shares filled at the illustrative $${plan.entry.toFixed(2)} entry; planned maximum loss $${result.maximumLoss.toFixed(0)}.`,
+        createdAt: new Date().toISOString(),
+      }, ...current.journal],
+    })),
+    recordStrategyEvent: (symbol, title, detail) => commitState((current) => ({
+      ...current,
+      journal: [{
+        id: eventId(),
+        workspace: "strategy",
+        symbol,
+        title,
+        detail,
         createdAt: new Date().toISOString(),
       }, ...current.journal],
     })),

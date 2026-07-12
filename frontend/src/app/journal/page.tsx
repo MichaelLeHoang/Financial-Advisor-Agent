@@ -40,7 +40,7 @@ export default function JournalPage() {
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
   const canUseJournal = PLAN_RANK[user.plan] >= PLAN_RANK.trader;
   const view = pathname === "/journal/investments" ? "investments" : pathname === "/journal/trades" ? "trades" : pathname === "/journal/strategies" ? "strategies" : pathname === "/journal/agent-actions" ? "agent-actions" : "all";
-  const visibleEvents = state.journal.filter((event) => view === "all" || (view === "investments" && event.workspace === "investment") || (view === "trades" && event.workspace === "trading"));
+  const visibleEvents = state.journal.filter((event) => view === "all" || (view === "investments" && event.workspace === "investment") || (view === "trades" && event.workspace === "trading") || (view === "strategies" && event.workspace === "strategy"));
 
   useEffect(() => {
     if (!canUseJournal || view !== "trades") return;
@@ -51,7 +51,7 @@ export default function JournalPage() {
   const topTags = useMemo(() => Object.entries(analytics?.by_tag ?? {}).slice(0, 4), [analytics]);
 
   if (view !== "trades") {
-    const emptyMessage = view === "investments" ? "Investment decisions will appear after an Invest review is recorded." : view === "strategies" ? "Strategy validation and deployment events will appear after Strategy Studio is connected." : view === "agent-actions" ? "Auditable agent actions will appear after automatic journal events are connected." : "Decisions from Invest and Trade will appear here.";
+    const emptyMessage = view === "investments" ? "Investment decisions will appear after an Invest review is recorded." : view === "strategies" ? "Strategy versions and paper deployments will appear after they are approved in Strategy Studio." : view === "agent-actions" ? "Auditable agent actions will appear after automatic journal events are connected." : "Decisions from Invest, Trade, and Strategy Studio will appear here.";
     return <div className="flex-1 overflow-y-auto p-5 lg:p-8"><div className="mx-auto max-w-6xl"><PrototypeTimeline events={visibleEvents} emptyMessage={emptyMessage} /></div></div>;
   }
 
