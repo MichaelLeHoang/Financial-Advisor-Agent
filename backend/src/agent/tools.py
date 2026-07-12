@@ -8,6 +8,23 @@ from src.quantum.portfolio import optimize_portfolio, quantum_optimize_portfolio
 from src.core.cache import cached_value
 from src.data.market_data_service import market_data_service
 
+_PREDICTION_TICKER_ALIASES = {
+    "SPACEX": "SPCX",
+    "SPACEXSTOCK": "SPCX",
+    "SPACEXSSTOCK": "SPCX",
+    "SPACEXINC": "SPCX",
+    "SPACEXCORP": "SPCX",
+    "SPACEXCORPORATION": "SPCX",
+    "SPACEEXPLORATIONTECHNOLOGIES": "SPCX",
+    "SPACEEXPLORATIONTECHNOLOGIESCORP": "SPCX",
+    "SPACEEXPLORATIONTECHNOLOGIESCORPORATION": "SPCX",
+}
+
+
+def _resolve_prediction_ticker(value: str) -> str:
+    normalized = "".join(char for char in value.upper() if char.isalnum())
+    return _PREDICTION_TICKER_ALIASES.get(normalized, value.upper().strip())
+
 
 @tool
 def market_search(query: str, limit: int = 8) -> str:
@@ -130,9 +147,10 @@ def predict_stock_price(ticker: str, model: str = "ensemble") -> str:
     """Predict stock movement using Random Forest, LSTM, or ensemble mode. Defaults to ensemble unless a single model is explicitly requested. Returns only computed metrics and caveats."""
     try:
         # Normalize ticker
-        ticker = ticker.upper().strip()
-        if not ticker:
+        requested_ticker = ticker.upper().strip()
+        if not requested_ticker:
             return "Error: Please provide a valid stock ticker symbol (e.g. AAPL, MSFT)."
+        ticker = _resolve_prediction_ticker(requested_ticker)
         selected_model = (model or "ensemble").strip().lower()
         if selected_model not in {"random_forest", "lstm", "ensemble"}:
             return "Error: model must be one of random_forest, lstm, or ensemble."
@@ -140,6 +158,11 @@ def predict_stock_price(ticker: str, model: str = "ensemble") -> str:
         # Fetch data first to check availability
         raw = fetch_stock_history([ticker], period="2y")
         if raw.empty:
+            if ticker != requested_ticker:
+                return (
+                    f"Error: Resolved '{requested_ticker}' to '{ticker}', but no market data was returned. "
+                    "This may be a recent IPO with limited provider coverage; verify the ticker in Market before relying on a forecast."
+                )
             return f"Error: No market data found for '{ticker}'. Please check the ticker symbol is correct (e.g. AAPL for Apple, MSFT for Microsoft)."
 
         # Need at least ~40 trading days for feature engineering (30-day SMA + lookback)

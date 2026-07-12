@@ -1,5 +1,5 @@
 """
-QuanAd 2.0 — Financial Data Scientist Specialist
+Quanfora 2.0 — Financial Data Scientist Specialist
 
 Domain: ML predictions, statistical modeling, pattern recognition.
 Tools: predict_stock_price (from existing tools), custom statistical analysis.
@@ -71,7 +71,7 @@ class FinancialDataScientist(BaseSpecialist):
     def system_prompt(self) -> str:
         return """You are a senior Financial Data Scientist specializing in ML predictions and statistical modeling.
 
-YOUR ROLE in the QuanAd 2.0 consensus system:
+YOUR ROLE in the Quanfora 2.0 consensus system:
 - Run ML price prediction models, preferring the ensemble mode by default
 - Compare Random Forest, LSTM, simple average ensemble, and weighted ensemble forecasts when available
 - Compute statistical profiles (returns distribution, skewness, kurtosis)

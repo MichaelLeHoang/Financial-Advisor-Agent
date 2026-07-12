@@ -139,22 +139,22 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -16, scale: 0.98 }}
             transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed left-1/2 top-[12vh] z-[110] w-[min(94vw,640px)] -translate-x-1/2 overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0a0a0e] shadow-[0_36px_120px_-48px_rgba(0,0,0,0.8),0_0_64px_rgba(99,102,241,0.08)]"
+            className="fixed left-1/2 top-[12vh] z-[110] w-[min(94vw,640px)] -translate-x-1/2 overflow-hidden rounded-[24px] border border-[var(--theme-border)] bg-[var(--surface-popover-strong)] shadow-[var(--shadow-popover)]"
           >
             {/* Close button */}
             <button
               type="button"
               aria-label="Close search"
               onClick={() => onOpenChange(false)}
-              className="absolute right-5 top-5 z-20 flex size-8 items-center justify-center rounded-lg text-white/30 transition-colors hover:text-white/60"
+              className="absolute right-5 top-5 z-20 flex size-8 items-center justify-center rounded-lg text-[var(--text-subtle)] transition-colors hover:text-[var(--text-primary)]"
             >
               <X className="size-[18px]" />
             </button>
 
             {/* Search input */}
-            <form onSubmit={handleSubmit} className="border-b border-white/[0.06] px-5 py-5 sm:px-6">
+            <form onSubmit={handleSubmit} className="border-b border-[var(--theme-border)] px-5 py-5 sm:px-6">
               <div className="flex items-center gap-3">
-                <Search className="size-5 shrink-0 text-white/25" />
+                <Search className="size-5 shrink-0 text-[var(--text-placeholder)]" />
                 <input
                   ref={inputRef}
                   type="text"
@@ -163,7 +163,7 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
                   placeholder="Start searching"
                   autoComplete="off"
                   spellCheck={false}
-                  className="w-full bg-transparent text-lg text-white outline-none placeholder:text-white/25"
+                  className="w-full bg-transparent text-lg text-[var(--text-primary)] outline-none placeholder:text-[var(--text-placeholder)]"
                 />
               </div>
             </form>
@@ -173,7 +173,7 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
               {/* Live results */}
               {liveMatches.length > 0 && (
                 <section className="mb-5">
-                  <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-white/30">
+                  <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-subtle)]">
                     Results
                   </h3>
                   <div className="space-y-1">
@@ -186,11 +186,11 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
                           onOpenChange(false);
                           router.push(`/blog/${post.slug}`);
                         }}
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-white/[0.05]"
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[var(--surface-selected)]"
                       >
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-white/80">{post.title}</div>
-                          <div className="truncate text-xs text-white/30">{post.category} · {post.readTime}</div>
+                          <div className="truncate text-sm font-medium text-[var(--text-primary)]">{post.title}</div>
+                          <div className="truncate text-xs text-[var(--text-subtle)]">{post.category} · {post.readTime}</div>
                         </div>
                       </button>
                     ))}
@@ -201,21 +201,21 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
               {/* Recent searches */}
               {recents.length > 0 && query.length === 0 && (
                 <section className="mb-5">
-                  <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-white/30">
+                  <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-subtle)]">
                     Recent
                   </h3>
                   <div className="flex flex-wrap gap-2">
                     {recents.map((term) => (
                       <span
                         key={term}
-                        className="group inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-sm text-white/50 transition-colors hover:border-white/[0.12] hover:bg-white/[0.06]"
+                        className="group inline-flex items-center gap-1.5 rounded-full border border-[var(--theme-border)] bg-[var(--surface-card)] px-3 py-1.5 text-sm text-[var(--text-muted)] transition-colors hover:border-[var(--theme-border-strong)] hover:bg-[var(--surface-selected)]"
                       >
                         <button
                           type="button"
                           onClick={() => performSearch(term)}
                           className="flex items-center gap-1.5 outline-none"
                         >
-                          <Clock className="size-3 text-white/20" />
+                          <Clock className="size-3 text-[var(--text-subtle)]" />
                           {term}
                         </button>
                         <button
@@ -225,7 +225,7 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
                             e.stopPropagation();
                             deleteRecent(term);
                           }}
-                          className="flex size-4 items-center justify-center rounded-full text-white/20 transition-colors hover:bg-white/[0.1] hover:text-white/60"
+                          className="flex size-4 items-center justify-center rounded-full text-[var(--text-subtle)] transition-colors hover:bg-[var(--surface-selected)] hover:text-[var(--text-primary)]"
                         >
                           <X className="size-2.5" />
                         </button>
@@ -238,7 +238,7 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
               {/* Suggested */}
               {query.length === 0 && (
                 <section>
-                  <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-white/30">
+                  <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-subtle)]">
                     Suggested
                   </h3>
                   <div className="flex flex-wrap gap-2">
@@ -250,7 +250,7 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
                           setQuery(term);
                           performSearch(term);
                         }}
-                        className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3.5 py-1.5 text-sm text-white/45 transition-colors hover:border-white/[0.14] hover:bg-white/[0.07] hover:text-white/65"
+                        className="rounded-full border border-[var(--theme-border)] bg-[var(--surface-card)] px-3.5 py-1.5 text-sm text-[var(--text-muted)] transition-colors hover:border-[var(--theme-border-strong)] hover:bg-[var(--surface-selected)] hover:text-[var(--text-primary)]"
                       >
                         {term}
                       </button>

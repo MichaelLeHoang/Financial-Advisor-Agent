@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     # Market data
     alpha_vantage_api_key: SecretStr | None = None
     finnhub_api_key: SecretStr | None = None
-    sec_user_agent: str = "QuanAd research contact@example.com"
+    sec_user_agent: str = "Quanfora research contact@example.com"
     market_data_timeout_seconds: int = 10
 
     # Qdrant vector DB

@@ -12,7 +12,7 @@ export default function PublicAccessGate() {
         </div>
         <h1 className="mt-6 text-3xl font-semibold tracking-tight text-white">Sign in to use this workspace feature</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-white/56">
-          Public access includes the AI Advisor demo, market lookup, and shallow QuanAd 2.1 research previews. Portfolio tools,
+          Public access includes the AI Advisor demo, market lookup, and shallow Quanfora 2.1 research previews. Portfolio tools,
           watchlists, saved state, risk workflows, and advanced research history require a signed-in workspace.
         </p>
 

@@ -76,19 +76,19 @@ const FAQS: FaqProItem[] = [
     id: "ai-financial-advice",
     question: "Is the AI advisor giving financial advice?",
     answer:
-      "No. QuanAd 1.0 and 2.0 provide institutional-grade research assistance, quantitative modeling, and risk context, not professional financial advice. Retail investors often confuse confident LLM outputs with fiduciary advice. Quantum Advisor separates insights from decisions, so you must verify all outputs and own your execution.",
+      "No. Quanfora 1.0 and 2.0 provide institutional-grade research assistance, quantitative modeling, and risk context, not professional financial advice. Retail investors often confuse confident LLM outputs with fiduciary advice. Quanfora separates insights from decisions, so you must verify all outputs and own your execution.",
   },
   {
     id: "multi-agent-consensus",
     question: "How does the Multi-Agent Consensus actually work?",
     answer:
-      "QuanAd 2.0 dispatches your query to specialized sub-agents such as Quant Researcher, Risk Analyst, and Data Scientist before aggregating their verdicts. The system preserves disagreements instead of blending conflicting data into a single average, so risk flags and bullish signals can both remain visible.",
+      "Quanfora 2.0 dispatches your query to specialized sub-agents such as Quant Researcher, Risk Analyst, and Data Scientist before aggregating their verdicts. The system preserves disagreements instead of blending conflicting data into a single average, so risk flags and bullish signals can both remain visible.",
   },
   {
     id: "locked-features",
     question: "Why are some features like Quantum Optimization locked?",
     answer:
-      "Advanced modules like Multi-Agent Consensus and Quantum Portfolio Optimization require significant specialized compute resources and are reserved for premium plans. Free-tier users retain access to the baseline QuanAd 1.0 model for essential market research and sentiment analysis.",
+      "Advanced modules like Multi-Agent Consensus and Quantum Portfolio Optimization require significant specialized compute resources and are reserved for premium plans. Free-tier users retain access to the baseline Quanfora 1.0 mode for essential market research and sentiment analysis.",
   },
   {
     id: "recover-deleted-conversations",
@@ -112,13 +112,13 @@ const FAQS: FaqProItem[] = [
 
 export default function HelpPage() {
   return (
-    <main className="min-h-screen bg-[#050507] text-white">
+    <main className="help-page min-h-screen bg-[#050507] text-white">
       <IntroductionNav />
 
       <section className="mx-auto max-w-6xl px-6 pb-16 pt-28 sm:pb-20 sm:pt-32">
-        <Link href="/introduction" className="mb-8 inline-flex items-center gap-2 text-sm text-white/45 transition-colors hover:text-white">
+        <Link href="/" className="mb-8 inline-flex items-center gap-2 text-sm text-white/45 transition-colors hover:text-white">
           <ArrowLeft className="h-4 w-4" />
-          Introduction
+          Home
         </Link>
 
         <div className="max-w-3xl">

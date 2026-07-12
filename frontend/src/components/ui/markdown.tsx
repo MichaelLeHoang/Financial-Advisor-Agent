@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 import type React from "react";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 
 function textFromChildren(children: React.ReactNode): string {
   if (typeof children === "string") return children;
@@ -28,7 +29,7 @@ function highlightClass(text: string) {
   if (normalized.includes("confidence") || normalized.includes("evidence") || normalized.includes("source")) {
     return "text-indigo-100 bg-indigo-primary/12 ring-indigo-primary/25";
   }
-  return "text-white bg-white/[0.06] ring-white/[0.08]";
+  return "text-[var(--text-primary)] bg-[var(--surface-card-hover)] ring-[var(--theme-border)]";
 }
 
 function HighlightValue({ children }: { children: React.ReactNode }) {
@@ -52,7 +53,7 @@ const components: Components = {
   ),
   p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
   strong: ({ children }) => <HighlightValue>{children}</HighlightValue>,
-  em: ({ children }) => <em className="text-white/70">{children}</em>,
+  em: ({ children }) => <em className="text-[var(--text-secondary)]">{children}</em>,
   ul: ({ children }) => <ul className="mb-3 ml-5 list-none space-y-1.5 last:mb-0 [&_ul]:mb-0 [&_ul]:mt-1.5 [&_ul]:ml-5">{children}</ul>,
   ol: ({ children }) => (
     <ol className="mb-3 ml-5 list-decimal space-y-1.5 last:mb-0">{children}</ol>
@@ -73,7 +74,7 @@ const components: Components = {
     </a>
   ),
   blockquote: ({ children }) => (
-    <blockquote className="my-3 border-l-2 border-indigo-primary/40 pl-4 text-white/60 italic">
+    <blockquote className="my-3 border-l-2 border-indigo-primary/40 pl-4 text-[var(--text-muted)] italic">
       {children}
     </blockquote>
   ),
@@ -81,7 +82,7 @@ const components: Components = {
     const isInline = !className;
     if (isInline) {
       return (
-        <code className="rounded-md bg-white/[0.08] px-1.5 py-0.5 text-[13px] text-indigo-primary/90">
+        <code className="rounded-md bg-[var(--surface-card-hover)] px-1.5 py-0.5 text-[13px] text-indigo-primary/90">
           {children}
         </code>
       );
@@ -93,31 +94,31 @@ const components: Components = {
     );
   },
   pre: ({ children }) => (
-    <pre className="my-3 overflow-x-auto rounded-xl bg-white/[0.04] border border-white/[0.06] p-4 text-[13px] leading-relaxed">
+    <HorizontalScroll as="pre" className="my-3 rounded-xl bg-[var(--surface-card)] border border-[var(--theme-border)] p-4 text-[13px] leading-relaxed">
       {children}
-    </pre>
+    </HorizontalScroll>
   ),
   table: ({ children }) => (
-    <div className="my-3 overflow-x-auto rounded-xl border border-white/[0.08]">
-      <table className="w-full text-sm">{children}</table>
-    </div>
+    <HorizontalScroll className="my-3 rounded-xl border border-[var(--theme-border)]">
+      <table className="w-full table-fixed text-sm">{children}</table>
+    </HorizontalScroll>
   ),
   thead: ({ children }) => (
-    <thead className="border-b border-white/[0.08] bg-white/[0.04] text-left text-white/70">
+    <thead className="border-b border-[var(--theme-border)] bg-[var(--surface-card-hover)] text-left text-[var(--text-secondary)]">
       {children}
     </thead>
   ),
-  th: ({ children }) => <th className="px-3 py-2 font-medium text-indigo-100">{children}</th>,
+  th: ({ children }) => <th className="max-w-[18rem] break-words px-3 py-2 align-top font-medium text-[var(--text-primary)] [overflow-wrap:anywhere]">{children}</th>,
   td: ({ children }) => {
     const text = textFromChildren(children);
     const shouldHighlight = /\b(buy|sell|hold|bullish|bearish|neutral|risk|support|resistance|confidence|source|unavailable|limited)\b/i.test(text);
     return (
-      <td className="px-3 py-2 text-white/70">
-        {shouldHighlight ? <span className={`rounded-md px-1.5 py-0.5 ring-1 ${highlightClass(text)}`}>{children}</span> : children}
+      <td className="max-w-[18rem] break-words px-3 py-2 align-top text-[var(--text-secondary)] [overflow-wrap:anywhere]">
+        {shouldHighlight ? <span className={`break-words rounded-md px-1.5 py-0.5 ring-1 [overflow-wrap:anywhere] ${highlightClass(text)}`}>{children}</span> : children}
       </td>
     );
   },
-  hr: () => <hr className="my-4 border-white/[0.08]" />,
+  hr: () => <hr className="my-4 border-[var(--theme-border)]" />,
 };
 
 interface MarkdownProps {

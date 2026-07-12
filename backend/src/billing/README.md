@@ -6,7 +6,7 @@ Integrates Stripe checkout, customer portal, subscription status, and webhook pr
 ## Responsibilities
 - Create checkout and billing-portal sessions.
 - Validate Stripe webhook signatures and process subscription events.
-- Translate Stripe subscription state into QuanAd plan state.
+- Translate Stripe subscription state into Quanfora plan state.
 - Keep secrets and provider requests behind the Stripe service boundary.
 
 ## Key Files

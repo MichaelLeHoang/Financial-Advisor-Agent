@@ -38,7 +38,7 @@ function AlertDialogContent({
       <AlertDialogPrimitive.Popup
         data-slot="alert-dialog-content"
         className={cn(
-          "fixed left-1/2 top-1/2 z-[250] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-[var(--theme-border)] bg-[var(--surface-dialog)] p-6 text-white shadow-[var(--shadow-dialog)] outline-none",
+          "fixed left-1/2 top-1/2 z-[250] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-[var(--theme-border)] bg-[var(--surface-dialog)] p-6 text-[var(--text-primary)] shadow-[var(--shadow-dialog)] outline-none",
           size === "sm" && "max-w-sm",
           className
         )}
@@ -55,7 +55,7 @@ function AlertDialogMedia({ className, ...props }: React.ComponentProps<"div">) 
     <div
       data-slot="alert-dialog-media"
       className={cn(
-        "mb-4 flex size-11 items-center justify-center rounded-2xl bg-white/[0.055] text-white/70 ring-1 ring-white/[0.08]",
+        "mb-4 flex size-11 items-center justify-center rounded-2xl bg-[var(--surface-card-hover)] text-[var(--text-muted)] ring-1 ring-[var(--theme-border)]",
         className
       )}
       {...props}
@@ -90,7 +90,7 @@ function AlertDialogTitle({
   return (
     <AlertDialogPrimitive.Title
       data-slot="alert-dialog-title"
-      className={cn("text-lg font-semibold text-white", className)}
+      className={cn("text-lg font-semibold text-[var(--text-primary)]", className)}
       {...props}
     />
   )
@@ -103,7 +103,7 @@ function AlertDialogDescription({
   return (
     <AlertDialogPrimitive.Description
       data-slot="alert-dialog-description"
-      className={cn("text-sm leading-6 text-white/46", className)}
+      className={cn("text-sm leading-6 text-[var(--text-subtle)]", className)}
       {...props}
     />
   )

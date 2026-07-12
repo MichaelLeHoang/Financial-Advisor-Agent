@@ -1,5 +1,5 @@
 """
-QuanAd 2.0 — Base Specialist Agent
+Quanfora 2.0 — Base Specialist Agent
 
 Every specialist inherits from BaseSpecialist. It provides:
 - Structured opinion extraction via LLM
@@ -48,7 +48,7 @@ Rules for the JSON:
 
 
 class BaseSpecialist(ABC):
-    """Abstract base class for all QuanAd 2.0 specialist agents."""
+    """Abstract base class for all Quanfora 2.0 specialist agents."""
 
     name: str = "base_specialist"
     display_name: str = "Base Specialist"

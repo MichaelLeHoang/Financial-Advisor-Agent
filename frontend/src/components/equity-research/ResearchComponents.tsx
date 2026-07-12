@@ -22,19 +22,29 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import type {
+  DecisionWorkspace,
+  DecisionWorkspaceBacktest,
+  DecisionWorkspaceMetric,
+  DecisionWorkspaceSection,
   EquityResearchEvent,
   EquityResearchReport,
   EquityResearchRun,
   EquityResearchRunDetail,
+  InvestmentDecision,
+  Overview,
   ResearchDepth,
+  ResearchReportType,
   ResearchRecommendation,
   ResearchRunStatus,
   ResearchSourceSurface,
+  TradingBias,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import Markdown from "@/components/ui/markdown";
 import { useAuth } from "@/components/auth/AuthProvider";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
+import { OverviewCard } from "@/components/ui/overview-card";
 
 const AGENT_GROUPS = [
   { title: "Analyst Agents", agents: [["market", "Market Analyst"], ["social", "Social Media Analyst"], ["news", "News Analyst"], ["fundamentals", "Fundamentals Analyst"]] },
@@ -61,22 +71,105 @@ const REPORT_FILES: Record<string, string> = {
   pm: "final_trade_decision.md",
 };
 
+const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, trader: 2, quant: 3, execution_addon: 4 };
+
+export function canUseTradingReports(plan: string | undefined) {
+  return PLAN_RANK[plan ?? "free"] >= PLAN_RANK.trader;
+}
+
+export function reportTypeLabel(type: ResearchReportType) {
+  return type === "trading" ? "Trading Report" : "Investment Report";
+}
+
+function reportTypeDescription(type: ResearchReportType) {
+  return type === "trading"
+    ? "Shorter-horizon setup, entry context, invalidation, and trading bias."
+    : "Longer-horizon thesis, fundamentals, valuation, portfolio fit, and investment view.";
+}
+
+function reportFileLabel(report: EquityResearchReport, run?: EquityResearchRun) {
+  if (report.agent_key === "pm" && run?.report_type === "trading") return "final_trading_bias.md";
+  if (report.agent_key === "pm") return "final_investment_view.md";
+  return REPORT_FILES[report.agent_key] ?? report.title;
+}
+
+function finalRecommendationTone(run: EquityResearchRun) {
+  if (run.report_type === "trading") {
+    if (run.trading_bias) return tradingBiasTone(run.trading_bias);
+    return legacyTradingTone(run.recommendation);
+  }
+  if (run.investment_decision) return investmentDecisionTone(run.investment_decision);
+  return legacyInvestmentTone(run.recommendation);
+}
+
 export function normalizeResearchTicker(value: string) {
   return value.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, "");
+}
+
+export function ResearchReportTypeSelector({
+  value,
+  onChange,
+  canUseTrading,
+  lockedMessage = "Trading reports require the Trader plan.",
+}: {
+  value: ResearchReportType;
+  onChange: (value: ResearchReportType) => void;
+  canUseTrading: boolean;
+  lockedMessage?: string;
+}) {
+  const options: Array<{ value: ResearchReportType; label: string }> = [
+    { value: "investment", label: "Investment" },
+    { value: "trading", label: "Trading" },
+  ];
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/[0.08] p-1">
+        {options.map((option) => {
+          const locked = option.value === "trading" && !canUseTrading;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              disabled={locked}
+              onClick={() => onChange(option.value)}
+              className={cn(
+                "rounded-lg px-2 py-2 text-xs font-semibold transition-colors",
+                value === option.value ? "bg-white/12 text-white" : "text-white/42 hover:bg-white/[0.05]",
+                locked && "cursor-not-allowed opacity-35"
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-xs leading-5 text-white/38">
+        {value === "trading" && !canUseTrading ? lockedMessage : reportTypeDescription(value)}
+      </p>
+    </div>
+  );
 }
 
 export function TickerAnalyzeInput({
   source,
   compact = false,
   initialTicker = "",
+  reportType = "investment",
   newTab = false,
   onCreated,
+  frameClassName,
+  inputClassName,
+  buttonClassName,
 }: {
   source: ResearchSourceSurface;
   compact?: boolean;
   initialTicker?: string;
+  reportType?: ResearchReportType;
   newTab?: boolean;
   onCreated?: (run: EquityResearchRun) => void;
+  frameClassName?: string;
+  inputClassName?: string;
+  buttonClassName?: string;
 }) {
   const router = useRouter();
   const [ticker, setTicker] = useState(initialTicker);
@@ -90,11 +183,12 @@ export function TickerAnalyzeInput({
     setError(null);
     try {
       if (newTab) {
-        window.open(`/research?ticker=${encodeURIComponent(normalized)}&source=${source}`, "_blank", "noopener,noreferrer");
+        window.open(`/research?ticker=${encodeURIComponent(normalized)}&source=${source}&report_type=${reportType}`, "_blank", "noopener,noreferrer");
         return;
       }
       const run = await api.createEquityResearchRun({
         ticker: normalized,
+        report_type: reportType,
         source_surface: source,
         research_depth: "shallow",
       });
@@ -109,7 +203,7 @@ export function TickerAnalyzeInput({
 
   return (
     <div className={cn("w-full", compact ? "max-w-xl" : "max-w-3xl")}>
-      <div className="flex items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.045] p-1.5 shadow-[0_18px_60px_rgba(0,0,0,0.20)] focus-within:border-indigo-primary/55">
+      <div className={cn("flex items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.045] p-1.5 shadow-[0_18px_60px_rgba(0,0,0,0.20)] focus-within:border-indigo-primary/55", frameClassName)}>
         <TickerSuggestionInput
           value={ticker}
           onValueChange={(value) => setTicker(normalizeResearchTicker(value))}
@@ -120,13 +214,13 @@ export function TickerAnalyzeInput({
           existingTickers={[]}
           placeholder="Enter a ticker: AAPL, MSFT, NVDA..."
           className="min-w-0 flex-1"
-          inputClassName="h-11 rounded-full border-0 bg-transparent pl-10 pr-9 text-base font-semibold text-white placeholder:text-white/30 focus-visible:ring-0"
+          inputClassName={cn("research-ticker-input h-11 rounded-full border-0 bg-transparent pl-10 pr-9 text-base font-semibold text-white placeholder:text-white/30 focus-visible:ring-0", inputClassName)}
         />
         <button
           type="button"
           onClick={() => submit()}
           disabled={loading || !ticker.trim()}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-primary text-white transition-colors hover:bg-indigo-primary/90 disabled:cursor-not-allowed disabled:opacity-45"
+          className={cn("on-accent flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-primary text-white transition-colors hover:bg-indigo-primary/90 disabled:cursor-not-allowed disabled:opacity-45", buttonClassName)}
           aria-label="Generate research report"
         >
           {loading ? <CircleDotDashed className="size-5 animate-spin" /> : <ArrowRight className="size-5" />}
@@ -139,13 +233,13 @@ export function TickerAnalyzeInput({
 
 export function EquityResearchIntroDemo() {
   return (
-    <section id="equity-research-demo" className="relative mx-auto mt-10 max-w-6xl scroll-mt-24 overflow-hidden rounded-3xl border border-white/[0.08] bg-[#090b12] px-5 py-7 shadow-[0_24px_90px_rgba(0,0,0,0.32)] sm:px-8 sm:py-9">
+    <section id="equity-research-demo" className="research-intro-demo relative mx-auto mt-10 max-w-6xl scroll-mt-24 overflow-hidden rounded-3xl border border-white/[0.08] bg-[#090b12] px-5 py-7 shadow-[0_24px_90px_rgba(0,0,0,0.32)] sm:px-8 sm:py-9">
       <div className="grid gap-7 lg:grid-cols-[1fr_0.8fr] lg:items-center">
         <div>
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-indigo-primary/25 bg-indigo-primary/10 px-3 py-1 text-xs font-semibold text-indigo-200">
-            <Radio className="size-3.5" /> QuanAd 2.1 Equity Research Desk
+            <Radio className="size-3.5" /> Quanfora 2.1 Equity Research Desk
           </div>
-          <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">What stock would you like to analyze?</h2>
+          <h2 className="font-heading text-2xl font-semibold tracking-tight text-white sm:text-3xl">What stock would you like to analyze?</h2>
           <div className="mt-6">
             <TickerAnalyzeInput source="introduction" />
           </div>
@@ -173,7 +267,7 @@ export function EquityResearchIntroDemo() {
           <p className="mt-4 text-xs text-white/38">Not investment advice. For educational and informational use only.</p>
           
         </div>
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
+        <div className="research-demo-progress rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
           <ResearchDemoProgressLoop />
         </div>
       </div>
@@ -181,7 +275,7 @@ export function EquityResearchIntroDemo() {
   );
 }
 
-function ResearchDemoProgressLoop() {
+export function ResearchDemoProgressLoop({ surface = "dark" }: { surface?: "dark" | "light" }) {
   const steps = [
     "Market Analyst",
     "News Analyst",
@@ -202,12 +296,14 @@ function ResearchDemoProgressLoop() {
     return () => window.clearInterval(timer);
   }, [steps.length]);
 
+  const isLight = surface === "light";
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-widest text-white/35">Workflow</p>
+        <p className={cn("text-xs font-semibold uppercase tracking-widest", isLight ? "text-slate-400" : "text-white/35")}>Workflow</p>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+      <div className={cn("h-1.5 overflow-hidden rounded-full", isLight ? "bg-slate-200" : "bg-white/[0.06]")}>
         <div
           className="h-full rounded-full bg-gradient-to-r from-indigo-primary via-cyan-secondary to-emerald-300 transition-[width] duration-500"
           style={{ width: `${((active + 1) / steps.length) * 100}%` }}
@@ -222,18 +318,28 @@ function ResearchDemoProgressLoop() {
               key={step}
               className={cn(
                 "flex items-center gap-2 rounded-lg px-2 py-2 transition-colors",
-                running ? "bg-indigo-primary/14 text-white" : completed ? "text-white/38" : "text-white/28"
+                isLight
+                  ? running
+                    ? "bg-indigo-primary/12 text-slate-950"
+                    : completed
+                      ? "text-slate-500"
+                      : "text-slate-300"
+                  : running
+                    ? "bg-indigo-primary/14 text-white"
+                    : completed
+                      ? "text-white/38"
+                      : "text-white/28"
               )}
             >
               {running ? (
-                <CircleDotDashed className="size-4 animate-spin text-indigo-200" />
+                <CircleDotDashed className={cn("size-4 animate-spin", isLight ? "text-indigo-primary" : "text-indigo-200")} />
               ) : completed ? (
                 <CheckCircle2 className="size-4 text-emerald-300" />
               ) : (
                 <Circle className="size-4" />
               )}
               <span className="text-sm font-medium">{step}</span>
-              {running && <span className="ml-auto text-[10px] uppercase tracking-wider text-indigo-100/70">processing</span>}
+              {running && <span className={cn("ml-auto text-[10px] uppercase tracking-wider", isLight ? "text-indigo-primary" : "text-indigo-100/70")}>processing</span>}
             </div>
           );
         })}
@@ -243,16 +349,22 @@ function ResearchDemoProgressLoop() {
 }
 
 export function FinalDecisionCard({ run }: { run: EquityResearchRun }) {
-  const tone = recommendationTone(run.recommendation);
+  const tone = finalRecommendationTone(run);
+  const isTrading = run.report_type === "trading";
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-white/[0.045] p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-white/35">Final Recommendation</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-white/35">
+            {isTrading ? "Trade Stance" : "Final Investment View"}
+          </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className={cn("rounded-xl px-3 py-1.5 text-lg font-bold", tone.className)}>{tone.label}</span>
             <span className="rounded-xl border border-white/[0.08] px-3 py-1.5 text-sm font-semibold text-white/70">
               {Math.round(run.confidence * 100)}% confidence
+            </span>
+            <span className="rounded-xl border border-indigo-primary/20 bg-indigo-primary/10 px-3 py-1.5 text-sm font-semibold text-indigo-100">
+              {reportTypeLabel(run.report_type)}
             </span>
           </div>
         </div>
@@ -263,8 +375,8 @@ export function FinalDecisionCard({ run }: { run: EquityResearchRun }) {
         </div>
       </div>
       <div className="mt-5 grid gap-3 md:grid-cols-2">
-        <DecisionFact icon={<BarChart3 className="size-4" />} label="Main upside" value={run.main_upside ?? "Pending research output."} />
-        <DecisionFact icon={<AlertTriangle className="size-4" />} label="Main risk" value={run.main_risk ?? "Pending risk review."} />
+        <DecisionFact icon={<BarChart3 className="size-4" />} label={isTrading ? "Setup upside" : "Main upside"} value={run.main_upside ?? "Pending research output."} />
+        <DecisionFact icon={<AlertTriangle className="size-4" />} label={isTrading ? "Invalidation risk" : "Main risk"} value={run.main_risk ?? "Pending risk review."} />
       </div>
       {run.final_summary && <p className="mt-4 text-sm leading-6 text-white/62">{run.final_summary}</p>}
       <p className="mt-4 inline-flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.03] px-2.5 py-1.5 text-xs text-white/45">
@@ -284,6 +396,7 @@ function DecisionFact({ icon, label, value }: { icon: React.ReactNode; label: st
 }
 
 export function AgentProgressSidebar({
+  run,
   reports,
   status,
   events = [],
@@ -291,6 +404,7 @@ export function AgentProgressSidebar({
   onSelectAgent,
   compact = false,
 }: {
+  run?: EquityResearchRun;
   reports: EquityResearchReport[];
   status: ResearchRunStatus;
   events?: EquityResearchEvent[];
@@ -367,7 +481,7 @@ export function AgentProgressSidebar({
                     >
                       <StatusIcon status={agentStatus} />
                       <span className="min-w-0 flex-1 truncate">{name}</span>
-                      {report && <span className="text-[10px] text-white/30">{REPORT_FILES[key]}</span>}
+                      {report && <span className="text-[10px] text-white/30">{reportFileLabel(report, run)}</span>}
                     </button>
                   );
                 })}
@@ -452,6 +566,7 @@ export function AnalysisConfigPanel({ run }: { run: EquityResearchRun }) {
   return (
     <div className="space-y-3">
       <ConfigRow label="Analysis Date" value={run.analysis_date} />
+      <ConfigRow label="Report Type" value={reportTypeLabel(run.report_type)} locked={isGuest && run.report_type === "investment"} lockText="Sign up for Trader to unlock trading reports." />
       <ConfigRow label="Research Depth" value={run.research_depth} locked={isGuest && run.research_depth === "shallow"} lockText="Sign up to unlock medium and deep research." />
       <ConfigRow label="Quick Thinking" value={run.quick_model} locked={isGuest} lockText="Sign up to choose Quick Thinking models." />
       <ConfigRow label="Deep Thinking" value={run.deep_model} locked={isGuest} lockText="Sign up to choose Deep Thinking models." />
@@ -479,16 +594,18 @@ function ConfigRow({ label, value, locked, lockText }: { label: string; value: s
 }
 
 export function ReportFileList({
+  run,
   reports,
   selectedAgent,
   onSelectAgent,
 }: {
+  run?: EquityResearchRun;
   reports: EquityResearchReport[];
   selectedAgent: string | null;
   onSelectAgent: (agent: string) => void;
 }) {
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1">
+    <HorizontalScroll className="flex gap-2 pb-1">
       {reports.map((report) => (
         <button
           key={report.report_id}
@@ -500,18 +617,165 @@ export function ReportFileList({
               : "border-white/[0.08] bg-white/[0.025] text-white/55 hover:bg-white/[0.055]"
           )}
         >
-          <span className="flex items-center gap-1.5 font-semibold"><FileText className="size-3.5" />{REPORT_FILES[report.agent_key] ?? report.title}</span>
+          <span className="flex items-center gap-1.5 font-semibold"><FileText className="size-3.5" />{reportFileLabel(report, run)}</span>
           <span className="mt-1 block text-[10px] text-white/34">{report.agent_name}</span>
         </button>
+      ))}
+    </HorizontalScroll>
+  );
+}
+
+type WorkspaceTab = "overview" | "evidence" | "signals" | "backtest" | "regime" | "debate" | "next" | "reports";
+
+const WORKSPACE_TABS: Array<{ key: WorkspaceTab; label: string }> = [
+  { key: "overview", label: "Overview" },
+  { key: "evidence", label: "Evidence" },
+  { key: "signals", label: "Signals" },
+  { key: "backtest", label: "Backtest" },
+  { key: "regime", label: "Regime" },
+  { key: "debate", label: "Agent Debate" },
+  { key: "next", label: "Next Steps" },
+  { key: "reports", label: "Reports" },
+];
+
+function WorkspaceTabBar({
+  activeTab,
+  onChange,
+  hasWorkspace,
+}: {
+  activeTab: WorkspaceTab;
+  onChange: (tab: WorkspaceTab) => void;
+  hasWorkspace: boolean;
+}) {
+  const tabs = hasWorkspace ? WORKSPACE_TABS : WORKSPACE_TABS.filter((tab) => tab.key === "reports");
+  return (
+    <HorizontalScroll className="flex gap-2 pb-1">
+      {tabs.map((tab) => (
+        <button
+          key={tab.key}
+          type="button"
+          onClick={() => onChange(tab.key)}
+          className={cn(
+            "shrink-0 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors",
+            activeTab === tab.key
+              ? "border-indigo-primary/50 bg-indigo-primary/18 text-white"
+              : "border-white/[0.08] bg-white/[0.025] text-white/55 hover:bg-white/[0.055]"
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </HorizontalScroll>
+  );
+}
+
+function metricToneClass(tone: DecisionWorkspaceMetric["tone"]) {
+  if (tone === "positive") return "border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-100";
+  if (tone === "negative") return "border-rose-400/20 bg-rose-400/[0.08] text-rose-100";
+  if (tone === "info") return "border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-100";
+  return "border-white/[0.08] bg-white/[0.025] text-white/72";
+}
+
+function WorkspaceMetricGrid({ metrics }: { metrics: DecisionWorkspaceMetric[] }) {
+  if (metrics.length === 0) return null;
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {metrics.map((metric) => (
+        <div key={`${metric.label}-${metric.value}`} className={cn("rounded-xl border p-3", metricToneClass(metric.tone))}>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-white/38">{metric.label}</p>
+          <p className="mt-1 text-lg font-semibold text-current">{metric.value}</p>
+        </div>
       ))}
     </div>
   );
 }
 
+function WorkspaceBullets({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-widest text-indigo-primary">{title}</p>
+      <ul className="mt-2 space-y-2 text-sm leading-6 text-white/62">
+        {items.map((item) => (
+          <li key={item} className="flex gap-2">
+            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-indigo-primary/70" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function WorkspaceSectionView({ title, section }: { title: string; section: DecisionWorkspaceSection }) {
+  return (
+    <article className="min-h-[30rem] rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
+      <h2 className="text-lg font-semibold text-white">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-white/62">{section.summary}</p>
+      <div className="mt-5">
+        <WorkspaceMetricGrid metrics={section.metrics} />
+      </div>
+      <div className="mt-5 grid gap-5 xl:grid-cols-2">
+        <WorkspaceBullets title="Key Points" items={section.bullets} />
+        <WorkspaceBullets title="Limitations" items={section.limitations} />
+      </div>
+    </article>
+  );
+}
+
+function WorkspaceBacktestView({ backtest }: { backtest: DecisionWorkspaceBacktest }) {
+  return (
+    <article className="min-h-[30rem] rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
+      <h2 className="text-lg font-semibold text-white">Backtest</h2>
+      <p className="mt-2 text-sm leading-6 text-white/62">{backtest.summary}</p>
+      <div className="mt-5">
+        <WorkspaceMetricGrid metrics={backtest.metrics} />
+      </div>
+      <div className="mt-5 grid gap-5 xl:grid-cols-2">
+        <WorkspaceBullets title="Assumptions" items={backtest.assumptions} />
+        <WorkspaceBullets title="Limitations" items={backtest.limitations} />
+      </div>
+    </article>
+  );
+}
+
+function WorkspaceNextStepsView({ workspace }: { workspace: DecisionWorkspace }) {
+  return (
+    <article className="min-h-[30rem] rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
+      <h2 className="text-lg font-semibold text-white">Next Steps</h2>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {workspace.next_steps.map((step) => (
+          <div key={`${step.label}-${step.detail}`} className="rounded-xl border border-white/[0.08] bg-black/15 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm font-semibold text-indigo-primary">{step.label}</p>
+              {step.trigger && <span className="rounded-lg border border-white/[0.08] px-2 py-1 text-xs font-semibold text-white/55">{step.trigger}</span>}
+            </div>
+            <p className="mt-2 text-sm leading-6 text-white/62">{step.detail}</p>
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function DecisionWorkspaceView({ workspace, activeTab, overview }: { workspace: DecisionWorkspace; activeTab: WorkspaceTab; overview?: Overview | null }) {
+  if (activeTab === "overview") {
+    return overview ? <OverviewCard overview={overview} /> : <WorkspaceSectionView title="Overview" section={workspace.overview} />;
+  }
+  if (activeTab === "evidence") return <WorkspaceSectionView title="Evidence" section={workspace.evidence} />;
+  if (activeTab === "signals") return <WorkspaceSectionView title="Signals" section={workspace.signals} />;
+  if (activeTab === "backtest") return <WorkspaceBacktestView backtest={workspace.backtest} />;
+  if (activeTab === "regime") return <WorkspaceSectionView title="Regime" section={workspace.regime} />;
+  if (activeTab === "debate") return <WorkspaceSectionView title="Agent Debate" section={workspace.agent_debate} />;
+  return <WorkspaceNextStepsView workspace={workspace} />;
+}
+
 export function AnalysisWorkspace({ runId }: { runId: string }) {
+  const { user } = useAuth();
   const [detail, setDetail] = useState<EquityResearchRunDetail | null>(null);
   const [events, setEvents] = useState<EquityResearchEvent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("overview");
   const [error, setError] = useState<string | null>(null);
   const visibleEvents = useSequentialEvents(events);
   const visibleKeys = useMemo(() => visibleReportKeys(visibleEvents), [visibleEvents]);
@@ -521,30 +785,38 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
   );
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    let terminal = false;
     let eventCursor = 0;
     const load = async () => {
       try {
-        const next = await api.equityResearchRun(runId);
-        if (cancelled) return;
+        const next = await api.equityResearchRun(runId, controller.signal);
+        if (controller.signal.aborted) return;
         setDetail(next);
         setEvents((current) => mergeEvents(current, next.latest_events));
-        const listed = await api.equityResearchEvents(runId, eventCursor);
-        if (!cancelled) {
+        const listed = await api.equityResearchEvents(runId, eventCursor, controller.signal);
+        if (!controller.signal.aborted) {
           eventCursor = listed.cursor;
           setEvents((current) => mergeEvents(current, listed.events));
+          terminal = ["completed", "failed", "cancelled"].includes(next.run.status);
         }
       } catch (err: any) {
-        if (!cancelled) setError(err.message ?? "Could not load research run.");
+        if (!controller.signal.aborted) setError(err.message ?? "Could not load research run.");
       }
     };
-    load();
-    const timer = window.setInterval(load, 1500);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
+    const poll = async () => {
+      while (!controller.signal.aborted && !terminal) {
+        await load();
+        if (!terminal && !controller.signal.aborted) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        }
+      }
     };
-  }, [runId]);
+    void poll();
+    return () => {
+      controller.abort();
+    };
+  }, [runId, user.id]);
 
   useEffect(() => {
     if (selectedAgent && visibleReports.some((report) => report.agent_key === selectedAgent)) return;
@@ -552,33 +824,42 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
   }, [selectedAgent, visibleReports]);
 
   if (error) return <div className="rounded-2xl border border-red-negative/30 bg-red-negative/10 p-5 text-red-negative">{error}</div>;
-  if (!detail) return <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-8 text-white/45">Loading QuanAd 2.1 workspace...</div>;
+  if (!detail) return <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-8 text-white/45">Loading Quanfora 2.1 workspace...</div>;
 
   const selectedReport = visibleReports.find((report) => report.agent_key === selectedAgent) ?? visibleReports.find((report) => report.agent_key === "pm") ?? visibleReports[0];
   const hasFinalDecision = visibleReports.some((report) => report.agent_key === "pm");
+  const hasWorkspace = Boolean(detail.decision_workspace);
+  const activeTab = hasWorkspace ? activeWorkspaceTab : "reports";
 
   return (
     <div className="grid min-h-[calc(100vh-5rem)] gap-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
       <aside className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
-        <AgentProgressSidebar reports={visibleReports} events={visibleEvents} status={detail.run.status} selectedAgent={selectedAgent ?? undefined} onSelectAgent={setSelectedAgent} />
+        <AgentProgressSidebar run={detail.run} reports={visibleReports} events={visibleEvents} status={detail.run.status} selectedAgent={selectedAgent ?? undefined} onSelectAgent={setSelectedAgent} />
       </aside>
       <main className="min-w-0 space-y-4">
         <FinalDecisionCard run={detail.run} />
-        <ReportFileList reports={visibleReports} selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} />
-        <article className="min-h-[30rem] rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
-          {selectedReport ? (
-            <>
-              <Markdown content={selectedReport.markdown} />
-              {selectedReport.agent_key === "pm" && detail.run.status === "completed" && (
-                <FinalDecisionDownloadGate detail={detail} />
+        <WorkspaceTabBar activeTab={activeTab} onChange={setActiveWorkspaceTab} hasWorkspace={hasWorkspace} />
+        {detail.decision_workspace && activeTab !== "reports" ? (
+          <DecisionWorkspaceView workspace={detail.decision_workspace} activeTab={activeTab} overview={detail.overview} />
+        ) : (
+          <>
+            <ReportFileList run={detail.run} reports={visibleReports} selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} />
+            <article className="min-h-[30rem] rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
+              {selectedReport ? (
+                <>
+                  <Markdown content={selectedReport.markdown} />
+                  {selectedReport.agent_key === "pm" && detail.run.status === "completed" && (
+                    <FinalDecisionDownloadGate detail={detail} />
+                  )}
+                </>
+              ) : (
+                <div className="flex min-h-[20rem] items-center justify-center text-center text-white/42">
+                  Agent reports will appear here as the run progresses.
+                </div>
               )}
-            </>
-          ) : (
-            <div className="flex min-h-[20rem] items-center justify-center text-center text-white/42">
-              Agent reports will appear here as the run progresses.
-            </div>
-          )}
-        </article>
+            </article>
+          </>
+        )}
       </main>
       <aside className="space-y-4 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
@@ -664,12 +945,13 @@ function downloadResearchMarkdown(detail: EquityResearchRunDetail) {
     return aIndex - bIndex;
   });
   const content = [
-    `# QuanAd 2.1 Equity Research Report: ${run.ticker}`,
+    `# Quanfora 2.1 ${reportTypeLabel(run.report_type)}: ${run.ticker}`,
     "",
     `- Company: ${run.company_name ?? "Unknown"}`,
     `- Exchange: ${run.exchange ?? "Unknown"}`,
     `- Analysis date: ${run.analysis_date}`,
-    `- Recommendation: ${run.recommendation.toUpperCase()}`,
+    `- Report type: ${reportTypeLabel(run.report_type)}`,
+    `- Final label: ${finalRecommendationTone(run).label}`,
     `- Confidence: ${Math.round(run.confidence * 100)}%`,
     `- Research depth: ${run.research_depth}`,
     "",
@@ -677,7 +959,7 @@ function downloadResearchMarkdown(detail: EquityResearchRunDetail) {
     "## Agent Reports",
     "",
     ...orderedReports.flatMap((report) => [
-      `### ${REPORT_FILES[report.agent_key] ?? report.title}`,
+      `### ${reportFileLabel(report, run)}`,
       "",
       report.markdown,
       "",
@@ -692,7 +974,7 @@ function downloadResearchMarkdown(detail: EquityResearchRunDetail) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `${run.ticker.toLowerCase()}-quanad-2.1-analysis.md`;
+  anchor.download = `${run.ticker.toLowerCase()}-quanfora-2.1-${run.report_type}.md`;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
@@ -738,6 +1020,42 @@ function recommendationTone(recommendation: ResearchRecommendation) {
   return { label: "INSUFFICIENT DATA", className: "bg-slate-400/14 text-slate-200 ring-1 ring-slate-400/25" };
 }
 
+function investmentDecisionTone(decision: InvestmentDecision) {
+  const tones: Record<InvestmentDecision, { label: string; className: string }> = {
+    strong_buy: { label: "STRONG BUY", className: "bg-emerald-400/18 text-emerald-100 ring-1 ring-emerald-300/35" },
+    buy: { label: "BUY", className: "bg-emerald-400/14 text-emerald-200 ring-1 ring-emerald-400/25" },
+    hold: { label: "HOLD", className: "bg-sky-400/14 text-sky-100 ring-1 ring-sky-400/25" },
+    watchlist: { label: "WATCHLIST", className: "bg-amber-400/14 text-amber-100 ring-1 ring-amber-400/25" },
+    reduce: { label: "REDUCE", className: "bg-orange-400/14 text-orange-100 ring-1 ring-orange-400/25" },
+    sell: { label: "SELL", className: "bg-rose-400/14 text-rose-200 ring-1 ring-rose-400/25" },
+    avoid: { label: "AVOID", className: "bg-slate-400/14 text-slate-200 ring-1 ring-slate-400/25" },
+  };
+  return tones[decision];
+}
+
+function tradingBiasTone(bias: TradingBias) {
+  const tones: Record<TradingBias, { label: string; className: string }> = {
+    bullish: { label: "BULLISH", className: "bg-emerald-400/14 text-emerald-200 ring-1 ring-emerald-400/25" },
+    neutral: { label: "NEUTRAL", className: "bg-amber-400/14 text-amber-100 ring-1 ring-amber-400/25" },
+    bearish: { label: "BEARISH", className: "bg-rose-400/14 text-rose-200 ring-1 ring-rose-400/25" },
+  };
+  return tones[bias];
+}
+
+function legacyInvestmentTone(recommendation: ResearchRecommendation) {
+  if (recommendation === "buy") return investmentDecisionTone("buy");
+  if (recommendation === "sell") return investmentDecisionTone("avoid");
+  if (recommendation === "hold") return investmentDecisionTone("watchlist");
+  return recommendationTone("insufficient_data");
+}
+
+function legacyTradingTone(recommendation: ResearchRecommendation) {
+  if (recommendation === "buy") return tradingBiasTone("bullish");
+  if (recommendation === "sell") return tradingBiasTone("bearish");
+  if (recommendation === "hold") return tradingBiasTone("neutral");
+  return recommendationTone("insufficient_data");
+}
+
 export function ResearchRunCompactResult({
   run,
   from,
@@ -747,13 +1065,13 @@ export function ResearchRunCompactResult({
   from?: ResearchSourceSurface;
   showOpenLink?: boolean;
 }) {
-  const tone = recommendationTone(run.recommendation);
+  const tone = finalRecommendationTone(run);
   const fullReportHref = from ? `/research/${run.run_id}?from=${from}` : `/research/${run.run_id}`;
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
       <div className="flex items-center justify-between gap-3">
         <span className={cn("rounded-lg px-2.5 py-1 text-sm font-bold", tone.className)}>{tone.label}</span>
-        <span className="text-xs text-white/45">{Math.round(run.confidence * 100)}% confidence</span>
+        <span className="text-xs text-white/45">{reportTypeLabel(run.report_type)} · {Math.round(run.confidence * 100)}% confidence</span>
       </div>
       <p className="mt-3 text-sm text-white/62">{run.final_summary ?? "Final verdict is pending."}</p>
       {showOpenLink && (

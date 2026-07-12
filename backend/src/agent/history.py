@@ -2,6 +2,7 @@
 Persistent conversation history using SQLite.
 Each session_id gets its own message thread.
 """
+import json
 import sqlite3
 from pathlib import Path
 from datetime import UTC, datetime
@@ -57,6 +58,7 @@ def _get_connection() -> sqlite3.Connection:
             session   TEXT    NOT NULL,
             role      TEXT    NOT NULL,
             content   TEXT    NOT NULL,
+            metadata  TEXT,
             created_at TEXT   NOT NULL
         )
     """)
@@ -71,6 +73,7 @@ def _get_connection() -> sqlite3.Connection:
         )
     """)
     _ensure_column(conn, "messages", "user_id", "TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'")
+    _ensure_column(conn, "messages", "metadata", "TEXT")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_user_session_id ON messages(user_id, session, id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_updated ON sessions(user_id, updated_at DESC)")
     conn.commit()
@@ -219,11 +222,22 @@ def load_history(session_id: str, user_id: str = "00000000-0000-0000-0000-000000
         return []
     conn = _get_connection()
     rows = conn.execute(
-        "SELECT id, role, content, created_at FROM messages WHERE user_id=? AND session=? ORDER BY id",
+        "SELECT id, role, content, metadata, created_at FROM messages WHERE user_id=? AND session=? ORDER BY id",
         (user_id, session_id),
     ).fetchall()
     conn.close()
-    return [{"id": row_id, "role": role, "content": content, "created_at": created_at} for row_id, role, content, created_at in rows]
+    messages = []
+    for row_id, role, content, metadata_raw, created_at in rows:
+        message = {"id": row_id, "role": role, "content": content, "created_at": created_at}
+        if metadata_raw:
+            try:
+                metadata = json.loads(metadata_raw)
+                if isinstance(metadata, dict):
+                    message["metadata"] = metadata
+            except json.JSONDecodeError:
+                pass
+        messages.append(message)
+    return messages
 
 
 def append_message(
@@ -231,6 +245,7 @@ def append_message(
     role: str,
     content: str,
     user_id: str = "00000000-0000-0000-0000-000000000001",
+    metadata: dict | None = None,
 ) -> None:
     """Append a single message to the session history."""
     if _is_guest_user(user_id):
@@ -238,9 +253,10 @@ def append_message(
     conn = _get_connection()
     title = _default_title(content) if role == "user" else None
     _touch_session(conn, user_id, session_id, title)
+    metadata_json = json.dumps(metadata) if metadata else None
     conn.execute(
-        "INSERT INTO messages (user_id, session, role, content, created_at) VALUES (?,?,?,?,?)",
-        (user_id, session_id, role, content, datetime.now(UTC).isoformat()),
+        "INSERT INTO messages (user_id, session, role, content, metadata, created_at) VALUES (?,?,?,?,?,?)",
+        (user_id, session_id, role, content, metadata_json, datetime.now(UTC).isoformat()),
     )
     conn.commit()
     conn.close()

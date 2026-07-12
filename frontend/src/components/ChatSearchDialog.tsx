@@ -133,7 +133,7 @@ export default function ChatSearchDialog({
   }, [filteredConversations, hoveredSessionId]);
 
   const openConversation = (conversation: SearchConversation) => {
-    router.push(`/?session=${encodeURIComponent(conversation.session_id)}`);
+    router.push(`/session/${encodeURIComponent(conversation.session_id)}`);
     onOpenChange(false);
   };
 

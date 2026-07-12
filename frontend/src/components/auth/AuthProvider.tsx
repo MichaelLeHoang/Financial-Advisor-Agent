@@ -5,6 +5,7 @@ import type { Provider, Session, User } from "@supabase/supabase-js";
 import { api } from "@/lib/api";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import { clearLocalChatHistory, notifyChatPrivacyReset } from "@/lib/local-chat-history";
+import { clearAccountScopedBrowserState } from "@/lib/privacy-storage";
 
 export type Plan = "free" | "pro" | "trader" | "quant" | "execution_addon";
 
@@ -70,6 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+    let sessionGeneration = 0;
     if (!isSupabaseConfigured()) {
       setLoading(false);
       return () => {
@@ -81,6 +83,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const applySession = async (nextSession: Session | null) => {
       if (!mounted) return;
+      const generation = ++sessionGeneration;
+      const isCurrent = () => mounted && generation === sessionGeneration;
 
       setAuthSession(nextSession);
       api.setAuthToken(nextSession?.access_token ?? null);
@@ -98,11 +102,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: freshUserData } = await supabase.auth.getUser();
         if (freshUserData.user) {
           fallbackUser = normalizeUser(freshUserData.user);
-          if (mounted) setUser(fallbackUser);
+          if (isCurrent()) setUser(fallbackUser);
         }
 
         const apiUser = await api.me();
-        if (mounted && !apiUser.is_guest) {
+        if (isCurrent() && !apiUser.is_guest) {
           setUser({
             ...fallbackUser,
             ...apiUser,
@@ -112,9 +116,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
         }
       } catch {
-        if (mounted) setUser(fallbackUser);
+        if (isCurrent()) setUser(fallbackUser);
       } finally {
-        if (mounted) setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
     };
 
@@ -137,6 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       mounted = false;
+      sessionGeneration += 1;
       listener.subscription.unsubscribe();
     };
   }, []);
@@ -149,6 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (previousIdentity && previousIdentity !== identity) {
       clearLocalChatHistory();
+      clearAccountScopedBrowserState();
       notifyChatPrivacyReset();
     }
   }, [loading, user.id, user.is_guest]);
@@ -204,10 +210,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api.setAuthToken(null);
   };
 
-  const signInWithOAuth = async (provider: Provider, nextPath = "/") => {
+  const signInWithOAuth = async (provider: Provider, nextPath = "/session") => {
     setError(null);
     const supabase = getSupabaseBrowserClient();
-    const safeNext = nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/";
+    const safeNext = nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/session";
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {

@@ -1,17 +1,37 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Eye, EyeOff, Info, Loader2, Pencil, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  BarChart3,
+  Building2,
+  CalendarDays,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  CircleDollarSign,
+  Eye,
+  EyeOff,
+  Info,
+  Loader2,
+  Pencil,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  TrendingUp,
+  WalletCards,
+} from "lucide-react";
 import { PieChart, Pie, Cell } from "recharts";
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
-import type { Holding, OptimizeResult, Portfolio } from "@/lib/api";
+import type { Holding, OptimizeResult, Portfolio, RecurringBuy } from "@/lib/api";
 import { fetchQuote } from "@/lib/quote-cache";
 import { useAuth } from "@/components/auth/AuthProvider";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
 import { ThinSlider } from "@/components/ui/thin-slider";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,14 +41,13 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
   type ChartConfig,
   ChartContainer,
   ChartTooltip,
-  ChartTooltipContent,
 } from "@/components/ui/chart";
+import { showToast } from "@/components/ui/toast";
 
 const PALETTE = [
   "#6366f1",
@@ -44,17 +63,48 @@ const PALETTE = [
 ];
 
 const SUPPORTED_BASE_CURRENCIES = ["USD", "CAD"] as const;
+const GLOBAL_CURRENCIES = [
+  { code: "USD", name: "United States Dollar" },
+  { code: "CAD", name: "Canadian Dollar" },
+  { code: "EUR", name: "Euro" },
+  { code: "GBP", name: "British Pound" },
+  { code: "JPY", name: "Japanese Yen" },
+  { code: "CHF", name: "Swiss Franc" },
+  { code: "AUD", name: "Australian Dollar" },
+  { code: "NZD", name: "New Zealand Dollar" },
+  { code: "HKD", name: "Hong Kong Dollar" },
+  { code: "SGD", name: "Singapore Dollar" },
+  { code: "CNY", name: "Chinese Yuan" },
+  { code: "INR", name: "Indian Rupee" },
+  { code: "KRW", name: "South Korean Won" },
+  { code: "MXN", name: "Mexican Peso" },
+  { code: "BRL", name: "Brazilian Real" },
+  { code: "SEK", name: "Swedish Krona" },
+  { code: "NOK", name: "Norwegian Krone" },
+  { code: "DKK", name: "Danish Krone" },
+  { code: "ZAR", name: "South African Rand" },
+  { code: "AED", name: "UAE Dirham" },
+];
 
 interface HoldingRow extends Holding {
+  name: string | null;
   quoteCurrency: string | null;
   baseCurrency: string | null;
   currentPrice: number | null;
   convertedPrice: number | null;
+  dailyChange: number | null;
+  dailyChangePct: number | null;
   fxRate: number | null;
+  costFxRate: number | null;
+  costBasis: number | null;
   originalValue: number | null;
   value: number | null;
   pnl: number | null;
   pnlPct: number | null;
+  holdingValue: number | null;
+  holdingDailyChange: number | null;
+  holdingPnl: number | null;
+  holdingPnlPct: number | null;
 }
 
 // Inline edit state for a single holding
@@ -64,6 +114,36 @@ interface EditState {
   draft: string;
   currency: string;
   saving: boolean;
+}
+
+interface RecurringBuyDraft {
+  symbol: string;
+  account: string;
+  purchaseMode: "amount" | "shares";
+  enteredAmount: string;
+  enteredCurrency: string;
+  filledQuantity: string;
+  recurrenceFrequency: "daily" | "weekly" | "monthly" | "yearly";
+  scheduleTime: string;
+  scheduleDayOfWeek: string;
+  scheduleDayOfMonth: string;
+  scheduleMonth: string;
+}
+
+function createRecurringBuyDraft(baseCurrency = "USD"): RecurringBuyDraft {
+  return {
+    symbol: "",
+    account: "TFSA",
+    purchaseMode: "amount",
+    enteredAmount: "",
+    enteredCurrency: normalizeCurrency(baseCurrency),
+    filledQuantity: "",
+    recurrenceFrequency: "monthly",
+    scheduleTime: "09:30",
+    scheduleDayOfWeek: "1",
+    scheduleDayOfMonth: "1",
+    scheduleMonth: "1",
+  };
 }
 
 function normalizeCurrency(currency: string | null | undefined, fallback = "USD") {
@@ -138,18 +218,44 @@ async function fetchCurrencyRate(sourceCurrency: string, targetCurrency: string)
 
 function emptyMetrics(baseCurrency: string): Pick<
   HoldingRow,
-  "quoteCurrency" | "baseCurrency" | "currentPrice" | "convertedPrice" | "fxRate" | "originalValue" | "value" | "pnl" | "pnlPct"
+  | "name"
+  | "quoteCurrency"
+  | "baseCurrency"
+  | "currentPrice"
+  | "convertedPrice"
+  | "dailyChange"
+  | "dailyChangePct"
+  | "fxRate"
+  | "costFxRate"
+  | "costBasis"
+  | "originalValue"
+  | "value"
+  | "pnl"
+  | "pnlPct"
+  | "holdingValue"
+  | "holdingDailyChange"
+  | "holdingPnl"
+  | "holdingPnlPct"
 > {
   return {
+    name: null,
     quoteCurrency: null,
     baseCurrency,
     currentPrice: null,
     convertedPrice: null,
+    dailyChange: null,
+    dailyChangePct: null,
     fxRate: null,
+    costFxRate: null,
+    costBasis: null,
     originalValue: null,
     value: null,
     pnl: null,
     pnlPct: null,
+    holdingValue: null,
+    holdingDailyChange: null,
+    holdingPnl: null,
+    holdingPnlPct: null,
   };
 }
 
@@ -158,29 +264,133 @@ function computeMetrics(
   price: number | null,
   quoteCurrency: string | null | undefined,
   baseCurrency: string | null | undefined,
-  fxRate = 1
+  fxRate = 1,
+  costFxRate = 1,
+  change: number | null = null,
+  name: string | null = null
 ) {
   const base = normalizeCurrency(baseCurrency);
   const quote = normalizeCurrency(quoteCurrency, base);
+  const costCurrency = normalizeCurrency(h.cost_currency, base);
   if (price == null) return emptyMetrics(base);
 
   const convertedPrice = price * fxRate;
+  const convertedChange = change == null ? null : change * fxRate;
+  const holdingPrice = price * costFxRate;
+  const holdingChange = change == null ? null : change * costFxRate;
   const originalValue = h.quantity * price;
   const value = h.quantity * convertedPrice;
-  const costBasis = h.quantity * h.average_cost;
+  const dailyChange = convertedChange == null ? null : h.quantity * convertedChange;
+  const priorValue = dailyChange == null ? null : value - dailyChange;
+  const dailyChangePct = dailyChange != null && priorValue != null && priorValue > 0
+    ? (dailyChange / priorValue) * 100
+    : null;
+  const costBasis = h.quantity * h.average_cost * deriveCostToBaseRate(costCurrency, base, fxRate, costFxRate);
   const pnl = value - costBasis;
   const pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
+  const holdingValue = h.quantity * holdingPrice;
+  const holdingDailyChange = holdingChange == null ? null : h.quantity * holdingChange;
+  const holdingCostBasis = h.quantity * h.average_cost;
+  const holdingPnl = holdingValue - holdingCostBasis;
+  const holdingPnlPct = holdingCostBasis > 0 ? (holdingPnl / holdingCostBasis) * 100 : 0;
   return {
+    name,
     quoteCurrency: quote,
     baseCurrency: base,
     currentPrice: price,
     convertedPrice,
+    dailyChange,
+    dailyChangePct,
     fxRate,
+    costFxRate,
+    costBasis,
     originalValue,
     value,
     pnl,
     pnlPct,
+    holdingValue,
+    holdingDailyChange,
+    holdingPnl,
+    holdingPnlPct,
   };
+}
+
+function deriveCostToBaseRate(costCurrency: string, baseCurrency: string, quoteFxRate: number, costFxRate: number) {
+  if (costCurrency === baseCurrency) return 1;
+  if (costFxRate > 0) return quoteFxRate / costFxRate;
+  return 1;
+}
+
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function defaultGoalTargetDate() {
+  const nextYear = new Date();
+  nextYear.setFullYear(nextYear.getFullYear() + 1);
+  return toDateInputValue(nextYear);
+}
+
+function parseDateInputValue(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  const date = new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatGoalDate(value: string) {
+  const date = parseDateInputValue(value);
+  if (!date) return "No target date";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
+function getGoalDateDelta(value: string) {
+  const target = parseDateInputValue(value);
+  if (!target) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / 86_400_000);
+}
+
+function formatGoalDateDelta(days: number | null) {
+  if (days == null) return "Set target";
+  if (days === 0) return "Due today";
+  const unit = Math.abs(days) === 1 ? "day" : "days";
+  return days > 0 ? `${days} ${unit} remaining` : `${Math.abs(days)} ${unit} past target`;
+}
+
+function formatRecurringDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatRecurringSchedule(buy: RecurringBuy) {
+  const time = buy.schedule_time || "09:30";
+  if (buy.recurrence_frequency === "daily") return `Daily at ${time}`;
+  if (buy.recurrence_frequency === "weekly") {
+    const day = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][buy.schedule_day_of_week ?? 1];
+    return `${day} at ${time}`;
+  }
+  if (buy.recurrence_frequency === "yearly") {
+    const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][(buy.schedule_month ?? 1) - 1];
+    return `${month} ${buy.schedule_day_of_month ?? 1} at ${time}`;
+  }
+  return `Day ${buy.schedule_day_of_month ?? 1} at ${time}`;
 }
 
 export default function PortfolioPage() {
@@ -188,14 +398,18 @@ export default function PortfolioPage() {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [holdings, setHoldings] = useState<HoldingRow[]>([]);
+  const [recurringBuys, setRecurringBuys] = useState<RecurringBuy[]>([]);
   const [newPortfolioName, setNewPortfolioName] = useState("");
-  const [newBaseCurrency, setNewBaseCurrency] = useState<(typeof SUPPORTED_BASE_CURRENCIES)[number]>("USD");
+  const [newBaseCurrency, setNewBaseCurrency] = useState("USD");
   const [showNewForm, setShowNewForm] = useState(false);
   const [tickerInput, setTickerInput] = useState("");
   const [addSymbol, setAddSymbol] = useState("");
   const [addQty, setAddQty] = useState("");
   const [addCost, setAddCost] = useState("");
   const [addCostCurrency, setAddCostCurrency] = useState<(typeof SUPPORTED_BASE_CURRENCIES)[number]>("USD");
+  const [displayBaseCurrency, setDisplayBaseCurrency] = useState("USD");
+  const [displayTotalValue, setDisplayTotalValue] = useState(0);
+  const [currencySearch, setCurrencySearch] = useState("");
   const [hideAmounts, setHideAmounts] = useState(false);
   const [mode, setMode] = useState<"classical" | "quantum">("classical");
   const [risk, setRisk] = useState(1.0);
@@ -204,18 +418,84 @@ export default function PortfolioPage() {
   const [optimizing, setOptimizing] = useState(false);
   const [portfoliosLoading, setPortfoliosLoading] = useState(true);
   const [holdingsLoading, setHoldingsLoading] = useState(false);
+  const [recurringBuysLoading, setRecurringBuysLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
   const [edit, setEdit] = useState<EditState | null>(null);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const [showAddPanel, setShowAddPanel] = useState(false);
+  const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
+  const [showCurrencySearchMenu, setShowCurrencySearchMenu] = useState(false);
+  const [showNewCurrencyMenu, setShowNewCurrencyMenu] = useState(false);
+  const [showNewCurrencySearchMenu, setShowNewCurrencySearchMenu] = useState(false);
+  const [newCurrencySearch, setNewCurrencySearch] = useState("");
+  const [portfolioToDelete, setPortfolioToDelete] = useState<Portfolio | null>(null);
+  const [holdingToDelete, setHoldingToDelete] = useState<HoldingRow | null>(null);
+  const [recurringBuyToDelete, setRecurringBuyToDelete] = useState<RecurringBuy | null>(null);
+  const [recurringBuyDraft, setRecurringBuyDraft] = useState<RecurringBuyDraft>(() => createRecurringBuyDraft());
+  const [recurringTickerInput, setRecurringTickerInput] = useState("");
+  const [expandedRecurringBuyId, setExpandedRecurringBuyId] = useState<string | null>(null);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [returnPeriod, setReturnPeriod] = useState<"5D" | "1M" | "YTD" | "1Y" | "5Y">("1Y");
+  const [sortBy, setSortBy] = useState<"total" | "weight" | "today" | "allTime" | "symbol">("total");
+  const [portfolioGoal, setPortfolioGoal] = useState(200000);
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [goalDraft, setGoalDraft] = useState("200000");
+  const [goalTargetDate, setGoalTargetDate] = useState(defaultGoalTargetDate);
+  const [editingGoalDate, setEditingGoalDate] = useState(false);
+  const [goalDateDraft, setGoalDateDraft] = useState(goalTargetDate);
   const editRef = useRef<HTMLInputElement>(null);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  const currencyMenuRef = useRef<HTMLDivElement>(null);
+  const newCurrencyMenuRef = useRef<HTMLDivElement>(null);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
 
   const activePortfolio = portfolios.find((p) => p.id === activeId) ?? null;
-  const activeBaseCurrency = normalizeCurrency(activePortfolio?.base_currency);
+  const portfolioBaseCurrency = normalizeCurrency(activePortfolio?.base_currency);
+  const activeBaseCurrency = portfolioBaseCurrency;
   const canLoadPortfolioData = !authLoading || Boolean(token);
 
   useEffect(() => {
-    setAddCostCurrency(activeBaseCurrency as (typeof SUPPORTED_BASE_CURRENCIES)[number]);
-  }, [activeBaseCurrency]);
+    setDisplayBaseCurrency(portfolioBaseCurrency);
+    if (SUPPORTED_BASE_CURRENCIES.includes(portfolioBaseCurrency as (typeof SUPPORTED_BASE_CURRENCIES)[number])) {
+      setAddCostCurrency(portfolioBaseCurrency as (typeof SUPPORTED_BASE_CURRENCIES)[number]);
+    }
+    setCurrencySearch("");
+    setRecurringBuyDraft((draft) => ({
+      ...draft,
+      enteredCurrency: portfolioBaseCurrency,
+    }));
+  }, [portfolioBaseCurrency]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+
+      if (showAccountMenu && accountMenuRef.current && !accountMenuRef.current.contains(target)) {
+        setShowAccountMenu(false);
+      }
+
+      if (showCurrencyMenu && currencyMenuRef.current && !currencyMenuRef.current.contains(target)) {
+        setShowCurrencyMenu(false);
+        setShowCurrencySearchMenu(false);
+        setCurrencySearch("");
+      }
+
+      if (showNewCurrencyMenu && newCurrencyMenuRef.current && !newCurrencyMenuRef.current.contains(target)) {
+        setShowNewCurrencyMenu(false);
+        setShowNewCurrencySearchMenu(false);
+        setNewCurrencySearch("");
+      }
+
+      if (showSortMenu && sortMenuRef.current && !sortMenuRef.current.contains(target)) {
+        setShowSortMenu(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [showAccountMenu, showCurrencyMenu, showNewCurrencyMenu, showSortMenu]);
 
   useEffect(() => {
     try {
@@ -255,6 +535,27 @@ export default function PortfolioPage() {
     };
   }, [canLoadPortfolioData, token]);
 
+  useEffect(() => {
+    if (!activeId) return;
+    try {
+      const savedGoal = localStorage.getItem(`portfolio.goal.${activeId}`);
+      const parsed = savedGoal ? Number(savedGoal) : NaN;
+      const nextGoal = Number.isFinite(parsed) && parsed > 0 ? parsed : 200000;
+      const savedGoalDate = localStorage.getItem(`portfolio.goalDate.${activeId}`);
+      const nextGoalDate = savedGoalDate && parseDateInputValue(savedGoalDate) ? savedGoalDate : defaultGoalTargetDate();
+      setPortfolioGoal(nextGoal);
+      setGoalDraft(String(nextGoal));
+      setGoalTargetDate(nextGoalDate);
+      setGoalDateDraft(nextGoalDate);
+    } catch {
+      const nextGoalDate = defaultGoalTargetDate();
+      setPortfolioGoal(200000);
+      setGoalDraft("200000");
+      setGoalTargetDate(nextGoalDate);
+      setGoalDateDraft(nextGoalDate);
+    }
+  }, [activeId]);
+
   // Fetch live prices using the shared cache
   const fetchPricesForHoldings = useCallback((list: Holding[], baseCurrency: string) => {
     const normalizedBase = normalizeCurrency(baseCurrency);
@@ -265,23 +566,40 @@ export default function PortfolioPage() {
         const quote = await fetchQuote(sym);
         const quoteCurrency = normalizeCurrency(quote.currency, normalizedBase);
         const fxRate = await fetchCurrencyRate(quoteCurrency, normalizedBase);
-        return { sym, price: quote.price, quoteCurrency, fxRate };
+        return { sym, price: quote.price, quoteCurrency, fxRate, change: quote.change ?? null, name: quote.name ?? null };
       })
-    ).then((results) => {
-      const quotes = new Map<string, { price: number; quoteCurrency: string; fxRate: number }>();
+    ).then(async (results) => {
+      const quotes = new Map<
+        string,
+        { price: number; quoteCurrency: string; fxRate: number; change: number | null; name: string | null }
+      >();
       results.forEach((result) => {
         if (result.status === "fulfilled") quotes.set(result.value.sym, result.value);
       });
       if (quotes.size === 0) return;
+
+      const costRates = new Map<string, number>();
+      await Promise.allSettled(
+        list.map(async (holding) => {
+          const quote = quotes.get(holding.symbol);
+          if (!quote) return;
+          const costCurrency = normalizeCurrency(holding.cost_currency, normalizedBase);
+          const key = `${holding.symbol}:${costCurrency}`;
+          if (costRates.has(key)) return;
+          costRates.set(key, await fetchCurrencyRate(quote.quoteCurrency, costCurrency));
+        })
+      );
 
       setHoldings((prev) =>
         prev.map((h) => {
           const quote = quotes.get(h.symbol);
           if (!quote) return h;
           if (normalizeCurrency(h.baseCurrency, normalizedBase) !== normalizedBase) return h;
+          const costCurrency = normalizeCurrency(h.cost_currency, normalizedBase);
+          const costFxRate = costRates.get(`${h.symbol}:${costCurrency}`) ?? 1;
           return {
             ...h,
-            ...computeMetrics(h, quote.price, quote.quoteCurrency, normalizedBase, quote.fxRate),
+            ...computeMetrics(h, quote.price, quote.quoteCurrency, normalizedBase, quote.fxRate, costFxRate, quote.change, quote.name),
           };
         })
       );
@@ -291,21 +609,45 @@ export default function PortfolioPage() {
   useEffect(() => {
     if (!activeId) return;
     setHoldings([]);
+    setRecurringBuys([]);
     setResult(null);
-    setHoldingsLoading(true);
+  }, [activeId]);
 
-    api.portfolioHoldings(activeId)
-      .then((list) => {
-        const rows: HoldingRow[] = list.map((h) => ({
-          ...h,
-          ...emptyMetrics(activeBaseCurrency),
-        }));
-        setHoldings(rows);
-        setHoldingsLoading(false);
-        fetchPricesForHoldings(list, activeBaseCurrency);
-      })
-      .catch(() => setHoldingsLoading(false));
+  const loadHoldings = useCallback(async () => {
+    if (!activeId) return;
+    setHoldingsLoading(true);
+    try {
+      const list = await api.portfolioHoldings(activeId);
+      const rows: HoldingRow[] = list.map((h) => ({
+        ...h,
+        ...emptyMetrics(activeBaseCurrency),
+      }));
+      setHoldings(rows);
+      fetchPricesForHoldings(list, activeBaseCurrency);
+    } finally {
+      setHoldingsLoading(false);
+    }
   }, [activeId, activeBaseCurrency, fetchPricesForHoldings]);
+
+  const loadRecurringBuys = useCallback(async () => {
+    if (!activeId) return;
+    setRecurringBuysLoading(true);
+    try {
+      const list = await api.recurringBuys(activeId);
+      setRecurringBuys(list);
+      setExpandedRecurringBuyId((current) => list.some((buy) => buy.id === current) ? current : list[0]?.id ?? null);
+    } finally {
+      setRecurringBuysLoading(false);
+    }
+  }, [activeId]);
+
+  useEffect(() => {
+    void loadHoldings().catch(() => setHoldingsLoading(false));
+  }, [loadHoldings]);
+
+  useEffect(() => {
+    void loadRecurringBuys().catch(() => setRecurringBuysLoading(false));
+  }, [loadRecurringBuys]);
 
   const createPortfolio = async () => {
     const name = newPortfolioName.trim();
@@ -333,13 +675,53 @@ export default function PortfolioPage() {
       await api.deletePortfolio(portfolioId);
       const updated = portfolios.filter((p) => p.id !== portfolioId);
       setPortfolios(updated);
+      setShowAccountMenu(false);
       if (activeId === portfolioId) {
         setActiveId(updated.length > 0 ? updated[0].id : null);
         setHoldings([]);
+        setRecurringBuys([]);
         setResult(null);
       }
     } catch (e: any) {
       setError(e.message);
+    } finally {
+      setPortfolioToDelete(null);
+    }
+  };
+
+  const commitGoal = () => {
+    if (!activeId) return;
+    const parsed = Number(goalDraft);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setGoalDraft(String(portfolioGoal));
+      setEditingGoal(false);
+      return;
+    }
+
+    setPortfolioGoal(parsed);
+    setGoalDraft(String(parsed));
+    setEditingGoal(false);
+    try {
+      localStorage.setItem(`portfolio.goal.${activeId}`, String(parsed));
+    } catch {
+      // Goal persistence is best effort.
+    }
+  };
+
+  const commitGoalDate = () => {
+    if (!activeId) return;
+    if (!goalDateDraft || !parseDateInputValue(goalDateDraft)) {
+      setGoalDateDraft(goalTargetDate);
+      setEditingGoalDate(false);
+      return;
+    }
+
+    setGoalTargetDate(goalDateDraft);
+    setEditingGoalDate(false);
+    try {
+      localStorage.setItem(`portfolio.goalDate.${activeId}`, goalDateDraft);
+    } catch {
+      // Goal date persistence is best effort.
     }
   };
 
@@ -354,8 +736,7 @@ export default function PortfolioPage() {
     setSaving(true);
     setError(null);
     try {
-      const costInBase = await convertAmount(cost, addCostCurrency, activeBaseCurrency);
-      const holding = await api.addHolding(activeId, addSymbol.toUpperCase(), qty, costInBase);
+      const holding = await api.addHolding(activeId, addSymbol.toUpperCase(), qty, cost, addCostCurrency);
       const row: HoldingRow = { ...holding, ...emptyMetrics(activeBaseCurrency) };
       setHoldings((prev) => [...prev, row]);
       setTickerInput("");
@@ -368,12 +749,13 @@ export default function PortfolioPage() {
         .then(async (quote) => {
           const quoteCurrency = normalizeCurrency(quote.currency, activeBaseCurrency);
           const fxRate = await fetchCurrencyRate(quoteCurrency, activeBaseCurrency);
+          const costFxRate = await fetchCurrencyRate(quoteCurrency, normalizeCurrency(holding.cost_currency, activeBaseCurrency));
           setHoldings((prev) =>
             prev.map((h) => {
               if (h.id !== holding.id) return h;
               return {
                 ...h,
-                ...computeMetrics(h, quote.price, quoteCurrency, activeBaseCurrency, fxRate),
+                ...computeMetrics(h, quote.price, quoteCurrency, activeBaseCurrency, fxRate, costFxRate, quote.change ?? null, quote.name ?? null),
               };
             })
           );
@@ -386,20 +768,141 @@ export default function PortfolioPage() {
     }
   };
 
-  const removeHolding = async (holdingId: string) => {
+  const removeHolding = async (holding: HoldingRow) => {
     if (!activeId) return;
     try {
-      await api.removeHolding(activeId, holdingId);
-      setHoldings((prev) => prev.filter((h) => h.id !== holdingId));
+      await api.removeHolding(activeId, holding.id);
+      setHoldings((prev) => prev.filter((h) => h.id !== holding.id));
       setResult(null);
+      showToast({
+        title: "Holding deleted",
+        message: `${holding.symbol} was removed from ${activePortfolio?.name ?? "this portfolio"}.`,
+        variant: "success",
+      });
     } catch (e: any) {
       setError(e.message);
+      showToast({
+        title: "Unable to delete holding",
+        message: e instanceof Error ? e.message : "The holding could not be removed.",
+        variant: "error",
+      });
+    } finally {
+      setHoldingToDelete(null);
+    }
+  };
+
+  const addRecurringBuy = async () => {
+    if (!activeId) return;
+    const symbol = recurringBuyDraft.symbol.trim().toUpperCase();
+    const inputAmount = parseFloat(recurringBuyDraft.enteredAmount);
+    const inputShares = parseFloat(recurringBuyDraft.filledQuantity);
+
+    if (!symbol) {
+      setError("Select a recurring buy symbol.");
+      return;
+    }
+    if (recurringBuyDraft.purchaseMode === "amount" && (!Number.isFinite(inputAmount) || inputAmount <= 0)) {
+      setError("Enter a positive recurring buy amount.");
+      return;
+    }
+    if (recurringBuyDraft.purchaseMode === "shares" && (!Number.isFinite(inputShares) || inputShares <= 0)) {
+      setError("Enter a positive recurring share quantity.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const quote = await fetchQuote(symbol);
+      if (!quote.price || quote.price <= 0) {
+        throw new Error(`Unable to get a live price for ${symbol}.`);
+      }
+      const fillCurrency = normalizeCurrency(quote.currency, activeBaseCurrency);
+      const enteredCurrency = normalizeCurrency(recurringBuyDraft.enteredCurrency, activeBaseCurrency);
+      const exchangeRate = await fetchCurrencyRate(fillCurrency, enteredCurrency);
+      const fillPrice = quote.price;
+      const enteredAmount = recurringBuyDraft.purchaseMode === "amount"
+        ? inputAmount
+        : inputShares * fillPrice * exchangeRate;
+      const filledQuantity = recurringBuyDraft.purchaseMode === "amount"
+        ? inputAmount / exchangeRate / fillPrice
+        : inputShares;
+      const scheduleDayOfWeek = ["weekly"].includes(recurringBuyDraft.recurrenceFrequency)
+        ? Number(recurringBuyDraft.scheduleDayOfWeek)
+        : null;
+      const scheduleDayOfMonth = ["monthly", "yearly"].includes(recurringBuyDraft.recurrenceFrequency)
+        ? Number(recurringBuyDraft.scheduleDayOfMonth)
+        : null;
+      const scheduleMonth = recurringBuyDraft.recurrenceFrequency === "yearly"
+        ? Number(recurringBuyDraft.scheduleMonth)
+        : null;
+      const recurringBuy = await api.addRecurringBuy(activeId, {
+        symbol,
+        account: recurringBuyDraft.account.trim() || null,
+        status: "completed",
+        purchase_mode: recurringBuyDraft.purchaseMode,
+        entered_amount: enteredAmount,
+        entered_currency: enteredCurrency,
+        filled_quantity: filledQuantity,
+        fill_price: fillPrice,
+        fill_currency: fillCurrency,
+        exchange_rate: exchangeRate,
+        recurrence_frequency: recurringBuyDraft.recurrenceFrequency,
+        schedule_time: recurringBuyDraft.scheduleTime,
+        schedule_day_of_week: scheduleDayOfWeek,
+        schedule_day_of_month: scheduleDayOfMonth,
+        schedule_month: scheduleMonth,
+        executed_at: new Date().toISOString(),
+      });
+      setRecurringBuyDraft(createRecurringBuyDraft(activeBaseCurrency));
+      setRecurringTickerInput("");
+      setExpandedRecurringBuyId(recurringBuy.id);
+      await Promise.all([loadRecurringBuys(), loadHoldings()]);
+      setResult(null);
+      showToast({
+        title: "Recurring buy saved",
+        message: `${symbol} was priced at ${formatMoney(fillPrice, fillCurrency, 2)} and synced into ${activePortfolio?.name ?? "this portfolio"}.`,
+        variant: "success",
+      });
+    } catch (e: any) {
+      setError(e.message);
+      showToast({
+        title: "Unable to save recurring buy",
+        message: e instanceof Error ? e.message : "The recurring buy could not be saved.",
+        variant: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeRecurringBuy = async (recurringBuy: RecurringBuy) => {
+    if (!activeId) return;
+    try {
+      await api.removeRecurringBuy(activeId, recurringBuy.id);
+      await Promise.all([loadRecurringBuys(), loadHoldings()]);
+      setResult(null);
+      showToast({
+        title: "Recurring buy deleted",
+        message: `${recurringBuy.symbol} and its linked holding were removed.`,
+        variant: "success",
+      });
+    } catch (e: any) {
+      setError(e.message);
+      showToast({
+        title: "Unable to delete recurring buy",
+        message: e instanceof Error ? e.message : "The recurring buy could not be removed.",
+        variant: "error",
+      });
+    } finally {
+      setRecurringBuyToDelete(null);
     }
   };
 
   // ── Inline editing ────────────────────────────────────────
   const startEdit = (holdingId: string, field: "quantity" | "average_cost", current: number) => {
-    setEdit({ holdingId, field, draft: String(current), currency: activeBaseCurrency, saving: false });
+    const holding = holdings.find((row) => row.id === holdingId);
+    setEdit({ holdingId, field, draft: String(current), currency: normalizeCurrency(holding?.cost_currency, activeBaseCurrency), saving: false });
     // focus happens after render via useEffect below
   };
 
@@ -415,16 +918,20 @@ export default function PortfolioPage() {
     const h = holdings.find((r) => r.id === edit.holdingId);
     if (!h) { cancelEdit(); return; }
 
-    const savedValue = edit.field === "average_cost"
-      ? await convertAmount(val, edit.currency, activeBaseCurrency)
-      : val;
+    const nextCostCurrency = normalizeCurrency(edit.currency, activeBaseCurrency);
+    const nextCostFxRate = edit.field === "average_cost" && h.quoteCurrency
+      ? await fetchCurrencyRate(h.quoteCurrency, nextCostCurrency)
+      : h.costFxRate ?? 1;
 
     // Optimistically update UI immediately
-    const patch = { [edit.field]: savedValue } as { quantity?: number; average_cost?: number };
+    const patch = {
+      [edit.field]: val,
+      ...(edit.field === "average_cost" ? { cost_currency: nextCostCurrency } : {}),
+    } as { quantity?: number; average_cost?: number; cost_currency?: string };
     setHoldings((prev) =>
       prev.map((r) => {
         if (r.id !== edit.holdingId) return r;
-        const updated = { ...r, ...patch };
+        const updated = { ...r, ...patch, costFxRate: nextCostFxRate };
         return {
           ...updated,
           ...computeMetrics(
@@ -432,7 +939,8 @@ export default function PortfolioPage() {
             updated.currentPrice,
             updated.quoteCurrency,
             updated.baseCurrency ?? activeBaseCurrency,
-            updated.fxRate ?? 1
+            updated.fxRate ?? 1,
+            nextCostFxRate
           ),
         };
       })
@@ -479,18 +987,48 @@ export default function PortfolioPage() {
   };
 
   const totalValue = holdings.reduce((s, h) => s + (h.value ?? 0), 0);
-  const totalCost = holdings.reduce((s, h) => s + h.quantity * h.average_cost, 0);
+  const totalCost = holdings.reduce((s, h) => s + (h.costBasis ?? h.quantity * h.average_cost), 0);
   const totalPnl = totalValue > 0 ? totalValue - totalCost : null;
   const totalPnlPct = totalCost > 0 && totalPnl != null ? (totalPnl / totalCost) * 100 : null;
+  const totalDailyReturn = holdings.reduce((s, h) => s + (h.dailyChange ?? 0), 0);
+  const priorPortfolioValue = totalValue - totalDailyReturn;
+  const totalDailyReturnPct = priorPortfolioValue > 0 ? (totalDailyReturn / priorPortfolioValue) * 100 : null;
   const pricedHoldingCount = holdings.filter((h) => h.value != null).length;
   const canShowAccountSummary = holdings.length > 0;
+  const portfolioGoalProgress = portfolioGoal > 0 ? Math.min((totalValue / portfolioGoal) * 100, 100) : 0;
+  const goalTargetLabel = formatGoalDate(goalTargetDate);
+  const goalDateDelta = getGoalDateDelta(goalTargetDate);
+  const goalDateDeltaLabel = formatGoalDateDelta(goalDateDelta);
+  const displayedReturn = returnPeriod === "5D" ? totalDailyReturn : totalPnl ?? 0;
+  const displayedReturnPct = returnPeriod === "5D" ? totalDailyReturnPct : totalPnlPct;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (displayBaseCurrency === activeBaseCurrency) {
+      setDisplayTotalValue(totalValue);
+      return;
+    }
+
+    convertAmount(totalValue, activeBaseCurrency, displayBaseCurrency)
+      .then((converted) => {
+        if (!cancelled) setDisplayTotalValue(converted);
+      })
+      .catch(() => {
+        if (!cancelled) setDisplayTotalValue(totalValue);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBaseCurrency, displayBaseCurrency, totalValue]);
 
   const uniqueSymbols = [...new Set(holdings.map((h) => h.symbol))];
 
   const allocationData = useMemo(() => {
     const bySymbol: Record<string, number> = {};
     for (const h of holdings) {
-      bySymbol[h.symbol] = (bySymbol[h.symbol] ?? 0) + (h.value ?? h.quantity * h.average_cost);
+      bySymbol[h.symbol] = (bySymbol[h.symbol] ?? 0) + (h.value ?? h.costBasis ?? h.quantity * h.average_cost);
     }
     return Object.entries(bySymbol).map(([symbol, value], i) => ({
       symbol,
@@ -506,7 +1044,6 @@ export default function PortfolioPage() {
     ? Math.max(...allocationData.map((d) => (d.value / totalValue) * 100), 0)
     : 0;
   const portfolioBadges = [
-    activeBaseCurrency,
     `${holdings.length} holding${holdings.length !== 1 ? "s" : ""}`,
     `${uniqueSymbols.length} symbol${uniqueSymbols.length !== 1 ? "s" : ""}`,
     crossCurrencyCount > 0 ? `${crossCurrencyCount} FX converted` : null,
@@ -521,6 +1058,47 @@ export default function PortfolioPage() {
 
   const colorForSymbol = (symbol: string) =>
     allocationData.find((d) => d.symbol === symbol)?.fill ?? PALETTE[0];
+
+  const sortedHoldings = useMemo(() => {
+    return [...holdings].sort((a, b) => {
+      const weightA = totalValue > 0 && a.value != null ? a.value / totalValue : 0;
+      const weightB = totalValue > 0 && b.value != null ? b.value / totalValue : 0;
+      if (sortBy === "symbol") return a.symbol.localeCompare(b.symbol);
+      if (sortBy === "weight") return weightB - weightA;
+      if (sortBy === "today") return (b.dailyChange ?? Number.NEGATIVE_INFINITY) - (a.dailyChange ?? Number.NEGATIVE_INFINITY);
+      if (sortBy === "allTime") return (b.pnl ?? Number.NEGATIVE_INFINITY) - (a.pnl ?? Number.NEGATIVE_INFINITY);
+      return (b.value ?? Number.NEGATIVE_INFINITY) - (a.value ?? Number.NEGATIVE_INFINITY);
+    });
+  }, [holdings, sortBy, totalValue]);
+
+  const filteredCurrencies = useMemo(() => {
+    const query = currencySearch.trim().toLowerCase();
+    if (!query) return GLOBAL_CURRENCIES;
+    return GLOBAL_CURRENCIES.filter((currency) =>
+      currency.code.toLowerCase().includes(query) || currency.name.toLowerCase().includes(query)
+    );
+  }, [currencySearch]);
+
+  const quickCurrencies = useMemo(() => {
+    const currencies = new Set<string>(SUPPORTED_BASE_CURRENCIES);
+    currencies.add(activeBaseCurrency);
+    currencies.add(displayBaseCurrency);
+    return Array.from(currencies);
+  }, [activeBaseCurrency, displayBaseCurrency]);
+
+  const quickNewCurrencies = useMemo(() => {
+    const currencies = new Set<string>(SUPPORTED_BASE_CURRENCIES);
+    currencies.add(normalizeCurrency(newBaseCurrency));
+    return Array.from(currencies);
+  }, [newBaseCurrency]);
+
+  const filteredNewCurrencies = useMemo(() => {
+    const query = newCurrencySearch.trim().toLowerCase();
+    if (!query) return GLOBAL_CURRENCIES;
+    return GLOBAL_CURRENCIES.filter((currency) =>
+      currency.code.toLowerCase().includes(query) || currency.name.toLowerCase().includes(query)
+    );
+  }, [newCurrencySearch]);
 
   const optimizerPieData = result?.weights
     ? Object.entries(result.weights)
@@ -554,7 +1132,7 @@ export default function PortfolioPage() {
 
     if (isEditing) {
       return (
-        <span className="flex flex-wrap items-center justify-end gap-1">
+        <span className="flex flex-wrap items-center justify-center gap-1">
           <input
             ref={editRef}
             type="number"
@@ -596,7 +1174,7 @@ export default function PortfolioPage() {
       <button
         type="button"
         onClick={() => startEdit(holdingId, field, value)}
-        className="group/cell flex items-center justify-end gap-1.5 tabular-nums text-white/65 transition-colors hover:text-white"
+        className="group/cell mx-auto flex items-center justify-center gap-1.5 tabular-nums text-white/65 transition-colors hover:text-white"
         title={`Click to edit ${field === "quantity" ? "quantity" : "average cost"}`}
       >
         <span>{format(value)}</span>
@@ -606,656 +1184,1366 @@ export default function PortfolioPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 sm:p-8">
-      <div className="mx-auto max-w-5xl space-y-6">
-        <h1 className="text-2xl font-bold text-white sm:text-3xl">Portfolio</h1>
-
+    <div className="flex-1 overflow-y-auto bg-space-black p-4 font-sans text-white sm:p-6 xl:p-8">
+      <div className="mx-auto max-w-[1480px] space-y-7">
         {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
+        {error && (
+          <div className="rounded-2xl border border-red-negative/25 bg-red-negative/10 px-4 py-3 text-sm text-red-100">
+            {error}
+          </div>
+        )}
 
-        {/* Portfolio tabs */}
-        <div className="flex flex-wrap items-center gap-2">
-          {portfoliosLoading ? (
-            <>
-              <div className="h-9 w-28 animate-pulse rounded-xl bg-white/[0.06]" />
-              <div className="h-9 w-24 animate-pulse rounded-xl bg-white/[0.04]" />
-            </>
-          ) : portfolios.map((p) => (
-            <div
-              key={p.id}
-              className={cn(
-                "group flex items-center gap-1 rounded-xl pl-4 pr-2 py-1.5 text-sm font-medium transition-colors",
-                activeId === p.id
-                  ? "bg-indigo-primary text-white shadow-[0_0_16px_rgba(99,102,241,0.3)]"
-                  : "bg-white/[0.06] text-white/55 hover:bg-white/[0.09] hover:text-white"
-              )}
-            >
-              <button onClick={() => setActiveId(p.id)} className="flex-1 text-left">
-                {p.name}
-              </button>
-              <AlertDialog>
-                <AlertDialogTrigger
-                  onClick={(e) => e.stopPropagation()}
-                  className={cn(
-                    "flex h-6 w-6 items-center justify-center rounded-lg transition-all",
-                    activeId === p.id
-                      ? "text-white/50 opacity-0 hover:bg-white/15 hover:text-white group-hover:opacity-100"
-                      : "text-white/30 opacity-0 hover:bg-white/10 hover:text-red-negative group-hover:opacity-100"
-                  )}
-                  aria-label={`Delete ${p.name}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete "{p.name}"?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will permanently remove the portfolio and all its holdings. This action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => deletePortfolio(p.id)}
-                      className="bg-red-negative text-white hover:bg-red-negative/85"
-                    >
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          ))}
-
-          {!portfoliosLoading && showNewForm ? (
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={newPortfolioName}
-                onChange={(e) => setNewPortfolioName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") createPortfolio();
-                  if (e.key === "Escape") setShowNewForm(false);
-                }}
-                placeholder="Portfolio name"
-                autoFocus
-                className="h-9 rounded-xl border border-white/[0.10] bg-white/[0.04] px-3 text-sm text-white placeholder:text-white/25 focus:border-indigo-primary/50 focus:outline-none"
-              />
-              <select
-                value={newBaseCurrency}
-                onChange={(e) => setNewBaseCurrency(e.target.value as (typeof SUPPORTED_BASE_CURRENCIES)[number])}
-                className="h-9 rounded-xl border border-white/[0.10] bg-white/[0.04] px-3 text-sm font-medium text-white focus:border-indigo-primary/50 focus:outline-none"
-                aria-label="Portfolio base currency"
-              >
-                {SUPPORTED_BASE_CURRENCIES.map((currency) => (
-                  <option key={currency} value={currency} className="bg-slate-950 text-white">
-                    {currency}
-                  </option>
-                ))}
-              </select>
-              <Button
-                onClick={createPortfolio}
-                disabled={saving || !newPortfolioName.trim()}
-                size="sm"
-                className="on-accent accent-gradient-surface h-9 rounded-xl px-3 text-xs font-semibold"
-              >
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Create"}
-              </Button>
-              <button onClick={() => setShowNewForm(false)} className="text-sm text-white/30 hover:text-white">✕</button>
-            </div>
-          ) : !portfoliosLoading ? (
-            <button
-              onClick={() => setShowNewForm(true)}
-              className="rounded-xl border border-dashed border-white/[0.10] px-3 py-2 text-sm text-white/35 transition-colors hover:border-white/20 hover:text-white/60"
-            >
-              + New portfolio
-            </button>
-          ) : null}
+        <div>
+          <h1 className="text-3xl font-bold tracking-[-0.03em] text-white">Portfolio</h1>
         </div>
 
-        {/* Holdings section */}
-        {portfoliosLoading ? (
-          <section className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.025]">
-            <div className="border-b border-white/[0.06] px-5 py-4">
-              <div className="h-5 w-40 animate-pulse rounded bg-white/[0.06]" />
-              <div className="mt-2 h-3 w-24 animate-pulse rounded bg-white/[0.04]" />
-            </div>
-            <div className="space-y-3 p-5">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="h-10 animate-pulse rounded-xl bg-white/[0.035]" />
-              ))}
-            </div>
-          </section>
-        ) : activePortfolio ? (
-          <section className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.025]">
-            {/* Header */}
-            <div className="flex flex-col gap-4 border-b border-white/[0.06] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-semibold text-white">{activePortfolio.name}</p>
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {portfolioBadges.map((badge) => (
-                    <span
-                      key={badge}
-                      className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-white/55"
-                    >
-                      {badge}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-3 sm:justify-end">
+        {activePortfolio && (
+          <section className="space-y-4">
+            <div className="flex items-center justify-between border-b border-white/12 pb-3">
+              <button type="button" className="text-sm text-white/86">All</button>
+              <div ref={accountMenuRef} className="relative">
                 <button
                   type="button"
-                  onClick={() => setHideAmounts((value) => !value)}
-                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 text-xs font-semibold text-white/60 transition-colors hover:border-white/16 hover:bg-white/[0.06] hover:text-white"
-                  aria-pressed={hideAmounts}
-                  aria-label={hideAmounts ? "Show money amounts" : "Hide money amounts"}
+                  onClick={() => setShowAccountMenu((value) => !value)}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-white/86 transition-colors hover:text-white"
                 >
-                  {hideAmounts ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                  {hideAmounts ? "Hidden" : "Hide"}
+                  Showing:
+                  <span className="text-white">{activePortfolio?.name ?? "All Accounts"}</span>
+                  <ChevronDown className={cn("size-4 transition-transform", showAccountMenu && "rotate-180")} />
                 </button>
-                {totalValue > 0 && totalPnl != null && (
-                  <div className="text-right">
-                    <p className="text-base font-bold text-white">
-                      {formatPrivateMoney(totalValue, activeBaseCurrency, hideAmounts)}
-                    </p>
-                    <p className={cn("text-xs font-medium", totalPnl >= 0 ? "text-green-positive" : "text-red-negative")}>
-                      {totalPnl >= 0 ? "+" : ""}
-                      {formatMoney(Math.abs(totalPnl), activeBaseCurrency)}
-                      {" "}({totalPnlPct! >= 0 ? "+" : ""}{totalPnlPct!.toFixed(2)}%)
-                    </p>
+                {showAccountMenu && (
+                  <div className="absolute right-0 top-8 z-40 w-80 rounded-2xl border border-white/12 bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]">
+                    <div className="max-h-64 space-y-1 overflow-auto">
+                      {portfolios.map((portfolio) => (
+                        <div
+                          key={portfolio.id}
+                          className={cn(
+                            "group/portfolio flex items-center gap-1 rounded-xl pr-1 transition-colors",
+                            activeId === portfolio.id ? "bg-white/10 text-white" : "text-white/60 hover:bg-white/[0.06] hover:text-white"
+                          )}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveId(portfolio.id);
+                              setShowAccountMenu(false);
+                            }}
+                            className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2 text-left text-sm"
+                          >
+                            <span className="min-w-0 truncate">{portfolio.name}</span>
+                            <span className="shrink-0 text-xs text-white/35">{normalizeCurrency(portfolio.base_currency)}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPortfolioToDelete(portfolio);
+                              setShowAccountMenu(false);
+                            }}
+                            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-white/30 opacity-0 transition-all hover:bg-red-negative/10 hover:text-red-negative group-hover/portfolio:opacity-100"
+                            aria-label={`Delete ${portfolio.name}`}
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 border-t border-white/[0.08] pt-2">
+                      {showNewForm ? (
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={newPortfolioName}
+                            onChange={(event) => setNewPortfolioName(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") createPortfolio();
+                              if (event.key === "Escape") setShowNewForm(false);
+                            }}
+                            placeholder="Portfolio name"
+                            autoFocus
+                            className="h-10 w-full rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-indigo-primary/50"
+                          />
+                          <div className="flex gap-2">
+                            <select
+                              value={newBaseCurrency}
+                              onChange={(event) => setNewBaseCurrency(event.target.value as (typeof SUPPORTED_BASE_CURRENCIES)[number])}
+                              className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white outline-none focus:border-indigo-primary/50"
+                            >
+                              {SUPPORTED_BASE_CURRENCIES.map((currency) => (
+                                <option key={currency} value={currency} className="bg-space-black text-white">
+                                  {currency}
+                                </option>
+                              ))}
+                            </select>
+                            <Button
+                              type="button"
+                              onClick={createPortfolio}
+                              disabled={saving || !newPortfolioName.trim()}
+                              className="h-10 flex-1 rounded-xl bg-[#a78bfa] text-sm font-bold text-black hover:bg-[#b8a6ff]"
+                            >
+                              {saving ? <Loader2 className="size-4 animate-spin" /> : "Create"}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setShowNewForm(true)}
+                          className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/12 text-sm text-white/55 transition-colors hover:border-[#a78bfa]/60 hover:text-white"
+                        >
+                          <Plus className="size-4" />
+                          New portfolio
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
-            {canShowAccountSummary && (
-              <div className="grid gap-px border-b border-white/[0.06] bg-white/[0.04] sm:grid-cols-4">
-                <div className="bg-[#090b12] px-5 py-4">
-                  <p className="text-[11px] font-medium uppercase tracking-widest text-white/32">Overall holdings</p>
-                  <p className="mt-1 text-lg font-semibold text-white">{holdings.length}</p>
-                  <p className="text-xs text-white/35">{pricedHoldingCount}/{holdings.length} priced live</p>
-                </div>
-                <div className="bg-[#090b12] px-5 py-4">
-                  <p className="text-[11px] font-medium uppercase tracking-widest text-white/32">Market value</p>
-                  <p className="mt-1 text-lg font-semibold text-white">
-                    {formatPrivateMoney(totalValue, activeBaseCurrency, hideAmounts)}
-                  </p>
-                  <p className="text-xs text-white/35">Converted to {activeBaseCurrency}</p>
-                </div>
-                <div className="bg-[#090b12] px-5 py-4">
-                  <p className="text-[11px] font-medium uppercase tracking-widest text-white/32">Cost basis</p>
-                  <p className="mt-1 text-lg font-semibold text-white">
-                    {formatPrivateMoney(totalCost, activeBaseCurrency, hideAmounts)}
-                  </p>
-                  <p className="text-xs text-white/35">Average cost is stored in base currency</p>
-                </div>
-                <div className="bg-[#090b12] px-5 py-4">
-                  <p className="text-[11px] font-medium uppercase tracking-widest text-white/32">Unrealized P&amp;L</p>
-                  {totalPnl != null ? (
-                    <>
-                      <p className={cn("mt-1 text-lg font-semibold", totalPnl >= 0 ? "text-green-positive" : "text-red-negative")}>
-                        {totalPnl >= 0 ? "+" : ""}
-                        {formatMoney(Math.abs(totalPnl), activeBaseCurrency)}
-                      </p>
-                      <p className={cn("text-xs font-medium", totalPnl >= 0 ? "text-green-positive/80" : "text-red-negative/80")}>
-                        {totalPnlPct! >= 0 ? "+" : ""}{totalPnlPct!.toFixed(2)}%
-                      </p>
-                    </>
-                  ) : (
-                    <p className="mt-1 text-lg font-semibold text-white/25">—</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {holdingsLoading ? (
-              <div className="flex items-center justify-center gap-2 py-12 text-sm text-white/30">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading holdings…
-              </div>
-            ) : holdings.length > 0 ? (
-              <div className="flex flex-col md:flex-row">
-                {/* Holdings table */}
-                <div className="min-w-0 flex-1 overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-white/[0.04] text-xs text-white/30">
-                        <th className="px-5 py-3 text-left font-medium">Symbol</th>
-                        <th className="border-l border-white/[0.06] px-4 py-3 text-right font-medium">
-                          <span className="flex items-center justify-end gap-1">
-                            Qty
-                            <Pencil className="h-3 w-3 opacity-40" />
-                          </span>
-                        </th>
-                        <th className="px-4 py-3 text-right font-medium">
-                          <span className="flex items-center justify-end gap-1">
-                            Avg Cost
-                            <Pencil className="h-3 w-3 opacity-40" />
-                          </span>
-                        </th>
-                        <th className="border-l border-white/[0.06] px-4 py-3 text-right font-medium">Price</th>
-                        <th className="px-4 py-3 text-right font-medium">Value</th>
-                        <th className="border-l border-white/[0.06] px-4 py-3 text-right font-medium">
-                          <span className="flex items-center justify-end gap-1.5">
-                            P&amp;L
-                            <span className="group relative inline-flex">
-                              <button
-                                type="button"
-                                className="flex size-4 items-center justify-center rounded-full border border-white/[0.14] text-white/42 transition-colors hover:border-cyan-secondary/40 hover:text-cyan-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-secondary/30"
-                                aria-label="How portfolio P&L is calculated"
-                              >
-                                <Info className="size-3" />
-                              </button>
-                              <span
-                                role="tooltip"
-                                className="pointer-events-none absolute right-0 top-6 z-30 hidden w-72 rounded-xl border border-white/[0.10] bg-[#0b0e16] p-3 text-left text-xs font-normal leading-5 text-white/62 shadow-[0_18px_60px_rgba(0,0,0,0.45)] group-hover:block group-focus-within:block"
-                              >
-                                P&amp;L compares live market value converted into {activeBaseCurrency} against average cost stored in {activeBaseCurrency}. For CAD-listed or other foreign-currency tickers, use the average-cost currency selector so cost basis aligns with your account statement.
-                              </span>
-                            </span>
-                          </span>
-                        </th>
-                        <th className="w-10 px-3 py-3" />
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/[0.03]">
-                      {holdings.map((h) => {
-                        const quoteCurrency = normalizeCurrency(h.quoteCurrency, activeBaseCurrency);
-                        const isConverted = quoteCurrency !== activeBaseCurrency;
-                        const rowWeight = totalValue > 0 && h.value != null ? (h.value / totalValue) * 100 : 0;
-
-                        return (
-                          <tr key={h.id} className="group transition-colors hover:bg-white/[0.02]">
-                            <td className="px-5 py-3">
-                              <span className="flex items-center gap-2">
-                                <span
-                                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                                  style={{ backgroundColor: colorForSymbol(h.symbol) }}
-                                />
-                                <span className="font-semibold text-white">{h.symbol}</span>
-                              </span>
-                            </td>
-                            <td className="border-l border-white/[0.06] px-4 py-3 text-right">
-                              <EditableCell
-                                holdingId={h.id}
-                                field="quantity"
-                                value={h.quantity}
-                                format={(v) => String(v)}
-                              />
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <EditableCell
-                                holdingId={h.id}
-                                field="average_cost"
-                                value={h.average_cost}
-                                format={(v) => formatPrivateMoney(v, activeBaseCurrency, hideAmounts)}
-                              />
-                            </td>
-                            <td className="border-l border-white/[0.06] px-4 py-3 text-right tabular-nums">
-                              {h.currentPrice != null ? (
-                                <div className="space-y-0.5">
-                                  <p className="text-white/70">{formatPrivateMoney(h.currentPrice, quoteCurrency, hideAmounts)}</p>
-                                  {isConverted && h.convertedPrice != null && (
-                                    <p className="text-[11px] text-white/35">
-                                      {formatPrivateMoney(h.convertedPrice, activeBaseCurrency, hideAmounts)}
-                                    </p>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="animate-pulse text-white/20">·····</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-right tabular-nums">
-                              {h.value != null ? (
-                                <div className="space-y-1.5">
-                                  <div>
-                                    <p className="text-white/70">{formatPrivateMoney(h.value, activeBaseCurrency, hideAmounts)}</p>
-                                    {isConverted && h.originalValue != null && (
-                                      <p className="text-[11px] text-white/35">
-                                        {formatPrivateMoney(h.originalValue, quoteCurrency, hideAmounts)}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center justify-end gap-1.5">
-                                    <div className="h-1 w-16 overflow-hidden rounded-full bg-white/[0.07]">
-                                      <div
-                                        className="h-full rounded-full transition-[width] duration-300"
-                                        style={{
-                                          width: `${Math.min(rowWeight, 100)}%`,
-                                          backgroundColor: colorForSymbol(h.symbol),
-                                        }}
-                                      />
-                                    </div>
-                                    <span className="w-10 text-right text-[11px] tabular-nums text-white/40">
-                                      {rowWeight.toFixed(1)}%
-                                    </span>
-                                  </div>
-                                </div>
-                              ) : "—"}
-                            </td>
-                            <td
-                              className={cn(
-                                "border-l border-white/[0.06] px-4 py-3 text-right tabular-nums font-medium",
-                                h.pnl == null ? "text-white/20" : h.pnl >= 0 ? "text-green-positive" : "text-red-negative"
-                              )}
-                            >
-                              {h.pnl != null ? (
-                                <>
-                                  {h.pnl >= 0 ? "+" : ""}
-                                  {formatMoney(Math.abs(h.pnl), activeBaseCurrency)}
-                                  <span className="ml-1 text-xs opacity-70">
-                                    ({h.pnlPct! >= 0 ? "+" : ""}{h.pnlPct!.toFixed(1)}%)
-                                  </span>
-                                </>
-                              ) : "—"}
-                            </td>
-                            <td className="px-3 py-3">
-                              <button
-                                onClick={() => removeHolding(h.id)}
-                                className="flex h-7 w-7 items-center justify-center rounded-lg text-white/20 opacity-0 transition-all hover:bg-white/[0.06] hover:text-red-negative group-hover:opacity-100"
-                                aria-label={`Remove ${h.symbol}`}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Allocation chart */}
-                <div className="flex shrink-0 flex-col items-center justify-center gap-4 border-t border-white/[0.04] p-6 md:w-64 md:border-l md:border-t-0">
-                  <p className="text-xs font-medium uppercase tracking-widest text-white/30">Allocation</p>
-                  <ChartContainer config={chartConfig} className="h-[180px] w-[180px]">
-                    <PieChart>
-                      <ChartTooltip
-                        content={
-                          <ChartTooltipContent
-                            formatter={(value, name) => (
-                              <span className="flex items-center gap-1.5">
-                                <span className="font-semibold text-white">{name}</span>
-                                <span className="text-white/55">
-                                  {totalValue > 0
-                                    ? `${(((value as number) / totalValue) * 100).toFixed(1)}%`
-                                    : "—"}
-                                </span>
-                              </span>
-                            )}
-                            hideLabel
-                          />
-                        }
-                      />
-                      <Pie
-                        data={allocationData}
-                        dataKey="value"
-                        nameKey="symbol"
-                        innerRadius={52}
-                        outerRadius={78}
-                        paddingAngle={3}
-                        strokeWidth={0}
-                      >
-                        {allocationData.map((entry) => (
-                          <Cell key={entry.symbol} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ChartContainer>
-
-                  <div className="w-full space-y-2">
-                    {allocationData.map((d) => {
-                      const pct = totalValue > 0 ? (d.value / totalValue) * 100 : 0;
-                      return (
-                        <div key={d.symbol} className="flex items-center gap-2">
-                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: d.fill }} />
-                          <span className="flex-1 truncate text-xs font-medium text-white/70">{d.symbol}</span>
-                          <div className="flex items-center gap-1.5">
-                            <div className="h-1 w-16 overflow-hidden rounded-full bg-white/[0.06]">
-                              <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: d.fill }} />
-                            </div>
-                            <span className="w-9 text-right text-xs tabular-nums text-white/40">{pct.toFixed(1)}%</span>
-                          </div>
-                        </div>
-                      );
-                    })}
+            <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.85fr)]">
+              <div className="min-w-0 rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-3 shadow-[var(--shadow-card)]">
+                {holdingsLoading || portfoliosLoading ? (
+                  <div className="flex min-h-[270px] items-center justify-center gap-2 text-sm text-white/45">
+                    <Loader2 className="size-4 animate-spin" />
+                    Loading portfolio…
                   </div>
+                ) : allocationData.length > 0 ? (
+                  <div className="relative mx-auto flex min-h-[270px] max-w-[540px] items-center justify-center">
+                    <ChartContainer config={chartConfig} className="h-[250px] w-[250px]">
+                      <PieChart>
+                        <ChartTooltip
+                          cursor={false}
+                          content={<AllocationTooltip totalValue={totalValue} />}
+                        />
+                        <Pie data={allocationData} dataKey="value" nameKey="symbol" innerRadius={78} outerRadius={112} paddingAngle={2} stroke="#07080b" strokeWidth={2}>
+                          {allocationData.map((entry) => (
+                            <Cell key={entry.symbol} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ChartContainer>
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-center">
+                      <div>
+                        <p className="text-2xl font-medium tracking-[-0.03em] text-white">
+                          {formatPrivateMoney(displayTotalValue, displayBaseCurrency, hideAmounts)}
+                        </p>
+                        <p className="mt-1 text-sm text-white/70">Portfolio Value</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                    <div className="flex min-h-[270px] items-center justify-center text-sm text-white/35">
+                    Add holdings to build your allocation chart.
+                  </div>
+                )}
+              </div>
+
+              <div className="grid min-w-0 gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <MetricTile
+                    label="Today's Return"
+                    value={`${totalDailyReturn >= 0 ? "+" : "-"}${formatPrivateMoney(Math.abs(totalDailyReturn), activeBaseCurrency, hideAmounts)}`}
+                    detail={totalDailyReturnPct == null ? "Waiting for live quotes" : `${totalDailyReturnPct >= 0 ? "+" : ""}${totalDailyReturnPct.toFixed(2)}% Today`}
+                    tone={totalDailyReturn >= 0 ? "positive" : "negative"}
+                  />
+                  <MetricTile
+                    label="All-Time Return"
+                    value={totalPnl == null ? "—" : `${totalPnl >= 0 ? "+" : "-"}${formatPrivateMoney(Math.abs(totalPnl), activeBaseCurrency, hideAmounts)}`}
+                    detail={totalPnlPct == null ? "Add cost basis" : `${totalPnlPct >= 0 ? "+" : ""}${totalPnlPct.toFixed(2)}% All time`}
+                    tone={(totalPnl ?? 0) >= 0 ? "positive" : "negative"}
+                  />
+                </div>
+                <div className="grid min-h-[90px] grid-cols-3 rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-2 shadow-[var(--shadow-card)]">
+                  <div ref={currencyMenuRef} className="relative h-full">
+                    <ActionButton
+                      icon={<WalletCards className="size-5" />}
+                      label={`Currency: ${displayBaseCurrency}`}
+                      tone="amber"
+                      onClick={() => {
+                        setShowCurrencyMenu((value) => {
+                          const next = !value;
+                          if (!next) {
+                            setShowCurrencySearchMenu(false);
+                            setCurrencySearch("");
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                    {showCurrencyMenu && (
+                      <div className="absolute left-1/2 top-[calc(100%+0.5rem)] z-30 w-44 -translate-x-1/2 rounded-2xl border border-white/12 bg-[var(--surface-popover)] p-1 shadow-[var(--shadow-popover)]">
+                        {quickCurrencies.map((currency) => (
+                          <button
+                            key={currency}
+                            type="button"
+                            onClick={() => {
+                              setDisplayBaseCurrency(currency);
+                              setShowCurrencyMenu(false);
+                              setShowCurrencySearchMenu(false);
+                              setCurrencySearch("");
+                            }}
+                            className={cn(
+                              "w-full rounded-xl px-3 py-2 text-left text-sm transition-colors",
+                              displayBaseCurrency === currency ? "bg-white/10 text-white" : "text-white/58 hover:bg-white/[0.06] hover:text-white"
+                            )}
+                          >
+                            {currency}
+                          </button>
+                        ))}
+                        <div
+                          className="relative"
+                          onMouseEnter={() => setShowCurrencySearchMenu(true)}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setShowCurrencySearchMenu(true)}
+                            onFocus={() => setShowCurrencySearchMenu(true)}
+                            className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-white/58 transition-colors hover:bg-white/[0.06] hover:text-white"
+                          >
+                            Add
+                            <ChevronRight className="size-4" />
+                          </button>
+                          {showCurrencySearchMenu && (
+                            <>
+                              <div className="absolute left-full top-0 hidden h-full w-3 sm:block" />
+                              <div
+                                onMouseLeave={() => {
+                                  setShowCurrencySearchMenu(false);
+                                  setCurrencySearch("");
+                                }}
+                                className="absolute left-0 top-[calc(100%+0.35rem)] z-40 w-72 rounded-2xl border border-white/12 bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)] sm:left-[calc(100%+0.5rem)] sm:top-0"
+                              >
+                                <label className="flex h-9 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-white/50">
+                                  <Search className="size-4" />
+                                  <input
+                                    type="search"
+                                    value={currencySearch}
+                                    onChange={(event) => setCurrencySearch(event.target.value)}
+                                    placeholder="Search currency"
+                                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/28"
+                                  />
+                                </label>
+                                <div className="mt-2 max-h-64 overflow-y-auto pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/14 [&::-webkit-scrollbar-track]:bg-transparent">
+                                  {filteredCurrencies.map((currency) => (
+                                    <button
+                                      key={currency.code}
+                                      type="button"
+                                      onClick={() => {
+                                        setDisplayBaseCurrency(currency.code);
+                                        setShowCurrencyMenu(false);
+                                        setShowCurrencySearchMenu(false);
+                                        setCurrencySearch("");
+                                      }}
+                                      className={cn(
+                                        "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors",
+                                        displayBaseCurrency === currency.code ? "bg-white/10 text-white" : "text-white/58 hover:bg-white/[0.06] hover:text-white"
+                                      )}
+                                    >
+                                      <span className="font-semibold">{currency.code}</span>
+                                      <span className="min-w-0 flex-1 truncate text-right text-xs text-white/38">{currency.name}</span>
+                                      {displayBaseCurrency === currency.code ? (
+                                        <Check className="size-4 shrink-0 text-green-positive" />
+                                      ) : (
+                                        <span className="size-4 shrink-0" />
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <ActionButton
+                    icon={<Building2 className="size-5" />}
+                    label="Add Investments"
+                    tone="green"
+                    onClick={() => setShowAddPanel((value) => !value)}
+                  />
+                  <ActionButton
+                    icon={<Pencil className="size-5" />}
+                    label="More portfolios"
+                    tone="orange"
+                    onClick={() => setShowAccountMenu((value) => !value)}
+                  />
                 </div>
               </div>
-            ) : (
-              <p className="px-5 py-8 text-center text-sm text-white/30">
-                No holdings yet. Add your first position below.
-              </p>
+            </div>
+          </section>
+        )}
+
+        {portfoliosLoading ? (
+          <section className="flex min-h-48 items-center justify-center gap-2 rounded-2xl border border-white/12 bg-[var(--surface-card-strong)] p-10 text-sm text-white/45 shadow-[var(--shadow-card)]">
+            <Loader2 className="size-4 animate-spin" />
+            Loading portfolios…
+          </section>
+        ) : activePortfolio ? (
+          <>
+            {showAddPanel && (
+              <section className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
+                <div className="flex flex-wrap items-center gap-2">
+                  {addSymbol ? (
+                    <span className="flex h-10 items-center gap-1.5 rounded-xl bg-[#a78bfa]/15 px-3 text-xs font-semibold text-[#c4b5fd] ring-1 ring-[#a78bfa]/25">
+                      {addSymbol}
+                      <button type="button" onClick={() => setAddSymbol("")} className="opacity-60 hover:opacity-100" aria-label="Clear ticker">
+                        ×
+                      </button>
+                    </span>
+                  ) : (
+                    <TickerSuggestionInput
+                      value={tickerInput}
+                      onValueChange={setTickerInput}
+                      onSelect={(ticker) => setAddSymbol(ticker)}
+                      existingTickers={holdings.map((holding) => holding.symbol)}
+                      placeholder="Symbol or company name"
+                      className="w-64"
+                      inputClassName="h-10 rounded-xl border border-white/[0.10] bg-black/20 text-sm focus-visible:ring-0 focus-visible:border-[#a78bfa]/60"
+                    />
+                  )}
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder="Qty"
+                    value={addQty}
+                    onChange={(event) => setAddQty(event.target.value)}
+                    className="h-10 w-24 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-[#a78bfa]/60"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder={`Avg cost (${addCostCurrency})`}
+                    value={addCost}
+                    onChange={(event) => setAddCost(event.target.value)}
+                    className="h-10 w-36 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-[#a78bfa]/60"
+                  />
+                  <select
+                    value={addCostCurrency}
+                    onChange={(event) => setAddCostCurrency(event.target.value as (typeof SUPPORTED_BASE_CURRENCIES)[number])}
+                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none focus:border-[#a78bfa]/60"
+                    aria-label="Average cost currency"
+                  >
+                    {SUPPORTED_BASE_CURRENCIES.map((currency) => (
+                      <option key={currency} value={currency} className="bg-space-black text-white">
+                        {currency}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    onClick={addHolding}
+                    disabled={saving || !addSymbol || !addQty || !addCost}
+                    className="h-10 rounded-xl bg-[#a78bfa] px-5 text-sm font-bold text-black hover:bg-[#b8a6ff]"
+                  >
+                    {saving ? <Loader2 className="size-4 animate-spin" /> : "Add holding"}
+                  </Button>
+                </div>
+              </section>
             )}
 
-            {/* Add holding form */}
-            <div className="border-t border-white/[0.06] px-5 py-4">
-              {error && <p className="mb-3 text-xs text-red-negative">{error}</p>}
-              <div className="flex flex-wrap items-center gap-2">
-                {addSymbol ? (
-                  <span className="flex h-9 items-center gap-1.5 rounded-xl bg-indigo-primary/15 px-3 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/20">
-                    {addSymbol}
+            <section className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-white">Recurring buys</h2>
+                  <p className="mt-1 text-sm text-white/42">Completed recurring buys automatically keep linked holdings updated.</p>
+                </div>
+                <span className="rounded-full border border-white/10 bg-black/24 px-3 py-1.5 text-xs font-semibold text-white/55">
+                  {recurringBuys.length} synced
+                </span>
+              </div>
+
+              <div className="mt-4 grid gap-3 rounded-2xl border border-white/[0.07] bg-black/18 p-3 lg:grid-cols-4 xl:grid-cols-[minmax(150px,1fr)_96px_160px_130px_90px_120px_120px_120px_auto]">
+                {recurringBuyDraft.symbol ? (
+                  <span className="flex h-10 items-center justify-between gap-1.5 rounded-xl bg-white/[0.06] px-3 text-xs font-semibold text-white ring-1 ring-white/10">
+                    {recurringBuyDraft.symbol}
                     <button
                       type="button"
-                      onClick={() => setAddSymbol("")}
-                      className="ml-0.5 opacity-60 hover:opacity-100"
-                      aria-label="Clear ticker"
+                      onClick={() => setRecurringBuyDraft((draft) => ({ ...draft, symbol: "" }))}
+                      className="opacity-60 hover:opacity-100"
+                      aria-label="Clear recurring ticker"
                     >
-                      ✕
+                      ×
                     </button>
                   </span>
                 ) : (
                   <TickerSuggestionInput
-                    value={tickerInput}
-                    onValueChange={setTickerInput}
-                    onSelect={(t) => setAddSymbol(t)}
-                    existingTickers={[]}
-                    placeholder="Symbol or company name"
-                    className="w-52"
-                    inputClassName="h-9 border border-white/[0.08] bg-white/[0.03] rounded-xl text-sm focus-visible:ring-0 focus-visible:border-indigo-primary/50"
+                    value={recurringTickerInput}
+                    onValueChange={setRecurringTickerInput}
+                    onSelect={(ticker) => setRecurringBuyDraft((draft) => ({ ...draft, symbol: ticker }))}
+                    existingTickers={recurringBuys.map((buy) => buy.symbol)}
+                    placeholder="Symbol"
+                    inputClassName="h-10 rounded-xl border border-white/[0.10] bg-black/20 text-sm focus-visible:ring-0 focus-visible:border-white/35"
                   />
                 )}
                 <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  placeholder="Qty"
-                  value={addQty}
-                  onChange={(e) => setAddQty(e.target.value)}
-                  className="h-9 w-24 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-sm text-white placeholder:text-white/25 focus:border-indigo-primary/50 focus:outline-none"
+                  value={recurringBuyDraft.account}
+                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, account: event.target.value }))}
+                  placeholder="Account"
+                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
                 />
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  placeholder={`Avg cost (${addCostCurrency})`}
-                  value={addCost}
-                  onChange={(e) => setAddCost(e.target.value)}
-                  className="h-9 w-32 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-sm text-white placeholder:text-white/25 focus:border-indigo-primary/50 focus:outline-none"
-                />
+                <div className="flex h-10 rounded-xl border border-white/[0.10] bg-black/20 p-1">
+                  {(["amount", "shares"] as const).map((buyMode) => (
+                    <button
+                      key={buyMode}
+                      type="button"
+                      onClick={() => setRecurringBuyDraft((draft) => ({
+                        ...draft,
+                        purchaseMode: buyMode,
+                        enteredAmount: buyMode === "amount" ? draft.enteredAmount : "",
+                        filledQuantity: buyMode === "shares" ? draft.filledQuantity : "",
+                      }))}
+                      className={cn(
+                        "flex-1 rounded-lg px-3 text-xs font-semibold capitalize transition-colors",
+                        recurringBuyDraft.purchaseMode === buyMode ? "bg-white text-black" : "text-white/54 hover:text-white"
+                      )}
+                    >
+                      {buyMode === "amount" ? "Amount" : "Shares"}
+                    </button>
+                  ))}
+                </div>
+                {recurringBuyDraft.purchaseMode === "amount" ? (
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={recurringBuyDraft.enteredAmount}
+                    onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, enteredAmount: event.target.value }))}
+                    placeholder="Amount"
+                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
+                  />
+                ) : (
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={recurringBuyDraft.filledQuantity}
+                    onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, filledQuantity: event.target.value }))}
+                    placeholder="Shares"
+                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
+                  />
+                )}
                 <select
-                  value={addCostCurrency}
-                  onChange={(e) => setAddCostCurrency(e.target.value as (typeof SUPPORTED_BASE_CURRENCIES)[number])}
-                  className="h-9 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-sm font-semibold text-white focus:border-indigo-primary/50 focus:outline-none"
-                  aria-label="Average cost currency"
+                  value={recurringBuyDraft.enteredCurrency}
+                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, enteredCurrency: event.target.value }))}
+                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none focus:border-white/35"
+                  aria-label="Entered amount currency"
                 >
                   {SUPPORTED_BASE_CURRENCIES.map((currency) => (
-                    <option key={currency} value={currency} className="bg-slate-950 text-white">
+                    <option key={currency} value={currency} className="bg-space-black text-white">
                       {currency}
                     </option>
                   ))}
                 </select>
-                <Button
-                  onClick={addHolding}
-                  disabled={saving || !addSymbol || !addQty || !addCost}
-                  size="sm"
-                  className="on-accent accent-gradient-surface h-9 rounded-xl px-4 text-sm font-semibold"
+                <select
+                  value={recurringBuyDraft.recurrenceFrequency}
+                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, recurrenceFrequency: event.target.value as RecurringBuyDraft["recurrenceFrequency"] }))}
+                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none focus:border-white/35"
+                  aria-label="Recurring buy frequency"
                 >
-                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Add holding"}
+                  {(["daily", "weekly", "monthly", "yearly"] as const).map((frequency) => (
+                    <option key={frequency} value={frequency} className="bg-space-black text-white">
+                      {frequency[0].toUpperCase() + frequency.slice(1)}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="time"
+                  value={recurringBuyDraft.scheduleTime}
+                  onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, scheduleTime: event.target.value }))}
+                  className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white outline-none [color-scheme:dark] focus:border-white/35"
+                  aria-label="Recurring buy time"
+                />
+                {recurringBuyDraft.recurrenceFrequency === "weekly" && (
+                  <select
+                    value={recurringBuyDraft.scheduleDayOfWeek}
+                    onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, scheduleDayOfWeek: event.target.value }))}
+                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none focus:border-white/35"
+                    aria-label="Recurring buy day of week"
+                  >
+                    {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day, index) => (
+                      <option key={day} value={index} className="bg-space-black text-white">
+                        {day}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {["monthly", "yearly"].includes(recurringBuyDraft.recurrenceFrequency) && (
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={recurringBuyDraft.scheduleDayOfMonth}
+                    onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, scheduleDayOfMonth: event.target.value }))}
+                    placeholder="Day"
+                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-white/35"
+                    aria-label="Recurring buy day of month"
+                  />
+                )}
+                {recurringBuyDraft.recurrenceFrequency === "yearly" && (
+                  <select
+                    value={recurringBuyDraft.scheduleMonth}
+                    onChange={(event) => setRecurringBuyDraft((draft) => ({ ...draft, scheduleMonth: event.target.value }))}
+                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none focus:border-white/35"
+                    aria-label="Recurring buy month"
+                  >
+                    {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((month, index) => (
+                      <option key={month} value={index + 1} className="bg-space-black text-white">
+                        {month}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <Button
+                  onClick={addRecurringBuy}
+                  disabled={
+                    saving
+                    || !recurringBuyDraft.symbol
+                    || (recurringBuyDraft.purchaseMode === "amount" ? !recurringBuyDraft.enteredAmount : !recurringBuyDraft.filledQuantity)
+                  }
+                  className="h-10 rounded-xl bg-white px-4 text-sm font-bold text-black hover:bg-white/86"
+                >
+                  {saving ? <Loader2 className="size-4 animate-spin" /> : "Price & sync"}
                 </Button>
               </div>
-              <p className="mt-2 text-xs text-white/35">
-                Average cost is saved in {activeBaseCurrency}. If you choose another currency, it is converted before P&amp;L is calculated.
-              </p>
-            </div>
-          </section>
-        ) : portfolios.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/[0.08] p-10 text-center text-sm text-white/30">
-            Create a portfolio above to get started.
-          </div>
-        ) : null}
 
-        {/* Optimizer */}
-        {activePortfolio && uniqueSymbols.length >= 2 && (
-          <section className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-white">Optimizer</h2>
-              <p className="text-xs text-white/35">{uniqueSymbols.join(" · ")}</p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div className="space-y-3">
-                <label className="text-xs font-medium uppercase tracking-widest text-white/35">Strategy</label>
-                <div className="flex rounded-xl border border-white/[0.06] p-1">
-                  {(["classical", "quantum"] as const).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => { setMode(m); setResult(null); }}
-                      className={cn(
-                        "flex-1 rounded-lg py-2.5 text-sm font-medium capitalize transition-colors",
-                        mode === m
-                          ? m === "quantum"
-                            ? "bg-indigo-primary text-white shadow-[0_0_14px_rgba(99,102,241,0.25)]"
-                            : "bg-white/10 text-white"
-                          : "text-white/40 hover:text-white/60"
-                      )}
-                    >
-                      {m === "quantum" ? "⚛ Quantum" : "Classical"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <label className="text-xs font-medium uppercase tracking-widest text-white/35">
-                  Risk Tolerance — {risk.toFixed(1)}
-                </label>
-                <div className="flex items-center gap-3 py-1">
-                  <span className="text-xs text-white/25">Low</span>
-                  <ThinSlider
-                    min={0.1}
-                    max={3}
-                    step={0.1}
-                    value={risk}
-                    onValueChange={(value) => { setRisk(value); setResult(null); }}
-                    aria-label="Risk tolerance"
-                    className="flex-1"
-                  />
-                  <span className="text-xs text-white/25">High</span>
-                </div>
-              </div>
-            </div>
-
-            <Button
-              onClick={optimize}
-              disabled={optimizing}
-              className="on-accent accent-gradient-surface w-full rounded-xl py-4 text-base font-semibold shadow-[var(--shadow-primary-wide)] hover:shadow-[var(--shadow-primary-wide-hover)]"
-            >
-              {optimizing ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Optimizing…
-                </span>
-              ) : "Run Optimization"}
-            </Button>
-
-            {result && (
-              <div className="space-y-5 border-t border-white/[0.06] pt-5">
-                {result.weights && (
-                  <>
-                    <div className="grid grid-cols-3 gap-4">
-                      {[
-                        { label: "Expected Return", value: `${((result.expected_annual_return ?? 0) * 100).toFixed(1)}%`, cls: "text-green-positive" },
-                        { label: "Volatility", value: `${((result.annual_volatility ?? 0) * 100).toFixed(1)}%`, cls: "text-amber-warning" },
-                        { label: "Sharpe", value: (result.sharpe_ratio ?? 0).toFixed(2), cls: "text-indigo-primary" },
-                      ].map((m) => (
-                        <div key={m.label} className="rounded-xl border border-white/[0.05] bg-white/[0.02] p-4 text-center">
-                          <p className="mb-1.5 text-xs text-white/30">{m.label}</p>
-                          <p className={cn("text-2xl font-bold", m.cls)}>{m.value}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="flex flex-col items-center gap-8 md:flex-row">
-                      <ChartContainer config={optimizerChartConfig} className="h-[200px] w-[200px] shrink-0">
-                        <PieChart>
-                          <ChartTooltip
-                            content={
-                              <ChartTooltipContent
-                                formatter={(value, name) => (
-                                  <span className="flex items-center gap-1.5">
-                                    <span className="font-semibold text-white">{name}</span>
-                                    <span className="text-white/55">{value}%</span>
-                                  </span>
-                                )}
-                                hideLabel
-                              />
-                            }
-                          />
-                          <Pie
-                            data={optimizerPieData}
-                            dataKey="value"
-                            nameKey="name"
-                            innerRadius={60}
-                            outerRadius={85}
-                            paddingAngle={4}
-                            strokeWidth={0}
-                          >
-                            {optimizerPieData.map((entry) => (
-                              <Cell key={entry.name} fill={entry.fill} />
-                            ))}
-                          </Pie>
-                        </PieChart>
-                      </ChartContainer>
-
-                      <div className="flex-1 w-full space-y-2">
-                        {optimizerPieData.map((d) => (
-                          <div key={d.name} className="flex items-center gap-3">
-                            <span className="w-14 text-xs font-bold text-white">{d.name}</span>
-                            <div className="flex-1 h-2 rounded-full bg-white/[0.05] overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${d.value}%`, backgroundColor: d.fill }} />
+              <div className="mt-4 space-y-3">
+                {recurringBuysLoading ? (
+                  <div className="flex min-h-28 items-center justify-center gap-2 rounded-2xl border border-white/[0.07] bg-black/14 text-sm text-white/42">
+                    <Loader2 className="size-4 animate-spin" />
+                    Loading recurring buys…
+                  </div>
+                ) : recurringBuys.length > 0 ? (
+                  recurringBuys.map((buy) => {
+                    const expanded = expandedRecurringBuyId === buy.id;
+                    const totalCost = buy.entered_amount;
+                    return (
+                      <article key={buy.id} className="overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.055]">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedRecurringBuyId(expanded ? null : buy.id)}
+                          className="flex w-full items-center justify-between gap-4 p-4 text-left transition-colors hover:bg-white/[0.025]"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span
+                              className="flex size-10 shrink-0 items-center justify-center rounded-xl text-[10px] font-black text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]"
+                              style={{ backgroundColor: colorForSymbol(buy.symbol) }}
+                            >
+                              {buy.symbol.slice(0, 4)}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-white">{buy.symbol}</p>
+                              <p className="truncate text-sm font-semibold text-white/58">
+                                Recurring buy {buy.account ? <span className="ml-2 font-normal">{buy.account}</span> : null}
+                              </p>
                             </div>
-                            <span className="w-12 text-right text-xs text-white/45">{d.value}%</span>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
+                          <div className="flex items-center gap-3">
+                            <span className="text-right text-lg font-bold tabular-nums text-white">
+                              {formatPrivateMoney(totalCost, buy.entered_currency, hideAmounts)} {buy.entered_currency}
+                            </span>
+                            <ChevronDown className={cn("size-5 text-white/72 transition-transform", expanded && "rotate-180")} />
+                          </div>
+                        </button>
 
-                {result.selected_stocks && (
-                  <div className="space-y-3">
-                    <p className="text-xs font-medium text-white/35">⚛ QAOA Selection</p>
-                    <div className="flex flex-wrap gap-2">
-                      {result.selected_stocks.map((t) => (
-                        <span key={t} className="rounded-lg bg-indigo-primary/15 px-3 py-1.5 text-xs font-bold text-indigo-primary ring-1 ring-indigo-primary/20">
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                    {result.best_probability != null && (
-                      <p className="text-xs text-white/30">
-                        Best probability: {(result.best_probability * 100).toFixed(1)}%
-                      </p>
-                    )}
+                        {expanded && (
+                          <div className="grid gap-5 border-t border-white/[0.07] px-5 pb-5 pt-4 md:grid-cols-[1fr_1fr]">
+                            <dl className="grid gap-3 text-sm">
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Account</dt>
+                                <dd className="text-right text-white/82">{buy.account || activePortfolio.name}</dd>
+                              </div>
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Status</dt>
+                                <dd className="text-right capitalize text-white/82">{buy.status}</dd>
+                              </div>
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Schedule</dt>
+                                <dd className="text-right text-white/82">{formatRecurringSchedule(buy)}</dd>
+                              </div>
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Last priced</dt>
+                                <dd className="text-right text-white/82">{formatRecurringDateTime(buy.executed_at)}</dd>
+                              </div>
+                            </dl>
+                            <dl className="grid gap-3 text-sm">
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Type</dt>
+                                <dd className="text-right text-white/82">
+                                  Recurring buy by {buy.purchase_mode === "shares" ? "shares" : "amount"}
+                                </dd>
+                              </div>
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Entered amount</dt>
+                                <dd className="text-right tabular-nums text-white/82">
+                                  {formatPrivateMoney(buy.entered_amount, buy.entered_currency, hideAmounts)} {buy.entered_currency}
+                                </dd>
+                              </div>
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Filled quantity</dt>
+                                <dd className="text-right tabular-nums text-white/82">
+                                  {buy.filled_quantity.toLocaleString("en-US", { maximumFractionDigits: 6 })} shares x {formatMoney(buy.fill_price, buy.fill_currency, 4)}
+                                </dd>
+                              </div>
+                              <div className="flex items-start justify-between gap-4">
+                                <dt className="font-semibold text-white">Exchange rate</dt>
+                                <dd className="text-right tabular-nums text-white/82">{buy.exchange_rate?.toLocaleString("en-US", { maximumFractionDigits: 6 }) ?? "—"}</dd>
+                              </div>
+                            </dl>
+                            <div className="flex items-center justify-between border-t border-white/[0.07] pt-4 md:col-span-2">
+                              <div>
+                                <p className="text-sm font-semibold text-white">Total cost</p>
+                                <p className="mt-1 text-xs text-white/42">Synced to linked holding</p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-lg font-bold tabular-nums text-white">
+                                  {formatPrivateMoney(buy.entered_amount, buy.entered_currency, hideAmounts)} {buy.entered_currency}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setRecurringBuyToDelete(buy)}
+                                  className="flex size-9 items-center justify-center rounded-full border border-red-negative/20 text-red-negative/75 transition-colors hover:bg-red-negative/10 hover:text-red-negative"
+                                  aria-label={`Delete recurring buy for ${buy.symbol}`}
+                                >
+                                  <Trash2 className="size-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })
+                ) : (
+                  <div className="flex min-h-28 items-center justify-center rounded-2xl border border-dashed border-white/[0.10] bg-black/14 text-sm text-white/42">
+                    No recurring buys yet.
                   </div>
                 )}
               </div>
+            </section>
+
+            <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(280px,420px)_minmax(0,1fr)]">
+              <section className="min-w-0 space-y-5">
+                <div className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
+                  <div className="flex items-center justify-between gap-4">
+                    <h2 className="text-xl font-bold">Portfolio Goal</h2>
+                    {editingGoal ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="1"
+                          value={goalDraft}
+                          onChange={(event) => setGoalDraft(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") commitGoal();
+                            if (event.key === "Escape") {
+                              setGoalDraft(String(portfolioGoal));
+                              setEditingGoal(false);
+                            }
+                          }}
+                          className="h-9 w-32 rounded-xl border border-white/[0.12] bg-black/20 px-3 text-right text-sm text-white outline-none focus:border-[#a78bfa]/60"
+                          autoFocus
+                        />
+                        <button type="button" onClick={commitGoal} className="text-sm text-[#c4b5fd] hover:text-white">
+                          Save
+                        </button>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => setEditingGoal(true)} className="text-base text-white/86 transition-colors hover:text-[#c4b5fd]">
+                        Edit goal
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-4 text-xl font-semibold tracking-[-0.04em]">
+                    <span className="text-[#a78bfa]">{formatPrivateMoney(totalValue, activeBaseCurrency, hideAmounts)}</span>
+                    <span className="text-white/82">/{formatMoney(portfolioGoal, activeBaseCurrency, 0)}</span>
+                  </div>
+                  <div className="mt-4 h-3 overflow-visible rounded-full bg-black/30">
+                    <div
+                      className="relative h-full rounded-full bg-[#a78bfa]"
+                      style={{ width: `${portfolioGoalProgress}%` }}
+                    >
+                      <span className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 rounded-full bg-[#a78bfa] px-1.5 py-0.5 text-xs font-semibold text-space-black">
+                        {portfolioGoalProgress.toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-white/78">You&apos;re aiming to reach this by</p>
+                      {editingGoalDate ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <input
+                            type="date"
+                            value={goalDateDraft}
+                            onChange={(event) => setGoalDateDraft(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") commitGoalDate();
+                              if (event.key === "Escape") {
+                                setGoalDateDraft(goalTargetDate);
+                                setEditingGoalDate(false);
+                              }
+                            }}
+                            className="h-9 rounded-xl border border-white/[0.12] bg-black/20 px-3 text-sm text-white outline-none [color-scheme:dark] focus:border-[#a78bfa]/60"
+                            aria-label="Portfolio goal target date"
+                            autoFocus
+                          />
+                          <button type="button" onClick={commitGoalDate} className="text-sm text-[#c4b5fd] hover:text-white">
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setGoalDateDraft(goalTargetDate);
+                              setEditingGoalDate(false);
+                            }}
+                            className="text-sm text-white/52 hover:text-white"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGoalDateDraft(goalTargetDate);
+                            setEditingGoalDate(true);
+                          }}
+                          className="mt-1.5 inline-flex items-center gap-2 text-sm text-[#c4b5fd] transition-colors hover:text-white"
+                        >
+                          <CalendarDays className="size-4" />
+                          <span>{goalTargetLabel}</span>
+                        </button>
+                      )}
+                    </div>
+                    {!editingGoalDate && (
+                      <span
+                        className={cn(
+                          "rounded-full border px-2.5 py-1 text-xs font-semibold",
+                          goalDateDelta != null && goalDateDelta < 0
+                            ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
+                            : "border-[#a78bfa]/24 bg-[#a78bfa]/10 text-[#c4b5fd]"
+                        )}
+                      >
+                        {goalDateDeltaLabel}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <h2 className="text-xl font-bold">Returns</h2>
+                    <div className="flex gap-2">
+                      {(["5D", "1M", "YTD", "1Y", "5Y"] as const).map((period) => (
+                        <button
+                          key={period}
+                          type="button"
+                          onClick={() => setReturnPeriod(period)}
+                          className={cn(
+                            "h-7 min-w-10 rounded-full px-3 text-xs font-semibold transition-colors",
+                            returnPeriod === period ? "bg-emerald-950/80 text-emerald-300" : "bg-black/28 text-white/72 hover:bg-black/42 hover:text-white"
+                          )}
+                        >
+                          {period}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-2.5">
+                    <ReturnRow
+                      label="Price Gain"
+                      icon={<TrendingUp className="size-5" />}
+                      value={totalPnl == null ? "—" : `${totalPnl >= 0 ? "+" : "-"}${formatPrivateMoney(Math.abs(totalPnl), activeBaseCurrency, hideAmounts)}`}
+                      detail={totalPnlPct == null ? "" : `(${totalPnlPct >= 0 ? "+" : ""}${totalPnlPct.toFixed(2)}%)`}
+                      positive={(totalPnl ?? 0) >= 0}
+                    />
+                    <ReturnRow label="Dividends" icon={<BarChart3 className="size-5" />} value="—" detail="Connect income data" positive />
+                    <ReturnRow
+                      label="Total Returns"
+                      icon={<CircleDollarSign className="size-5" />}
+                      value={`${displayedReturn >= 0 ? "+" : "-"}${formatPrivateMoney(Math.abs(displayedReturn), activeBaseCurrency, hideAmounts)}`}
+                      detail={displayedReturnPct == null ? "" : `(${displayedReturnPct >= 0 ? "+" : ""}${displayedReturnPct.toFixed(2)}%)`}
+                      positive={displayedReturn >= 0}
+                      highlight
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section className="min-w-0">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-semibold">Holdings</h2>
+                    <button
+                      type="button"
+                      onClick={() => setHideAmounts((value) => !value)}
+                      className="inline-flex h-9 items-center gap-2 rounded-full border border-white/10 bg-[var(--surface-card-strong)] px-3 text-xs font-medium text-white/58 transition-colors hover:border-white/20 hover:text-white"
+                    >
+                      {hideAmounts ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                      {hideAmounts ? "Hidden" : "Hide"}
+                    </button>
+                  </div>
+                  <div ref={sortMenuRef} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowSortMenu((value) => !value)}
+                      className="inline-flex items-center gap-2 text-sm text-white/86 transition-colors hover:text-white"
+                    >
+                      Sort:
+                      <span className="text-white">
+                        {sortBy === "total" ? "Total value" : sortBy === "allTime" ? "All-time return" : sortBy === "today" ? "Today" : sortBy === "weight" ? "% of portfolio" : "Symbol"}
+                      </span>
+                      <ChevronDown className={cn("size-4 transition-transform", showSortMenu && "rotate-180")} />
+                    </button>
+                    {showSortMenu && (
+                      <div className="absolute right-0 top-8 z-30 w-48 rounded-2xl border border-white/12 bg-[var(--surface-popover)] p-1 shadow-[var(--shadow-popover)]">
+                        {[
+                          ["total", "Total value"],
+                          ["weight", "% of portfolio"],
+                          ["today", "Today's return"],
+                          ["allTime", "All-time return"],
+                          ["symbol", "Symbol"],
+                        ].map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => {
+                              setSortBy(value as typeof sortBy);
+                              setShowSortMenu(false);
+                            }}
+                            className={cn("w-full rounded-xl px-3 py-2 text-left text-sm transition-colors", sortBy === value ? "bg-white/10 text-white" : "text-white/58 hover:bg-white/[0.06] hover:text-white")}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="overflow-hidden rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] shadow-[var(--shadow-card)]">
+                  {holdingsLoading ? (
+                    <div className="flex min-h-80 items-center justify-center gap-2 text-sm text-white/45">
+                      <Loader2 className="size-4 animate-spin" />
+                      Loading holdings…
+                    </div>
+                  ) : sortedHoldings.length > 0 ? (
+                    <HorizontalScroll className="w-full">
+                      <table className="w-full min-w-[700px] table-fixed text-xs sm:text-sm">
+                        <thead>
+                          <tr className="border-b border-white/10 text-xs text-white/60">
+                            <th className="w-[32%] px-3 py-3 text-left font-medium">Holdings</th>
+                            <th className="w-[12%] px-3 py-3 text-right font-medium">% of portfolio</th>
+                            <th className="w-[13%] px-3 py-3 text-right font-medium">Position</th>
+                            <th className="w-[12%] px-3 py-3 text-center font-medium">Shares</th>
+                            <th className="w-[14%] px-3 py-3 text-right font-medium">Today&apos;s Return</th>
+                            <th className="w-[14%] px-3 py-3 text-right font-medium">All-Time Return</th>
+                            <th className="w-[3%] px-1 py-3" />
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/[0.07]">
+                          {sortedHoldings.map((holding) => {
+                            const rowWeight = totalValue > 0 && holding.value != null ? (holding.value / totalValue) * 100 : 0;
+                            const holdingName = holding.name || holding.asset_type || "Holding";
+                            const holdingCurrency = normalizeCurrency(holding.cost_currency, activeBaseCurrency);
+                            const rowValue = holding.holdingValue ?? holding.quantity * holding.average_cost;
+                            const rowDailyChange = holding.holdingDailyChange;
+                            const rowPnl = holding.holdingPnl;
+                            const rowPnlPct = holding.holdingPnlPct;
+
+                            return (
+                              <tr key={holding.id} className="group transition-colors hover:bg-white/[0.025]">
+                                <td className="px-3 py-3">
+                                  <div className="flex items-center gap-3">
+                                    <span
+                                      className="flex size-9 shrink-0 items-center justify-center rounded-full text-[10px] font-black text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]"
+                                      style={{ backgroundColor: colorForSymbol(holding.symbol) }}
+                                    >
+                                      {holding.symbol.slice(0, 4)}
+                                    </span>
+                                    <div className="min-w-0">
+                                      <p className="font-semibold text-white">{holding.symbol}</p>
+                                      <p className="truncate text-xs text-white/56">{holdingName}</p>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-3 text-right font-semibold tabular-nums text-white">{rowWeight.toFixed(2)}%</td>
+                                <td className="px-3 py-3 text-right tabular-nums">
+                                  <p className="font-semibold text-white">
+                                    {formatPrivateMoney(rowValue, holdingCurrency, hideAmounts)} {holdingCurrency}
+                                  </p>
+                                </td>
+                                <td className="px-3 py-3 text-center tabular-nums">
+                                  <EditableCell holdingId={holding.id} field="quantity" value={holding.quantity} format={(value) => `${value} shares`} />
+                                </td>
+                                <td className={cn("px-3 py-3 text-right tabular-nums font-semibold", (rowDailyChange ?? 0) >= 0 ? "text-green-positive" : "text-red-negative")}>
+                                  {rowDailyChange == null ? (
+                                    <span className="text-white/25">Updating...</span>
+                                  ) : (
+                                    <>
+                                      {rowDailyChange >= 0 ? "+" : "-"}
+                                      {formatPrivateMoney(Math.abs(rowDailyChange), holdingCurrency, hideAmounts)}
+                                      <p className="text-xs opacity-80">
+                                        {holding.dailyChangePct == null ? "" : `${holding.dailyChangePct >= 0 ? "+" : ""}${holding.dailyChangePct.toFixed(2)}%`}
+                                      </p>
+                                    </>
+                                  )}
+                                </td>
+                                <td className={cn("px-3 py-3 text-right tabular-nums font-semibold", rowPnl == null ? "text-white/25" : rowPnl >= 0 ? "text-green-positive" : "text-red-negative")}>
+                                  {rowPnl == null ? (
+                                    "—"
+                                  ) : (
+                                    <>
+                                      {rowPnl >= 0 ? "+" : "-"}
+                                      {formatPrivateMoney(Math.abs(rowPnl), holdingCurrency, hideAmounts)}
+                                      <p className="text-xs opacity-80">{rowPnlPct! >= 0 ? "+" : ""}{rowPnlPct!.toFixed(2)}%</p>
+                                    </>
+                                  )}
+                                </td>
+                                <td className="px-1 py-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => setHoldingToDelete(holding)}
+                                    className="flex size-8 items-center justify-center rounded-full text-white/28 opacity-0 transition-all hover:bg-white/[0.07] hover:text-red-negative group-hover:opacity-100"
+                                    aria-label={`Remove ${holding.symbol}`}
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </HorizontalScroll>
+                  ) : (
+                    <div className="flex min-h-80 flex-col items-center justify-center gap-3 text-center">
+                      <p className="text-sm text-white/40">No holdings yet.</p>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddPanel(true)}
+                        className="rounded-full bg-[#a78bfa] px-4 py-2 text-sm font-bold text-black hover:bg-[#b8a6ff]"
+                      >
+                        Add your first investment
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {portfolioBadges.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {portfolioBadges.map((badge) => (
+                      <span key={badge} className="rounded-full border border-white/10 bg-[var(--surface-card-strong)] px-3 py-1.5 text-xs font-medium text-white/55">
+                        {badge}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+
+            {uniqueSymbols.length >= 2 && (
+              <section className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-6 shadow-[var(--shadow-card)]">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Optimizer</h2>
+                    <p className="mt-1 text-xs text-white/42">{uniqueSymbols.join(" · ")}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex rounded-full bg-black/28 p-1">
+                      {(["classical", "quantum"] as const).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => {
+                            setMode(option);
+                            setResult(null);
+                          }}
+                          className={cn(
+                            "rounded-full px-4 py-2 text-sm font-semibold capitalize transition-colors",
+                            mode === option ? "bg-white/12 text-white" : "text-white/46 hover:text-white"
+                          )}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex min-w-64 items-center gap-3">
+                      <SlidersHorizontal className="size-4 text-white/45" />
+                      <ThinSlider min={0.1} max={3} step={0.1} value={risk} onValueChange={(value) => { setRisk(value); setResult(null); }} aria-label="Risk tolerance" />
+                      <span className="w-8 text-right text-sm text-white/55">{risk.toFixed(1)}</span>
+                    </div>
+                    <Button onClick={optimize} disabled={optimizing} className="rounded-full bg-[#a78bfa] px-5 text-sm font-bold text-black hover:bg-[#b8a6ff]">
+                      {optimizing ? <Loader2 className="size-4 animate-spin" /> : "Run Optimization"}
+                    </Button>
+                  </div>
+                </div>
+
+                {result && (
+                  <div className="mt-5 grid gap-4 border-t border-white/10 pt-5 md:grid-cols-3">
+                    {[
+                      { label: "Expected Return", value: `${((result.expected_annual_return ?? 0) * 100).toFixed(1)}%`, cls: "text-green-positive" },
+                      { label: "Volatility", value: `${((result.annual_volatility ?? 0) * 100).toFixed(1)}%`, cls: "text-amber-warning" },
+                      { label: "Sharpe", value: (result.sharpe_ratio ?? 0).toFixed(2), cls: "text-[#a78bfa]" },
+                    ].map((metric) => (
+                      <div key={metric.label} className="rounded-2xl border border-white/[0.08] bg-black/16 p-4">
+                        <p className="text-xs text-white/42">{metric.label}</p>
+                        <p className={cn("mt-2 text-2xl font-black", metric.cls)}>{metric.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {uniqueSymbols.length === 1 && (
+              <p className="text-center text-xs text-white/28">Add at least one more holding to enable optimization.</p>
+            )}
+          </>
+        ) : (
+          <section className="rounded-2xl border border-dashed border-white/12 bg-[var(--surface-card-strong)] p-10 text-center shadow-[var(--shadow-card)]">
+            <p className="text-sm text-white/45">Create a portfolio to start tracking holdings.</p>
+            {showNewForm ? (
+              <div className="mx-auto mt-5 max-w-md space-y-3 text-left">
+                <input
+                  type="text"
+                  value={newPortfolioName}
+                  onChange={(event) => setNewPortfolioName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") createPortfolio();
+                    if (event.key === "Escape") setShowNewForm(false);
+                  }}
+                  placeholder="Portfolio name"
+                  autoFocus
+                  className="h-11 w-full rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-[#a78bfa]/60"
+                />
+                <div className="flex gap-2">
+                  <div ref={newCurrencyMenuRef} className="relative w-32 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowNewCurrencyMenu((value) => {
+                          const next = !value;
+                          if (!next) {
+                            setShowNewCurrencySearchMenu(false);
+                            setNewCurrencySearch("");
+                          }
+                          return next;
+                        });
+                      }}
+                      className="flex h-11 w-full items-center justify-between rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none transition-colors hover:border-white/18 focus:border-[#a78bfa]/60"
+                      aria-label="Portfolio base currency"
+                    >
+                      {normalizeCurrency(newBaseCurrency)}
+                      <ChevronDown className={cn("size-4 text-white/45 transition-transform", showNewCurrencyMenu && "rotate-180")} />
+                    </button>
+                    {showNewCurrencyMenu && (
+                      <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-44 rounded-2xl border border-white/12 bg-[var(--surface-popover)] p-1 shadow-[var(--shadow-popover)]">
+                        {quickNewCurrencies.map((currency) => (
+                          <button
+                            key={currency}
+                            type="button"
+                            onClick={() => {
+                              setNewBaseCurrency(currency);
+                              setShowNewCurrencyMenu(false);
+                              setShowNewCurrencySearchMenu(false);
+                              setNewCurrencySearch("");
+                            }}
+                            className={cn(
+                              "w-full rounded-xl px-3 py-2 text-left text-sm transition-colors",
+                              normalizeCurrency(newBaseCurrency) === currency ? "bg-white/10 text-white" : "text-white/58 hover:bg-white/[0.06] hover:text-white"
+                            )}
+                          >
+                            {currency}
+                          </button>
+                        ))}
+                        <div
+                          className="relative"
+                          onMouseEnter={() => setShowNewCurrencySearchMenu(true)}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setShowNewCurrencySearchMenu(true)}
+                            onFocus={() => setShowNewCurrencySearchMenu(true)}
+                            className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-white/58 transition-colors hover:bg-white/[0.06] hover:text-white"
+                          >
+                            Add
+                            <ChevronRight className="size-4" />
+                          </button>
+                          {showNewCurrencySearchMenu && (
+                            <>
+                              <div className="absolute left-full top-0 hidden h-full w-3 sm:block" />
+                              <div
+                                onMouseLeave={() => {
+                                  setShowNewCurrencySearchMenu(false);
+                                  setNewCurrencySearch("");
+                                }}
+                                className="absolute bottom-0 left-0 z-50 w-72 rounded-2xl border border-white/12 bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)] sm:bottom-auto sm:left-[calc(100%+0.5rem)] sm:top-0"
+                              >
+                                <label className="flex h-9 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-white/50">
+                                  <Search className="size-4" />
+                                  <input
+                                    type="search"
+                                    value={newCurrencySearch}
+                                    onChange={(event) => setNewCurrencySearch(event.target.value)}
+                                    placeholder="Search currency"
+                                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/28"
+                                  />
+                                </label>
+                                <div className="mt-2 max-h-64 overflow-y-auto pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/14 [&::-webkit-scrollbar-track]:bg-transparent">
+                                  {filteredNewCurrencies.map((currency) => {
+                                    const selected = normalizeCurrency(newBaseCurrency) === currency.code;
+                                    return (
+                                      <button
+                                        key={currency.code}
+                                        type="button"
+                                        onClick={() => {
+                                          setNewBaseCurrency(currency.code);
+                                          setShowNewCurrencyMenu(false);
+                                          setShowNewCurrencySearchMenu(false);
+                                          setNewCurrencySearch("");
+                                        }}
+                                        className={cn(
+                                          "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors",
+                                          selected ? "bg-white/10 text-white" : "text-white/58 hover:bg-white/[0.06] hover:text-white"
+                                        )}
+                                      >
+                                        <span className="font-semibold">{currency.code}</span>
+                                        <span className="min-w-0 flex-1 truncate text-right text-xs text-white/38">{currency.name}</span>
+                                        {selected ? (
+                                          <Check className="size-4 shrink-0 text-green-positive" />
+                                        ) : (
+                                          <span className="size-4 shrink-0" />
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={createPortfolio}
+                    disabled={saving || !newPortfolioName.trim()}
+                    className="h-11 flex-1 rounded-xl bg-[#a78bfa] text-sm font-bold text-black hover:bg-[#b8a6ff]"
+                  >
+                    {saving ? <Loader2 className="size-4 animate-spin" /> : "Create portfolio"}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewForm(false)}
+                    className="h-11 rounded-xl border border-white/10 px-4 text-sm font-medium text-white/58 transition-colors hover:border-white/18 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowNewForm(true)}
+                className="mt-4 rounded-full bg-[#a78bfa] px-5 py-2 text-sm font-bold text-black hover:bg-[#b8a6ff]"
+              >
+                New portfolio
+              </button>
             )}
           </section>
         )}
+        <AlertDialog
+          open={Boolean(portfolioToDelete)}
+          onOpenChange={(open) => {
+            if (!open) setPortfolioToDelete(null);
+          }}
+        >
+          <AlertDialogContent size="sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete "{portfolioToDelete?.name}"?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently remove the portfolio and its holdings. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (portfolioToDelete) void deletePortfolio(portfolioToDelete.id);
+                }}
+                className="bg-red-negative text-white hover:bg-red-negative/85"
+              >
+                Delete portfolio
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        <AlertDialog
+          open={Boolean(holdingToDelete)}
+          onOpenChange={(open) => {
+            if (!open) setHoldingToDelete(null);
+          }}
+        >
+          <AlertDialogContent size="sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {holdingToDelete?.symbol}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will remove {holdingToDelete?.symbol} from the current portfolio holdings table. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (holdingToDelete) void removeHolding(holdingToDelete);
+                }}
+                className="bg-red-negative text-white hover:bg-red-negative/85"
+              >
+                Delete holding
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        <AlertDialog
+          open={Boolean(recurringBuyToDelete)}
+          onOpenChange={(open) => {
+            if (!open) setRecurringBuyToDelete(null);
+          }}
+        >
+          <AlertDialogContent size="sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete recurring buy for {recurringBuyToDelete?.symbol}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will remove the recurring buy and its linked holding from the current portfolio. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (recurringBuyToDelete) void removeRecurringBuy(recurringBuyToDelete);
+                }}
+                className="bg-red-negative text-white hover:bg-red-negative/85"
+              >
+                Delete recurring buy
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </div>
+  );
+}
 
-        {activePortfolio && uniqueSymbols.length === 1 && (
-          <p className="text-center text-xs text-white/25">Add at least one more holding to enable optimization.</p>
-        )}
+function AllocationTooltip({
+  active,
+  payload,
+  totalValue,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: { symbol?: string; value?: number; fill?: string } }>;
+  totalValue: number;
+}) {
+  const item = payload?.[0]?.payload;
+  if (!active || !item?.symbol || item.value == null) return null;
+
+  const pct = totalValue > 0 ? (item.value / totalValue) * 100 : 0;
+
+  return (
+    <div className="rounded-full bg-black/86 px-3 py-1.5 text-sm font-bold text-white shadow-[0_10px_24px_rgba(0,0,0,0.35)]">
+      <span className="mr-2 rounded-full px-2 py-0.5 text-xs text-white" style={{ backgroundColor: item.fill }}>
+        {item.symbol}
+      </span>
+      {pct.toFixed(1)}%
+    </div>
+  );
+}
+
+function MetricTile({
+  label,
+  value,
+  detail,
+  tone,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone: "positive" | "negative";
+}) {
+  return (
+    <div className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
+      <p className="text-sm text-white/86">{label}</p>
+      <p className={cn("mt-4 text-2xl font-semibold tracking-[-0.04em]", tone === "positive" ? "text-green-positive" : "text-red-negative")}>
+        {value}
+      </p>
+      <p className={cn("mt-2 text-sm", tone === "positive" ? "text-green-positive" : "text-red-negative")}>{detail}</p>
+    </div>
+  );
+}
+
+function ActionButton({
+  icon,
+  label,
+  tone,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  tone: "amber" | "green" | "orange";
+  onClick: () => void;
+}) {
+  const styles = {
+    amber: "bg-amber-500/12 text-amber-300",
+    green: "bg-emerald-500/12 text-emerald-300",
+    orange: "bg-orange-500/12 text-orange-300",
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex h-full min-h-[74px] w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl text-center transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a78bfa]/50"
+    >
+      <span className={cn("flex size-8 items-center justify-center rounded-full transition-transform group-hover:scale-105", styles[tone])}>
+        {icon}
+      </span>
+      <span className="text-xs font-medium leading-tight text-white/84">{label}</span>
+    </button>
+  );
+}
+
+function ReturnRow({
+  icon,
+  label,
+  value,
+  detail,
+  positive,
+  highlight,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  detail: string;
+  positive: boolean;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] px-3.5 py-2.5",
+        highlight ? "bg-green-positive/18 text-green-200" : "bg-[var(--surface-card-hover)]"
+      )}
+    >
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <span className="text-white/82" aria-hidden="true">{icon}</span>
+        <span>{label}</span>
+      </div>
+      <div className={cn("text-right text-sm font-semibold tabular-nums", positive ? "text-green-positive" : "text-red-negative")}>
+        <p>{value}</p>
+        {detail && <p className="text-xs">{detail}</p>}
       </div>
     </div>
   );

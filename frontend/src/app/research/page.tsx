@@ -5,15 +5,19 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Lock, Radio, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
-import type { ResearchDepth, ResearchSourceSurface } from "@/lib/api";
+import type { ResearchDepth, ResearchReportType, ResearchSourceSurface } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { ResearchDepthSelector, normalizeResearchTicker } from "@/components/equity-research/ResearchComponents";
+import { ResearchDepthSelector, ResearchReportTypeSelector, canUseTradingReports, normalizeResearchTicker } from "@/components/equity-research/ResearchComponents";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 
 function sourceFromQuery(value: string | null): ResearchSourceSurface {
   if (value === "intro-demo") return "introduction";
   if (value === "market" || value === "ai_advisor" || value === "shared" || value === "introduction") return value;
   return "research";
+}
+
+function reportTypeFromQuery(value: string | null): ResearchReportType {
+  return value === "trading" ? "trading" : "investment";
 }
 
 function researchRunHref(runId: string, source: ResearchSourceSurface) {
@@ -25,23 +29,34 @@ function ResearchLandingContent() {
   const params = useSearchParams();
   const { user } = useAuth();
   const tickerInputRef = useRef<HTMLInputElement>(null);
+  const autoStartedRef = useRef(false);
   const initialTicker = normalizeResearchTicker(params.get("ticker") ?? "");
   const source = sourceFromQuery(params.get("source"));
+  const initialReportType = reportTypeFromQuery(params.get("report_type"));
   const [ticker, setTicker] = useState(initialTicker);
+  const [reportType, setReportType] = useState<ResearchReportType>(initialReportType);
   const [depth, setDepth] = useState<ResearchDepth>("shallow");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const autoStart = useMemo(() => Boolean(initialTicker && params.get("source")), [initialTicker, params]);
   const isGuest = Boolean(user.is_guest);
+  const canUseTrading = canUseTradingReports(user.plan);
   const currentPath = `/research${params.toString() ? `?${params.toString()}` : ""}`;
   const loginHref = `/login?next=${encodeURIComponent(currentPath)}`;
 
   useEffect(() => {
+    if (!canUseTrading && reportType === "trading") setReportType("investment");
+  }, [canUseTrading, reportType]);
+
+  useEffect(() => {
     if (!autoStart) return;
+    if (autoStartedRef.current) return;
+    autoStartedRef.current = true;
     let cancelled = false;
     setLoading(true);
     api.createEquityResearchRun({
       ticker: initialTicker,
+      report_type: canUseTrading ? reportType : "investment",
       source_surface: source,
       research_depth: depth,
     }).then((run) => {
@@ -54,7 +69,7 @@ function ResearchLandingContent() {
     return () => {
       cancelled = true;
     };
-  }, [autoStart, depth, initialTicker, router, source]);
+  }, [autoStart, canUseTrading, depth, initialTicker, reportType, router, source]);
 
   const start = async (value = ticker) => {
     const normalized = normalizeResearchTicker(value);
@@ -64,6 +79,7 @@ function ResearchLandingContent() {
     try {
       const run = await api.createEquityResearchRun({
         ticker: normalized,
+        report_type: canUseTrading ? reportType : "investment",
         source_surface: source,
         research_depth: user.is_guest ? "shallow" : depth,
       });
@@ -78,7 +94,7 @@ function ResearchLandingContent() {
   return (
     <main className="min-h-screen bg-[#06080d] px-4 py-6 text-white sm:px-8">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-        <Link href={source === "market" ? "/market" : source === "introduction" ? "/introduction#equity-research-demo" : "/"} className="inline-flex items-center gap-2 text-sm text-white/45 hover:text-white">
+        <Link href={source === "market" ? "/market" : source === "introduction" ? "/#equity-research-demo" : "/"} className="inline-flex items-center gap-2 text-sm text-white/45 hover:text-white">
           <ArrowLeft className="size-4" /> {source === "market" ? "Market" : source === "introduction" ? "Introduction Demo" : "AI Advisor"}
         </Link>
         {isGuest ? (
@@ -94,7 +110,7 @@ function ResearchLandingContent() {
 
       <section className="mx-auto flex min-h-[calc(100vh-8rem)] max-w-5xl flex-col items-center justify-center py-12 text-center">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-primary/25 bg-indigo-primary/10 px-3 py-1 text-xs font-semibold text-indigo-200">
-          <Radio className="size-3.5" /> QuanAd 2.1 Equity Research Desk
+          <Radio className="size-3.5" /> Quanfora 2.1 Equity Research Desk
         </div>
         <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-6xl">What equity would you like to analyze?</h1>
         <p className="mt-5 max-w-2xl text-base leading-7 text-white/58">
@@ -156,6 +172,14 @@ function ResearchLandingContent() {
         ) : null}
 
         <div className="mt-6 w-full max-w-2xl rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 text-left">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-semibold text-indigo-primary">Report type</p>
+            {!canUseTrading && <span className="inline-flex items-center gap-1 text-xs text-white/38"><Lock className="size-3" /> Trading requires Trader</span>}
+          </div>
+          <ResearchReportTypeSelector value={reportType} onChange={setReportType} canUseTrading={canUseTrading} />
+        </div>
+
+        <div className="mt-4 w-full max-w-2xl rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 text-left">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-semibold text-indigo-primary">Research depth</p>
             {isGuest && <span className="inline-flex items-center gap-1 text-xs text-white/38"><Lock className="size-3" /> Guest demo uses shallow</span>}

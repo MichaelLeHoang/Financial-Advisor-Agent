@@ -32,6 +32,19 @@ When a new feature connects to existing behavior, verify both sides of the conne
 
 Do not duplicate existing functionality unless there is a clear reason. If temporary duplication is necessary, document why, keep the boundary explicit, and prefer a follow-up refactor once the correct abstraction is clear.
 
+## Skills Usage
+Use applicable Codex skills before starting specialized work. If the task matches an available skill, read that skill's `SKILL.md` completely and follow its workflow before making changes. This applies even when the request sounds simple, because skill instructions may include required discovery, safety, validation, or asset-handling steps.
+
+Use skills according to their intended scope:
+
+- Use `openai-docs` for OpenAI API, model, Codex, or product documentation questions and for implementation work that depends on current OpenAI behavior.
+- Use `imagegen` for generated or edited raster images, bitmap assets, mockups, textures, sprites, or transparent-background cutouts.
+- Use `skill-creator` when creating or updating Codex skills.
+- Use `skill-installer` or `find-skills` when discovering or installing reusable skills.
+- Use `plugin-creator` when creating or updating Codex plugins.
+
+When multiple skills could apply, choose the smallest set that covers the task, state which skill is being used, and avoid loading unrelated skill references. If no listed skill fits, proceed with normal repository inspection and implementation.
+
 ## Module Documentation
 Each maintained backend package under `backend/src/` has a `README.md` describing its purpose, responsibilities, key files, boundaries, testing, and a `Latest Change` section.
 
@@ -146,3 +159,5 @@ After resolving merge conflicts, rerun the affected tests because conflict resol
 
 ## Security & Configuration Tips
 Copy `.env.example` files instead of committing secrets. Keep API keys, Supabase credentials, Stripe secrets, and ngrok domains out of Git. For database changes, create a new numbered file in `supabase/migrations/` and document required variables in `.env.example`.
+
+For frontend browser storage, never store account-specific data under a global `localStorage` or `sessionStorage` key. Scope saved preferences, selected symbols, drafts, cached user summaries, and guest-only state by authenticated user id or by an explicit `guest` namespace. Lightweight guest market customization may use device-local `localStorage`, but guest research data must be session-scoped with a guest owner token; backend access checks must never treat `user_id = null` as globally readable. When auth identity changes, clear legacy/global account-state keys so one user's local browser state cannot appear in another user's workspace.

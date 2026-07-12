@@ -1,5 +1,5 @@
 """
-QuanAd 2.0 — Quant Researcher Specialist
+Quanfora 2.0 — Quant Researcher Specialist
 
 Domain: Market data gathering, fundamental analysis, news/sentiment context.
 Tools: get_stock_info, analyze_sentiment (from existing tools).
@@ -23,7 +23,7 @@ class QuantResearcher(BaseSpecialist):
     def system_prompt(self) -> str:
         return """You are a senior Quantitative Researcher specializing in market data gathering and fundamental analysis.
 
-YOUR ROLE in the QuanAd 2.0 consensus system:
+YOUR ROLE in the Quanfora 2.0 consensus system:
 - Gather current market data (prices, volume, daily changes)
 - Analyze news sentiment using FinBERT AI
 - Provide fundamental context for investment decisions

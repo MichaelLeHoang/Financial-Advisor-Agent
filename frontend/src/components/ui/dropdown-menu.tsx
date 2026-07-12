@@ -44,7 +44,7 @@ function DropdownMenuContent({
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"
           className={cn(
-            "max-h-[min(34rem,calc(100dvh-1rem))] w-80 overflow-y-auto rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover-strong)] p-2 text-white shadow-[var(--shadow-popover)] outline-none",
+            "max-h-[min(34rem,calc(100dvh-1rem))] w-80 overflow-y-auto rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover-strong)] p-2 text-[var(--text-primary)] shadow-[var(--shadow-popover)] outline-none",
             className
           )}
           {...props}
@@ -62,7 +62,7 @@ function DropdownMenuItem({
     <MenuPrimitive.Item
       data-slot="dropdown-menu-item"
       className={cn(
-        "theme-menu-item flex h-11 w-full cursor-default select-none items-center gap-3 rounded-xl px-3 text-sm text-white/82 outline-none hover:bg-white/[0.055] data-[highlighted]:bg-white/[0.055] data-[highlighted]:text-white",
+        "theme-menu-item flex h-11 w-full cursor-default select-none items-center gap-3 rounded-xl px-3 text-sm text-[var(--text-secondary)] outline-none hover:bg-white/[0.055] hover:text-[var(--text-primary)] data-[highlighted]:bg-white/[0.055] data-[highlighted]:text-[var(--text-primary)]",
         className
       )}
       {...props}
@@ -80,7 +80,7 @@ function DropdownMenuSeparator({ className, ...props }: React.ComponentProps<"di
   return (
     <div
       data-slot="dropdown-menu-separator"
-      className={cn("my-2 h-px bg-white/[0.08]", className)}
+      className={cn("my-2 h-px bg-[var(--theme-border)]", className)}
       {...props}
     />
   )

@@ -103,6 +103,37 @@ def _article_id(title: str, publisher: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
+def _best_thumbnail_url(thumbnail: dict | None) -> str | None:
+    """Choose a usable provider image instead of Yahoo's tiny derived thumbnail."""
+    if not isinstance(thumbnail, dict):
+        return None
+
+    resolutions = thumbnail.get("resolutions", [])
+    if not isinstance(resolutions, list):
+        return None
+
+    candidates: list[tuple[int, str]] = []
+    for resolution in resolutions:
+        if not isinstance(resolution, dict):
+            continue
+        url = resolution.get("url")
+        if not isinstance(url, str) or not url:
+            continue
+
+        width = resolution.get("width")
+        height = resolution.get("height")
+        if not isinstance(width, int) or not isinstance(height, int):
+            width = height = 0
+
+        candidates.append((width * height, url))
+
+    if not candidates:
+        return None
+
+    area, url = max(candidates, key=lambda item: item[0])
+    return url if area >= 300 * 160 else None
+
+
 def _parse_search_news(items: list[dict], category: str) -> list[NewsArticle]:
     """Parse news items returned by yf.Search().news"""
     articles: list[NewsArticle] = []
@@ -114,13 +145,7 @@ def _parse_search_news(items: list[dict], category: str) -> list[NewsArticle]:
         publisher = item.get("publisher", "Unknown")
         link = item.get("link", "")
         pub_date = item.get("providerPublishTime")
-        thumbnail = None
-
-        # Try to extract thumbnail
-        if item.get("thumbnail"):
-            resolutions = item["thumbnail"].get("resolutions", [])
-            if resolutions:
-                thumbnail = resolutions[-1].get("url")
+        thumbnail = _best_thumbnail_url(item.get("thumbnail"))
 
         published_str = None
         if pub_date:
@@ -175,12 +200,7 @@ def _parse_ticker_news(items: list[dict], category: str, ticker_symbol: str) -> 
         summary = content.get("summary", "")
         pub_date = content.get("pubDate")
 
-        thumbnail = None
-        thumb_data = content.get("thumbnail")
-        if isinstance(thumb_data, dict):
-            resolutions = thumb_data.get("resolutions", [])
-            if resolutions:
-                thumbnail = resolutions[-1].get("url")
+        thumbnail = _best_thumbnail_url(content.get("thumbnail"))
 
         published_str = None
         if pub_date:

@@ -79,17 +79,17 @@ export default function PrivacyPage() {
   return (
     <main className="min-h-screen bg-[#06080d] px-6 py-8 text-white">
       <div className="mx-auto max-w-4xl">
-        <Link href="/introduction" className="inline-flex items-center gap-2 text-sm text-white/45 transition-colors hover:text-white">
-          <ArrowLeft className="size-4" /> Back to introduction
+        <Link href="/" className="inline-flex items-center gap-2 text-sm text-white/45 transition-colors hover:text-white">
+          <ArrowLeft className="size-4" /> Back to home
         </Link>
         <header className="mt-10 rounded-3xl border border-white/[0.08] bg-white/[0.035] p-8">
           <div className="flex size-12 items-center justify-center rounded-2xl bg-indigo-primary/14 text-indigo-200 ring-1 ring-indigo-primary/25">
             <Database className="size-6" />
           </div>
           <p className="mt-6 text-xs font-semibold uppercase tracking-widest text-indigo-primary">Privacy Policy</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white">QuanAd Privacy Policy</h1>
+          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white">Quanfora Privacy Policy</h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-white/52">
-            Last updated June 18, 2026. This policy explains how QuanAd collects, uses, shares, and protects information.
+            Last updated June 18, 2026. This policy explains how Quanfora collects, uses, shares, and protects information.
           </p>
           <div className="mt-5 flex items-start gap-3 rounded-2xl border border-indigo-primary/20 bg-indigo-primary/10 p-4 text-sm leading-6 text-indigo-50/78">
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-indigo-primary" />

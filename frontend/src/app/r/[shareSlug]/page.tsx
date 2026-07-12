@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import type { PublicEquityResearchReport } from "@/lib/api";
 import Markdown from "@/components/ui/markdown";
 import { FinalDecisionCard, ReportFileList } from "@/components/equity-research/ResearchComponents";
+import { OverviewCard } from "@/components/ui/overview-card";
 
 export default function SharedResearchReportPage({ params }: { params: Promise<{ shareSlug: string }> }) {
   const { shareSlug } = use(params);
@@ -36,7 +37,7 @@ export default function SharedResearchReportPage({ params }: { params: Promise<{
     <main className="min-h-screen bg-[#06080d] px-4 py-5 text-white sm:px-8">
       <div className="mx-auto max-w-5xl">
         <Link href="/research" className="mb-5 inline-flex items-center gap-2 text-sm text-white/45 hover:text-white">
-          <ArrowLeft className="size-4" /> QuanAd Research Desk
+          <ArrowLeft className="size-4" /> Quanfora Research Desk
         </Link>
         {error ? (
           <div className="rounded-2xl border border-red-negative/30 bg-red-negative/10 p-5 text-red-negative">{error}</div>
@@ -45,7 +46,8 @@ export default function SharedResearchReportPage({ params }: { params: Promise<{
         ) : (
           <div className="space-y-4">
             <FinalDecisionCard run={data.run} />
-            <ReportFileList reports={data.reports} selectedAgent={selected} onSelectAgent={setSelected} />
+            {data.overview && <OverviewCard overview={data.overview} />}
+            <ReportFileList run={data.run} reports={data.reports} selectedAgent={selected} onSelectAgent={setSelected} />
             <article className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5">
               <Markdown content={report?.markdown ?? "No public report content is available."} />
             </article>

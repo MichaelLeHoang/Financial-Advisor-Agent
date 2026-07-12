@@ -9,7 +9,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 
 function returnTarget(from: string | null) {
   if (from === "market") return { href: "/market", label: "Market" };
-  if (from === "introduction" || from === "intro-demo") return { href: "/introduction#equity-research-demo", label: "Introduction Demo" };
+  if (from === "introduction" || from === "intro-demo") return { href: "/#equity-research-demo", label: "Introduction Demo" };
   if (from === "ai_advisor") return { href: "/", label: "AI Advisor" };
   return { href: "/research", label: "Research Desk" };
 }
@@ -43,7 +43,7 @@ export default function ResearchRunPage({ params }: { params: Promise<{ runId: s
             </Link>
           ) : null}
           <div className="rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1 text-xs font-semibold text-white/50">
-            QuanAd 2.1
+            Quanfora 2.1
           </div>
         </div>
       </div>

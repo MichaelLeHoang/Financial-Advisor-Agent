@@ -20,4 +20,4 @@ Jobs coordinate existing services; they should not duplicate ingestion, notifica
 Unit-test function delegation with mocked services. Use integration tests only when intentionally exercising Inngest, Redis, or external providers.
 
 ## Latest Change
-- Added the background worker entry point for Redis-backed single-agent and consensus chat jobs.
+- Updated the queued LLM worker startup message to use Quanfora branding.

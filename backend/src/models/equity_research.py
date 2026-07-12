@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.models.overview import Overview
 
 DISCLAIMER = "Not investment advice. For educational and informational use only."
 
@@ -16,6 +17,11 @@ class ResearchDepth(str, Enum):
     SHALLOW = "shallow"
     MEDIUM = "medium"
     DEEP = "deep"
+
+
+class ReportType(str, Enum):
+    INVESTMENT = "investment"
+    TRADING = "trading"
 
 
 class SourceSurface(str, Enum):
@@ -49,6 +55,22 @@ class Recommendation(str, Enum):
     INSUFFICIENT_DATA = "insufficient_data"
 
 
+class InvestmentDecision(str, Enum):
+    STRONG_BUY = "strong_buy"
+    BUY = "buy"
+    HOLD = "hold"
+    WATCHLIST = "watchlist"
+    REDUCE = "reduce"
+    SELL = "sell"
+    AVOID = "avoid"
+
+
+class TradingBias(str, Enum):
+    BULLISH = "bullish"
+    NEUTRAL = "neutral"
+    BEARISH = "bearish"
+
+
 class ResearchEventType(str, Enum):
     REASONING = "reasoning"
     TOOL = "tool"
@@ -71,7 +93,10 @@ class EvidenceReference(BaseModel):
 class EquityResearchRunCreate(BaseModel):
     ticker: str = Field(min_length=1, max_length=20)
     analysis_date: date | None = None
-    selected_analysts: list[AnalystKey] = Field(default_factory=lambda: ["market", "social", "news", "fundamentals"])
+    report_type: ReportType = ReportType.INVESTMENT
+    selected_analysts: list[AnalystKey] = Field(
+        default_factory=lambda: ["market", "social", "news", "fundamentals"]
+    )
     research_depth: ResearchDepth = ResearchDepth.SHALLOW
     quick_model: str = "default-fast"
     deep_model: str = "default-research"
@@ -156,16 +181,56 @@ class EquityResearchEvent(BaseModel):
     token_output: int | None = None
 
 
+class DecisionWorkspaceMetric(BaseModel):
+    label: str
+    value: str
+    tone: Literal["positive", "neutral", "negative", "info"] = "neutral"
+
+
+class DecisionWorkspaceSection(BaseModel):
+    summary: str
+    metrics: list[DecisionWorkspaceMetric] = Field(default_factory=list)
+    bullets: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class DecisionWorkspaceBacktest(BaseModel):
+    summary: str
+    assumptions: list[str] = Field(default_factory=list)
+    metrics: list[DecisionWorkspaceMetric] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class DecisionWorkspaceNextStep(BaseModel):
+    label: str
+    detail: str
+    trigger: str | None = None
+
+
+class DecisionWorkspace(BaseModel):
+    overview: DecisionWorkspaceSection
+    evidence: DecisionWorkspaceSection
+    signals: DecisionWorkspaceSection
+    backtest: DecisionWorkspaceBacktest
+    regime: DecisionWorkspaceSection
+    agent_debate: DecisionWorkspaceSection
+    next_steps: list[DecisionWorkspaceNextStep] = Field(default_factory=list)
+
+
 class EquityResearchRun(BaseModel):
     run_id: UUID = Field(default_factory=uuid4)
     user_id: UUID | None = None
+    guest_owner_id: str | None = Field(default=None, exclude=True)
     ticker: str
     company_name: str | None = None
     exchange: str | None = None
     analysis_date: date
     status: ResearchRunStatus = ResearchRunStatus.QUEUED
     recommendation: Recommendation = Recommendation.INSUFFICIENT_DATA
+    investment_decision: InvestmentDecision | None = None
+    trading_bias: TradingBias | None = None
     confidence: float = Field(ge=0, le=1, default=0)
+    report_type: ReportType = ReportType.INVESTMENT
     research_depth: ResearchDepth = ResearchDepth.SHALLOW
     selected_analysts: list[str] = Field(default_factory=list)
     quick_model: str = "default-fast"
@@ -188,6 +253,8 @@ class EquityResearchRunDetail(BaseModel):
     snapshot: EquityResearchSnapshot | None = None
     reports: list[EquityResearchReport] = Field(default_factory=list)
     latest_events: list[EquityResearchEvent] = Field(default_factory=list)
+    decision_workspace: DecisionWorkspace | None = None
+    overview: Overview | None = None
 
 
 class EquityResearchShareUpdate(BaseModel):
@@ -198,3 +265,5 @@ class PublicEquityResearchReport(BaseModel):
     run: EquityResearchRun
     reports: list[EquityResearchReport]
     snapshot: EquityResearchSnapshot | None = None
+    decision_workspace: DecisionWorkspace | None = None
+    overview: Overview | None = None

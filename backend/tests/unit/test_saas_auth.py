@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 from pydantic import SecretStr
+from fastapi.security import HTTPAuthorizationCredentials
 
 
 def _b64url(value: bytes) -> str:
@@ -108,3 +109,54 @@ def test_optional_auth_returns_guest_without_token():
     assert user.id == GUEST_USER_ID
     assert user.plan == "free"
     assert user.is_guest is True
+
+
+def test_editable_jwt_metadata_cannot_grant_paid_plan(monkeypatch):
+    from src.auth import supabase
+    from src.auth.supabase import get_current_user
+    from src.saas import repository
+
+    user_id = uuid4()
+    token = _sign(
+        {
+            "sub": str(user_id),
+            "exp": int(time.time()) + 3600,
+            "user_metadata": {"plan": "quant"},
+        }
+    )
+    monkeypatch.setattr(supabase.settings, "supabase_jwt_secret", SecretStr("test-secret"))
+    monkeypatch.setattr(repository, "get_store", lambda _user=None: (_ for _ in ()).throw(RuntimeError("store unavailable")))
+
+    user = asyncio.run(
+        get_current_user(HTTPAuthorizationCredentials(scheme="Bearer", credentials=token))
+    )
+
+    assert user.plan == "free"
+
+
+def test_active_server_subscription_overrides_untrusted_claims(monkeypatch):
+    from src.auth import supabase
+    from src.auth.supabase import get_current_user
+    from src.saas import repository
+    from src.saas.models import Plan
+
+    class SubscriptionStore:
+        def get_user_plan(self, _user_id):
+            return Plan.PRO
+
+    user_id = uuid4()
+    token = _sign(
+        {
+            "sub": str(user_id),
+            "exp": int(time.time()) + 3600,
+            "user_metadata": {"plan": "quant"},
+        }
+    )
+    monkeypatch.setattr(supabase.settings, "supabase_jwt_secret", SecretStr("test-secret"))
+    monkeypatch.setattr(repository, "get_store", lambda _user=None: SubscriptionStore())
+
+    user = asyncio.run(
+        get_current_user(HTTPAuthorizationCredentials(scheme="Bearer", credentials=token))
+    )
+
+    assert user.plan == "pro"

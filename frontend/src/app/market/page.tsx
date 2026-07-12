@@ -29,24 +29,16 @@ import { motion } from "motion/react";
 import {
     Area,
     AreaChart,
-    Bar,
-    CartesianGrid,
-    ComposedChart,
-    Line,
-    ReferenceDot,
-    ReferenceLine,
     ResponsiveContainer,
     Tooltip,
-    XAxis,
-    YAxis,
 } from "recharts";
 import { cn } from "@/lib/utils";
-import { api, type EarningsPoint, type MarketQuote, type QuarterlyFinancial, type ResearchDepth } from "@/lib/api";
+import { api, type EarningsPoint, type MarketQuote, type QuarterlyFinancial, type ResearchDepth, type ResearchReportType } from "@/lib/api";
 import { fetchQuote as fetchCachedQuote, fetchQuotes as fetchCachedQuotes, invalidate as invalidateQuote } from "@/lib/quote-cache";
+import { useAuth } from "@/components/auth/AuthProvider";
 import {
     CHART_RANGES,
     DEFAULT_MARKET_TICKERS,
-    createMarketSeries,
     createMarketSymbol,
     normalizeTicker,
     searchMarketSymbols,
@@ -54,7 +46,7 @@ import {
     type MarketPoint,
     type MarketSymbol,
 } from "@/lib/market-data";
-import FinanceOhlcLayer from "@/components/market/FinanceOhlcLayer";
+import InteractiveMarketChart from "@/components/market/InteractiveMarketChart";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -75,10 +67,11 @@ import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { showToast } from "@/components/ui/toast";
-import { ResearchDepthSelector } from "@/components/equity-research/ResearchComponents";
+import { ResearchDepthSelector, ResearchReportTypeSelector, canUseTradingReports } from "@/components/equity-research/ResearchComponents";
 
 interface StockInfo extends MarketSymbol {
     data: MarketPoint[];
+    hasQuote?: boolean;
     loading?: boolean;
     currency?: string | null;
     openPrice?: number | null;
@@ -124,6 +117,7 @@ interface DetailChartPoint extends MarketPoint {
 }
 
 const MARKET_STOCKS_STORAGE_KEY = "market.savedStocks";
+const MARKET_SKIP_REMOVE_CONFIRM_STORAGE_KEY = "market.skipRemoveConfirm";
 const CHART_DETAIL_RANGES: MarketChartRange[] = ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "MAX"];
 const DEFAULT_MARKET_RANGE: ChartRange = "1M";
 const COMPARE_COLORS = ["#34d399", "#818cf8", "#22d3ee", "#fbbf24", "#f472b6"];
@@ -134,16 +128,22 @@ const CHART_STYLE_LABELS: Record<DetailChartStyle, string> = {
     bar: "Bar",
 };
 
-function createStock(ticker: string): StockInfo {
+function createPendingStock(ticker: string): StockInfo {
     const symbol = createMarketSymbol(ticker);
     return {
         ...symbol,
-        data: createMarketSeries(symbol, DEFAULT_MARKET_RANGE),
+        price: 0,
+        change: 0,
+        data: [],
+        hasQuote: false,
+        loading: true,
     };
 }
 
 function quoteToStock(quote: MarketQuote, fallback?: StockInfo): StockInfo {
-    const history = quote.history.length > 0 ? quote.history : fallback?.data ?? createMarketSeries(createMarketSymbol(quote.ticker), DEFAULT_MARKET_RANGE);
+    const history = quote.history.length > 0
+        ? quote.history
+        : [{ label: "Latest", price: quote.price, volume: quote.volume ?? 0 }];
     return {
         ticker: quote.ticker,
         name: quote.name || fallback?.name || quote.ticker,
@@ -164,6 +164,7 @@ function quoteToStock(quote: MarketQuote, fallback?: StockInfo): StockInfo {
         dividendRate: quote.dividend_rate,
         quarterlyDividendAmount: quote.quarterly_dividend_amount,
         data: history,
+        hasQuote: true,
         earnings: quote.earnings,
         quarterlyFinancials: quote.quarterly_financials,
     };
@@ -191,9 +192,14 @@ function rangeRefreshMs(range: MarketChartRange): number | null {
     return null;
 }
 
-function readSavedMarketStocks(): string[] | null {
+function marketStorageKey(baseKey: string, scope: string): string {
+    return `${baseKey}.${scope.replace(/[^a-zA-Z0-9:_-]/g, "_")}`;
+}
+
+function readSavedMarketStocks(scope: string): string[] | null {
     try {
-        const raw = window.localStorage.getItem(MARKET_STOCKS_STORAGE_KEY);
+        window.localStorage.removeItem(MARKET_STOCKS_STORAGE_KEY);
+        const raw = window.localStorage.getItem(marketStorageKey(MARKET_STOCKS_STORAGE_KEY, scope));
         if (raw === null) return null;
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) return null;
@@ -243,15 +249,6 @@ function calculateSeriesChange(series: MarketPoint[], fallbackChange = 0): numbe
     const last = series[series.length - 1]?.price;
     if (!Number.isFinite(first) || !Number.isFinite(last) || first === 0) return fallbackChange;
     return performanceFrom(first, last);
-}
-
-function domainWithPadding(values: number[]): [number, number] {
-    const finite = values.filter((value) => Number.isFinite(value));
-    if (finite.length === 0) return [0, 1];
-    const min = Math.min(...finite);
-    const max = Math.max(...finite);
-    const padding = Math.max((max - min) * 0.12, Math.abs(max || min || 1) * 0.01);
-    return [min - padding, max + padding];
 }
 
 function compareKey(symbol: string, suffix: "price" | "performance"): string {
@@ -324,9 +321,11 @@ function DetailChartTooltip({
 
 export default function MarketPage() {
     const router = useRouter();
+    const { user, loading: authLoading } = useAuth();
+    const canUseTradingResearch = canUseTradingReports(user.plan);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const marketTopRef = useRef<HTMLDivElement>(null);
-    const [stocks, setStocks] = useState<StockInfo[]>(() => DEFAULT_MARKET_TICKERS.map(createStock));
+    const [stocks, setStocks] = useState<StockInfo[]>(() => DEFAULT_MARKET_TICKERS.map(createPendingStock));
     const [query, setQuery] = useState("");
     const [searchOpen, setSearchOpen] = useState(false);
     const [symbolMatches, setSymbolMatches] = useState<MarketSymbol[]>([]);
@@ -341,9 +340,14 @@ export default function MarketPage() {
     const [skipRemoveConfirm, setSkipRemoveConfirm] = useState(false);
     const [skipRemoveConfirmDraft, setSkipRemoveConfirmDraft] = useState(false);
     const [researchStock, setResearchStock] = useState<StockInfo | null>(null);
+    const [researchReportType, setResearchReportType] = useState<ResearchReportType>("investment");
     const [researchDepth, setResearchDepth] = useState<ResearchDepth>("shallow");
     const [researchStarting, setResearchStarting] = useState(false);
     const [researchError, setResearchError] = useState<string | null>(null);
+    const marketStorageScope = useMemo(() => {
+        if (authLoading) return null;
+        return user.is_guest ? "guest" : `user:${user.id}`;
+    }, [authLoading, user.id, user.is_guest]);
 
     const localMatches = useMemo(() => searchMarketSymbols(query), [query]);
     const matches = useMemo(
@@ -351,13 +355,18 @@ export default function MarketPage() {
         [localMatches, symbolMatches]
     );
     useEffect(() => {
-        const saved = readSavedMarketStocks();
+        if (!marketStorageScope) return;
+        setMounted(false);
+        const saved = readSavedMarketStocks(marketStorageScope);
         if (saved !== null) {
-            setStocks(saved.map(createStock));
+            setStocks(saved.map(createPendingStock));
+        } else {
+            setStocks(DEFAULT_MARKET_TICKERS.map(createPendingStock));
         }
-        setSkipRemoveConfirm(window.localStorage.getItem("market.skipRemoveConfirm") === "true");
+        window.localStorage.removeItem(MARKET_SKIP_REMOVE_CONFIRM_STORAGE_KEY);
+        setSkipRemoveConfirm(window.localStorage.getItem(marketStorageKey(MARKET_SKIP_REMOVE_CONFIRM_STORAGE_KEY, marketStorageScope)) === "true");
         setMounted(true);
-    }, []);
+    }, [marketStorageScope]);
 
     useEffect(() => {
         if (!mounted) return;
@@ -366,9 +375,12 @@ export default function MarketPage() {
     }, [mounted]);
 
     useEffect(() => {
-        if (!mounted) return;
-        window.localStorage.setItem(MARKET_STOCKS_STORAGE_KEY, JSON.stringify(stocks.map((stock) => stock.ticker)));
-    }, [mounted, stocks]);
+        if (!mounted || !marketStorageScope) return;
+        window.localStorage.setItem(
+            marketStorageKey(MARKET_STOCKS_STORAGE_KEY, marketStorageScope),
+            JSON.stringify(stocks.map((stock) => stock.ticker))
+        );
+    }, [marketStorageScope, mounted, stocks]);
 
     useEffect(() => {
         const normalized = query.trim();
@@ -442,7 +454,7 @@ export default function MarketPage() {
             return;
         }
 
-        setStocks((current) => [{ ...createStock(ticker), loading: true }, ...current]);
+        setStocks((current) => [createPendingStock(ticker), ...current]);
         setQuery("");
         setSearchOpen(false);
 
@@ -473,6 +485,11 @@ export default function MarketPage() {
     const removeTicker = (ticker: string) => {
         setStocks((current) => current.filter((stock) => stock.ticker !== ticker));
         setSelectedStock((current) => current?.ticker === ticker ? null : current);
+        showToast({
+            title: "Market card deleted",
+            message: `${ticker} was removed from Market.`,
+            variant: "success",
+        });
     };
 
     const requestRemoveTicker = (stock: StockInfo) => {
@@ -487,7 +504,9 @@ export default function MarketPage() {
     const confirmRemoveTicker = () => {
         if (!pendingRemoval) return;
         if (skipRemoveConfirmDraft) {
-            window.localStorage.setItem("market.skipRemoveConfirm", "true");
+            if (marketStorageScope) {
+                window.localStorage.setItem(marketStorageKey(MARKET_SKIP_REMOVE_CONFIRM_STORAGE_KEY, marketStorageScope), "true");
+            }
             setSkipRemoveConfirm(true);
         }
         removeTicker(pendingRemoval.ticker);
@@ -497,7 +516,7 @@ export default function MarketPage() {
     const openChartForTicker = (ticker: string) => {
         const normalized = normalizeTicker(ticker);
         const existing = stocks.find((stock) => stock.ticker === normalized);
-        const next = existing ?? createStock(normalized);
+        const next = existing ?? createPendingStock(normalized);
         setSelectedStock(next);
         setSelectedRange(DEFAULT_MARKET_RANGE);
         setChartStyle("area");
@@ -540,6 +559,7 @@ export default function MarketPage() {
         try {
             const run = await api.createEquityResearchRun({
                 ticker: researchStock.ticker,
+                report_type: canUseTradingResearch ? researchReportType : "investment",
                 source_surface: "market",
                 research_depth: researchDepth,
             });
@@ -552,18 +572,39 @@ export default function MarketPage() {
         }
     };
 
-    const refresh = async () => {
-        if (stocks.length === 0) return;
+    const refresh = async (targetStocks: StockInfo[] = stocks) => {
+        if (targetStocks.length === 0) return;
         setLoading(true);
-        setStocks((current) => current.map((stock) => ({ ...stock, loading: true })));
+        const targetTickers = new Set(targetStocks.map((stock) => stock.ticker));
+        setStocks((current) => current.map((stock) => targetTickers.has(stock.ticker) ? { ...stock, loading: true } : stock));
         const [period, interval] = quotePeriod(DEFAULT_MARKET_RANGE);
-        const quoteMap = await fetchCachedQuotes(stocks.map((stock) => stock.ticker), period, interval);
-        const updated = stocks.map((stock) => {
-            const quote = quoteMap.get(stock.ticker.toUpperCase());
-            return quote ? quoteToStock(quote, stock) : { ...stock, loading: false };
-        });
-        setStocks(updated);
-        setLoading(false);
+        try {
+            const quoteMap = await fetchCachedQuotes(targetStocks.map((stock) => stock.ticker), period, interval);
+            const updated = targetStocks.map((stock) => {
+                const quote = quoteMap.get(stock.ticker.toUpperCase());
+                return quote ? quoteToStock(quote, stock) : { ...stock, loading: false };
+            });
+            setStocks((current) => {
+                const updatedByTicker = new Map(updated.map((stock) => [stock.ticker, stock]));
+                return current.map((stock) => updatedByTicker.get(stock.ticker) ?? stock);
+            });
+            if (quoteMap.size === 0) {
+                showToast({
+                    title: "Market data unavailable",
+                    message: "The quote service did not return live market data. Showing the last local chart fallback.",
+                    variant: "warning",
+                });
+            }
+        } catch {
+            setStocks((current) => current.map((stock) => ({ ...stock, loading: false })));
+            showToast({
+                title: "Market data unavailable",
+                message: "The quote request timed out or failed. Try refreshing again in a moment.",
+                variant: "warning",
+            });
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -589,7 +630,7 @@ export default function MarketPage() {
                             onPreview={openChartForTicker}
                         />
                         <Button
-                            onClick={refresh}
+                            onClick={() => void refresh()}
                             disabled={loading || stocks.length === 0}
                             size="icon"
                             variant="outline"
@@ -606,7 +647,9 @@ export default function MarketPage() {
                             variant="outline"
                             className="rounded-xl"
                             onClick={() => {
-                                setStocks(DEFAULT_MARKET_TICKERS.map(createStock));
+                                const defaults = DEFAULT_MARKET_TICKERS.map(createPendingStock);
+                                setStocks(defaults);
+                                void refresh(defaults);
                             }}
                         >
                             Restore defaults
@@ -681,6 +724,9 @@ export default function MarketPage() {
             />
             <MarketResearchDrawer
                 stock={researchStock}
+                reportType={researchReportType}
+                onReportTypeChange={setResearchReportType}
+                canUseTrading={canUseTradingResearch}
                 depth={researchDepth}
                 onDepthChange={setResearchDepth}
                 starting={researchStarting}
@@ -867,6 +913,7 @@ function MarketCard({
     onRequestRemove: () => void;
 }) {
     const up = stock.change >= 0;
+    const hasQuote = Boolean(stock.hasQuote);
 
     return (
         <motion.div whileHover={{ y: -5 }} className="group">
@@ -886,16 +933,22 @@ function MarketCard({
                             <p className="truncate text-sm text-white/40">{stock.name}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                            <Badge
-                                variant="outline"
-                                className={cn(
-                                    "h-6 rounded-lg border-transparent gap-1",
-                                    up ? "bg-green-positive/20 text-green-positive" : "bg-red-negative/20 text-red-negative"
-                                )}
-                            >
-                                {up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-                                {formatChange(stock.change)}
-                            </Badge>
+                            {hasQuote ? (
+                                <Badge
+                                    variant="outline"
+                                    className={cn(
+                                        "h-6 rounded-lg border-transparent gap-1",
+                                        up ? "bg-green-positive/20 text-green-positive" : "bg-red-negative/20 text-red-negative"
+                                    )}
+                                >
+                                    {up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+                                    {formatChange(stock.change)}
+                                </Badge>
+                            ) : (
+                                <Badge variant="outline" className="h-6 rounded-lg border-white/[0.08] bg-white/[0.04] text-white/38">
+                                    {stock.loading ? "Loading" : "No quote"}
+                                </Badge>
+                            )}
                             <button
                                 type="button"
                                 className="group inline-flex size-8 items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
@@ -918,14 +971,22 @@ function MarketCard({
 
                     <div className="mb-6 flex items-end justify-between gap-3">
                         <div>
-                            <div className="text-3xl font-bold">{formatCurrency(stock.price)}</div>
-                            <div className="mt-1 text-xs text-white/35">{stock.loading ? "Updating..." : `${stock.exchange} · ${stock.sector}`}</div>
+                            <div className="text-3xl font-bold">{hasQuote ? formatCurrency(stock.price) : "—"}</div>
+                            <div className="mt-1 text-xs text-white/35">
+                                {stock.loading ? "Loading live quote..." : hasQuote ? `${stock.exchange} · ${stock.sector}` : "Live quote unavailable"}
+                            </div>
                         </div>
                         <Maximize2 className="size-4 text-white/30 transition-colors group-hover:text-white/70" />
                     </div>
 
                     <div className="h-24 min-h-24 w-full min-w-0">
-                        {mounted ? <MiniChart stock={stock} /> : <div className="h-full w-full rounded-xl bg-white/[0.035]" />}
+                        {mounted && hasQuote && stock.data.length > 0 ? (
+                            <MiniChart stock={stock} />
+                        ) : (
+                            <div className="flex h-full w-full items-center justify-center rounded-xl bg-white/[0.035] text-xs text-white/30">
+                                {stock.loading ? "Loading chart..." : "No live chart"}
+                            </div>
+                        )}
                     </div>
                     <button
                         type="button"
@@ -946,6 +1007,9 @@ function MarketCard({
 
 function MarketResearchDrawer({
     stock,
+    reportType,
+    onReportTypeChange,
+    canUseTrading,
     depth,
     onDepthChange,
     starting,
@@ -954,6 +1018,9 @@ function MarketResearchDrawer({
     onClose,
 }: {
     stock: StockInfo | null;
+    reportType: ResearchReportType;
+    onReportTypeChange: (type: ResearchReportType) => void;
+    canUseTrading: boolean;
     depth: ResearchDepth;
     onDepthChange: (depth: ResearchDepth) => void;
     starting: boolean;
@@ -970,7 +1037,7 @@ function MarketResearchDrawer({
             >
                 <div className="mb-5 flex items-start justify-between gap-3">
                     <div>
-                        <p className="text-xs font-semibold uppercase tracking-widest text-indigo-200">QuanAd 2.1</p>
+                        <p className="text-xs font-semibold uppercase tracking-widest text-indigo-200">Quanfora 2.1</p>
                         <h2 className="mt-1 text-xl font-semibold text-white">Equity Research Desk</h2>
                         <p className="mt-1 text-sm text-white/48">{stock.ticker} · {stock.name}</p>
                     </div>
@@ -988,6 +1055,10 @@ function MarketResearchDrawer({
                     <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4">
                         <p className="text-xs font-semibold uppercase tracking-widest text-white/35">Analysis Date</p>
                         <p className="mt-1 text-sm font-semibold text-white">{new Date().toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-white/35">Report Type</p>
+                        <ResearchReportTypeSelector value={reportType} onChange={onReportTypeChange} canUseTrading={canUseTrading} />
                     </div>
                     <div>
                         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-white/35">Research Depth</p>
@@ -1190,6 +1261,11 @@ function MarketChartDialog({
         () => normalizeSymbolList(comparisonSymbols).filter((symbol) => symbol !== stock?.ticker),
         [comparisonSymbols, stock?.ticker]
     );
+    const requestLongerRange = useCallback(() => {
+        const currentIndex = CHART_DETAIL_RANGES.indexOf(range);
+        const nextRange = CHART_DETAIL_RANGES[currentIndex + 1];
+        if (nextRange) onRangeChange(nextRange);
+    }, [onRangeChange, range]);
 
     useEffect(() => {
         if (!stock || activeComparisonSymbols.length === 0) {
@@ -1206,7 +1282,7 @@ function MarketChartDialog({
                 activeComparisonSymbols
                     .map((symbol) => quotes.get(symbol.toUpperCase()))
                     .filter((quote): quote is MarketQuote => Boolean(quote))
-                    .map((quote) => quoteToStock(quote, createStock(quote.ticker)))
+                    .map((quote) => quoteToStock(quote, createPendingStock(quote.ticker)))
             );
             setCompareLoading(false);
         });
@@ -1223,8 +1299,8 @@ function MarketChartDialog({
 
     const series = useMemo(() => {
         if (!detailStock) return [];
-        return detailStock.data.length > 0 ? detailStock.data : createMarketSeries(detailStock, range === "MAX" ? "5Y" : range);
-    }, [detailStock, range]);
+        return detailStock.data;
+    }, [detailStock]);
     const chartData = useMemo(() => {
         return series.map((point, index, history) => ({
             ...pointToDetail(point, history[index - 1]?.price),
@@ -1254,26 +1330,13 @@ function MarketChartDialog({
     }, [chartData, compareQuotes]);
 
     const stats = useMemo(() => createStats(detailStock, series), [detailStock, series]);
-    const chartValues = compareMode
-        ? displayedChartData.flatMap((point) => [
-            point.primaryPerformance,
-            ...compareQuotes.flatMap((compareQuote) => {
-                const value = point[compareKey(compareQuote.ticker, "performance")];
-                return typeof value === "number" ? [value] : [];
-            }),
-        ])
-        : chartStyle === "candle" || chartStyle === "bar"
-            ? displayedChartData.flatMap((point) => [
-                typeof point.high === "number" ? point.high : point.price,
-                typeof point.low === "number" ? point.low : point.price,
-            ])
-            : displayedChartData.map((point) => point.price);
-    const yDomain = domainWithPadding(chartValues);
+    const detailHasQuote = Boolean(detailStock?.hasQuote);
     const activePoint = hoverPoint ?? displayedChartData[displayedChartData.length - 1] ?? null;
-    const activePrice = activePoint?.price ?? detailStock?.price ?? 0;
-    const rangeBaseline = displayedChartData[0]?.price ?? activePrice;
-    const activePercentChange = performanceFrom(rangeBaseline, activePrice);
-    const activeAbsoluteChange = activePrice - rangeBaseline;
+    const activePrice = detailHasQuote ? activePoint?.price ?? detailStock?.price ?? null : null;
+    const activePriceForMath = activePrice ?? 0;
+    const rangeBaseline = displayedChartData[0]?.price ?? activePriceForMath;
+    const activePercentChange = detailHasQuote ? performanceFrom(rangeBaseline, activePriceForMath) : 0;
+    const activeAbsoluteChange = activePriceForMath - rangeBaseline;
     const up = activePercentChange >= 0;
     const color = compareMode ? COMPARE_COLORS[0] : up ? "#34d399" : "#f87171";
     const filteredCompareMatches = useMemo(() => {
@@ -1308,12 +1371,16 @@ function MarketChartDialog({
                                     <DialogDescription>{detailStock.name} · {detailStock.sector}</DialogDescription>
                                 </div>
                                 <div className="text-left lg:text-right">
-                                    <div className="text-2xl font-bold text-white sm:text-3xl">{formatCurrency(activePrice)}</div>
-                                    <div className={cn("mt-1 inline-flex items-center gap-1 text-sm", up ? "text-green-positive" : "text-red-negative")}>
-                                        {activePercentChange >= 0 ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
-                                        {formatChange(activePercentChange)}
-                                        <span className="text-white/42">({activeAbsoluteChange >= 0 ? "+" : "-"}{formatCurrency(Math.abs(activeAbsoluteChange))})</span>
-                                    </div>
+                                    <div className="text-2xl font-bold text-white sm:text-3xl">{activePrice == null ? "—" : formatCurrency(activePrice)}</div>
+                                    {detailHasQuote ? (
+                                        <div className={cn("mt-1 inline-flex items-center gap-1 text-sm", up ? "text-green-positive" : "text-red-negative")}>
+                                            {activePercentChange >= 0 ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
+                                            {formatChange(activePercentChange)}
+                                            <span className="text-white/42">({activeAbsoluteChange >= 0 ? "+" : "-"}{formatCurrency(Math.abs(activeAbsoluteChange))})</span>
+                                        </div>
+                                    ) : (
+                                        <div className="mt-1 text-sm text-white/42">Loading live quote...</div>
+                                    )}
                                 </div>
                             </div>
                         </DialogHeader>
@@ -1437,120 +1504,31 @@ function MarketChartDialog({
                                         </div>
                                         {mounted ? (
                                             <div className="h-[20rem] sm:h-[24rem] lg:h-[28rem]">
-                                                <SafeChartContainer>
-                                                    <ComposedChart
-                                                        data={displayedChartData}
-                                                        margin={{ left: 0, right: 8, top: 12, bottom: 0 }}
-                                                        onMouseMove={(state: unknown) => {
-                                                            const payload = (state as { activePayload?: Array<{ payload?: DetailChartPoint }> })?.activePayload?.[0]?.payload;
-                                                            if (payload) setHoverPoint(payload);
-                                                        }}
-                                                        onMouseLeave={() => setHoverPoint(null)}
-                                                    >
-                                                        <defs>
-                                                            <linearGradient id={`dialog-grad-${detailStock.ticker}`} x1="0" y1="0" x2="0" y2="1">
-                                                                <stop offset="5%" stopColor={color} stopOpacity={0.34} />
-                                                                <stop offset="95%" stopColor={color} stopOpacity={0.02} />
-                                                            </linearGradient>
-                                                        </defs>
-                                                        <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
-                                                        <XAxis
-                                                            dataKey="chartIndex"
-                                                            tickLine={false}
-                                                            axisLine={false}
-                                                            tick={{ fill: "var(--chart-axis)", fontSize: 11 }}
-                                                            minTickGap={range === "1D" ? 16 : 24}
-                                                            tickFormatter={(value) => {
-                                                                const label = displayedChartData[Number(value)]?.label ?? String(value);
-                                                                return range === "1D" ? formatIntradayLabel(label) : label;
-                                                            }}
+                                                <InteractiveMarketChart
+                                                    data={displayedChartData}
+                                                    mode={compareMode ? "line" : chartStyle}
+                                                    color={color}
+                                                    compareMode={compareMode}
+                                                    valueKey={compareMode ? "primaryPerformance" : "price"}
+                                                    compareLines={compareQuotes.map((compareQuote, index) => ({
+                                                        key: compareKey(compareQuote.ticker, "performance"),
+                                                        color: COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length],
+                                                    }))}
+                                                    axisFormatter={(value) => compareMode ? `${value.toFixed(1)}%` : formatAxisPrice(value)}
+                                                    timeFormatter={(label) => range === "1D" ? formatIntradayLabel(label) : label}
+                                                    rangeKey={range}
+                                                    onRequestLongerRange={requestLongerRange}
+                                                    onHover={(point) => setHoverPoint(point)}
+                                                    tooltip={(point) => (
+                                                        <DetailChartTooltip
+                                                            active
+                                                            payload={[{ payload: point }]}
+                                                            primaryTicker={detailStock.ticker}
+                                                            compareQuotes={compareQuotes}
+                                                            compareMode={compareMode}
                                                         />
-                                                        <YAxis
-                                                            yAxisId="price"
-                                                            orientation="right"
-                                                            tickLine={false}
-                                                            axisLine={false}
-                                                            tick={{ fill: "var(--chart-axis)", fontSize: 11 }}
-                                                            width={64}
-                                                            domain={yDomain}
-                                                            tickFormatter={(value) => compareMode ? `${Number(value).toFixed(1)}%` : formatAxisPrice(Number(value))}
-                                                        />
-                                                        <YAxis yAxisId="volume" hide />
-                                                        <Tooltip
-                                                            content={<DetailChartTooltip primaryTicker={detailStock.ticker} compareQuotes={compareQuotes} compareMode={compareMode} />}
-                                                            cursor={{ stroke: "var(--chart-cursor)", strokeWidth: 1 }}
-                                                        />
-                                                        {compareMode && <ReferenceLine yAxisId="price" y={0} stroke="rgba(255,255,255,0.32)" strokeDasharray="4 4" />}
-                                                        {!compareMode && <Bar yAxisId="volume" dataKey="volume" fill="var(--chart-volume)" barSize={6} radius={[4, 4, 0, 0]} />}
-                                                        {chartStyle === "area" && !compareMode && (
-                                                            <Area yAxisId="price" type="monotone" dataKey="price" stroke={color} strokeWidth={2.4} fill={`url(#dialog-grad-${detailStock.ticker})`} dot={false} />
-                                                        )}
-                                                        {chartStyle === "bar" && !compareMode && (
-                                                            <FinanceOhlcLayer
-                                                                data={displayedChartData}
-                                                                mode="bar"
-                                                                yAxisId="price"
-                                                                positiveColor="#34d399"
-                                                                negativeColor="#f87171"
-                                                            />
-                                                        )}
-                                                        {chartStyle === "candle" && !compareMode && (
-                                                            <FinanceOhlcLayer
-                                                                data={displayedChartData}
-                                                                mode="candle"
-                                                                yAxisId="price"
-                                                                positiveColor="#34d399"
-                                                                negativeColor="#f87171"
-                                                            />
-                                                        )}
-                                                        {(chartStyle === "line" || compareMode) && (
-                                                            <Line yAxisId="price" type="monotone" dataKey={compareMode ? "primaryPerformance" : "price"} stroke={color} strokeWidth={2.4} dot={false} />
-                                                        )}
-                                                        {compareMode && compareQuotes.map((compareQuote, index) => (
-                                                            <Line
-                                                                key={compareQuote.ticker}
-                                                                yAxisId="price"
-                                                                type="monotone"
-                                                                dataKey={compareKey(compareQuote.ticker, "performance")}
-                                                                stroke={COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length]}
-                                                                strokeWidth={2.2}
-                                                                dot={false}
-                                                            />
-                                                        ))}
-                                                        {hoverPoint && (
-                                                            <ReferenceDot
-                                                                yAxisId="price"
-                                                                x={hoverPoint.chartIndex}
-                                                                y={compareMode ? hoverPoint.primaryPerformance : hoverPoint.price}
-                                                                r={4.5}
-                                                                fill={color}
-                                                                stroke="#0b0f17"
-                                                                strokeWidth={2}
-                                                                ifOverflow="visible"
-                                                            />
-                                                        )}
-                                                        {compareMode && hoverPoint && compareQuotes.map((compareQuote, index) => {
-                                                            const performance = hoverPoint[compareKey(compareQuote.ticker, "performance")];
-                                                            if (typeof performance !== "number") return null;
-                                                            return (
-                                                                <ReferenceDot
-                                                                    key={`${compareQuote.ticker}-active-dot`}
-                                                                    yAxisId="price"
-                                                                    x={hoverPoint.chartIndex}
-                                                                    y={performance}
-                                                                    r={4}
-                                                                    fill={COMPARE_COLORS[(index + 1) % COMPARE_COLORS.length]}
-                                                                    stroke="#0b0f17"
-                                                                    strokeWidth={2}
-                                                                    ifOverflow="visible"
-                                                                />
-                                                            );
-                                                        })}
-                                                        {loading && (
-                                                            <ReferenceLine yAxisId="price" y={yDomain[1]} label={{ value: "Refreshing...", fill: "rgba(255,255,255,0.42)", fontSize: 11 }} stroke="transparent" />
-                                                        )}
-                                                    </ComposedChart>
-                                                </SafeChartContainer>
+                                                    )}
+                                                />
                                             </div>
                                         ) : (
                                             <div className="h-[20rem] sm:h-[24rem] lg:h-[28rem] rounded-xl bg-white/[0.035]" />
@@ -1761,13 +1739,12 @@ function createStats(stock: StockInfo | null, series: MarketPoint[]) {
     const high = Math.max(...prices);
     const low = Math.min(...prices);
     const volume = stock.volume ?? series.reduce((sum, point) => sum + point.volume, 0);
-    const marketCap = stock.marketCap ?? stock.price * (900000000 + stock.ticker.length * 420000000);
 
     return [
         { label: "Open", value: formatCurrency(stock.openPrice ?? open) },
         { label: "High", value: formatCurrency(stock.dayHigh ?? high) },
         { label: "Low", value: formatCurrency(stock.dayLow ?? low) },
-        { label: "Mkt cap", value: formatLargeNumber(marketCap) },
+        { label: "Mkt cap", value: stock.marketCap == null ? "—" : formatLargeNumber(stock.marketCap) },
         { label: "P/E ratio", value: formatRatio(stock.peRatio) },
         { label: "52-wk high", value: formatCurrency(stock.fiftyTwoWeekHigh ?? high) },
         { label: "Dividend", value: formatPercent(stock.dividendYield) },

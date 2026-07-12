@@ -1,26 +1,43 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import type { Provider } from "@supabase/supabase-js";
-import {
-  ArrowLeft,
-  Zap,
-  Mail,
-  Lock,
-  Eye,
-  EyeOff,
-  LogIn,
-} from "lucide-react";
+import { ChevronDown, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { HighlightPill } from "@/components/ui/highlight-pill";
+import { cn } from "@/lib/utils";
+
+const QUOTES = [
+  {
+    text: "An investment operation is one which, upon thorough analysis, promises safety of principal and an adequate return. Operations not meeting these requirements are speculative.",
+    source: "Benjamin Graham and David Dodd",
+  },
+  {
+    text: "Know your circle of competence, and stick within it. The size of that circle is not very important; knowing its boundaries, however, is vital.",
+    source: "Warren Buffett",
+  },
+  {
+    text: "Most investors are primarily oriented toward return, how much they can make, and pay little attention to risk, how much they can lose.",
+    source: "Seth Klarman",
+  },
+  {
+    text: "The four most dangerous words in investing are: this time it's different.",
+    source: "Sir John Templeton",
+  },
+];
 
 function getSafeNextTarget() {
-  if (typeof window === "undefined") return "/";
+  if (typeof window === "undefined") return "/session";
   const next = new URLSearchParams(window.location.search).get("next");
-  if (!next?.startsWith("/") || next.startsWith("//")) return "/";
+  if (!next?.startsWith("/") || next.startsWith("//")) return "/session";
   const target = new URL(next, window.location.origin);
-  if (target.pathname === "/" && target.searchParams.has("session")) return "/";
+  if (target.pathname === "/" && target.searchParams.has("session")) {
+    const sessionId = target.searchParams.get("session");
+    return sessionId ? `/session/${encodeURIComponent(sessionId)}` : "/session";
+  }
   return `${target.pathname}${target.search}${target.hash}`;
 }
 
@@ -35,6 +52,29 @@ export default function LoginPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<Provider | null>(null);
+  const [otherOptionsOpen, setOtherOptionsOpen] = useState(false);
+  const [quoteIndex, setQuoteIndex] = useState(0);
+
+  useEffect(() => {
+    const previousTheme = document.body.dataset.theme;
+    const lockTheme = () => {
+      document.body.dataset.theme = "Deep Space";
+      document.body.dataset.authThemeLock = "true";
+    };
+
+    lockTheme();
+    const frame = window.requestAnimationFrame(lockTheme);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      delete document.body.dataset.authThemeLock;
+      if (previousTheme) {
+        document.body.dataset.theme = previousTheme;
+      } else {
+        delete document.body.dataset.theme;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!loading && !user.is_guest) {
@@ -42,13 +82,31 @@ export default function LoginPage() {
     }
   }, [loading, router, user.is_guest]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setQuoteIndex((index) => (index + 1) % QUOTES.length);
+    }, 7200);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
   const submitAuth = async (event: FormEvent) => {
     event.preventDefault();
     setFormError(null);
+
+    if (!email.trim()) {
+      setFormError("Enter your email address.");
+      return;
+    }
+    if (!password) {
+      setFormError("Enter your password.");
+      return;
+    }
     if (authMode === "signup" && !policyAccepted) {
       setFormError("Please agree to the Terms of Service and Privacy Policy to create an account.");
       return;
     }
+
     setSubmitting(true);
     try {
       if (authMode === "signin") {
@@ -62,325 +120,317 @@ export default function LoginPage() {
     }
   };
 
-  const goBack = () => {
-    const referrer = document.referrer;
-    const isSameOrigin = referrer && new URL(referrer).origin === window.location.origin;
-    if (isSameOrigin) {
-      router.back();
-    } else {
-      router.push("/introduction");
-    }
-  };
-
   const handleOAuthSignIn = async (provider: Provider) => {
     setFormError(null);
-    if (authMode === "signup" && !policyAccepted) {
-      setFormError("Please agree to the Terms of Service and Privacy Policy before continuing.");
-      return;
-    }
     setOauthLoading(provider);
     try {
       await signInWithOAuth(provider, getSafeNextTarget());
-      // signInWithOAuth redirects to the OAuth provider — we don't reach here
-      // unless there's a client-side error (caught below).
     } catch {
       setOauthLoading(null);
     }
   };
 
+  const activeQuote = QUOTES[quoteIndex];
+  const activeQuoteWords = activeQuote.text.split(" ");
+  const highlightedQuoteWords = Math.ceil(activeQuoteWords.length / 2);
+  const highlightedQuoteText = activeQuoteWords.slice(0, highlightedQuoteWords).join(" ");
+  const mutedQuoteText = activeQuoteWords.slice(highlightedQuoteWords).join(" ");
+
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
-      {/* ── Animated background ── */}
-      <div className="pointer-events-none absolute inset-0 z-0">
-        {/* base gradient */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0a0b14] via-[#0d0f1a] to-[#07080b]" />
-        {/* indigo orb - top */}
-        <motion.div
-          animate={{ scale: [1, 1.15, 1], opacity: [0.25, 0.35, 0.25] }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute left-1/2 top-0 h-[700px] w-[700px] -translate-x-1/2 -translate-y-1/3 rounded-full bg-indigo-600/20 blur-[140px]"
-        />
-        {/* cyan orb - bottom-right */}
-        <motion.div
-          animate={{ scale: [1, 1.1, 1], opacity: [0.15, 0.25, 0.15] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-          className="absolute bottom-0 right-0 h-[500px] w-[500px] translate-x-1/4 translate-y-1/4 rounded-full bg-cyan-500/15 blur-[120px]"
-        />
-        {/* purple orb - left */}
-        <motion.div
-          animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.2, 0.1] }}
-          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 4 }}
-          className="absolute bottom-1/3 left-0 h-[400px] w-[400px] -translate-x-1/3 rounded-full bg-purple-600/12 blur-[100px]"
-        />
-        {/* subtle grid overlay */}
-        <div
-          className="absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px)",
-            backgroundSize: "60px 60px",
-          }}
-        />
-      </div>
-
-      <button
-        type="button"
-        aria-label="Go back"
-        onClick={goBack}
-        className="group absolute left-5 top-5 z-20 flex h-10 w-10 items-center justify-center text-white/42 transition-colors hover:text-white focus:outline-none focus-visible:text-white sm:left-8 sm:top-8"
+    <main className="login-theme-lock flex min-h-screen bg-[#070707] text-white">
+      <Link
+        href="/"
+        aria-label="Quanfora home"
+        className="fixed left-5 top-5 z-30 flex size-9 items-center justify-center rounded-full text-white/78 transition-opacity hover:opacity-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
       >
-        <ArrowLeft className="h-5 w-5 transition-transform duration-200 group-hover:-translate-x-0.5" />
-      </button>
+        <img src="/logo.svg" alt="" className="size-7 object-contain brightness-0 invert" />
+      </Link>
 
-      {/* ── Login card ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 w-full max-w-md"
-      >
-        <div className="rounded-3xl border border-white/[0.08] bg-white/[0.04] p-8 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_32px_80px_rgba(0,0,0,0.5),0_0_60px_rgba(99,102,241,0.08)] backdrop-blur-xl sm:p-10">
-          {/* Logo */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-400 shadow-[0_0_0_1px_rgba(255,255,255,0.14),0_10px_28px_rgba(99,102,241,0.35),inset_0_1px_0_rgba(255,255,255,0.25)]"
-          >
-            <Zap className="h-7 w-7 text-white" />
-          </motion.div>
-
-          {/* Heading */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.15 }}
-            className="mb-8 text-center"
-          >
-            <h1 className="text-2xl font-bold text-white">
-              {authMode === "signin" ? "Welcome back" : "Create account"}
-            </h1>
-            <p className="mt-2 text-sm text-white/40">
-              {authMode === "signin"
-                ? "Sign in to access your financial workspace"
-                : "Start your AI-powered financial journey"}
-            </p>
-          </motion.div>
-
-          {/* Auth mode toggle */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="mb-6 flex rounded-xl bg-white/[0.04] p-1"
-          >
-            <button
-              type="button"
-              onClick={() => setAuthMode("signin")}
-              className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-all duration-200 ${
-                authMode === "signin"
-                  ? "bg-white/[0.1] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
-                  : "text-white/40 hover:text-white/60"
-              }`}
-            >
-              Sign in
-            </button>
-            <button
-              type="button"
-              onClick={() => setAuthMode("signup")}
-              className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-all duration-200 ${
-                authMode === "signup"
-                  ? "bg-white/[0.1] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
-                  : "text-white/40 hover:text-white/60"
-              }`}
-            >
-              Sign up
-            </button>
-          </motion.div>
-
-          {/* Form */}
-          <motion.form
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.25 }}
-            onSubmit={submitAuth}
-            className="space-y-4"
-          >
-            {/* Email */}
-            <div className="relative">
-              <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/25" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email"
-                required
-                className="h-12 w-full rounded-xl border border-white/[0.08] bg-white/[0.04] pl-11 pr-4 text-sm text-white placeholder:text-white/25 outline-none transition-all focus:border-indigo-500/40 focus:bg-white/[0.06] focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)]"
-              />
+      <section className="relative m-2 hidden min-h-[calc(100vh-1rem)] w-[48%] overflow-hidden md:block lg:w-1/2">
+        <img
+          src="/sign-in.webp"
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          aria-hidden="true"
+        />
+        <div className="absolute inset-0 bg-black/18" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_58%_76%,rgba(255,255,255,0.22),transparent_24%),linear-gradient(90deg,rgba(0,0,0,0.72),rgba(0,0,0,0.16)_58%,rgba(255,255,255,0.08))]" />
+        <div className="relative z-10 flex h-full w-full items-center justify-center px-8 text-center xl:px-12">
+          <div className="w-full max-w-[52rem]">
+            <div className="relative h-80 w-full">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeQuote.text}
+                  initial={{ opacity: 0, y: 14, filter: "blur(7px)" }}
+                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, y: -12, filter: "blur(7px)" }}
+                  transition={{ duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
+                  className="absolute inset-x-0 top-1/2 w-full -translate-y-1/2"
+                >
+                  <p
+                    className="mx-auto text-white/44"
+                    style={{
+                      width: "min(100%, 50rem)",
+                      whiteSpace: "normal",
+                      overflowWrap: "normal",
+                      wordBreak: "normal",
+                      fontSize: "clamp(1.2rem, 1.9vw, 2rem)",
+                      lineHeight: 1.52,
+                      letterSpacing: "-0.02em",
+                    }}
+                  >
+                    <span className="text-white">&quot;{highlightedQuoteText}</span>
+                    {mutedQuoteText ? ` ${mutedQuoteText}` : ""}
+                    &quot;
+                  </p>
+                  <p className="mt-8 text-sm text-white/42">{activeQuote.source}</p>
+                </motion.div>
+              </AnimatePresence>
             </div>
-
-            {/* Password */}
-            <div className="relative">
-              <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/25" />
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                required
-                minLength={6}
-                className="h-12 w-full rounded-xl border border-white/[0.08] bg-white/[0.04] pl-11 pr-12 text-sm text-white placeholder:text-white/25 outline-none transition-all focus:border-indigo-500/40 focus:bg-white/[0.06] focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)]"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/25 transition-colors hover:text-white/50"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-
-            {/* Forgot password */}
-            {authMode === "signin" && (
-              <div className="text-right">
-                <button type="button" className="text-xs text-indigo-400/70 transition-colors hover:text-indigo-400">
-                  Forgot password?
-                </button>
-              </div>
-            )}
-
-            {authMode === "signup" && (
-              <label className="flex items-start gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-left">
-                <input
-                  type="checkbox"
-                  checked={policyAccepted}
-                  onChange={(event) => setPolicyAccepted(event.target.checked)}
-                  className="mt-1 size-4 rounded border-white/15 bg-white/5 accent-indigo-500"
-                  aria-describedby="signup-policy-consent"
-                />
-                <span id="signup-policy-consent" className="text-xs leading-5 text-white/48">
-                  I agree to the{" "}
-                  <a href="/terms" target="_blank" rel="noopener noreferrer" className="font-semibold text-indigo-300 transition-colors hover:text-white">
-                    Terms of Service
-                  </a>{" "}
-                  and{" "}
-                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-indigo-300 transition-colors hover:text-white">
-                    Privacy Policy
-                  </a>
-                  .
-                </span>
-              </label>
-            )}
-
-            {/* Error */}
-            {(formError || authError) && (
-              <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{formError || authError}</p>
-            )}
-
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={submitting || (authMode === "signup" && !policyAccepted)}
-              className="group flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 text-sm font-semibold text-white shadow-[0_0_0_1px_rgba(99,102,241,0.5),0_8px_22px_rgba(99,102,241,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] transition-all hover:from-indigo-400 hover:to-indigo-500 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.6),0_14px_36px_rgba(99,102,241,0.35)] active:scale-[0.98] disabled:opacity-50"
-            >
-              {submitting ? (
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              ) : (
-                <>
-                  <LogIn className="h-4 w-4" />
-                  {authMode === "signin" ? "Get Started" : "Create Account"}
-                </>
-              )}
-            </button>
-          </motion.form>
-
-          {/* Divider */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.35 }}
-            className="my-6 flex items-center gap-4"
-          >
-            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
-            <span className="text-xs text-white/25">Or sign in with</span>
-            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
-          </motion.div>
-
-          {/* Social buttons */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="grid grid-cols-3 gap-3"
-          >
-            <SocialButton label="Google" onClick={() => handleOAuthSignIn("google")} disabled={!!oauthLoading} loading={oauthLoading === "google"}>
-              <svg viewBox="0 0 24 24" className="h-5 w-5">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-              </svg>
-            </SocialButton>
-
-            <SocialButton label="Facebook" onClick={() => handleOAuthSignIn("facebook")} disabled={!!oauthLoading} loading={oauthLoading === "facebook"}>
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="#1877F2">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-              </svg>
-            </SocialButton>
-
-            <SocialButton label="Discord" onClick={() => handleOAuthSignIn("discord")} disabled={!!oauthLoading} loading={oauthLoading === "discord"}>
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="#5865F2">
-                <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
-              </svg>
-            </SocialButton>
-          </motion.div>
+          </div>
         </div>
+      </section>
 
-        {/* Back to app link */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6 }}
-          className="mt-6 text-center"
-        >
-          <a
-            href="/"
-            className="text-xs text-white/30 transition-colors hover:text-white/50"
-          >
-            ← Continue as Guest
-          </a>
-        </motion.div>
-      </motion.div>
-    </div>
+      <section className="flex min-h-screen w-full flex-col items-center justify-center px-6 py-10 md:w-[52%] lg:w-1/2 lg:px-12">
+        <div className="flex min-h-[calc(100vh-5rem)] w-full max-w-md flex-col">
+          <div className="flex flex-1 flex-col justify-center">
+            <div className="mb-10 text-center">
+              <h1 className="font-serif text-2xl font-normal tracking-[-0.01em] text-white/90">
+                Welcome to Quanfora
+              </h1>
+              <p className="mt-4 text-sm text-white/42">Sign in or create an account</p>
+            </div>
+
+            <div className="space-y-3">
+              <OAuthButton
+                label="Continue with Google"
+                disabled={Boolean(oauthLoading)}
+                loading={oauthLoading === "google"}
+                onClick={() => handleOAuthSignIn("google")}
+                icon={<GoogleIcon />}
+              />
+              <OAuthButton
+                label="Continue with Discord"
+                disabled={Boolean(oauthLoading)}
+                loading={oauthLoading === "discord"}
+                onClick={() => handleOAuthSignIn("discord")}
+                icon={<DiscordIcon />}
+              />
+            </div>
+
+            <div className="my-8 flex items-center gap-4">
+              <div className="h-px flex-1 bg-white/[0.08]" />
+              <span className="text-sm text-white/38">or</span>
+              <div className="h-px flex-1 bg-white/[0.08]" />
+            </div>
+
+            <button
+              type="button"
+              aria-expanded={otherOptionsOpen}
+              onClick={() => setOtherOptionsOpen((open) => !open)}
+              className="flex h-14 w-full items-center justify-center gap-2 border border-white/[0.08] bg-white/[0.045] px-5 text-sm font-medium text-white/82 transition-colors hover:bg-white/[0.075] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+            >
+              Show other options
+              <ChevronDown className={cn("size-4 text-white/45 transition-transform", otherOptionsOpen && "rotate-180")} />
+            </button>
+
+            <AnimatePresence initial={false}>
+              {otherOptionsOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                  className="overflow-hidden"
+                >
+                  <div className="pt-5">
+                    <div className="mb-4 grid grid-cols-2 border border-white/[0.08] bg-white/[0.035] p-1" role="tablist" aria-label="Authentication mode">
+                      {(["signin", "signup"] as const).map((mode) => {
+                        const isActive = authMode === mode;
+
+                        return (
+                          <div key={mode} className="relative">
+                            {isActive && (
+                              <HighlightPill layoutId="login-auth-mode-pill" className="absolute inset-0 bg-white" />
+                            )}
+                            <button
+                              type="button"
+                              role="tab"
+                              aria-selected={isActive}
+                              onClick={() => {
+                                setAuthMode(mode);
+                                setFormError(null);
+                              }}
+                              className={cn(
+                                "relative z-10 h-10 w-full text-sm font-medium transition-colors",
+                                isActive ? "text-black" : "text-white/46 hover:text-white"
+                              )}
+                            >
+                              {mode === "signin" ? "Sign in" : "Sign up"}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <form noValidate onSubmit={submitAuth} className="space-y-4">
+                      <label className="relative block">
+                        <span className="sr-only">Email</span>
+                        <Mail className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-white/32" />
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(event) => setEmail(event.target.value)}
+                          placeholder="Email"
+                          autoComplete="email"
+                          className="h-14 w-full border border-white/[0.10] bg-transparent pl-12 pr-4 text-base text-white outline-none transition-colors placeholder:text-white/30 hover:border-white/18 focus:border-white/30"
+                        />
+                      </label>
+
+                      <label className="relative block">
+                        <span className="sr-only">Password</span>
+                        <Lock className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-white/32" />
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(event) => setPassword(event.target.value)}
+                          placeholder="Password"
+                          autoComplete={authMode === "signin" ? "current-password" : "new-password"}
+                          className="h-14 w-full border border-white/[0.10] bg-transparent pl-12 pr-12 text-base text-white outline-none transition-colors placeholder:text-white/30 hover:border-white/18 focus:border-white/30"
+                        />
+                        <button
+                          type="button"
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                          onClick={() => setShowPassword((visible) => !visible)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-white/34 transition-colors hover:text-white/70"
+                        >
+                          {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+                        </button>
+                      </label>
+
+                      <AnimatePresence mode="wait" initial={false}>
+                        {authMode === "signin" ? (
+                          <motion.div
+                            key="signin-options"
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                            className="text-right"
+                          >
+                            <button type="button" className="text-sm text-indigo-300 transition-colors hover:text-indigo-100">
+                              Forgot password?
+                            </button>
+                          </motion.div>
+                        ) : (
+                          <motion.label
+                            key="signup-policy"
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                            className="flex items-start gap-3 border border-white/[0.08] bg-white/[0.025] p-3 text-left"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={policyAccepted}
+                              onChange={(event) => setPolicyAccepted(event.target.checked)}
+                              className="mt-1 size-4 border-white/15 bg-transparent accent-white"
+                              aria-describedby="signup-policy-consent"
+                            />
+                            <span id="signup-policy-consent" className="text-xs leading-5 text-white/46">
+                              I agree to the{" "}
+                              <Link href="/terms" target="_blank" className="text-white/78 underline underline-offset-2 hover:text-white">
+                                Terms of Service
+                              </Link>{" "}
+                              and{" "}
+                              <Link href="/privacy" target="_blank" className="text-white/78 underline underline-offset-2 hover:text-white">
+                                Privacy Policy
+                              </Link>
+                              .
+                            </span>
+                          </motion.label>
+                        )}
+                      </AnimatePresence>
+
+                      {(formError || authError) && (
+                        <p className="border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                          {formError || authError}
+                        </p>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={submitting || (authMode === "signup" && !policyAccepted)}
+                        className="h-12 w-full border border-white bg-white text-sm font-semibold text-black transition-colors hover:bg-white/86 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        {submitting ? "Working..." : authMode === "signin" ? "Sign in" : "Create account"}
+                      </button>
+                    </form>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <p className="mt-8 text-center text-xs leading-6 text-white/38">
+            By signing in you agree to our{" "}
+            <Link href="/terms" className="underline underline-offset-2 transition-colors hover:text-white/70">
+              Terms of service
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="underline underline-offset-2 transition-colors hover:text-white/70">
+              Privacy policy
+            </Link>
+            .
+          </p>
+        </div>
+      </section>
+    </main>
   );
 }
 
-function SocialButton({
-  children,
+function OAuthButton({
+  icon,
   label,
   onClick,
   disabled,
   loading,
 }: {
-  children: React.ReactNode;
+  icon: ReactNode;
   label: string;
-  onClick?: () => void;
+  onClick: () => void;
   disabled?: boolean;
   loading?: boolean;
 }) {
   return (
     <button
       type="button"
-      aria-label={`Sign in with ${label}`}
       onClick={onClick}
       disabled={disabled}
-      className="flex h-12 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] transition-all duration-200 hover:border-white/[0.14] hover:bg-white/[0.07] active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
+      className="flex h-14 w-full items-center justify-center gap-3 border border-white/[0.08] bg-transparent text-sm font-medium text-white/82 transition-colors hover:bg-white/[0.055] disabled:cursor-not-allowed disabled:opacity-45"
     >
-      {loading ? (
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-      ) : (
-        children
-      )}
+      {loading ? <span className="size-4 animate-spin rounded-full border-2 border-white/25 border-t-white" /> : icon}
+      {label}
     </button>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M10 3.958c1.475 0 2.796.509 3.838 1.5l2.854-2.854C14.959.992 12.696 0 10 0a9.995 9.995 0 0 0-8.933 5.508l3.325 2.58c.787-2.371 3-4.13 5.608-4.13Z" fill="#EA4335" />
+      <path d="M19.575 10.23c0-.655-.063-1.288-.158-1.897H10v3.759h5.392a4.648 4.648 0 0 1-1.992 2.991l3.22 2.5c1.88-1.741 2.955-4.316 2.955-7.354Z" fill="#4285F4" />
+      <path d="M4.388 11.912A6.075 6.075 0 0 1 4.07 10c0-.667.112-1.308.317-1.913L1.063 5.508A9.964 9.964 0 0 0 0 10c0 1.617.383 3.142 1.067 4.492l3.32-2.58Z" fill="#FBBC05" />
+      <path d="M10 20c2.7 0 4.97-.887 6.62-2.42l-3.22-2.5c-.896.603-2.05.958-3.4.958-2.608 0-4.82-1.759-5.612-4.13l-3.325 2.58C2.712 17.758 6.091 20 10 20Z" fill="#34A853" />
+    </svg>
+  );
+}
+
+function DiscordIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-5" fill="#5865F2" aria-hidden="true">
+      <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03ZM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418Zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418Z" />
+    </svg>
   );
 }

@@ -54,6 +54,7 @@ PLAN_ENTITLEMENTS: dict[Plan, PlanEntitlement] = {
         },
         limits={
             "ai_messages_per_day": 10,
+            "equity_research_reports_per_month": 5,
             "sentiment_requests_per_day": 5,
             "portfolios": 1,
             "watchlists": 1,
@@ -73,6 +74,7 @@ PLAN_ENTITLEMENTS: dict[Plan, PlanEntitlement] = {
         },
         limits={
             "ai_messages_per_day": 100,
+            "equity_research_reports_per_month": 50,
             "sentiment_requests_per_day": 50,
             "portfolios": 5,
             "watchlists": 5,
@@ -96,6 +98,8 @@ PLAN_ENTITLEMENTS: dict[Plan, PlanEntitlement] = {
         },
         limits={
             "ai_messages_per_day": 250,
+            "equity_research_reports_per_month": 150,
+            "equity_research_deep_reports_per_month": 10,
             "sentiment_requests_per_day": 150,
             "portfolios": 10,
             "watchlists": 10,
@@ -108,6 +112,8 @@ PLAN_ENTITLEMENTS: dict[Plan, PlanEntitlement] = {
         features=set(FeatureKey),
         limits={
             "ai_messages_per_day": 750,
+            "equity_research_reports_per_month": 500,
+            "equity_research_deep_reports_per_month": 100,
             "sentiment_requests_per_day": 500,
             "portfolios": 25,
             "watchlists": 25,

@@ -5,20 +5,20 @@ import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Check, ChevronDown, Cpu, FileSearch, Network, Zap } from "lucide-react";
 
-// ─── Model types ───────────────────────────
+// ─── Mode types ────────────────────────────
 
-export type QuanAdVersion = "1.0" | "2.0" | "2.1";
+export type QuanforaVersion = "1.0" | "2.0" | "2.1";
 
 /** Translates the frontend version pick into the API mode field. */
-export function apiModeFromVersion(version: Exclude<QuanAdVersion, "2.1">): "single" | "consensus" {
+export function apiModeFromVersion(version: Exclude<QuanforaVersion, "2.1">): "single" | "consensus" {
   return version === "2.0" ? "consensus" : "single";
 }
 
 // ─── Context ───────────────────────────────
 
 interface ModelContextValue {
-  version: QuanAdVersion;
-  setVersion: (v: QuanAdVersion) => void;
+  version: QuanforaVersion;
+  setVersion: (v: QuanforaVersion) => void;
 }
 
 const ModelContext = createContext<ModelContextValue>({
@@ -31,7 +31,7 @@ export function useModel() {
 }
 
 export function ModelProvider({ children }: { children: ReactNode }) {
-  const [version, setVersion] = useState<QuanAdVersion>("1.0");
+  const [version, setVersion] = useState<QuanforaVersion>("1.0");
   return (
     <ModelContext.Provider value={{ version, setVersion }}>
       {children}
@@ -39,10 +39,10 @@ export function ModelProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// ─── Models data ───────────────────────────
+// ─── Modes data ────────────────────────────
 
-const MODELS: {
-  version: QuanAdVersion;
+const QUANFORA_MODES: {
+  version: QuanforaVersion;
   label: string;
   tagline: string;
   icon: typeof Cpu;
@@ -50,21 +50,21 @@ const MODELS: {
 }[] = [
   {
     version: "1.0",
-    label: "QuanAd 1.0",
+    label: "Quanfora 1.0",
     tagline: "Fast single-agent advisor for market, portfolio, and sentiment work.",
     icon: Zap,
     accentClass: "text-indigo-primary bg-indigo-primary/18 ring-indigo-primary/25",
   },
   {
     version: "2.0",
-    label: "QuanAd 2.0",
+    label: "Quanfora 2.0",
     tagline: "Multi-agent consensus — 5 specialists analyze independently.",
     icon: Network,
     accentClass: "text-emerald-400 bg-emerald-400/18 ring-emerald-400/25",
   },
   {
     version: "2.1",
-    label: "QuanAd 2.1",
+    label: "Quanfora 2.1",
     tagline: "Equity Research Desk for ticker-based reports and risk review.",
     icon: FileSearch,
     accentClass: "text-cyan-300 bg-cyan-300/16 ring-cyan-300/25",
@@ -83,7 +83,7 @@ export default function ModelSelector({
   const { version, setVersion } = useModel();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const active = MODELS.find((m) => m.version === version) ?? MODELS[0];
+  const active = QUANFORA_MODES.find((m) => m.version === version) ?? QUANFORA_MODES[0];
   const ActiveIcon = active.icon;
   const menuPosition = placement === "top" ? "bottom-12" : "top-12";
   const menuAlignment = compact ? "right-0" : "left-0";
@@ -120,8 +120,8 @@ export default function ModelSelector({
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             className={`absolute ${menuAlignment} ${menuPosition} z-30 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]`}
           >
-            <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-subtle)]">Models</div>
-            {MODELS.map((model) => {
+            <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-subtle)]">Modes</div>
+            {QUANFORA_MODES.map((model) => {
               const Icon = model.icon;
               const isActive = model.version === version;
               const badgeClass = model.version === "2.1"
@@ -160,18 +160,6 @@ export default function ModelSelector({
                 </button>
               );
             })}
-
-            {/* Info footer */}
-            <div className="mt-1.5 rounded-xl border border-white/[0.04] bg-white/[0.02] px-3 py-2.5">
-              <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
-                <strong className="text-[var(--text-subtle)]">v1.0</strong> — Fast single-agent ReAct advisor.{" "}
-                <strong className="text-[var(--text-subtle)]">v2.0</strong> — 5 specialists (Quant Researcher,
-                Analyst, Data Scientist, Risk Analyst, Portfolio Analytics) analyze
-                independently and form a weighted consensus.{" "}
-                <strong className="text-[var(--text-subtle)]">v2.1</strong> — ticker-based equity research desk
-                that creates structured reports.
-              </p>
-            </div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -29,7 +29,6 @@ import {
     Sparkles,
     Trash2,
     TrendingUp,
-    Zap,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { ChatSession } from "@/lib/api";
@@ -50,7 +49,7 @@ type NavItem = {
 
 const NAV: NavItem[] = [
     { href: "/dashboard", icon: Sparkles, label: "Dashboard" },
-    { href: "/", icon: MessageSquare, label: "AI Advisor" },
+    { href: "/session", icon: MessageSquare, label: "AI Advisor" },
     { href: "/market", icon: TrendingUp, label: "Market" },
     { href: "/sentiment", icon: Brain, label: "Sentiment" },
     { href: "/watchlist", icon: Pin, label: "Watchlist" },
@@ -68,6 +67,10 @@ const MORE_NAV: NavItem[] = [
     { href: "/export", icon: Code2, label: "Export", minPlan: "quant" },
 ];
 
+function isNavItemActive(path: string, href: string) {
+    return path === href || (href === "/session" && path.startsWith("/session/"));
+}
+
 export default function Sidebar({
     isOpen,
     onToggle,
@@ -84,18 +87,21 @@ export default function Sidebar({
     const path = usePathname();
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
     const [sessions, setSessions] = useState<ChatSession[]>([]);
     const [sessionsLoading, setSessionsLoading] = useState(true);
-    const isGuest = Boolean(user?.is_guest);
+    const isGuest = !authLoading && Boolean(user?.is_guest);
     const visibleNav = isGuest
-        ? NAV.filter((item) => item.href === "/" || item.href === "/market")
+        ? NAV.filter((item) => item.href === "/session" || item.href === "/market")
         : getVisibleNav(user?.plan ?? "free");
     const visibleMoreNav = isGuest ? [] : getVisibleMoreNav(user?.plan ?? "free");
-    const activeSessionId = path === "/" ? searchParams.get("session") || "default" : null;
+    const isSessionPath = path === "/session" || path.startsWith("/session/");
+    const routeSessionId = isSessionPath && path !== "/session" ? decodeURIComponent(path.split("/")[2] || "") : null;
+    const activeSessionId = isSessionPath ? routeSessionId || searchParams.get("session") || "default" : null;
     const displaySessions = useMemo(() => sessions, [sessions]);
+    const creatingSessionRef = useRef(false);
 
     const openSearch = useCallback(() => {
         setSearchOpen(true);
@@ -104,6 +110,7 @@ export default function Sidebar({
 
     const refreshSessions = useCallback(async () => {
         setSessionsLoading(true);
+        if (authLoading) return;
         if (user?.is_guest) {
             setSessions(listLocalChatSessions());
             setSessionsLoading(false);
@@ -117,9 +124,27 @@ export default function Sidebar({
         } finally {
             setSessionsLoading(false);
         }
-    }, [user?.id, user?.is_guest]);
+    }, [authLoading, user?.id, user?.is_guest]);
 
     const startNewAnalysis = useCallback(() => {
+        const activeSessionIsListed = activeSessionId ? sessions.some((session) => session.session_id === activeSessionId) : false;
+        if (activeSessionId && !activeSessionIsListed) {
+            router.push(activeSessionId === "default" ? "/session" : `/session/${encodeURIComponent(activeSessionId)}`);
+            setMobileOpen(false);
+            window.setTimeout(() => window.dispatchEvent(new Event("chat-input:focus")), 80);
+            return;
+        }
+
+        const reusableBlankSession = sessions.find((session) => session.message_count === 0);
+        if (reusableBlankSession) {
+            router.push(`/session/${encodeURIComponent(reusableBlankSession.session_id)}`);
+            setMobileOpen(false);
+            window.setTimeout(() => window.dispatchEvent(new Event("chat-input:focus")), 80);
+            return;
+        }
+        if (creatingSessionRef.current) return;
+        creatingSessionRef.current = true;
+
         const nextSessionId = typeof crypto !== "undefined" && "randomUUID" in crypto
             ? crypto.randomUUID()
             : `session-${Date.now()}`;
@@ -131,12 +156,13 @@ export default function Sidebar({
         };
 
         setSessions((current) => [optimisticSession, ...current.filter((session) => session.session_id !== nextSessionId)]);
-        router.push(`/?session=${encodeURIComponent(nextSessionId)}`);
+        router.push(`/session/${encodeURIComponent(nextSessionId)}`);
         setMobileOpen(false);
         window.setTimeout(() => window.dispatchEvent(new Event("chat-input:focus")), 80);
 
         if (user?.is_guest) {
             createLocalChatSession(nextSessionId);
+            creatingSessionRef.current = false;
             return;
         }
 
@@ -146,14 +172,17 @@ export default function Sidebar({
             })
             .catch(() => {
                 setSessions((current) => current.filter((session) => session.session_id !== nextSessionId));
-                router.replace("/");
+                router.replace("/session");
+            })
+            .finally(() => {
+                creatingSessionRef.current = false;
             });
-    }, [router, user?.is_guest]);
+    }, [activeSessionId, router, sessions, user?.is_guest]);
 
     const handleSessionDeleted = useCallback((sessionId: string) => {
         refreshSessions();
         if (activeSessionId === sessionId) {
-            router.push("/");
+            router.push("/session");
         }
     }, [activeSessionId, refreshSessions, router]);
 
@@ -415,8 +444,8 @@ function MiniSidebar({
                 onClick={onToggleSidebar}
                 className="group relative mb-3 flex h-10 w-10 cursor-e-resize items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
-                    <span className="accent-gradient-surface on-accent absolute flex h-10 w-10 items-center justify-center rounded-xl opacity-100 shadow-[var(--shadow-brand-mark)] transition-opacity group-hover:opacity-0">
-                    <Zap className="h-5 w-5" />
+                    <span className="absolute flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] opacity-100 shadow-[var(--shadow-brand-mark)] transition-opacity group-hover:opacity-0">
+                    <img src="/logo.svg" alt="" className="h-6 w-6 object-contain" />
                 </span>
                 <span className="absolute flex h-10 w-10 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
                     <SidebarGlyph />
@@ -445,7 +474,7 @@ function MiniSidebar({
 
             <nav className="flex flex-col items-center gap-1" aria-label="Primary navigation">
                 {nav.map(({ href, icon: Icon, label }) => {
-                    const active = path === href;
+                    const active = isNavItemActive(path, href);
 
                     return (
                         <Link
@@ -490,7 +519,7 @@ function MiniSidebar({
                                 className="absolute left-12 top-0 w-48 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
                             >
                                 {moreNav.map(({ href, icon: Icon, label }) => {
-                                    const active = path === href;
+                                    const active = isNavItemActive(path, href);
                                     return (
                                         <Link
                                             key={href}
@@ -617,11 +646,11 @@ function SidebarSurface({
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
                 <div className="mb-3 flex h-10 items-center justify-between">
                     <Link
-                        href="/"
-                        aria-label="Quantum Advisor home"
-                        className="accent-gradient-surface on-accent flex h-10 w-10 items-center justify-center rounded-xl shadow-[var(--shadow-brand-mark-strong)] outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                        href="/session"
+                        aria-label="Quanfora home"
+                        className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] shadow-[var(--shadow-brand-mark-strong)] outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
-                        <Zap className="h-5 w-5" />
+                        <img src="/logo.svg" alt="" className="h-6 w-6 object-contain" />
                     </Link>
                     {onToggle && (
                         <button
@@ -666,7 +695,7 @@ function SidebarSurface({
                         </div>
                         <nav className="space-y-1" aria-label="Primary navigation">
                             {nav.map(({ href, icon: Icon, label }) => {
-                                const active = path === href;
+                                const active = isNavItemActive(path, href);
 
                                 return (
                                     <Link
@@ -729,7 +758,7 @@ function SidebarSurface({
                                         >
                                             <div className="mt-1 space-y-1 pl-3">
                                                 {moreNav.map(({ href, icon: Icon, label }) => {
-                                                    const active = path === href;
+                                                    const active = isNavItemActive(path, href);
                                                     return (
                                                         <Link
                                                             key={href}
@@ -1034,7 +1063,7 @@ function RecentThreadRow({
                 />
             ) : (
                 <Link
-                    href={`/?session=${encodeURIComponent(session.session_id)}`}
+                    href={`/session/${encodeURIComponent(session.session_id)}`}
                     aria-current={active ? "page" : undefined}
                     className={cn(
                         "flex items-center rounded-xl text-sm outline-none transition-all duration-200 hover:bg-white/[0.05] hover:text-white focus-visible:ring-2 focus-visible:ring-indigo-primary/50",

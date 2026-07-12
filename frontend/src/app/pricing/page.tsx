@@ -1,15 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { Check, Lock, Crown, Zap, ArrowRight, CreditCard, AlertCircle } from "lucide-react";
-import { PLANS, type PlanId } from "@/config/plans";
+import {
+  AlertCircle,
+  ArrowRight,
+  Building2,
+  Check,
+  CreditCard,
+  Crown,
+  GraduationCap,
+  Lock,
+  Sparkles,
+} from "lucide-react";
+
+import {
+  COMPARISON_TABLE,
+  PLANS,
+  type CheckState,
+  type PlanConfig,
+  type PlanId,
+} from "@/config/plans";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { HighlightPill } from "@/components/ui/highlight-pill";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { api, type AuthUser as ApiAuthUser, type BillingSubscription } from "@/lib/api";
 
 type CheckoutPlanId = Extract<ApiAuthUser["plan"], "pro" | "trader" | "quant">;
-
 function checkoutPlanFor(planId: PlanId): CheckoutPlanId | null {
   return planId === "pro" || planId === "trader" || planId === "quant" ? planId : null;
 }
@@ -29,6 +48,28 @@ export default function PricingPage() {
   const [loadingPlan, setLoadingPlan] = useState<PlanId | "portal" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    const previousTheme = document.body.dataset.theme;
+    const applyDarkTheme = () => {
+      if (document.body.dataset.theme !== "Deep Space") {
+        document.body.dataset.theme = "Deep Space";
+      }
+    };
+
+    applyDarkTheme();
+    const observer = new MutationObserver(applyDarkTheme);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["data-theme"] });
+
+    return () => {
+      observer.disconnect();
+      if (previousTheme) {
+        document.body.dataset.theme = previousTheme;
+      } else {
+        delete document.body.dataset.theme;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -56,7 +97,7 @@ export default function PricingPage() {
     setError(null);
 
     if (planId === "free") {
-      router.push(user.is_guest ? "/login?next=/" : "/");
+      router.push(user.is_guest ? "/login?next=/session" : "/session");
       return;
     }
 
@@ -104,53 +145,35 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#050507]">
-      {/* Ambient background */}
+    <div className="pricing-theme-lock dark relative min-h-screen overflow-hidden bg-[#050507] text-white" data-theme="Deep Space">
       <div className="pointer-events-none fixed inset-0 z-0">
-        <div className="absolute left-1/2 top-0 h-[700px] w-[700px] -translate-x-1/2 -translate-y-1/3 rounded-full bg-indigo-600/[0.06] blur-[120px]" />
-        <div className="absolute bottom-0 right-0 h-[500px] w-[500px] translate-x-1/4 translate-y-1/4 rounded-full bg-cyan-500/[0.04] blur-[100px]" />
+        <div className="absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(circle_at_50%_0%,rgba(99,102,241,0.16),transparent_56%)]" />
+        <div className="absolute bottom-0 right-0 h-[520px] w-[520px] translate-x-1/4 translate-y-1/4 rounded-full bg-cyan-500/[0.045] blur-[110px]" />
       </div>
 
-      {/* Close button */}
-      <button
-        type="button"
-        onClick={() => {
-          const referrer = document.referrer;
-          const isSameOrigin = referrer && new URL(referrer).origin === window.location.origin;
-          if (isSameOrigin) {
-            router.back();
-          } else {
-            router.push("/");
-          }
-        }}
-        aria-label="Close pricing"
-        className="group fixed right-6 top-6 z-50 flex h-10 w-10 items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
-      >
-        <img
-          src="/close-svgrepo-com.svg"
-          alt=""
-          aria-hidden="true"
-          className="h-5 w-5 opacity-55 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]"
-        />
-      </button>
+      <PricingNav isGuest={Boolean(user.is_guest)} />
 
-      <div className="relative z-10 mx-auto max-w-6xl px-4 py-16 sm:px-8 sm:py-20">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
+      <main className="relative z-10 mx-auto max-w-7xl px-4 pb-20 pt-28 sm:px-6 sm:pb-24 lg:px-8">
+        <motion.section
+          initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-10 text-center"
+          transition={{ duration: 0.45 }}
+          className="mx-auto max-w-3xl text-center"
         >
-          <h1 className="text-3xl font-bold text-white sm:text-4xl">Pricing</h1>
-          <p className="mx-auto mt-3 max-w-xl text-base text-white/45">
-            Unlock more AI research, portfolio tools, backtesting, and advanced analytics.
+          <h1 className="font-heading text-4xl font-semibold leading-[0.95] tracking-tight text-white sm:text-6xl lg:text-7xl">
+            Choose your research plan.
+          </h1>
+          <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-white/44 sm:text-lg">
+            Unlock deeper AI research, portfolio analytics, backtesting, risk controls, and advanced validation for the workflow you actually use.
           </p>
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
+
+          <p className="mt-7 text-sm font-medium text-white/45">Monthly billing</p>
+
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             {!user.is_guest && (
-              <div className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.035] px-4 text-sm text-white/60">
+              <div className="inline-flex h-10 items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-4 text-sm text-white/62">
                 <Crown className="h-4 w-4 text-green-positive" />
-                {formatPlan(currentPlan)} <span className="text-white/30">/</span> {status}
+                {formatPlan(currentPlan)} <span className="text-white/28">/</span> {status}
               </div>
             )}
             {!user.is_guest && (
@@ -158,18 +181,18 @@ export default function PricingPage() {
                 type="button"
                 onClick={openPortal}
                 disabled={loadingPlan !== null || !hasStripeCustomer}
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 text-sm font-medium text-white/70 transition-all hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+                className="inline-flex h-10 items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-4 text-sm font-medium text-white/70 transition-all hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <CreditCard className="h-4 w-4" />
                 {loadingPlan === "portal" ? "Opening..." : "Manage subscription"}
               </button>
             )}
           </div>
-        </motion.div>
+        </motion.section>
 
         {(notice || error) && (
           <div
-            className={`mx-auto mb-8 flex max-w-2xl items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
+            className={`mx-auto mt-8 flex max-w-2xl items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
               error
                 ? "border-red-negative/25 bg-red-negative/10 text-red-negative"
                 : "border-indigo-primary/25 bg-indigo-primary/10 text-white/70"
@@ -180,126 +203,273 @@ export default function PricingPage() {
           </div>
         )}
 
-        {/* Plan cards grid */}
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-          {PLANS.filter((p) => p.id !== "execution").map((plan, i) => {
-            const isCurrent = plan.id === currentPlan;
-            const isRecommended = plan.highlighted;
-            const isLoading = loadingPlan === plan.id;
+        <section className="mt-12">
+          <div className="relative overflow-hidden rounded-[1.45rem] px-4 py-8 shadow-[0_38px_120px_rgba(0,0,0,0.36)] sm:px-8 sm:py-10 lg:px-10">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/pay-background.webp"
+              alt=""
+              aria-hidden="true"
+              loading="eager"
+              decoding="async"
+              className="absolute inset-0 h-full w-full object-cover opacity-65"
+            />
+            <div
+              className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,5,7,0.62),rgba(5,5,7,0.82)),radial-gradient(circle_at_50%_0%,rgba(99,102,241,0.22),transparent_48%)]"
+              aria-hidden="true"
+            />
 
-            return (
-              <motion.div
-                key={plan.id}
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: i * 0.08 }}
-                className={`group relative flex flex-col rounded-2xl border p-6 transition-all duration-300 ${
-                  isCurrent
-                    ? "border-green-positive/30 bg-green-positive/[0.06] shadow-[inset_0_0_0_1px_rgba(52,211,153,0.12)]"
-                    : isRecommended
-                    ? "border-indigo-500/40 bg-gradient-to-b from-indigo-500/[0.08] to-transparent shadow-[0_0_0_1px_rgba(99,102,241,0.2),0_20px_60px_rgba(99,102,241,0.12)]"
-                    : "border-white/[0.06] bg-white/[0.025] hover:border-white/[0.1] hover:bg-white/[0.04]"
-                }`}
-              >
-                {/* Badges */}
-                {isCurrent && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1.5 rounded-full bg-green-positive px-3 py-1 text-xs font-semibold text-white shadow-[0_4px_14px_rgba(52,211,153,0.35)]">
-                    <Crown className="h-3 w-3" /> Current Plan
-                  </div>
-                )}
-                {isRecommended && !isCurrent && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1.5 rounded-full bg-indigo-500 px-3 py-1 text-xs font-semibold text-white shadow-[0_4px_14px_rgba(99,102,241,0.4)]">
-                    <Zap className="h-3 w-3" /> Recommended
-                  </div>
-                )}
+            <div className="relative grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+              {PLANS.filter((plan) => plan.id !== "execution").map((plan, index) => (
+                <PlanCard
+                  key={plan.id}
+                  plan={plan}
+                  index={index}
+                  isCurrent={plan.id === currentPlan}
+                  isLoading={loadingPlan === plan.id}
+                  isGuest={Boolean(user.is_guest)}
+                  loadingPlan={loadingPlan}
+                  onUpgrade={handleUpgrade}
+                />
+              ))}
+            </div>
 
-                {/* Plan info */}
-                <div className="mb-4 mt-2">
-                  <h3 className="text-lg font-bold text-white">{plan.name}</h3>
-                  <p className="text-sm text-white/40">{plan.subtitle}</p>
-                </div>
+            <BusinessAccess onRequestExecution={() => handleUpgrade("execution")} />
+          </div>
+        </section>
 
-                <div className="mb-4">
-                  <span className="text-4xl font-bold text-white">{plan.priceLabel}</span>
-                  {plan.priceNote && <span className="ml-2 text-sm text-white/35">{plan.priceNote}</span>}
-                </div>
+        <ComparisonTable />
 
-                <p className="mb-6 text-sm leading-relaxed text-white/40">{plan.description}</p>
-
-                {/* Feature list */}
-                <ul className="mb-8 flex-1 space-y-3">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm text-white/60">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" /> {f}
-                    </li>
-                  ))}
-                </ul>
-
-                {/* CTA */}
-                {isCurrent ? (
-                  <div className="h-11 flex items-center justify-center rounded-xl border border-green-positive/20 bg-green-positive/10 text-sm font-medium text-green-positive">
-                    Active
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleUpgrade(plan.id)}
-                    disabled={loadingPlan !== null}
-                    className={`group/btn flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] ${
-                      isRecommended
-                        ? "bg-indigo-500 text-white shadow-[0_0_0_1px_rgba(99,102,241,0.5),0_6px_18px_rgba(99,102,241,0.3)] hover:bg-indigo-400"
-                        : "border border-white/[0.08] bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"
-                    } disabled:cursor-not-allowed disabled:opacity-60`}
-                  >
-                    {isLoading ? "Opening Checkout..." : user.is_guest && plan.id !== "free" ? "Sign in to upgrade" : plan.ctaLabel}
-                    {!isLoading && <ArrowRight className="h-4 w-4 transition-transform group-hover/btn:translate-x-0.5" />}
-                  </button>
-                )}
-              </motion.div>
-            );
-          })}
-        </div>
-
-        {/* Execution add-on */}
-        {(() => {
-          const exec = PLANS.find((p) => p.id === "execution")!;
-          return (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-              className="group mx-auto mt-8 max-w-2xl rounded-2xl bg-white/[0.06] p-px transition-all duration-300 hover:bg-gradient-to-r hover:from-amber-300 hover:via-yellow-500 hover:to-orange-400 hover:shadow-[0_0_0_1px_rgba(251,191,36,0.14),0_18px_50px_rgba(251,191,36,0.16)]"
-            >
-              <div className="rounded-[calc(1rem-1px)] bg-space-black/95 p-6 text-center transition-colors duration-300 group-hover:bg-[#11100a]/95">
-                <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400">
-                  <Lock className="h-3 w-3" /> Invite Only
-                </div>
-                <h3 className="text-lg font-bold text-white">
-                  {exec.name} <span className="text-white/40">— {exec.subtitle}</span>
-                </h3>
-                <p className="mt-2 text-sm text-white/40">{exec.description}</p>
-                <div className="mt-4 flex flex-wrap justify-center gap-3">
-                  {exec.features.map((f) => (
-                    <span key={f} className="rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-xs text-white/50">{f}</span>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleUpgrade(exec.id)}
-                  className="mt-6 inline-flex h-10 items-center rounded-xl border border-white/[0.08] bg-white/[0.04] px-6 text-sm font-medium text-white/60 transition-all hover:border-amber-400/40 hover:bg-amber-400/10 hover:text-amber-200"
-                >
-                  {exec.ctaLabel}
-                </button>
-              </div>
-            </motion.div>
-          );
-        })()}
-
-        {/* Disclaimer */}
-        <div className="mx-auto mt-12 max-w-3xl rounded-xl border border-white/[0.06] bg-white/[0.02] px-6 py-4 text-center text-xs leading-relaxed text-white/30">
+        <div className="mx-auto mt-14 max-w-3xl rounded-xl border border-white/[0.06] bg-white/[0.02] px-6 py-4 text-center text-xs leading-relaxed text-white/30">
           This platform provides research, analytics, backtesting, journaling, and risk-management tools. It does not provide personalized financial advice, does not guarantee returns, and should not be used as the sole basis for investment decisions.
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function PricingNav({ isGuest }: { isGuest: boolean }) {
+  return (
+    <header className="fixed inset-x-0 top-0 z-50 px-4 py-4">
+      <nav className="mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center justify-center gap-6 rounded-full bg-black/72 px-4 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl sm:gap-8">
+        <Link href="/" className="flex shrink-0 items-center gap-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.svg" alt="" aria-hidden="true" className="size-6 object-contain" />
+          <span className="hidden text-sm font-semibold text-white/92 sm:block">Quanfora</span>
+        </Link>
+        <div className="flex items-center gap-1 text-sm font-semibold text-white/58">
+          <div className="relative">
+            <HighlightPill layoutId="pricing-nav-pill" className="absolute inset-0 rounded-full bg-white/[0.08]" />
+            <Link href="/pricing" className="relative z-10 block rounded-full px-2.5 py-1.5 text-white/92 transition-colors hover:text-white">
+              Pricing
+            </Link>
+          </div>
+          <Link href="/help" className="hidden rounded-full px-2.5 py-1.5 transition-colors hover:bg-white/[0.08] hover:text-white sm:inline-flex">
+            Help
+          </Link>
+          {isGuest ? (
+            <Link href="/login?next=/session" className="rounded-full bg-white px-4 py-2 font-semibold text-black transition-all hover:bg-white/86">
+              Join free
+            </Link>
+          ) : (
+            <Link href="/session" className="rounded-full bg-white px-4 py-2 font-semibold text-black transition-all hover:bg-white/86">
+              Open app
+            </Link>
+          )}
+        </div>
+      </nav>
+    </header>
+  );
+}
+
+function PlanCard({
+  plan,
+  index,
+  isCurrent,
+  isLoading,
+  isGuest,
+  loadingPlan,
+  onUpgrade,
+}: {
+  plan: PlanConfig;
+  index: number;
+  isCurrent: boolean;
+  isLoading: boolean;
+  isGuest: boolean;
+  loadingPlan: PlanId | "portal" | null;
+  onUpgrade: (planId: PlanId) => void;
+}) {
+  const isRecommended = plan.highlighted;
+  const price = { label: plan.priceLabel, note: plan.priceNote };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 22 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, delay: index * 0.06 }}
+      className={`relative flex min-h-[520px] flex-col rounded-[1.15rem] border p-6 transition-all duration-300 ${
+        isCurrent
+          ? "border-green-positive/30 bg-green-positive/[0.075] shadow-[inset_0_0_0_1px_rgba(52,211,153,0.12)]"
+          : isRecommended
+            ? "border-indigo-500/55 bg-[#101225]/95 shadow-[0_0_0_1px_rgba(99,102,241,0.24),0_20px_60px_rgba(99,102,241,0.16)] hover:-translate-y-1 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.48),0_28px_82px_rgba(99,102,241,0.28)]"
+            : "border-white/[0.10] bg-[#0f1117]/94 shadow-[0_18px_58px_rgba(0,0,0,0.18)] hover:-translate-y-1 hover:border-indigo-primary/45 hover:bg-[#141827]/96 hover:shadow-[0_24px_76px_rgba(0,0,0,0.28),0_0_32px_rgba(99,102,241,0.12)]"
+      }`}
+    >
+      <div className="mb-5 flex min-h-12 items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold leading-none text-white">{plan.name}</h2>
+            {isRecommended && !isCurrent && (
+              <span className="on-accent rounded-md bg-indigo-500 px-2 py-1 text-[11px] font-bold leading-none text-white">
+                Popular
+              </span>
+            )}
+          </div>
+          <p className="mt-2 text-sm text-white/42">{plan.subtitle}</p>
+        </div>
+        {isCurrent && (
+          <span className="rounded-full border border-green-positive/24 bg-green-positive/12 px-2.5 py-1 text-xs font-semibold text-green-positive">
+            Active
+          </span>
+        )}
+      </div>
+
+      <div className="mb-5 flex items-end gap-2">
+        <span className="text-5xl font-bold tracking-tight text-white">{price.label}</span>
+        {price.note && <span className="pb-1.5 text-xs leading-tight text-white/36">{price.note}</span>}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onUpgrade(plan.id)}
+        disabled={loadingPlan !== null || isCurrent}
+        className={`mb-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full text-sm font-semibold transition-all active:scale-[0.98] ${
+          isCurrent
+            ? "border border-green-positive/20 bg-green-positive/10 text-green-positive"
+            : isRecommended
+              ? "on-accent bg-indigo-500 text-white shadow-[0_0_0_1px_rgba(99,102,241,0.5),0_6px_18px_rgba(99,102,241,0.3)] hover:bg-indigo-400"
+              : "border border-white/[0.10] bg-[#171a23] text-white/76 hover:bg-[#202432] hover:text-white"
+        } disabled:cursor-not-allowed disabled:opacity-60`}
+      >
+        {isCurrent
+          ? "Current plan"
+          : isLoading
+            ? "Opening Checkout..."
+            : isGuest && plan.id !== "free"
+              ? "Sign in to upgrade"
+              : plan.ctaLabel}
+        {!isCurrent && !isLoading && <ArrowRight className="h-4 w-4" />}
+      </button>
+
+      <p className="mb-6 text-sm leading-relaxed text-white/42">{plan.description}</p>
+
+      <ul className="flex-1 space-y-3">
+        {plan.features.map((feature) => (
+          <li key={feature} className="flex items-start gap-2.5 text-sm leading-5 text-white/62">
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" /> {feature}
+          </li>
+        ))}
+      </ul>
+    </motion.div>
+  );
+}
+
+function BusinessAccess({ onRequestExecution }: { onRequestExecution: () => void }) {
+  const executionPlan = PLANS.find((plan) => plan.id === "execution")!;
+
+  return (
+    <div className="relative mt-8 grid gap-5 md:grid-cols-2">
+      <div className="rounded-[1.15rem] border border-white/[0.10] bg-[#0f1117]/88 p-6 text-center shadow-[0_18px_58px_rgba(0,0,0,0.18)]">
+        <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-full border border-amber-500/20 bg-amber-500/10 text-amber-400">
+          <Lock className="h-4 w-4" />
+        </div>
+        <h2 className="text-lg font-bold text-white">Execution access</h2>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/44">{executionPlan.description}</p>
+        <button
+          type="button"
+          onClick={onRequestExecution}
+          className="mt-5 inline-flex h-10 items-center justify-center rounded-full border border-white/[0.10] bg-[#171a23] px-6 text-sm font-medium text-white/70 transition-all hover:border-amber-400/40 hover:bg-amber-400/10 hover:text-amber-200"
+        >
+          {executionPlan.ctaLabel}
+        </button>
+      </div>
+
+      <div className="rounded-[1.15rem] border border-white/[0.10] bg-[#0f1117]/88 p-6 text-center shadow-[0_18px_58px_rgba(0,0,0,0.18)]">
+        <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-full border border-indigo-primary/22 bg-indigo-primary/[0.12] text-indigo-300">
+          <Building2 className="h-4 w-4" />
+        </div>
+        <h2 className="text-lg font-bold text-white">Teams and education</h2>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/44">
+          Need shared research workflows, billing support, or classroom access? We can help map the right plan.
+        </p>
+        <div className="mt-5 flex flex-wrap justify-center gap-3">
+          <Link
+            href="/contact-sales"
+            className="inline-flex h-10 items-center justify-center rounded-full border border-white/[0.10] bg-[#171a23] px-6 text-sm font-medium text-white/70 transition-all hover:bg-[#202432] hover:text-white"
+          >
+            Contact sales
+          </Link>
+          <Link
+            href="/help"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium text-white/48 transition-all hover:bg-white/[0.06] hover:text-white/72"
+          >
+            <GraduationCap className="h-4 w-4" /> Learn more
+          </Link>
         </div>
       </div>
     </div>
+  );
+}
+
+function ComparisonTable() {
+  const planIds: PlanId[] = ["free", "pro", "trader", "quant", "execution"];
+  const planLabels = ["Free", "Pro", "Trader", "Quant", "Execution"];
+
+  return (
+    <section className="mt-20">
+      <div className="mb-8 text-center">
+        <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.26em] text-indigo-400">
+          <Sparkles className="h-3.5 w-3.5" /> Compare
+        </span>
+        <h2 className="mt-4 font-heading text-3xl font-semibold tracking-tight text-white sm:text-4xl">Plan access at a glance</h2>
+      </div>
+
+      <HorizontalScroll className="rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+        <table className="w-full min-w-[760px] text-sm">
+          <thead>
+            <tr className="border-b border-white/[0.06]">
+              <th className="px-5 py-4 text-left font-medium text-white/50">Feature</th>
+              {planLabels.map((label, index) => (
+                <th key={label} className={`px-4 py-4 text-center font-semibold ${planIds[index] === "trader" ? "text-indigo-400" : "text-white/70"}`}>
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {COMPARISON_TABLE.map((row, index) => (
+              <tr key={row.feature} className={`border-b border-white/[0.04] ${index % 2 === 0 ? "" : "bg-white/[0.01]"}`}>
+                <td className="px-5 py-3 text-white/55">{row.feature}</td>
+                {planIds.map((planId) => {
+                  const value = row[planId] as CheckState;
+
+                  return (
+                    <td key={planId} className="px-4 py-3 text-center">
+                      {value === true ? (
+                        <Check className="mx-auto h-4 w-4 text-indigo-400" />
+                      ) : value === false ? (
+                        <span className="text-white/15">-</span>
+                      ) : (
+                        <span className="text-white/50">{value}</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </HorizontalScroll>
+    </section>
   );
 }

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from fastapi import HTTPException, status
 
-from src.models.equity_research import EquityResearchRunCreate, ResearchDepth
+from src.models.equity_research import EquityResearchRunCreate, ReportType, ResearchDepth
+from src.saas.entitlements import get_entitlement
 from src.saas.models import AuthenticatedUser, Plan
 
 
@@ -19,6 +20,17 @@ GUEST_TICKER_ALLOWLIST = {
 }
 
 DEFAULT_ANALYSTS = ["market", "social", "news", "fundamentals"]
+TRADING_REPORT_PLANS = {Plan.TRADER, Plan.QUANT, Plan.EXECUTION_ADDON}
+RESEARCH_REPORTS_LIMIT_KEY = "equity_research_reports_per_month"
+RESEARCH_DEEP_REPORTS_LIMIT_KEY = "equity_research_deep_reports_per_month"
+
+
+def research_report_limit(user: AuthenticatedUser) -> int | None:
+    return get_entitlement(user.plan).limits.get(RESEARCH_REPORTS_LIMIT_KEY)
+
+
+def research_deep_report_limit(user: AuthenticatedUser) -> int | None:
+    return get_entitlement(user.plan).limits.get(RESEARCH_DEEP_REPORTS_LIMIT_KEY)
 
 
 def apply_research_entitlements(payload: EquityResearchRunCreate, user: AuthenticatedUser) -> EquityResearchRunCreate:
@@ -36,6 +48,7 @@ def apply_research_entitlements(payload: EquityResearchRunCreate, user: Authenti
                 },
             )
         updates.update(
+            report_type=ReportType.INVESTMENT,
             research_depth=ResearchDepth.SHALLOW,
             selected_analysts=DEFAULT_ANALYSTS,
             quick_model="default-fast",
@@ -45,6 +58,9 @@ def apply_research_entitlements(payload: EquityResearchRunCreate, user: Authenti
 
     if user.plan in {Plan.FREE, Plan.PRO} and payload.research_depth == ResearchDepth.DEEP:
         updates["research_depth"] = ResearchDepth.MEDIUM if user.plan == Plan.PRO else ResearchDepth.SHALLOW
+
+    if payload.report_type == ReportType.TRADING and user.plan not in TRADING_REPORT_PLANS:
+        updates["report_type"] = ReportType.INVESTMENT
 
     if user.plan == Plan.FREE:
         updates["quick_model"] = "default-fast"

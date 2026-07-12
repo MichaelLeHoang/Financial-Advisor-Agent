@@ -141,16 +141,6 @@ def _verify_supabase_token(token: str) -> dict[str, Any]:
     raise ValueError(f"Unsupported JWT algorithm: {alg}")
 
 
-def _plan_from_claims(claims: dict[str, Any]) -> Plan:
-    app_metadata = claims.get("app_metadata") or {}
-    user_metadata = claims.get("user_metadata") or {}
-    raw_plan = claims.get("plan") or app_metadata.get("plan") or user_metadata.get("plan") or Plan.FREE.value
-    try:
-        return Plan(raw_plan)
-    except ValueError:
-        return Plan.FREE
-
-
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> AuthenticatedUser:
@@ -176,7 +166,8 @@ async def get_current_user(
             display_name=user_metadata.get("display_name") or user_metadata.get("full_name"),
             username=user_metadata.get("username"),
             avatar_url=user_metadata.get("avatar_url"),
-            plan=_plan_from_claims(claims),
+            # Entitlements must come from the server-owned subscription store.
+            plan=Plan.FREE,
         )
         try:
             from src.saas.repository import get_store
@@ -223,7 +214,8 @@ async def get_current_or_guest_user(
             display_name=user_metadata.get("display_name") or user_metadata.get("full_name"),
             username=user_metadata.get("username"),
             avatar_url=user_metadata.get("avatar_url"),
-            plan=_plan_from_claims(claims),
+            # Never authorize from editable JWT metadata.
+            plan=Plan.FREE,
             is_guest=False,
         )
         try:

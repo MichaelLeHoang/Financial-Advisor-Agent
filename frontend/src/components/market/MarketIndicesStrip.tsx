@@ -6,6 +6,7 @@ import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 import { fetchQuotes } from "@/lib/quote-cache";
 import type { MarketQuote } from "@/lib/api";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 
 /* Google-Finance-style market summary strip: a row of index cards with
    value, percent change and a mini sparkline. yfinance index symbols. */
@@ -78,7 +79,7 @@ export default function MarketIndicesStrip() {
   }, []);
 
   return (
-    <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+    <HorizontalScroll className="-mx-1 flex gap-3 px-1 pb-1">
       {indices.map((index) => {
         const q = index.quote;
         const pct = q ? q.change : 0;
@@ -116,6 +117,6 @@ export default function MarketIndicesStrip() {
           </div>
         );
       })}
-    </div>
+    </HorizontalScroll>
   );
 }

@@ -1,5 +1,5 @@
 """
-QuanAd 2.0 — Consensus Engine
+Quanfora 2.0 — Consensus Engine
 
 Aggregates structured opinions from specialist agents into a weighted
 consensus recommendation with disagreement detection and risk-veto logic.
@@ -176,7 +176,7 @@ class ConsensusEngine:
         dissenting: list[str],
         vetoed: bool,
     ) -> str:
-        parts = [f"QuanAd 2.0 Consensus: **{verdict.value.upper()}** (score {score:+.2f})."]
+        parts = [f"Quanfora 2.0 Consensus: **{verdict.value.upper()}** (score {score:+.2f})."]
 
         if agreement >= 0.8:
             parts.append(f"Strong agreement across {len(opinions)} specialists ({agreement:.0%}).")

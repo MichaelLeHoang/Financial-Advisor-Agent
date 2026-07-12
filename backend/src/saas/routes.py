@@ -11,6 +11,9 @@ from src.saas.models import (
     HoldingUpdate,
     PortfolioCreate,
     PortfolioRead,
+    RecurringBuyCreate,
+    RecurringBuyRead,
+    RecurringBuyUpdate,
     WatchlistAssetCreate,
     WatchlistAssetRead,
     WatchlistCreate,
@@ -119,6 +122,58 @@ async def delete_holding(
     removed = get_store(user).delete_holding(user.id, portfolio_id, holding_id)
     if not removed:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+
+@router.get("/portfolios/{portfolio_id}/recurring-buys", response_model=list[RecurringBuyRead])
+async def list_recurring_buys(
+    portfolio_id: UUID,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> list[RecurringBuyRead]:
+    if user.is_guest:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to view saved recurring buys.")
+    recurring_buys = get_store(user).list_recurring_buys(user.id, portfolio_id)
+    if recurring_buys is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+    return recurring_buys
+
+
+@router.post("/portfolios/{portfolio_id}/recurring-buys", response_model=RecurringBuyRead, status_code=status.HTTP_201_CREATED)
+async def create_recurring_buy(
+    portfolio_id: UUID,
+    payload: RecurringBuyCreate,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> RecurringBuyRead:
+    require_signed_in(user)
+    recurring_buy = get_store(user).add_recurring_buy(user.id, portfolio_id, payload)
+    if recurring_buy is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+    return recurring_buy
+
+
+@router.patch("/portfolios/{portfolio_id}/recurring-buys/{recurring_buy_id}", response_model=RecurringBuyRead)
+async def update_recurring_buy(
+    portfolio_id: UUID,
+    recurring_buy_id: UUID,
+    payload: RecurringBuyUpdate,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> RecurringBuyRead:
+    require_signed_in(user)
+    recurring_buy = get_store(user).update_recurring_buy(user.id, portfolio_id, recurring_buy_id, payload)
+    if recurring_buy is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recurring buy not found")
+    return recurring_buy
+
+
+@router.delete("/portfolios/{portfolio_id}/recurring-buys/{recurring_buy_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_recurring_buy(
+    portfolio_id: UUID,
+    recurring_buy_id: UUID,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> None:
+    require_signed_in(user)
+    removed = get_store(user).delete_recurring_buy(user.id, portfolio_id, recurring_buy_id)
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recurring buy not found")
 
 
 @router.get("/watchlists", response_model=list[WatchlistRead])

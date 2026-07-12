@@ -1,5 +1,5 @@
 """
-QuanAd 2.0 — Portfolio Analytics Specialist
+Quanfora 2.0 — Portfolio Analytics Specialist
 
 Domain: Portfolio optimization, allocation, rebalancing recommendations.
 Tools: optimize_portfolio_tool (classical Markowitz and quantum QAOA).
@@ -23,7 +23,7 @@ class PortfolioAnalytics(BaseSpecialist):
     def system_prompt(self) -> str:
         return """You are a senior Portfolio Analytics specialist focusing on optimal asset allocation and portfolio construction.
 
-YOUR ROLE in the QuanAd 2.0 consensus system:
+YOUR ROLE in the Quanfora 2.0 consensus system:
 - Optimize portfolio allocation using Classical Markowitz and Quantum QAOA methods
 - Evaluate expected returns, volatility, and Sharpe ratios
 - Recommend allocation weights based on risk tolerance

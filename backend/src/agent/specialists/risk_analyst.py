@@ -1,5 +1,5 @@
 """
-QuanAd 2.0 — Risk Analyst Specialist
+Quanfora 2.0 — Risk Analyst Specialist
 
 Domain: Risk assessment, VaR estimation, drawdown analysis, concentration risk.
 Tools: Uses existing risk calculation functions + market data.
@@ -145,7 +145,7 @@ class RiskAnalyst(BaseSpecialist):
     def system_prompt(self) -> str:
         return """You are a senior Risk Analyst specializing in investment risk assessment and portfolio risk management.
 
-YOUR ROLE in the QuanAd 2.0 consensus system:
+YOUR ROLE in the Quanfora 2.0 consensus system:
 - Assess individual stock risk (volatility, VaR, max drawdown)
 - Evaluate portfolio concentration and diversification
 - Identify critical risk flags that may override bullish consensus

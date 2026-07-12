@@ -44,7 +44,7 @@ function NavigationMenuItem({ className, ...props }: React.ComponentProps<typeof
 }
 
 const navigationMenuTriggerStyle = cva(
-  'cursor-pointer group inline-flex h-9 w-max items-center justify-center rounded-md bg-transparent px-4 py-2 text-sm font-medium hover:bg-white/[0.08] hover:text-white focus:bg-white/[0.08] focus:text-white disabled:pointer-events-none disabled:opacity-50 data-[active=true]:bg-white/[0.08] data-[state=open]:bg-white/[0.08] data-[active=true]:text-white ring-ring/10 dark:ring-ring/20 dark:outline-ring/40 outline-ring/50 transition-[color,box-shadow,background-color] focus-visible:ring-4 focus-visible:outline-1 text-white/40',
+  'cursor-pointer group inline-flex h-9 w-max items-center justify-center rounded-md bg-transparent px-4 py-2 text-sm font-medium text-[var(--text-subtle)] hover:bg-white/[0.08] hover:text-[var(--text-primary)] focus:bg-white/[0.08] focus:text-[var(--text-primary)] disabled:pointer-events-none disabled:opacity-50 data-[active=true]:bg-white/[0.08] data-[state=open]:bg-white/[0.08] data-[active=true]:text-[var(--text-primary)] ring-ring/10 dark:ring-ring/20 dark:outline-ring/40 outline-ring/50 transition-[color,box-shadow,background-color] focus-visible:ring-4 focus-visible:outline-1',
 );
 
 function NavigationMenuTrigger({
@@ -73,7 +73,7 @@ function NavigationMenuContent({ className, ...props }: React.ComponentProps<typ
       data-slot="navigation-menu-content"
       className={cn(
         'data-[motion^=from-]:animate-in data-[motion^=to-]:animate-out data-[motion^=from-]:fade-in data-[motion^=to-]:fade-out data-[motion=from-end]:slide-in-from-right-52! data-[motion=from-start]:slide-in-from-left-52! data-[motion=to-end]:slide-out-to-right-52! data-[motion=to-start]:slide-out-to-left-52! top-0 left-0 w-full p-2 pr-2.5 md:absolute md:w-auto',
-        'group-data-[viewport=false]/navigation-menu:bg-[#0c0d14]/95 group-data-[viewport=false]/navigation-menu:backdrop-blur-xl group-data-[viewport=false]/navigation-menu:text-white group-data-[viewport=false]/navigation-menu:data-[state=open]:animate-in group-data-[viewport=false]/navigation-menu:data-[state=closed]:animate-out group-data-[viewport=false]/navigation-menu:data-[state=closed]:zoom-out-95 group-data-[viewport=false]/navigation-menu:data-[state=open]:zoom-in-95 group-data-[viewport=false]/navigation-menu:data-[state=open]:fade-in-0 group-data-[viewport=false]/navigation-menu:data-[state=closed]:fade-out-0 group-data-[viewport=false]/navigation-menu:top-full group-data-[viewport=false]/navigation-menu:mt-3 group-data-[viewport=false]/navigation-menu:overflow-hidden group-data-[viewport=false]/navigation-menu:rounded-xl group-data-[viewport=false]/navigation-menu:border group-data-[viewport=false]/navigation-menu:border-white/[0.08] group-data-[viewport=false]/navigation-menu:shadow-md group-data-[viewport=false]/navigation-menu:duration-200 **:data-[slot=navigation-menu-link]:focus:ring-0 **:data-[slot=navigation-menu-link]:focus:outline-none',
+        'group-data-[viewport=false]/navigation-menu:bg-[var(--surface-popover-strong)] group-data-[viewport=false]/navigation-menu:backdrop-blur-xl group-data-[viewport=false]/navigation-menu:text-[var(--text-primary)] group-data-[viewport=false]/navigation-menu:data-[state=open]:animate-in group-data-[viewport=false]/navigation-menu:data-[state=closed]:animate-out group-data-[viewport=false]/navigation-menu:data-[state=closed]:zoom-out-95 group-data-[viewport=false]/navigation-menu:data-[state=open]:zoom-in-95 group-data-[viewport=false]/navigation-menu:data-[state=open]:fade-in-0 group-data-[viewport=false]/navigation-menu:data-[state=closed]:fade-out-0 group-data-[viewport=false]/navigation-menu:top-full group-data-[viewport=false]/navigation-menu:mt-3 group-data-[viewport=false]/navigation-menu:overflow-hidden group-data-[viewport=false]/navigation-menu:rounded-xl group-data-[viewport=false]/navigation-menu:border group-data-[viewport=false]/navigation-menu:border-[var(--theme-border)] group-data-[viewport=false]/navigation-menu:shadow-md group-data-[viewport=false]/navigation-menu:duration-200 **:data-[slot=navigation-menu-link]:focus:ring-0 **:data-[slot=navigation-menu-link]:focus:outline-none',
         className,
       )}
       {...props}
@@ -90,7 +90,7 @@ function NavigationMenuViewport({
       <NavigationMenuPrimitive.Viewport
         data-slot="navigation-menu-viewport"
         className={cn(
-          'shadow-md shadow-black/5 rounded-xl border border-white/[0.08] bg-[#0c0d14]/95 backdrop-blur-xl text-white p-1.5 origin-top-center data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-90 relative mt-3 h-[var(--radix-navigation-menu-viewport-height)] w-full overflow-hidden md:w-[var(--radix-navigation-menu-viewport-width)]',
+          'shadow-md shadow-black/5 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-popover-strong)] backdrop-blur-xl text-[var(--text-primary)] p-1.5 origin-top-center data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-90 relative mt-3 h-[var(--radix-navigation-menu-viewport-height)] w-full overflow-hidden md:w-[var(--radix-navigation-menu-viewport-width)]',
           className,
         )}
         {...props}
@@ -104,7 +104,7 @@ function NavigationMenuLink({ className, ...props }: React.ComponentProps<typeof
     <NavigationMenuPrimitive.Link
       data-slot="navigation-menu-link"
       className={cn(
-        'hover:bg-white/[0.08] hover:text-white focus:bg-white/[0.08] focus:text-white data-[active=true]:bg-white/[0.08] data-[active=true]:text-white ring-ring/10 dark:ring-ring/20 dark:outline-ring/40 outline-ring/50 flex flex-col gap-1 rounded-lg p-3 text-sm transition-[color,box-shadow,background-color] focus-visible:ring-4 focus-visible:outline-1',
+        'hover:bg-[var(--surface-selected)] hover:text-[var(--text-primary)] focus:bg-[var(--surface-selected)] focus:text-[var(--text-primary)] data-[active=true]:bg-[var(--surface-selected)] data-[active=true]:text-[var(--text-primary)] ring-ring/10 dark:ring-ring/20 dark:outline-ring/40 outline-ring/50 flex flex-col gap-1 rounded-lg p-3 text-sm transition-[color,box-shadow,background-color] focus-visible:ring-4 focus-visible:outline-1',
         className,
       )}
       {...props}
@@ -125,7 +125,7 @@ function NavigationMenuIndicator({
       )}
       {...props}
     >
-      <div className="bg-white/[0.08] relative top-[60%] h-2 w-2 rotate-45 rounded-ts-md shadow-md" />
+      <div className="bg-[var(--theme-border)] relative top-[60%] h-2 w-2 rotate-45 rounded-ts-md shadow-md" />
     </NavigationMenuPrimitive.Indicator>
   );
 }

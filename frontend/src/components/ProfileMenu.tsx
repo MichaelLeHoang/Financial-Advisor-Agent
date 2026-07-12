@@ -43,7 +43,7 @@ export default function ProfileMenu({
     onAlertsClick?: () => void;
 }) {
     const router = useRouter();
-    const { user, error: authError, signIn, signUp, signOut } = useAuth();
+    const { user, loading, error: authError, signIn, signUp, signOut } = useAuth();
     const [accountSwitcherOpen, setAccountSwitcherOpen] = useState(false);
     const [signInOpen, setSignInOpen] = useState(false);
     const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
@@ -54,11 +54,11 @@ export default function ProfileMenu({
     const [authSubmitting, setAuthSubmitting] = useState(false);
     const triggerRef = useRef<HTMLButtonElement>(null);
 
-    const currentUserName = user?.display_name || user?.email?.split("@")[0] || "Researcher";
+    const currentUserName = loading ? "Loading account..." : user?.display_name || user?.email?.split("@")[0] || "Researcher";
     const currentPlan = user?.plan ?? "free";
-    const initial = getAvatarInitials(user?.display_name, user?.email);
+    const initial = loading ? "" : getAvatarInitials(user?.display_name, user?.email);
     const avatarColor = getAvatarColor(user?.id || user?.email);
-    const isGuest = user?.is_guest ?? false;
+    const isGuest = !loading && (user?.is_guest ?? false);
 
     const submitAuth = async (event: FormEvent) => {
         event.preventDefault();
@@ -89,7 +89,7 @@ export default function ProfileMenu({
     const openHelpCenter = () => {
         setAccountSwitcherOpen(false);
         setSignInOpen(false);
-        router.push("/introduction/help");
+        router.push("/help");
     };
 
     const openAlerts = () => {

@@ -1,4 +1,4 @@
-"""QuanAd 2.0 specialist agents for multi-agent consensus architecture."""
+"""Quanfora 2.0 specialist agents for multi-agent consensus architecture."""
 
 from src.agent.specialists.base import BaseSpecialist
 from src.agent.specialists.quant_researcher import QuantResearcher

@@ -375,7 +375,7 @@ export default function Plan({ mode = "single", isActive = true, activeTool = nu
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
           )}
           <span className="text-xs font-semibold text-white/70">
-            {mode === "consensus" ? "QuanAd 2.0 — Consensus Analysis" : mode === "research" ? "QuanAd 2.1 — Equity Research Desk" : "QuanAd 1.0 — Agent Execution"}
+            {mode === "consensus" ? "Quanfora 2.0 — Consensus Analysis" : mode === "research" ? "Quanfora 2.1 — Equity Research Desk" : "Quanfora 1.0 — Agent Execution"}
           </span>
         </div>
         <div className="flex items-center gap-2">

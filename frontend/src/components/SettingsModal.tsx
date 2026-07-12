@@ -1,7 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { useEffect, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -54,6 +53,15 @@ const THEMES = [
 ];
 
 export default function SettingsModal({ isOpen, onClose, settings, setSettings }: SettingsModalProps) {
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") onClose();
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     return (
@@ -69,11 +77,14 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="settings-title"
                 className="relative z-10 flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl overflow-hidden sm:max-h-[calc(100dvh-2rem)]"
             >
                 <Card className="flex max-h-full w-full flex-col rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-settings)] py-0 text-white shadow-[var(--shadow-settings)]">
                     <CardHeader className="flex shrink-0 flex-row items-center justify-between px-5 pt-5 sm:px-8 sm:pt-8">
-                        <CardTitle className="text-2xl font-bold sm:text-3xl">Settings</CardTitle>
+                        <CardTitle id="settings-title" className="text-2xl font-bold sm:text-3xl">Settings</CardTitle>
                         <button
                             type="button"
                             onClick={onClose}
@@ -86,31 +97,6 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
 
                     <CardContent className="flex min-h-0 flex-1 flex-col px-5 pb-5 sm:px-8 sm:pb-8">
                         <div className="min-h-0 flex-1 space-y-7 overflow-y-auto pr-1 sm:space-y-8 sm:pr-2">
-                    {/* AI Model */}
-                    <div className="space-y-4">
-                        <label className="text-sm font-bold text-white/40 uppercase tracking-widest">AI Intelligence</label>
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-                            {["Gemini 3 Flash", "Gemini 3.1 Pro"].map((m) => (
-                                <Button
-                                    key={m}
-                                    type="button"
-                                    variant="outline"
-                                    data-selected={settings.model === m}
-                                    onClick={() => setSettings({ ...settings, model: m })}
-                                    className={cn(
-                                        "theme-section-button h-auto flex-col items-start justify-start rounded-2xl border p-4 text-left hover:-translate-y-0.5 hover:shadow-[var(--shadow-primary-action-hover)] focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
-                                        settings.model === m
-                                            ? "border-indigo-primary bg-indigo-primary/20 text-white shadow-[var(--shadow-primary-action)]"
-                                            : "border-white/[0.06] bg-white/5 text-white/40 hover:border-indigo-primary/50 hover:bg-indigo-primary/10 hover:text-white"
-                                    )}
-                                >
-                                    <div className="font-bold">{m}</div>
-                                    <div className="text-xs opacity-60">{m.includes("Pro") ? "High reasoning" : "Fast & efficient"}</div>
-                                </Button>
-                            ))}
-                        </div>
-                    </div>
-
                     {/* Theme */}
                     <div className="space-y-4">
                         <label className="text-sm font-bold text-white/40 uppercase tracking-widest">Visual Theme</label>
@@ -147,44 +133,6 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                         </div>
                     </div>
 
-                    {/* Risk Profile */}
-                    <div className="space-y-4">
-                        <label className="text-sm font-bold text-white/40 uppercase tracking-widest">Default Risk Profile</label>
-                        <select
-                            value={settings.risk}
-                            onChange={(e) => setSettings({ ...settings, risk: e.target.value })}
-                            className="w-full glass bg-white/5 border-white/[0.06] rounded-2xl p-4 focus:outline-none focus:border-indigo-primary/50"
-                        >
-                            <option value="conservative" className="bg-space-black">Conservative</option>
-                            <option value="moderate" className="bg-space-black">Moderate</option>
-                            <option value="aggressive" className="bg-space-black">Aggressive</option>
-                        </select>
-                    </div>
-
-                    {/* Quantum Backend */}
-                    <div className="space-y-4">
-                        <label className="text-sm font-bold text-white/40 uppercase tracking-widest">Quantum Backend</label>
-                        <div className="space-y-2">
-                            {["IonQ Forte (11 Qubits)", "Rigetti Aspen-M-3", "IBM Eagle (127 Qubits)"].map((q) => (
-                                <Button
-                                    key={q}
-                                    type="button"
-                                    variant="outline"
-                                    data-selected={settings.quantum === q}
-                                    onClick={() => setSettings({ ...settings, quantum: q })}
-                                    className={cn(
-                                        "theme-section-button h-auto w-full rounded-2xl border p-4 flex justify-between items-center",
-                                        settings.quantum === q
-                                            ? "bg-cyan-secondary/20 border-cyan-secondary text-white"
-                                            : "bg-white/5 border-white/[0.06] text-white/40 hover:border-white/[0.12]"
-                                    )}
-                                >
-                                    <span className="font-bold">{q}</span>
-                                    {settings.quantum === q && <CheckCircle2 className="w-5 h-5 text-cyan-secondary" />}
-                                </Button>
-                            ))}
-                        </div>
-                    </div>
                 </div>
 
                         <div className="mt-5 flex shrink-0 gap-4 sm:mt-8">

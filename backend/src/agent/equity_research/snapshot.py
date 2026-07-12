@@ -10,6 +10,7 @@ import yfinance as yf
 from fastapi import HTTPException, status
 
 from src.data.market_data_service import market_data_service
+from src.agent.market_grounding import resolve_market_entity
 from src.models.equity_research import EquityResearchSnapshot
 
 
@@ -143,17 +144,15 @@ def _sentiment_summary(news_items: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def build_data_snapshot(run_id: UUID, ticker_symbol: str, analysis_date: date) -> EquityResearchSnapshot:
-    normalized = ticker_symbol.strip().upper()
-    market_snapshot = market_data_service.fetch_snapshot(normalized, period="6mo", interval="1d", include_news=True)
-    if not market_snapshot.company_name and not market_snapshot.exchange and not market_snapshot.latest_price:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Could not resolve {ticker_symbol}. Check the ticker and try again.",
-        )
+def _build_equity_research_snapshot(
+    run_id: UUID,
+    ticker: str,
+    analysis_date: date,
+    market_snapshot: Any,
+) -> EquityResearchSnapshot:
     return EquityResearchSnapshot(
         run_id=run_id,
-        ticker=normalized,
+        ticker=ticker,
         company_name=market_snapshot.company_name,
         exchange=market_snapshot.exchange,
         analysis_date=analysis_date,
@@ -194,71 +193,25 @@ def build_data_snapshot(run_id: UUID, ticker_symbol: str, analysis_date: date) -
         filing_context=market_snapshot.filing_context,
     )
 
-    ticker = yf.Ticker(ticker_symbol)
-    try:
-        info = ticker.info or {}
-    except Exception:
-        info = {}
 
-    company_name = info.get("shortName") or info.get("longName")
-    exchange = info.get("exchange") or info.get("fullExchangeName")
-    if not company_name and not exchange:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Could not resolve {ticker_symbol}. Check the ticker and try again.",
-        )
-
-    try:
-        history = ticker.history(period="6mo", interval="1d", auto_adjust=True)
-    except Exception:
-        history = pd.DataFrame()
-
-    latest_price = None
-    previous_close = _clean_number(info.get("regularMarketPreviousClose") or info.get("previousClose"))
-    volume = _clean_number(info.get("regularMarketVolume") or info.get("volume"))
-    if not history.empty and "Close" in history:
-        close = history["Close"].dropna()
-        latest_price = _latest(close)
-        if previous_close is None and len(close) > 1:
-            previous_close = _clean_number(close.iloc[-2])
-        if volume is None and "Volume" in history:
-            volume = _latest(history["Volume"])
-    latest_price = latest_price or _clean_number(info.get("regularMarketPrice") or info.get("currentPrice"))
-
-    news = _news_items(ticker)
-    fundamentals = {
-        "trailing_pe": _clean_number(info.get("trailingPE")),
-        "forward_pe": _clean_number(info.get("forwardPE")),
-        "price_to_book": _clean_number(info.get("priceToBook")),
-        "profit_margins": _clean_number(info.get("profitMargins")),
-        "revenue_growth": _clean_number(info.get("revenueGrowth")),
-        "earnings_growth": _clean_number(info.get("earningsGrowth")),
-        "debt_to_equity": _clean_number(info.get("debtToEquity")),
-        "free_cashflow": _clean_number(info.get("freeCashflow")),
-        "sector": info.get("sector"),
-        "industry": info.get("industry"),
-    }
-
-    sources = ["yfinance"]
-    if news:
-        sources.append("yfinance_news")
-
-    return EquityResearchSnapshot(
-        run_id=run_id,
-        ticker=ticker_symbol,
-        company_name=company_name,
-        exchange=exchange,
-        analysis_date=analysis_date,
-        latest_price=latest_price,
-        previous_close=previous_close,
-        daily_change=_safe_pct_change(latest_price, previous_close),
-        volume=volume,
-        market_cap=_clean_number(info.get("marketCap")),
-        fundamentals=fundamentals,
-        technical_indicators=_technical_indicators(history),
-        news_items=news,
-        rag_context=[],
-        sentiment_summary=_sentiment_summary(news),
-        risk_metrics=_risk_metrics(history),
-        data_sources=sources,
-    )
+def build_data_snapshot(run_id: UUID, ticker_symbol: str, analysis_date: date) -> EquityResearchSnapshot:
+    normalized = ticker_symbol.strip().upper()
+    market_snapshot = market_data_service.fetch_snapshot(normalized, period="6mo", interval="1d", include_news=True)
+    if not market_snapshot.company_name and not market_snapshot.exchange and not market_snapshot.latest_price:
+        candidates = resolve_market_entity(normalized, limit=3)
+        resolved_ticker = candidates[0].ticker if candidates else None
+        if resolved_ticker and resolved_ticker != normalized:
+            market_snapshot = market_data_service.fetch_snapshot(
+                resolved_ticker,
+                period="6mo",
+                interval="1d",
+                include_news=True,
+            )
+            if market_snapshot.company_name or market_snapshot.exchange or market_snapshot.latest_price:
+                normalized = resolved_ticker
+        if not (market_snapshot.company_name or market_snapshot.exchange or market_snapshot.latest_price):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Could not resolve {ticker_symbol}. Check the ticker and try again.",
+            )
+    return _build_equity_research_snapshot(run_id, normalized, analysis_date, market_snapshot)

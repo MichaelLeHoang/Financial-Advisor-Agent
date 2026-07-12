@@ -1,5 +1,6 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 let authToken: string | null = null;
+const GUEST_SESSION_STORAGE_KEY = "quanfora.guestResearchSession";
 
 // ─── Types ────────────────────
 
@@ -7,6 +8,8 @@ export interface ChatResponse {
   response: string;
   session_id: string;
   mode?: "single" | "consensus" | "auto";
+  consensus?: ConsensusMetadata;
+  overview?: Overview | null;
 }
 
 export type ChatJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
@@ -62,15 +65,19 @@ export interface ConsensusResponse extends ChatResponse {
 }
 
 export type ResearchDepth = "shallow" | "medium" | "deep";
+export type ResearchReportType = "investment" | "trading";
 export type ResearchRunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 export type ResearchAgentStatus = "pending" | "running" | "completed" | "failed" | "skipped";
 export type ResearchRecommendation = "buy" | "hold" | "sell" | "insufficient_data";
+export type InvestmentDecision = "strong_buy" | "buy" | "hold" | "watchlist" | "reduce" | "sell" | "avoid";
+export type TradingBias = "bullish" | "neutral" | "bearish";
 export type ResearchSourceSurface = "introduction" | "research" | "market" | "ai_advisor" | "shared";
 export type ResearchEventType = "reasoning" | "tool" | "report" | "status" | "final" | "error";
 
 export interface EquityResearchRunCreate {
   ticker: string;
   analysis_date?: string;
+  report_type?: ResearchReportType;
   selected_analysts?: Array<"market" | "social" | "news" | "fundamentals">;
   research_depth?: ResearchDepth;
   quick_model?: string;
@@ -87,7 +94,10 @@ export interface EquityResearchRun {
   analysis_date: string;
   status: ResearchRunStatus;
   recommendation: ResearchRecommendation;
+  investment_decision?: InvestmentDecision | null;
+  trading_bias?: TradingBias | null;
   confidence: number;
+  report_type: ResearchReportType;
   research_depth: ResearchDepth;
   selected_analysts: string[];
   quick_model: string;
@@ -166,11 +176,85 @@ export interface EquityResearchEvent {
   token_output?: number | null;
 }
 
+export type OverviewTone = "positive" | "neutral" | "negative" | "info";
+export type OverviewVerdict = "buy" | "hold" | "sell" | "bullish" | "neutral" | "bearish" | "insufficient_data";
+
+export interface OverviewMetric {
+  label: string;
+  value: string;
+  tone: OverviewTone;
+}
+
+export interface OverviewSource {
+  label: string;
+  source: string;
+  url?: string | null;
+}
+
+export interface OverviewPoint {
+  title: string;
+  detail: string;
+  sources: OverviewSource[];
+  tone: OverviewTone;
+}
+
+export interface Overview {
+  title: string;
+  verdict: OverviewVerdict;
+  summary: string;
+  metrics: OverviewMetric[];
+  catalysts: OverviewPoint[];
+  risks: OverviewPoint[];
+  sources: OverviewSource[];
+  next_questions: string[];
+  disclaimer: string;
+}
+
+export type DecisionWorkspaceTone = "positive" | "neutral" | "negative" | "info";
+
+export interface DecisionWorkspaceMetric {
+  label: string;
+  value: string;
+  tone: DecisionWorkspaceTone;
+}
+
+export interface DecisionWorkspaceSection {
+  summary: string;
+  metrics: DecisionWorkspaceMetric[];
+  bullets: string[];
+  limitations: string[];
+}
+
+export interface DecisionWorkspaceBacktest {
+  summary: string;
+  assumptions: string[];
+  metrics: DecisionWorkspaceMetric[];
+  limitations: string[];
+}
+
+export interface DecisionWorkspaceNextStep {
+  label: string;
+  detail: string;
+  trigger?: string | null;
+}
+
+export interface DecisionWorkspace {
+  overview: DecisionWorkspaceSection;
+  evidence: DecisionWorkspaceSection;
+  signals: DecisionWorkspaceSection;
+  backtest: DecisionWorkspaceBacktest;
+  regime: DecisionWorkspaceSection;
+  agent_debate: DecisionWorkspaceSection;
+  next_steps: DecisionWorkspaceNextStep[];
+}
+
 export interface EquityResearchRunDetail {
   run: EquityResearchRun;
   snapshot?: EquityResearchSnapshot | null;
   reports: EquityResearchReport[];
   latest_events: EquityResearchEvent[];
+  decision_workspace?: DecisionWorkspace | null;
+  overview?: Overview | null;
 }
 
 export interface EquityResearchEventsList {
@@ -182,6 +266,8 @@ export interface PublicEquityResearchReport {
   run: EquityResearchRun;
   snapshot?: EquityResearchSnapshot | null;
   reports: EquityResearchReport[];
+  decision_workspace?: DecisionWorkspace | null;
+  overview?: Overview | null;
 }
 
 export interface ChatMessage {
@@ -189,6 +275,14 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   created_at?: string;
+  metadata?: {
+    consensus?: ConsensusMetadata;
+    researchReports?: EquityResearchReport[];
+    overview?: Overview | null;
+  } | null;
+  consensusOpinions?: ConsensusOpinion[];
+  researchReports?: EquityResearchReport[];
+  overview?: Overview | null;
 }
 
 export interface ChatSession {
@@ -344,7 +438,50 @@ export interface Holding {
   asset_type: string;
   quantity: number;
   average_cost: number;
+  cost_currency: string;
   created_at: string;
+}
+
+export interface RecurringBuy {
+  id: string;
+  portfolio_id: string;
+  linked_holding_id?: string | null;
+  symbol: string;
+  account?: string | null;
+  status: string;
+  purchase_mode: "amount" | "shares";
+  entered_amount: number;
+  entered_currency: string;
+  filled_quantity: number;
+  fill_price: number;
+  fill_currency: string;
+  exchange_rate?: number | null;
+  recurrence_frequency: "daily" | "weekly" | "monthly" | "yearly";
+  schedule_time: string;
+  schedule_day_of_week?: number | null;
+  schedule_day_of_month?: number | null;
+  schedule_month?: number | null;
+  executed_at: string;
+  created_at: string;
+}
+
+export interface RecurringBuyRequest {
+  symbol: string;
+  account?: string | null;
+  status?: string;
+  purchase_mode?: "amount" | "shares";
+  entered_amount: number;
+  entered_currency: string;
+  filled_quantity: number;
+  fill_price: number;
+  fill_currency: string;
+  exchange_rate?: number | null;
+  recurrence_frequency?: "daily" | "weekly" | "monthly" | "yearly";
+  schedule_time?: string;
+  schedule_day_of_week?: number | null;
+  schedule_day_of_month?: number | null;
+  schedule_month?: number | null;
+  executed_at?: string;
 }
 
 export interface Watchlist {
@@ -801,11 +938,12 @@ export interface StrategyExportResult {
 
 // ─── API helpers ────────────────────
 
-async function post<T>(path: string, body: unknown): Promise<T> {
+async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
   const res = await request(`${BASE}${path}`, {
     method: "POST",
     headers: requestHeaders(),
     body: JSON.stringify(body),
+    signal,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -814,8 +952,8 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
-async function get<T>(path: string): Promise<T> {
-  const res = await request(`${BASE}${path}`, { headers: requestHeaders(false), cache: "no-store" });
+async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const res = await request(`${BASE}${path}`, { headers: requestHeaders(false), cache: "no-store", signal });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new ApiError(res.status, err.detail ?? err);
@@ -872,13 +1010,42 @@ function errorMessage(detail: unknown): string {
   return "API error";
 }
 
+function getGuestSessionId(): string | null {
+  if (authToken || typeof window === "undefined") return null;
+  const storage = window.sessionStorage;
+  const existing = storage.getItem(GUEST_SESSION_STORAGE_KEY);
+  if (existing) return existing;
+
+  const next = typeof window.crypto?.randomUUID === "function"
+    ? window.crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  storage.setItem(GUEST_SESSION_STORAGE_KEY, next);
+  return next;
+}
+
 function requestHeaders(includeJson = true): HeadersInit {
+  const guestSessionId = getGuestSessionId();
   return {
     ...(includeJson ? { "Content-Type": "application/json" } : {}),
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    ...(guestSessionId ? { "X-Guest-Session-Id": guestSessionId } : {}),
     // Bypass ngrok free-tier browser interstitial warning page
     "ngrok-skip-browser-warning": "true",
   };
+}
+
+function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Request aborted", "AbortError"));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => {
+      clearTimeout(timer);
+      reject(new DOMException("Request aborted", "AbortError"));
+    }, { once: true });
+  });
 }
 
 // ─── Exported functions ────────────
@@ -902,19 +1069,35 @@ export const api = {
   portfolioHoldings: (portfolioId: string) =>
     get<Holding[]>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings`),
 
-  addHolding: (portfolioId: string, symbol: string, quantity: number, averageCost: number) =>
+  addHolding: (portfolioId: string, symbol: string, quantity: number, averageCost: number, costCurrency?: string) =>
     post<Holding>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings`, {
       symbol,
       asset_type: "equity",
       quantity,
       average_cost: averageCost,
+      cost_currency: costCurrency,
     }),
 
-  updateHolding: (portfolioId: string, holdingId: string, updates: { quantity?: number; average_cost?: number }) =>
+  updateHolding: (portfolioId: string, holdingId: string, updates: { quantity?: number; average_cost?: number; cost_currency?: string }) =>
     patch<Holding>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings/${encodeURIComponent(holdingId)}`, updates),
 
   removeHolding: (portfolioId: string, holdingId: string) =>
     del<void>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings/${encodeURIComponent(holdingId)}`),
+
+  recurringBuys: (portfolioId: string) =>
+    get<RecurringBuy[]>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/recurring-buys`),
+
+  addRecurringBuy: (portfolioId: string, payload: RecurringBuyRequest) =>
+    post<RecurringBuy>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/recurring-buys`, payload),
+
+  updateRecurringBuy: (portfolioId: string, recurringBuyId: string, payload: Partial<RecurringBuyRequest>) =>
+    patch<RecurringBuy>(
+      `/api/v1/portfolios/${encodeURIComponent(portfolioId)}/recurring-buys/${encodeURIComponent(recurringBuyId)}`,
+      payload
+    ),
+
+  removeRecurringBuy: (portfolioId: string, recurringBuyId: string) =>
+    del<void>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/recurring-buys/${encodeURIComponent(recurringBuyId)}`),
 
   watchlists: () => get<Watchlist[]>("/api/v1/watchlists"),
 
@@ -1013,20 +1196,23 @@ export const api = {
   exportStrategy: (payload: StrategyExportRequest) =>
     post<StrategyExportResult>("/api/v1/quant/export", payload),
 
-  /** Chat with the LangGraph agent — mode controls QuanAd version */
-  chat: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single") =>
-    post<ChatResponse>("/api/v1/agent/chat", { message, session_id: sessionId, remember, mode }),
+  /** Chat with the LangGraph agent — mode controls Quanfora version */
+  chat: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single", signal?: AbortSignal) =>
+    post<ChatResponse>("/api/v1/agent/chat", { message, session_id: sessionId, remember, mode }, signal),
 
   /** Queue AI chat work and poll the job status/result */
-  chatJob: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single") =>
-    post<ChatJobCreateResponse>("/api/v1/agent/chat/jobs", { message, session_id: sessionId, remember, mode }),
+  chatJob: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single", signal?: AbortSignal) =>
+    post<ChatJobCreateResponse>("/api/v1/agent/chat/jobs", { message, session_id: sessionId, remember, mode }, signal),
 
-  chatJobStatus: (jobId: string) =>
-    get<ChatJobStatusResponse>(`/api/v1/agent/chat/jobs/${encodeURIComponent(jobId)}`),
+  chatJobStatus: (jobId: string, signal?: AbortSignal) =>
+    get<ChatJobStatusResponse>(`/api/v1/agent/chat/jobs/${encodeURIComponent(jobId)}`, signal),
 
-  waitForChatJob: async (jobId: string, onUpdate?: (job: ChatJobStatusResponse) => void, intervalMs = 1500) => {
+  waitForChatJob: async (jobId: string, onUpdate?: (job: ChatJobStatusResponse) => void, intervalMs = 1500, signal?: AbortSignal, timeoutMs = 10 * 60 * 1000) => {
+    const deadline = Date.now() + timeoutMs;
     while (true) {
-      const job = await api.chatJobStatus(jobId);
+      signal?.throwIfAborted();
+      if (Date.now() >= deadline) throw new Error("Chat job timed out");
+      const job = await api.chatJobStatus(jobId, signal);
       onUpdate?.(job);
 
       if (job.status === "succeeded") {
@@ -1037,26 +1223,26 @@ export const api = {
         throw new Error(job.error?.message ?? `Chat job ${job.status}`);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      await abortableDelay(intervalMs, signal);
     }
   },
 
-  /** Full QuanAd 2.0 multi-agent consensus with metadata */
+  /** Full Quanfora 2.0 multi-agent consensus with metadata */
   consensus: (message: string, sessionId = "default", remember = true) =>
     post<ConsensusResponse>("/api/v1/agent/consensus", { message, session_id: sessionId, remember }),
 
-  /** QuanAd 2.1 Equity Research Desk */
-  createEquityResearchRun: (payload: EquityResearchRunCreate) =>
-    post<EquityResearchRun>("/api/v1/equity-research/runs", payload),
+  /** Quanfora 2.1 Equity Research Desk */
+  createEquityResearchRun: (payload: EquityResearchRunCreate, signal?: AbortSignal) =>
+    post<EquityResearchRun>("/api/v1/equity-research/runs", payload, signal),
 
-  equityResearchRun: (runId: string) =>
-    get<EquityResearchRunDetail>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}`),
+  equityResearchRun: (runId: string, signal?: AbortSignal) =>
+    get<EquityResearchRunDetail>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}`, signal),
 
   equityResearchReports: (runId: string) =>
     get<EquityResearchReport[]>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/reports`),
 
-  equityResearchEvents: (runId: string, after = 0) =>
-    get<EquityResearchEventsList>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/events/list?after=${after}`),
+  equityResearchEvents: (runId: string, after = 0, signal?: AbortSignal) =>
+    get<EquityResearchEventsList>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/events/list?after=${after}`, signal),
 
   shareEquityResearchRun: (runId: string, shared = true) =>
     patch<EquityResearchRun>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/share`, { shared }),
@@ -1076,8 +1262,8 @@ export const api = {
   chatSessionMessages: (sessionId = "default") =>
     get<ChatSessionMessages>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`),
 
-  appendChatSessionMessage: (sessionId: string, role: "user" | "assistant", content: string) =>
-    post<{ status: string; session_id: string }>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`, { role, content }),
+  appendChatSessionMessage: (sessionId: string, role: "user" | "assistant", content: string, metadata?: ChatMessage["metadata"]) =>
+    post<{ status: string; session_id: string }>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`, { role, content, metadata }),
 
   renameChatSession: (sessionId: string, title: string) =>
     patch<ChatSession>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}`, { title }),
@@ -1115,6 +1301,9 @@ export const api = {
   news: (categories: string[], limit = 20) =>
     get<NewsResponse>(`/api/v1/news?categories=${encodeURIComponent(categories.join(","))}&limit=${limit}`),
 
+  marketIntelligence: (categories: string[], limit = 30) =>
+    get<MarketIntelligenceResponse>(`/api/v1/market-intelligence?categories=${encodeURIComponent(categories.join(","))}&limit=${limit}`),
+
   /** Health check */
   health: () => get<{ status: string }>("/health"),
   status: () => get<ServiceStatus>("/api/v1/status"),
@@ -1146,6 +1335,85 @@ export interface NewsResponse {
 export interface CategoryInfo {
   key: string;
   label: string;
+}
+
+export interface InsightSource {
+  title: string;
+  url: string | null;
+  publisher: string | null;
+  published_at: string | null;
+}
+
+export interface ImpactScoreBreakdown {
+  freshness: number;
+  relevance: number;
+  sentiment: number;
+  price_volume: number;
+  source_quality: number;
+  risk_penalty: number;
+  final_score: number;
+}
+
+export interface NewsBriefCard {
+  id: string;
+  headline: string;
+  summary: string;
+  tickers: string[];
+  categories: string[];
+  sentiment: "bullish" | "neutral" | "bearish";
+  impact_score: number;
+  confidence: number;
+  why_it_matters: string;
+  risk_flags: string[];
+  sources: InsightSource[];
+  published_at: string | null;
+  score_breakdown?: ImpactScoreBreakdown | null;
+}
+
+export interface TodayPickCard {
+  id: string;
+  ticker: string;
+  company_name: string | null;
+  current_price?: number | null;
+  daily_change_pct?: number | null;
+  thesis: string;
+  label: string;
+  opportunity_score: number;
+  confidence: number;
+  risk_level: "low" | "medium" | "high" | "critical";
+  score_breakdown?: ImpactScoreBreakdown | null;
+  key_evidence: string[];
+  risk_flags: string[];
+  related_news_count: number;
+  sources: InsightSource[];
+}
+
+export interface ResearchReport {
+  id: string;
+  title: string;
+  executive_summary: string;
+  affected_tickers: string[];
+  sections: Record<string, string>;
+  bull_case: string[];
+  bear_case: string[];
+  risk_flags: string[];
+  signal_summary: Record<string, unknown>;
+  sources: InsightSource[];
+  what_to_watch_next: string[];
+  disclaimer: string;
+  created_at: string;
+}
+
+export interface MarketIntelligenceResponse {
+  briefing: NewsBriefCard[];
+  picks: TodayPickCard[];
+  reports: ResearchReport[];
+  categories_fetched: string[];
+  total_sources: number;
+  sources_attempted: number;
+  sources_succeeded: number;
+  sources_failed: number;
+  generated_at: string;
 }
 
 /** WebSocket URL for streaming agent chat */

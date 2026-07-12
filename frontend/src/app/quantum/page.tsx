@@ -12,6 +12,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 
 const COLORS = ["#6366f1", "#22d3ee", "#34d399", "#fbbf24", "#f87171"];
 
@@ -67,8 +68,9 @@ export default function QuantumPage() {
 
                 {/* Quantum Circuit Visualization */}
                 <Card className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_14px_38px_rgba(0,0,0,0.28)]">
-                  <CardContent className="overflow-x-auto p-10">
-                    <div className="min-w-[800px] space-y-8">
+                  <CardContent className="p-10">
+                    <HorizontalScroll>
+                      <div className="min-w-[800px] space-y-8">
                         {tickers.map((t) => (
                             <div key={t} className="flex items-center gap-6">
                                 <div className="w-16 font-mono text-sm text-white/40">{t}</div>
@@ -82,7 +84,8 @@ export default function QuantumPage() {
                                 </div>
                             </div>
                         ))}
-                    </div>
+                      </div>
+                    </HorizontalScroll>
                   </CardContent>
                 </Card>
 

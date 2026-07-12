@@ -1,7 +1,7 @@
 # Backend Source Modules
 
 ## Purpose
-`backend/src` contains the FastAPI application, financial-agent workflows, domain services, provider adapters, shared schemas, and infrastructure used by QuanAd.
+`backend/src` contains the FastAPI application, financial-agent workflows, domain services, provider adapters, shared schemas, and infrastructure used by Quanfora.
 
 ## Structure
 - `api/` exposes HTTP and WebSocket entry points.

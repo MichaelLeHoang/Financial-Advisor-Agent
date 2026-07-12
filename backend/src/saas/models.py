@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -52,11 +52,23 @@ class HoldingCreate(BaseModel):
     asset_type: str = Field(default="equity", min_length=1, max_length=40)
     quantity: float = Field(ge=0)
     average_cost: float = Field(ge=0)
+    cost_currency: str | None = Field(default=None, min_length=3, max_length=3)
+
+    @field_validator("cost_currency", mode="before")
+    @classmethod
+    def normalize_cost_currency(cls, value: Any) -> str | None:
+        return str(value).strip().upper() if value else value
 
 
 class HoldingUpdate(BaseModel):
     quantity: float | None = Field(default=None, ge=0)
     average_cost: float | None = Field(default=None, ge=0)
+    cost_currency: str | None = Field(default=None, min_length=3, max_length=3)
+
+    @field_validator("cost_currency", mode="before")
+    @classmethod
+    def normalize_cost_currency(cls, value: Any) -> str | None:
+        return str(value).strip().upper() if value else value
 
 
 class HoldingRead(BaseModel):
@@ -66,7 +78,114 @@ class HoldingRead(BaseModel):
     asset_type: str = "equity"
     quantity: float
     average_cost: float
+    cost_currency: str = "USD"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_validator("cost_currency", mode="before")
+    @classmethod
+    def normalize_cost_currency(cls, value: Any) -> str:
+        return str(value or "USD").strip().upper()
+
+
+class RecurringBuyCreate(BaseModel):
+    symbol: str = Field(min_length=1, max_length=20)
+    account: str | None = Field(default=None, max_length=80)
+    status: str = Field(default="completed", min_length=1, max_length=40)
+    purchase_mode: Literal["amount", "shares"] = "amount"
+    entered_amount: float = Field(gt=0)
+    entered_currency: str = Field(default="USD", min_length=3, max_length=3)
+    filled_quantity: float = Field(gt=0)
+    fill_price: float = Field(gt=0)
+    fill_currency: str = Field(default="USD", min_length=3, max_length=3)
+    exchange_rate: float | None = Field(default=None, gt=0)
+    recurrence_frequency: Literal["daily", "weekly", "monthly", "yearly"] = "monthly"
+    schedule_time: str = Field(default="09:30", pattern=r"^\d{2}:\d{2}$")
+    schedule_day_of_week: int | None = Field(default=None, ge=0, le=6)
+    schedule_day_of_month: int | None = Field(default=None, ge=1, le=31)
+    schedule_month: int | None = Field(default=None, ge=1, le=12)
+    executed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_validator("symbol", mode="before")
+    @classmethod
+    def normalize_symbol(cls, value: Any) -> str:
+        return str(value).strip().upper()
+
+    @field_validator("entered_currency", "fill_currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, value: Any) -> str:
+        return str(value or "USD").strip().upper()
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, value: Any) -> str:
+        return str(value or "completed").strip().lower()
+
+
+class RecurringBuyUpdate(BaseModel):
+    symbol: str | None = Field(default=None, min_length=1, max_length=20)
+    account: str | None = Field(default=None, max_length=80)
+    status: str | None = Field(default=None, min_length=1, max_length=40)
+    purchase_mode: Literal["amount", "shares"] | None = None
+    entered_amount: float | None = Field(default=None, gt=0)
+    entered_currency: str | None = Field(default=None, min_length=3, max_length=3)
+    filled_quantity: float | None = Field(default=None, gt=0)
+    fill_price: float | None = Field(default=None, gt=0)
+    fill_currency: str | None = Field(default=None, min_length=3, max_length=3)
+    exchange_rate: float | None = Field(default=None, gt=0)
+    recurrence_frequency: Literal["daily", "weekly", "monthly", "yearly"] | None = None
+    schedule_time: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    schedule_day_of_week: int | None = Field(default=None, ge=0, le=6)
+    schedule_day_of_month: int | None = Field(default=None, ge=1, le=31)
+    schedule_month: int | None = Field(default=None, ge=1, le=12)
+    executed_at: datetime | None = None
+
+    @field_validator("symbol", mode="before")
+    @classmethod
+    def normalize_symbol(cls, value: Any) -> str | None:
+        return str(value).strip().upper() if value else value
+
+    @field_validator("entered_currency", "fill_currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, value: Any) -> str | None:
+        return str(value).strip().upper() if value else value
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, value: Any) -> str | None:
+        return str(value).strip().lower() if value else value
+
+
+class RecurringBuyRead(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    portfolio_id: UUID
+    linked_holding_id: UUID | None = None
+    symbol: str
+    account: str | None = None
+    status: str = "completed"
+    purchase_mode: Literal["amount", "shares"] = "amount"
+    entered_amount: float
+    entered_currency: str = "USD"
+    filled_quantity: float
+    fill_price: float
+    fill_currency: str = "USD"
+    exchange_rate: float | None = None
+    recurrence_frequency: Literal["daily", "weekly", "monthly", "yearly"] = "monthly"
+    schedule_time: str = "09:30"
+    schedule_day_of_week: int | None = None
+    schedule_day_of_month: int | None = None
+    schedule_month: int | None = None
+    executed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_validator("symbol", mode="before")
+    @classmethod
+    def normalize_symbol(cls, value: Any) -> str:
+        return str(value).strip().upper()
+
+    @field_validator("entered_currency", "fill_currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, value: Any) -> str:
+        return str(value or "USD").strip().upper()
 
 
 class WatchlistCreate(BaseModel):
