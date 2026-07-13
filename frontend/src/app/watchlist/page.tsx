@@ -475,7 +475,7 @@ function MarketCard({ row, onOpen }: { row: QuoteRow; onOpen: (instrument: Marke
     <button
       type="button"
       onClick={() => onOpen(row)}
-      className="group flex h-[132px] min-w-[220px] flex-col justify-between rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 text-left transition-all hover:border-white/[0.14] hover:bg-white/[0.055] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/40"
+      className="group flex h-[132px] min-w-[220px] flex-col justify-between rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 text-left transition-colors duration-150 hover:border-white/[0.14] hover:bg-white/[0.055] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/40"
       aria-label={`Open ${row.label} chart detail`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -1638,7 +1638,7 @@ function WatchlistSection({
                           e.preventDefault();
                           removeAsset(a.id);
                         }}
-                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-white/15 opacity-0 transition-all hover:bg-white/[0.06] hover:text-red-negative focus-visible:opacity-100 group-hover:opacity-100"
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-white/15 opacity-0 transition-[color,background-color,opacity] duration-150 hover:bg-white/[0.06] hover:text-red-negative focus-visible:opacity-100 group-hover:opacity-100"
                         aria-label={`Remove ${a.symbol} from ${watchlist.name}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />

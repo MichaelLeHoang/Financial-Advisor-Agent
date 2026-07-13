@@ -342,13 +342,11 @@ function DesktopSidebar({
     const [recentsOpen, setRecentsOpen] = useState(false);
 
     return (
-        <motion.aside
+        <aside
             className={cn(
                 "fixed inset-y-0 left-0 z-50 hidden overflow-visible md:block",
                 isOpen ? "w-72" : "w-16"
             )}
-            animate={{ width: isOpen ? 288 : 64 }}
-            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
         >
             {isOpen ? (
                 <SidebarSurface
@@ -389,7 +387,7 @@ function DesktopSidebar({
                     onAlertsClick={onAlertsClick}
                 />
             )}
-        </motion.aside>
+        </aside>
     );
 }
 
@@ -664,7 +662,7 @@ function SidebarSurface({
                 <button
                     type="button"
                     onClick={onNewAnalysis}
-                    className="accent-gradient-surface on-accent mb-4 flex h-11 items-center justify-between rounded-xl px-3 text-sm font-semibold shadow-[var(--shadow-create-action)] outline-none transition-all duration-200 hover:shadow-[var(--shadow-create-action-hover)] active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-space-black"
+                    className="accent-gradient-surface on-accent mb-4 flex h-11 items-center justify-between rounded-xl px-3 text-sm font-semibold shadow-[var(--shadow-create-action)] outline-none transition-[box-shadow,transform] duration-150 hover:shadow-[var(--shadow-create-action-hover)] active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-space-black"
                 >
                     <span className="flex items-center gap-2">
                         <PenLine className="h-5 w-5" />
@@ -700,19 +698,13 @@ function SidebarSurface({
                                         href={href}
                                         aria-current={active ? "page" : undefined}
                                         className={cn(
-                                            "group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                                            "group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                                             active
                                                 ? "bg-white/[0.09] text-white shadow-[var(--shadow-selected-nav)]"
                                                 : "text-white/55 hover:bg-white/[0.055] hover:text-white"
                                         )}
                                     >
-                                        {active && (
-                                            <motion.span
-                                                layoutId="active-sidebar-pill"
-                                                className="absolute inset-0 rounded-xl border border-indigo-primary/25 bg-gradient-to-r from-indigo-primary/14 to-cyan-secondary/5"
-                                                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                                            />
-                                        )}
+                                        {active && <span className="absolute inset-0 rounded-xl border border-indigo-primary/25 bg-gradient-to-r from-indigo-primary/14 to-cyan-secondary/5" />}
                                         <Icon className={cn("relative h-5 w-5 shrink-0", active ? "text-indigo-primary" : "text-white/40 group-hover:text-white/75")} />
                                         <span className="relative min-w-0 flex-1 truncate">{label}</span>
                                         {active && <ChevronRight className="relative h-4 w-4 text-white/35" />}
@@ -727,19 +719,13 @@ function SidebarSurface({
                                     aria-expanded={moreOpen}
                                     onClick={() => setMoreOpen((open) => !open)}
                                     className={cn(
-                                        "group relative flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                                        "group relative flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                                         moreOpen || moreActive
                                             ? "bg-white/[0.09] text-white shadow-[var(--shadow-selected-nav)]"
                                             : "text-white/55 hover:bg-white/[0.055] hover:text-white"
                                     )}
                                 >
-                                    {(moreOpen || moreActive) && (
-                                        <motion.span
-                                            layoutId="active-sidebar-more-pill"
-                                            className="absolute inset-0 rounded-xl border border-indigo-primary/25 bg-gradient-to-r from-indigo-primary/14 to-cyan-secondary/5"
-                                            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                                        />
-                                    )}
+                                    {(moreOpen || moreActive) && <span className="absolute inset-0 rounded-xl border border-indigo-primary/25 bg-gradient-to-r from-indigo-primary/14 to-cyan-secondary/5" />}
                                     <MoreHorizontal className={cn("relative h-5 w-5 shrink-0", moreOpen || moreActive ? "text-indigo-primary" : "text-white/40 group-hover:text-white/75")} />
                                     <span className="relative min-w-0 flex-1 text-left">More</span>
                                     <ChevronRight className={cn("relative h-4 w-4 text-white/35 transition-transform", moreOpen && "rotate-90")} />
@@ -1063,7 +1049,7 @@ function RecentThreadRow({
                     href={`/ai/${encodeURIComponent(session.session_id)}`}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                        "flex items-center rounded-xl text-sm outline-none transition-all duration-200 hover:bg-white/[0.05] hover:text-white focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                        "flex items-center rounded-xl text-sm outline-none hover:bg-white/[0.05] hover:text-white focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                         "pr-10",
                         compact ? "h-9 px-3 text-white/48" : "h-10 px-3 text-white/62",
                         active && "bg-white/[0.07] text-white"

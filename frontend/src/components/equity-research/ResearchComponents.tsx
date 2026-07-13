@@ -305,7 +305,7 @@ export function ResearchDemoProgressLoop({ surface = "dark" }: { surface?: "dark
       </div>
       <div className={cn("h-1.5 overflow-hidden rounded-full", isLight ? "bg-slate-200" : "bg-white/[0.06]")}>
         <div
-          className="h-full rounded-full bg-gradient-to-r from-indigo-primary via-cyan-secondary to-emerald-300 transition-[width] duration-500"
+          className="h-full rounded-full bg-gradient-to-r from-indigo-primary via-cyan-secondary to-emerald-300 transition-[width] duration-200"
           style={{ width: `${((active + 1) / steps.length) * 100}%` }}
         />
       </div>

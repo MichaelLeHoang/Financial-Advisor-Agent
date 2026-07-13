@@ -136,7 +136,7 @@ export default function ModelSelector({
                     setVersion(model.version);
                     setOpen(false);
                   }}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-primary-action-hover)] ${
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left ${
                     isActive
                       ? "bg-[var(--surface-selected)] text-[var(--text-primary)] shadow-[var(--shadow-control)]"
                       : "text-[var(--text-secondary)] hover:bg-[var(--surface-selected)]/50"

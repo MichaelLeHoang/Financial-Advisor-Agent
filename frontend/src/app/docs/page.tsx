@@ -217,7 +217,7 @@ function CodeBlock({ code, language = "json", title }: { code: string; language?
       <button
         type="button"
         onClick={handleCopy}
-        className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.04] text-white/35 opacity-0 transition-all hover:bg-white/[0.08] hover:text-white/75 group-hover:opacity-100"
+        className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.04] text-white/35 opacity-0 transition-[color,background-color,opacity] duration-150 hover:bg-white/[0.08] hover:text-white/75 group-hover:opacity-100"
         aria-label="Copy code"
       >
         {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
@@ -661,7 +661,7 @@ export default function DocsPage() {
     window.setTimeout(() => {
       const element = document.getElementById(id);
       if (!element) return;
-      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      element.scrollIntoView({ behavior: "auto", block: "start" });
       setActiveSection(id);
       setMobileNavOpen(false);
       if (updateHash) window.history.replaceState(null, "", `#${id}`);
@@ -899,7 +899,7 @@ export default function DocsPage() {
                   setActiveView(view);
                   setActiveSection(view === "guide" ? "overview" : "architecture");
                   window.history.replaceState(null, "", view === "guide" ? "#overview" : "#architecture");
-                  window.scrollTo({ top: 0, behavior: "smooth" });
+                  window.scrollTo({ top: 0, behavior: "auto" });
                 }}
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
                   activeView === view
@@ -986,7 +986,7 @@ export default function DocsPage() {
                       <button
                         type="button"
                         onClick={() => scrollToSection(item.id, section.view)}
-                        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition-all ${
+                        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] ${
                           activeSection === item.id
                             ? "bg-[var(--docs-control-active)] font-medium text-[var(--docs-control-active-text)]"
                             : "text-[var(--docs-text-muted)] hover:bg-[var(--docs-control-hover)] hover:text-[var(--docs-text-secondary)]"
@@ -1017,8 +1017,8 @@ export default function DocsPage() {
 
       <button
         type="button"
-        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-        className="fixed bottom-6 right-6 z-50 flex size-10 items-center justify-center rounded-full border border-[var(--docs-border)] bg-[var(--docs-control)] text-[var(--docs-text-muted)] shadow-[var(--docs-shadow)] backdrop-blur-sm transition-all hover:bg-[var(--docs-control-hover)] hover:text-[var(--docs-text-secondary)]"
+        onClick={(event) => window.scrollTo({ top: 0, behavior: event.detail === 0 ? "auto" : "smooth" })}
+        className="fixed bottom-6 right-6 z-50 flex size-10 items-center justify-center rounded-full border border-[var(--docs-border)] bg-[var(--docs-control)] text-[var(--docs-text-muted)] shadow-[var(--docs-shadow)] backdrop-blur-sm transition-colors duration-150 hover:bg-[var(--docs-control-hover)] hover:text-[var(--docs-text-secondary)]"
         aria-label="Scroll to top"
       >
         <ArrowUp className="size-4" />

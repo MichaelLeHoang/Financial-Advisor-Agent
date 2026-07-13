@@ -1,0 +1,4 @@
+interface:
+  display_name: "Purposeful UI Animation"
+  short_description: "Design fast, purposeful interface motion"
+  default_prompt: "Use $purposeful-ui-animation to audit and improve motion in this interface."

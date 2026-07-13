@@ -13,7 +13,7 @@ export function ToolCallCard({ toolCall }: { toolCall: ToolCall }) {
   const done = toolCall.status === "done";
 
   return (
-    <div className={`glass rounded-lg px-3 py-2 text-xs flex items-center gap-2 transition-all duration-300 ${done ? "opacity-70" : ""}`}>
+    <div className={`glass rounded-lg px-3 py-2 text-xs flex items-center gap-2 transition-opacity duration-150 ${done ? "opacity-70" : ""}`}>
       {done
         ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--accent-green)" }} />
         : <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" style={{ color: "var(--accent)" }} />

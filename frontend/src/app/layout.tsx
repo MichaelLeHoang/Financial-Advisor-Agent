@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Geist, Hanken_Grotesk, Inter } from "next/font/google";
+import { MotionConfig } from "motion/react";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import SettingsModal from "@/components/SettingsModal";
@@ -122,16 +123,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     return (
       <html lang="en" className={`${rootFontClasses} dark`}>
       <body data-theme={settings.theme} className="bg-space-black text-white font-sans antialiased overflow-x-hidden">
-          <AuthProvider>
-            <WorkspacePrototypeProvider>
-              <StrategyStudioProvider>
-                <ModelProvider>
-                  {children}
-                  <Toaster />
-                </ModelProvider>
-              </StrategyStudioProvider>
-            </WorkspacePrototypeProvider>
-          </AuthProvider>
+          <MotionConfig reducedMotion="user">
+            <AuthProvider>
+              <WorkspacePrototypeProvider>
+                <StrategyStudioProvider>
+                  <ModelProvider>
+                    {children}
+                    <Toaster />
+                  </ModelProvider>
+                </StrategyStudioProvider>
+              </WorkspacePrototypeProvider>
+            </AuthProvider>
+          </MotionConfig>
         </body>
       </html>
     );
@@ -148,10 +151,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${rootFontClasses} dark`}>
       <body data-theme={settings.theme} className="flex h-screen overflow-hidden relative">
-        <AuthProvider>
-          <WorkspacePrototypeProvider>
-            <StrategyStudioProvider>
-              <ModelProvider>
+        <MotionConfig reducedMotion="user">
+          <AuthProvider>
+            <WorkspacePrototypeProvider>
+              <StrategyStudioProvider>
+                <ModelProvider>
                 <MainWorkspace
                   isSidebarOpen={isSidebarOpen}
                   onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
@@ -177,10 +181,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   onClose={() => setIsAlertsOpen(false)}
                 />
                 <Toaster />
-              </ModelProvider>
-            </StrategyStudioProvider>
-          </WorkspacePrototypeProvider>
-        </AuthProvider>
+                </ModelProvider>
+              </StrategyStudioProvider>
+            </WorkspacePrototypeProvider>
+          </AuthProvider>
+        </MotionConfig>
       </body>
     </html>
   );
@@ -216,7 +221,7 @@ function MainWorkspace({
         onAlertsClick={onAlertsClick}
       />
 
-      <main className={`flex-1 flex flex-col relative z-10 overflow-hidden transition-[margin] duration-300 ease-out ${isSidebarOpen ? "md:ml-72" : "md:ml-16"}`}>
+      <main className={`flex-1 flex flex-col relative z-10 overflow-hidden ${isSidebarOpen ? "md:ml-72" : "md:ml-16"}`}>
         <div className="flex-1 overflow-y-auto">
           {loading && !isPublicAppPath ? (
             <div className="flex min-h-[50vh] items-center justify-center text-sm text-white/45" role="status">

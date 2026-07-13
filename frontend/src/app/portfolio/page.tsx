@@ -1256,7 +1256,7 @@ export default function PortfolioPage() {
                               setPortfolioToDelete(portfolio);
                               setShowAccountMenu(false);
                             }}
-                            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-white/30 opacity-0 transition-all hover:bg-red-negative/10 hover:text-red-negative group-hover/portfolio:opacity-100"
+                            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-white/30 opacity-0 transition-[color,background-color,opacity] duration-150 hover:bg-red-negative/10 hover:text-red-negative group-hover/portfolio:opacity-100"
                             aria-label={`Delete ${portfolio.name}`}
                           >
                             <Trash2 className="size-4" />
@@ -2123,7 +2123,7 @@ export default function PortfolioPage() {
                                   <button
                                     type="button"
                                     onClick={() => setHoldingToDelete(holding)}
-                                    className="flex size-8 items-center justify-center rounded-full text-white/28 opacity-0 transition-all hover:bg-white/[0.07] hover:text-red-negative group-hover:opacity-100"
+                                    className="flex size-8 items-center justify-center rounded-full text-white/28 opacity-0 transition-[color,background-color,opacity] duration-150 hover:bg-white/[0.07] hover:text-red-negative group-hover:opacity-100"
                                     aria-label={`Remove ${holding.symbol}`}
                                   >
                                     <Trash2 className="size-4" />

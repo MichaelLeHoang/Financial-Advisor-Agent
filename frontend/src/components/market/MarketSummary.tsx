@@ -162,7 +162,7 @@ function SummaryRow({ story, isOpen, onToggle }: { story: SummaryStory; isOpen: 
           onClick={onToggle}
           aria-expanded={isOpen}
           aria-label={isOpen ? "Collapse" : "Expand"}
-          className="group flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.03] text-white/50 transition-all hover:bg-white/[0.07] hover:text-white/80"
+          className="group flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.03] text-white/50 transition-colors duration-150 hover:bg-white/[0.07] hover:text-white/80"
         >
           <ChevronDown className={cn("h-4 w-4 transition-transform", isOpen && "rotate-180")} aria-hidden="true" />
         </button>

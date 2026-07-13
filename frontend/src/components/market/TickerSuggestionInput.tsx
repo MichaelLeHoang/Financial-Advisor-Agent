@@ -192,7 +192,7 @@ export default function TickerSuggestionInput({
                                 initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
                                 animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
                                 transition={{ duration: 0.24, delay: Math.min(index * 0.035, 0.18), ease: [0.16, 1, 0.3, 1] }}
-                                className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-[var(--surface-selected)] hover:shadow-[var(--shadow-row-hover)]"
+                                className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-[var(--surface-selected)] hover:shadow-[var(--shadow-row-hover)]"
                             >
                                 <button
                                     type="button"
@@ -233,7 +233,7 @@ export default function TickerSuggestionInput({
                                 animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
                                 transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
                                 onClick={() => selectTicker(value)}
-                                className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-[var(--surface-selected)]"
+                                className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-[var(--surface-selected)]"
                             >
                                 <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-cyan-secondary/14 text-cyan-secondary ring-1 ring-cyan-secondary/24">
                                     <Plus className="size-4" />

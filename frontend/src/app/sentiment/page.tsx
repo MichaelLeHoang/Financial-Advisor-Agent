@@ -111,28 +111,6 @@ const PLACEHOLDERS = [
   "Drag a CSV of headlines or call transcript snippets into this panel...",
 ];
 
-const placeholderContainerVariants = {
-  initial: {},
-  animate: { transition: { staggerChildren: 0.015 } },
-  exit: { transition: { staggerChildren: 0.01, staggerDirection: -1 } },
-};
-
-const letterVariants = {
-  initial: { opacity: 0, filter: "blur(12px)", y: 10 },
-  animate: {
-    opacity: 1,
-    filter: "blur(0px)",
-    y: 0,
-    transition: { opacity: { duration: 0.25 }, filter: { duration: 0.4 }, y: { type: "spring" as const, stiffness: 80, damping: 20 } },
-  },
-  exit: {
-    opacity: 0,
-    filter: "blur(12px)",
-    y: -10,
-    transition: { opacity: { duration: 0.2 }, filter: { duration: 0.3 }, y: { type: "spring" as const, stiffness: 80, damping: 20 } },
-  },
-};
-
 function getId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `headline-${Date.now()}-${Math.random()}`;
 }
@@ -512,24 +490,11 @@ export default function SentimentPage() {
                       className="relative z-10 max-h-[220px] min-h-28 resize-none border-transparent bg-transparent px-3 py-3 pr-4 text-sm leading-6 text-white focus-visible:border-transparent focus-visible:ring-0"
                     />
                     <div className="pointer-events-none absolute inset-0 flex items-start px-3 py-3">
-                      <AnimatePresence mode="wait">
-                        {showPlaceholder && !isActive && !input && (
-                          <motion.span
-                            key={placeholderIndex}
-                            className="mt-0.5 max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white/24"
-                            variants={placeholderContainerVariants}
-                            initial="initial"
-                            animate="animate"
-                            exit="exit"
-                          >
-                            {PLACEHOLDERS[placeholderIndex].split("").map((char, index) => (
-                              <motion.span key={index} variants={letterVariants} style={{ display: "inline-block" }}>
-                                {char === " " ? "\u00A0" : char}
-                              </motion.span>
-                            ))}
-                          </motion.span>
-                        )}
-                      </AnimatePresence>
+                      {showPlaceholder && !isActive && !input && (
+                        <span className="mt-0.5 max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white/24">
+                          {PLACEHOLDERS[placeholderIndex]}
+                        </span>
+                      )}
                     </div>
                   </div>
 

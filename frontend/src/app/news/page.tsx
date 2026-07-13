@@ -478,14 +478,7 @@ function NewsPageContent() {
             </div>
           )}
 
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-            >
+          <div key={activeTab}>
               {activeTab === "news" && rawNews && rawNews.articles.length > 0 && (
                 <NewsTab articles={rawNews.articles} />
               )}
@@ -499,17 +492,16 @@ function NewsPageContent() {
                       reports={workspace.reports}
                       onViewReport={(reportId) => {
                         setTab("reports");
-                        window.setTimeout(() => {
-                          document.getElementById(reportId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-                        }, 260);
+                        window.requestAnimationFrame(() => {
+                          document.getElementById(reportId)?.scrollIntoView({ behavior: "auto", block: "start" });
+                        });
                       }}
                     />
                   )}
                   {activeTab === "reports" && <ReportsTab reports={workspace.reports} />}
                 </>
               )}
-            </motion.div>
-          </AnimatePresence>
+          </div>
         </section>
       )}
 
@@ -532,7 +524,7 @@ function CategorySetup({
       <motion.div
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35 }}
+        transition={{ duration: 0.22 }}
         className="w-full"
       >
         <div className="mx-auto max-w-2xl text-center">
@@ -652,7 +644,7 @@ function FeaturedNewsArticle({ article }: { article: NewsArticle }) {
             <img
               src={article.thumbnail}
               alt=""
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+              className="h-full w-full object-cover"
             />
           ) : (
             <NewsVisualFallback category={category} />
@@ -696,7 +688,7 @@ function NewsArticleCard({ article }: { article: NewsArticle }) {
           <img
             src={article.thumbnail}
             alt=""
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+            className="h-full w-full object-cover"
           />
         ) : (
           <NewsVisualFallback category={category} compact />
@@ -1038,8 +1030,8 @@ function ReportTickerRail({
 }) {
   return (
     <div className="group fixed right-5 top-1/2 z-30 hidden -translate-y-1/2 lg:block">
-      <div className="news-rail-panel rounded-2xl border border-transparent bg-transparent p-2 transition-all duration-200 group-hover:shadow-2xl">
-        <div className="flex w-8 flex-col items-center gap-2 py-1 transition-all duration-200 group-hover:w-32 group-hover:items-stretch">
+      <div className="news-rail-panel rounded-2xl border border-transparent bg-transparent p-2 transition-shadow duration-[180ms] group-hover:shadow-2xl">
+        <div className="flex w-8 flex-col items-center gap-2 py-1 transition-[width] duration-[180ms] group-hover:w-32 group-hover:items-stretch">
           {reports.map((report) => {
             const ticker = report.affected_tickers[0] ?? "Memo";
             const active = report.id === activeReportId;
@@ -1047,16 +1039,16 @@ function ReportTickerRail({
               <button
                 key={report.id}
                 type="button"
-                onClick={() => {
+                onClick={(event) => {
                   onNavigate(report.id);
-                  document.getElementById(report.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  document.getElementById(report.id)?.scrollIntoView({ behavior: event.detail === 0 ? "auto" : "smooth", block: "start" });
                 }}
                 className="news-rail-item flex h-6 w-full items-center gap-3 rounded-md px-1 text-left transition-colors"
                 aria-label={`Jump to ${ticker} report`}
               >
                 <span
                   className={cn(
-                    "h-1 w-7 shrink-0 rounded-full transition-all duration-200",
+                    "h-1 w-7 shrink-0 rounded-full transition-[background-color,box-shadow] duration-150",
                     active ? "news-rail-line-active shadow-[0_0_10px_rgba(255,255,255,0.65)]" : "news-rail-line"
                   )}
                 />

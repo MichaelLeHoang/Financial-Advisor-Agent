@@ -397,7 +397,7 @@ export default function Plan({ mode = "single", isActive = true, activeTool = nu
           className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400"
           initial={{ width: "0%" }}
           animate={{ width: `${visualProgress}%` }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
         />
       </div>
 

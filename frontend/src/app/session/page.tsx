@@ -400,24 +400,6 @@ function bestResearchModeForPlan(plan: keyof typeof PLAN_RANK, requested: Resear
   return [...RESEARCH_MODES].reverse().find((mode) => canUseResearchMode(plan, mode.depth))?.depth ?? "shallow";
 }
 
-const placeholderContainerVariants = {
-  initial: {},
-  animate: { transition: { staggerChildren: 0.015 } },
-  exit: { transition: { staggerChildren: 0.01, staggerDirection: -1 } },
-};
-
-const letterVariants = {
-  initial: { opacity: 0, filter: "blur(12px)", y: 10 },
-  animate: {
-    opacity: 1, filter: "blur(0px)", y: 0,
-    transition: { opacity: { duration: 0.25 }, filter: { duration: 0.4 }, y: { type: "spring" as const, stiffness: 80, damping: 20 } },
-  },
-  exit: {
-    opacity: 0, filter: "blur(12px)", y: -10,
-    transition: { opacity: { duration: 0.2 }, filter: { duration: 0.3 }, y: { type: "spring" as const, stiffness: 80, damping: 20 } },
-  },
-};
-
 export default function ChatPage() {
   const { user, loading: authLoading } = useAuth();
   const { version } = useModel();
@@ -1119,24 +1101,11 @@ export default function ChatPage() {
                   )}
                 />
                 <div className="absolute inset-0 pointer-events-none flex items-center px-3">
-                  <AnimatePresence mode="wait">
-                    {showPlaceholder && !isActive && !input && (
-                      <motion.span
-                        key={placeholderIndex}
-                        className="max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-5 text-white/24"
-                        variants={placeholderContainerVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                      >
-                        {PLACEHOLDERS[placeholderIndex].split("").map((char, i) => (
-                          <motion.span key={i} variants={letterVariants} style={{ display: "inline-block" }}>
-                            {char === " " ? "\u00A0" : char}
-                          </motion.span>
-                        ))}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
+                  {showPlaceholder && !isActive && !input && (
+                    <span className="max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-5 text-white/24">
+                      {PLACEHOLDERS[placeholderIndex]}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1229,10 +1198,10 @@ export default function ChatPage() {
           {isStarterState ? (
             <motion.div
               key="starter"
-              initial={{ opacity: 0, y: 16, filter: "blur(8px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: -12, filter: "blur(8px)" }}
-              transition={{ duration: 0.22 }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
               className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-5xl flex-col items-center justify-center gap-7 py-8 sm:gap-8 lg:min-h-[calc(100vh-12rem)]"
             >
               <motion.div
@@ -1268,10 +1237,10 @@ export default function ChatPage() {
           ) : (
             <motion.div
               key="conversation"
-              initial={{ opacity: 0, y: 12, filter: "blur(6px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: 8, filter: "blur(6px)" }}
-              transition={{ duration: 0.2 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.16 }}
               className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-5xl flex-col gap-4"
             >
               <AnimatePresence>
@@ -1432,7 +1401,7 @@ function ResearchModeSelector({
                     setOpen(false);
                   }}
                   className={cn(
-                    "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all",
+                    "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left",
                     isActive
                       ? "bg-[var(--surface-selected)] text-[var(--text-primary)] shadow-[var(--shadow-control)]"
                       : "text-[var(--text-secondary)] hover:bg-[var(--surface-selected)]/50",
@@ -1607,7 +1576,7 @@ function SuggestionBubble({
     <button
       type="button"
       onClick={onClick}
-      className="group inline-flex max-w-[16rem] items-center gap-2 rounded-full border border-white/[0.08] bg-[#17181d]/95 px-3 py-2 text-left text-xs text-white/72 shadow-[0_14px_44px_rgba(0,0,0,0.34)] backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:border-indigo-primary/35 hover:bg-[#1e2028] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+      className="group inline-flex max-w-[16rem] items-center gap-2 rounded-full border border-white/[0.08] bg-[#17181d]/95 px-3 py-2 text-left text-xs text-white/72 shadow-[0_14px_44px_rgba(0,0,0,0.34)] backdrop-blur-xl transition-colors duration-150 hover:border-indigo-primary/35 hover:bg-[#1e2028] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
     >
       <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-indigo-primary/14 text-indigo-primary ring-1 ring-indigo-primary/20">
         <Icon className="size-3.5" />

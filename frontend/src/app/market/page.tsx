@@ -25,7 +25,6 @@ import {
     Trash2Icon,
     X,
 } from "lucide-react";
-import { motion } from "motion/react";
 import {
     Area,
     AreaChart,
@@ -422,7 +421,7 @@ export default function MarketPage() {
 
     useEffect(() => {
         const focusSearch = () => {
-            marketTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+            marketTopRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
             window.requestAnimationFrame(() => {
                 searchInputRef.current?.focus();
                 setSearchOpen(true);
@@ -804,22 +803,14 @@ function MarketSearch({
             )}
 
             {open && query && (
-                <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
-                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                    className="absolute left-0 right-0 top-13 z-30"
-                >
+                <div className="absolute left-0 right-0 top-13 z-30">
                     <Card className="rounded-2xl border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
                         <CardContent className="flex max-h-80 flex-col gap-1 overflow-y-auto px-2 py-0">
                             {matches.map((match, index) => (
-                                <motion.div
+                                <div
                                     key={`${match.ticker}-${match.exchange}-${index}`}
-                                    initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
-                                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-                                    transition={{ duration: 0.24, delay: Math.min(index * 0.035, 0.18), ease: [0.16, 1, 0.3, 1] }}
                                     onMouseDown={(event) => event.preventDefault()}
-                                    className="group/search-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-white/[0.11] hover:shadow-[var(--shadow-row-hover)]"
+                                    className="group/search-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-white/[0.11] hover:shadow-[var(--shadow-row-hover)]"
                                 >
                                     <button
                                         type="button"
@@ -860,7 +851,7 @@ function MarketSearch({
                                             <Plus className="size-4" />
                                         </button>
                                     </div>
-                                </motion.div>
+                                </div>
                             ))}
 
                             {searching && matches.length === 0 && (
@@ -872,11 +863,8 @@ function MarketSearch({
                             )}
 
                             {canAddCustom && !searching && (
-                                <motion.button
+                                <button
                                     type="button"
-                                    initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
-                                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-                                    transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
                                     onMouseDown={(event) => event.preventDefault()}
                                     onClick={() => onSelect(query)}
                                     className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-white/[0.06]"
@@ -888,11 +876,11 @@ function MarketSearch({
                                         <div className="text-sm font-semibold text-white">Add {normalizeTicker(query)}</div>
                                         <div className="text-xs text-white/42">Create a custom market tile</div>
                                     </div>
-                                </motion.button>
+                                </button>
                             )}
                         </CardContent>
                     </Card>
-                </motion.div>
+                </div>
             )}
         </div>
     );
@@ -916,7 +904,7 @@ function MarketCard({
     const hasQuote = Boolean(stock.hasQuote);
 
     return (
-        <motion.div whileHover={{ y: -5 }} className="group">
+        <div className="group">
             <Card
                 role="button"
                 tabIndex={0}
@@ -924,7 +912,7 @@ function MarketCard({
                 onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") onOpen();
                 }}
-                className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[var(--shadow-accent-card)] transition-all duration-300 group-hover:border-white/[0.12] group-hover:bg-white/[0.07] focus:outline-none focus-visible:border-white/[0.12] focus-visible:ring-0"
+                className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[var(--shadow-accent-card)] transition-colors duration-150 group-hover:border-white/[0.12] group-hover:bg-white/[0.07] focus:outline-none focus-visible:border-white/[0.12] focus-visible:ring-0"
             >
                 <CardContent className="p-6">
                     <div className="mb-4 flex items-start justify-between gap-4">
@@ -1001,7 +989,7 @@ function MarketCard({
                     </button>
                 </CardContent>
             </Card>
-        </motion.div>
+        </div>
     );
 }
 
