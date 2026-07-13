@@ -88,12 +88,29 @@ test("paper trade requires review and creates a simulated fill", async ({ page }
   await waitForWorkspace(page);
   await expect(page.getByRole("heading", { name: "Paper Trading Desk" })).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText("Policy passed", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "15m" }).click();
+  await expect(page.getByRole("button", { name: "15m" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Signals", exact: true }).click();
+  await expect(page.getByText(/Momentum setup active for AMD/)).toBeVisible();
   await page.getByRole("button", { name: "Review paper order" }).click();
-  await expect(page.getByRole("dialog", { name: "Buy 100 AMD" })).toBeVisible();
+  await expect(page.getByRole("alertdialog", { name: "Buy 100 AMD" })).toBeVisible();
   await page.getByRole("button", { name: "Confirm simulated fill" }).click();
   await expect(page.getByText("100 AMD shares filled at $170.00")).toBeVisible();
   await page.goto("/journal");
   await expect(page.getByText("AMD · Paper order filled")).toBeVisible();
+});
+
+test("consequential paper review traps focus, closes with Escape, and restores its trigger", async ({ page }) => {
+  await page.goto("/trade");
+  await waitForWorkspace(page);
+  const trigger = page.getByRole("button", { name: "Review paper order" });
+  await trigger.click();
+  const dialog = page.getByRole("alertdialog", { name: "Buy 100 AMD" });
+  await expect(dialog).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
 });
 
 test("Strategy Studio validates changes, versions a draft, and records paper approval", async ({ page }) => {
@@ -104,7 +121,7 @@ test("Strategy Studio validates changes, versions a draft, and records paper app
 
   await page.getByRole("button", { name: "Remove Risk budget" }).click();
   await page.getByRole("button", { name: "Validate" }).click();
-  await expect(page.getByText("Add a deterministic risk rule before validation.")).toBeVisible();
+  await expect(page.getByRole("tabpanel", { name: "validation" })).toContainText("Add a deterministic risk rule before validation.");
   await page.getByRole("button", { name: "Undo" }).click();
 
   const architectTab = page.getByRole("tab", { name: "architect" });
@@ -112,7 +129,7 @@ test("Strategy Studio validates changes, versions a draft, and records paper app
   await page.getByRole("button", { name: "Accept change" }).click();
   await page.getByRole("button", { name: "Save version" }).click();
   await page.getByRole("button", { name: "Paper deploy" }).click();
-  await expect(page.getByRole("dialog", { name: /Deploy Daily Trend Discipline/ })).toBeVisible();
+  await expect(page.getByRole("alertdialog", { name: /Deploy Daily Trend Discipline/ })).toBeVisible();
   await page.getByRole("button", { name: "Confirm paper deployment" }).click();
 
   await page.goto("/journal/strategies");
@@ -132,12 +149,13 @@ test("Strategy Studio hands compatible definitions to the deterministic Backtest
   await expect(page.getByRole("button", { name: "Remove MSFT" })).toBeVisible();
 });
 
-test("Strategy Studio keeps its editing surface within desktop and mobile viewports", async ({ page }, testInfo) => {
+test("Strategy Studio keeps its editing surface within desktop and mobile viewports", async ({ page }) => {
   await page.goto("/trade/strategies/trading-starter");
   await waitForWorkspace(page);
   await expect(page.getByRole("heading", { name: "Visual Strategy Tree" })).toBeVisible();
 
-  if (testInfo.project.name === "desktop") {
+  const panelTabs = page.getByRole("tablist", { name: "Studio panels" });
+  if (!(await panelTabs.isVisible())) {
     await expect(page.getByRole("heading", { name: "Strategy Architect" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Backtest Preview" })).toBeVisible();
   } else {
@@ -146,4 +164,42 @@ test("Strategy Studio keeps its editing surface within desktop and mobile viewpo
   }
 
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
+test("custom Studio tabs support keyboard navigation", async ({ page }) => {
+  await page.goto("/trade/strategies/trading-starter");
+  await waitForWorkspace(page);
+
+  if (await page.getByRole("tablist", { name: "Studio panels" }).isVisible()) {
+    const treeTab = page.getByRole("tab", { name: "tree" });
+    await treeTab.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("tab", { name: "preview" })).toHaveAttribute("aria-selected", "true");
+  }
+
+  const overview = page.getByRole("tab", { name: "overview" });
+  await overview.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "backtest" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tabpanel", { name: "backtest" })).toContainText("Deterministic handoff");
+});
+
+test("light theme and reduced motion preserve the authenticated workspace", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addInitScript(() => window.localStorage.setItem("financial-advisor.settings", JSON.stringify({ theme: "White" })));
+  await page.goto("/home");
+  await waitForWorkspace(page);
+  await expect(page.locator("body")).toHaveAttribute("data-theme", "White");
+  await expect(page.getByRole("heading", { name: "Good morning" })).toBeVisible();
+  await expect.poll(() => page.locator("a").first().evaluate((element) => Number.parseFloat(getComputedStyle(element).transitionDuration))).toBeLessThanOrEqual(0.00001);
+});
+
+test("Architect proposals can be dismissed without changing strategy rules", async ({ page }) => {
+  await page.goto("/trade/strategies/trading-starter");
+  await waitForWorkspace(page);
+  const architectTab = page.getByRole("tab", { name: "architect" });
+  if (await architectTab.isVisible()) await architectTab.click();
+  await page.getByRole("button", { name: "Dismiss", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Proposal dismissed");
+  await expect(page.getByText("Volatility guard", { exact: true })).toHaveCount(0);
 });

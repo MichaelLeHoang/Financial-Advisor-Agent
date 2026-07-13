@@ -685,7 +685,7 @@ function SidebarSurface({
                     </span>
                 </button>
 
-                <div className="flex min-h-0 flex-1 flex-col gap-6 pr-1">
+                <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden pr-1">
                     <section className="shrink-0">
                         <div className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-widest text-white/35">
                             Workspace
@@ -809,7 +809,7 @@ function SidebarSurface({
 
                 <div className="mt-auto flex flex-col gap-3 border-t border-white/[0.06] pt-3">
                     {showProCard && (
-                        <div className="relative overflow-hidden rounded-2xl border border-indigo-primary/20 bg-[var(--pro-card-bg)] p-3 shadow-[var(--pro-card-shadow)]">
+                        <div className="relative overflow-hidden rounded-2xl border border-indigo-primary/20 bg-[var(--pro-card-bg)] p-3 shadow-[var(--pro-card-shadow)] [@media(max-height:820px)]:hidden">
                             <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-cyan-secondary/15 blur-2xl" />
                             <button
                                 type="button"

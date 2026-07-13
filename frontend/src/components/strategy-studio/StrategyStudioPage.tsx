@@ -13,7 +13,6 @@ import {
   FlaskConical,
   History,
   Layers3,
-  LockKeyhole,
   Plus,
   Redo2,
   Rocket,
@@ -22,6 +21,7 @@ import {
   Trash2,
   Undo2,
 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useStrategyStudio } from "@/components/strategy-studio/StrategyStudioProvider";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { LockedFeature } from "@/components/LockedFeature";
@@ -47,12 +47,15 @@ export default function StrategyStudioPage({ strategyId }: { strategyId: string 
   const [showValidation, setShowValidation] = useState(false);
   const [deployOpen, setDeployOpen] = useState(false);
   const [proposalAccepted, setProposalAccepted] = useState(false);
+  const [proposalDismissed, setProposalDismissed] = useState(false);
 
   useEffect(() => {
     if (!draft) return;
     setNodes(draft.nodes);
     setUndoStack([]);
     setRedoStack([]);
+    setProposalAccepted(false);
+    setProposalDismissed(false);
   }, [draft?.id]);
 
   const workingDraft = useMemo(() => draft ? { ...draft, nodes } : null, [draft, nodes]);
@@ -147,24 +150,24 @@ export default function StrategyStudioPage({ strategyId }: { strategyId: string 
         </div>
       </header>
 
-      <div className="border-b border-[var(--theme-border)] px-4 py-2 lg:hidden">
+      <div className="border-b border-[var(--theme-border)] px-4 py-2 xl:hidden">
         <div role="tablist" aria-label="Studio panels" className="grid grid-cols-3 border border-[var(--theme-border)]">
-          {(["architect", "tree", "preview"] as MobilePanel[]).map((panel) => <button key={panel} type="button" role="tab" aria-selected={mobilePanel === panel} onClick={() => setMobilePanel(panel)} className={`h-9 text-xs font-semibold capitalize ${mobilePanel === panel ? "bg-white text-black" : "text-[var(--text-muted)]"}`}>{panel}</button>)}
+          {(["architect", "tree", "preview"] as MobilePanel[]).map((panel) => <button key={panel} id={`studio-tab-${panel}`} type="button" role="tab" aria-controls={`studio-panel-${panel}`} aria-selected={mobilePanel === panel} tabIndex={mobilePanel === panel ? 0 : -1} onKeyDown={(event) => handleTabKey(event, ["architect", "tree", "preview"], mobilePanel, setMobilePanel)} onClick={() => setMobilePanel(panel)} className={`h-9 text-xs font-semibold capitalize ${mobilePanel === panel ? "bg-white text-black" : "text-[var(--text-muted)]"}`}>{panel}</button>)}
         </div>
       </div>
 
-      <main className="grid min-h-[680px] lg:grid-cols-[270px_minmax(360px,1fr)_340px]">
-        <section aria-label="Strategy Architect" className={`${mobilePanel === "architect" ? "block" : "hidden"} border-r border-[var(--theme-border)] p-4 lg:block`}>
+      <main className="grid min-h-[680px] xl:grid-cols-[270px_minmax(360px,1fr)_340px]">
+        <section id="studio-panel-architect" role="tabpanel" aria-labelledby="studio-tab-architect" aria-label="Strategy Architect" className={`${mobilePanel === "architect" ? "block" : "hidden"} border-r border-[var(--theme-border)] p-4 xl:block`}>
           <div className="flex items-center gap-2"><Bot className="size-4 text-indigo-primary" /><h2 className="text-sm font-semibold">Strategy Architect</h2></div>
-          <div className="mt-5 border-l-2 border-indigo-primary bg-indigo-primary/7 p-4">
+          {!proposalDismissed ? <div className="mt-5 border-l-2 border-indigo-primary bg-indigo-primary/7 p-4">
             <p className="text-xs font-semibold text-indigo-primary">Prepared change</p>
             <h3 className="mt-3 text-sm font-semibold">{proposal.title}</h3>
             <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">{proposal.description}</p>
             <div className="mt-4 flex gap-2">
               <button type="button" disabled={proposalAccepted} onClick={() => { commitNodes([...nodes, proposal.node]); setProposalAccepted(true); }} className="h-8 bg-white px-3 text-xs font-semibold text-black disabled:opacity-45">{proposalAccepted ? "Accepted" : "Accept change"}</button>
-              <button type="button" className="h-8 border border-[var(--theme-border-strong)] px-3 text-xs font-semibold">Dismiss</button>
+              <button type="button" onClick={() => setProposalDismissed(true)} className="h-8 border border-[var(--theme-border-strong)] px-3 text-xs font-semibold">Dismiss</button>
             </div>
-          </div>
+          </div> : <div role="status" className="mt-5 border-l-2 border-[var(--theme-border-strong)] p-4 text-xs text-[var(--text-muted)]">Proposal dismissed for this editing session.</div>}
           <div className="mt-6">
             <div className="flex items-center gap-2 text-xs font-semibold"><History className="size-3.5" /> Version history</div>
             <div className="mt-3 space-y-3">
@@ -174,7 +177,7 @@ export default function StrategyStudioPage({ strategyId }: { strategyId: string 
           </div>
         </section>
 
-        <section aria-label="Visual Strategy Tree" className={`${mobilePanel === "tree" ? "block" : "hidden"} min-w-0 border-r border-[var(--theme-border)] p-4 lg:block lg:p-5`}>
+        <section id="studio-panel-tree" role="tabpanel" aria-labelledby="studio-tab-tree" aria-label="Visual Strategy Tree" className={`${mobilePanel === "tree" ? "block" : "hidden"} min-w-0 border-r border-[var(--theme-border)] p-4 xl:block xl:p-5`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><h2 className="text-sm font-semibold">Visual Strategy Tree</h2><p className="mt-1 text-xs text-[var(--text-muted)]">{nodes.length} top-level rules · {draft.symbols.join(", ")}</p></div>
             <div className="flex items-center gap-2">
@@ -188,7 +191,7 @@ export default function StrategyStudioPage({ strategyId }: { strategyId: string 
           {selectedNode && <div className="mt-5 border-t border-[var(--theme-border)] pt-5"><label className="text-xs font-semibold">Selected rule<input aria-label="Selected node label" value={selectedNode.label} onChange={(event) => commitNodes(updateNode(nodes, selectedNode.id, (current) => ({ ...current, label: event.target.value })))} className="mt-2 h-10 w-full border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-3 text-sm outline-none" /></label><label className="mt-4 block text-xs font-semibold">Rule detail<textarea aria-label="Selected node detail" value={selectedNode.detail} onChange={(event) => commitNodes(updateNode(nodes, selectedNode.id, (current) => ({ ...current, detail: event.target.value })))} rows={3} className="mt-2 w-full resize-none border border-[var(--theme-border-strong)] bg-[var(--surface-control)] p-3 text-sm outline-none" /></label></div>}
         </section>
 
-        <section aria-label="Backtest Preview" className={`${mobilePanel === "preview" ? "block" : "hidden"} p-4 lg:block`}>
+        <section id="studio-panel-preview" role="tabpanel" aria-labelledby="studio-tab-preview" aria-label="Backtest Preview" className={`${mobilePanel === "preview" ? "block" : "hidden"} p-4 xl:block`}>
           <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">Backtest Preview</h2><Status tone={errors.length === 0 ? "positive" : "danger"}>{errors.length === 0 ? "Ready" : `${errors.length} blocked`}</Status></div>
           <div className="mt-5 h-44">
             <svg viewBox="0 0 320 176" preserveAspectRatio="none" role="img" aria-label="Illustrative strategy equity curve" className="h-full w-full">
@@ -205,11 +208,18 @@ export default function StrategyStudioPage({ strategyId }: { strategyId: string 
         </section>
       </main>
 
-      <nav aria-label="Strategy results" className="flex overflow-x-auto border-t border-[var(--theme-border)] bg-[var(--surface-sidebar)] px-4">
-        {(["overview", "backtest", "validation", "journal"] as ResultTab[]).map((tab) => <button key={tab} type="button" aria-current={resultTab === tab ? "page" : undefined} onClick={() => setResultTab(tab)} className={`relative h-11 shrink-0 px-4 text-xs font-semibold capitalize ${resultTab === tab ? "text-[var(--text-primary)] after:absolute after:inset-x-4 after:bottom-0 after:h-0.5 after:bg-white" : "text-[var(--text-muted)]"}`}>{tab}</button>)}
-      </nav>
+      <div role="tablist" aria-label="Strategy results" className="flex overflow-x-auto border-t border-[var(--theme-border)] bg-[var(--surface-sidebar)] px-4">
+        {(["overview", "backtest", "validation", "journal"] as ResultTab[]).map((tab) => <button key={tab} id={`result-tab-${tab}`} type="button" role="tab" aria-controls="strategy-result-panel" aria-selected={resultTab === tab} tabIndex={resultTab === tab ? 0 : -1} onKeyDown={(event) => handleTabKey(event, ["overview", "backtest", "validation", "journal"], resultTab, setResultTab)} onClick={() => setResultTab(tab)} className={`relative h-11 shrink-0 px-4 text-xs font-semibold capitalize ${resultTab === tab ? "text-[var(--text-primary)] after:absolute after:inset-x-4 after:bottom-0 after:h-0.5 after:bg-white" : "text-[var(--text-muted)]"}`}>{tab}</button>)}
+      </div>
+      <section id="strategy-result-panel" role="tabpanel" aria-labelledby={`result-tab-${resultTab}`} className="border-t border-[var(--theme-border)] bg-[var(--surface-card)] px-5 py-4 text-sm"><StrategyResultPanel tab={resultTab} draft={workingDraft} issues={issues} /></section>
 
-      {deployOpen && <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/75 p-4 sm:items-center" onMouseDown={(event) => { if (event.target === event.currentTarget) setDeployOpen(false); }}><div role="dialog" aria-modal="true" aria-labelledby="paper-deploy-title" className="w-full max-w-lg border border-white/15 bg-[#090a0f] p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase text-sky-300">Paper deployment preview</p><h2 id="paper-deploy-title" className="mt-2 text-xl font-semibold">Deploy {draft.name}</h2></div><LockKeyhole className="size-5 text-sky-300" /></div><div className="mt-6 space-y-3 border-y border-white/10 py-4 text-sm"><DeployRow label="Version" value={`Version ${draft.versions[0]?.number ?? 1}`} /><DeployRow label="Mode" value="Paper only" /><DeployRow label="Schedule" value={draft.mode === "investment" ? "Quarterly review" : "Daily after close"} /><DeployRow label="Execution" value="No broker connected" /></div><p className="mt-4 text-xs leading-5 text-[var(--text-muted)]">This records prototype approval only. It does not start a scheduler or submit an order.</p><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setDeployOpen(false)} className="h-10 border border-white/15 px-4 text-sm font-semibold">Cancel</button><button type="button" onClick={() => { deployPaper(draft.id); setDeployOpen(false); }} className="h-10 bg-white px-4 text-sm font-semibold text-black">Confirm paper deployment</button></div></div></div>}
+      <AlertDialog open={deployOpen} onOpenChange={setDeployOpen}>
+        <AlertDialogContent className="max-w-lg rounded-none bg-[#090a0f]">
+          <AlertDialogHeader><p className="text-xs font-semibold uppercase text-sky-300">Paper deployment preview</p><AlertDialogTitle>Deploy {draft.name}</AlertDialogTitle><AlertDialogDescription>This records prototype approval only. It does not start a scheduler or submit an order.</AlertDialogDescription></AlertDialogHeader>
+          <div className="mt-6 space-y-3 border-y border-white/10 py-4 text-sm"><DeployRow label="Version" value={`Version ${draft.versions[0]?.number ?? 1}`} /><DeployRow label="Mode" value="Paper only" /><DeployRow label="Schedule" value={draft.mode === "investment" ? "Quarterly review" : "Daily after close"} /><DeployRow label="Execution" value="No broker connected" /></div>
+          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => deployPaper(draft.id)}>Confirm paper deployment</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -225,5 +235,20 @@ function IconButton({ label, disabled, onClick, children }: { label: string; dis
 
 function PreviewMetric({ label, value }: { label: string; value: string }) { return <div><p className="text-[11px] text-[var(--text-muted)]">{label}</p><p className="mt-1 text-sm font-semibold">{value}</p></div>; }
 function DeployRow({ label, value }: { label: string; value: string }) { return <div className="flex items-center justify-between gap-4"><span className="text-[var(--text-muted)]">{label}</span><strong>{value}</strong></div>; }
+function StrategyResultPanel({ tab, draft, issues }: { tab: ResultTab; draft: StrategyDraft; issues: ReturnType<typeof validateStrategy> }) {
+  if (tab === "backtest") return <div><strong>Deterministic handoff</strong><p className="mt-1 text-[var(--text-muted)]">{draft.template.replaceAll("_", " ")} · {draft.symbols.join(", ")} · fees and slippage configured in Backtest Lab</p></div>;
+  if (tab === "validation") return <div><strong>{issues.length === 0 ? "Validation passed" : `${issues.length} validation items`}</strong><p className="mt-1 text-[var(--text-muted)]">{issues[0]?.message ?? "Required structure and risk controls are present."}</p></div>;
+  if (tab === "journal") return <div><strong>{draft.versions.length} saved versions</strong><p className="mt-1 text-[var(--text-muted)]">{draft.status === "paper" ? "Paper deployment approval is recorded in the Decision Journal." : "Save a version before approving paper deployment."}</p></div>;
+  return <div><strong>{draft.name}</strong><p className="mt-1 text-[var(--text-muted)]">{draft.nodes.length} top-level rules · {draft.mode} mode · {draft.status}</p></div>;
+}
+function handleTabKey<T extends string>(event: React.KeyboardEvent<HTMLButtonElement>, tabs: readonly T[], current: T, select: (tab: T) => void) {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  const index = tabs.indexOf(current);
+  const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+  const next = tabs[nextIndex];
+  select(next);
+  document.getElementById(event.currentTarget.id.replace(current, next))?.focus();
+}
 function titleCase(value: string) { return value.replaceAll("_", " ").replace(/^./, (character) => character.toUpperCase()); }
 function findNode(nodes: StrategyNode[], id: string | null): StrategyNode | null { if (!id) return null; for (const current of nodes) { if (current.id === id) return current; const child = findNode(current.children, id); if (child) return child; } return null; }
