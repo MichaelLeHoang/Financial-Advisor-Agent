@@ -16,6 +16,7 @@ import { ModelProvider } from "@/components/ModelSelector";
 import Toaster from "@/components/ui/toast";
 import { WorkspacePrototypeProvider } from "@/components/workspace/WorkspacePrototypeProvider";
 import { StrategyStudioProvider } from "@/components/strategy-studio/StrategyStudioProvider";
+import { PortfolioBooksProvider } from "@/components/portfolio/PortfolioBooksProvider";
 import { normalizeAppPath, onboardingHref } from "@/lib/workspace-routing";
 
 const hankenGrotesk = Hanken_Grotesk({
@@ -128,14 +129,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <MotionConfig reducedMotion="user">
             <AuthProvider>
               <OnboardingProvider>
-                <WorkspacePrototypeProvider>
+                <PortfolioBooksProvider>
+                  <WorkspacePrototypeProvider>
                   <StrategyStudioProvider>
                     <ModelProvider>
                       {children}
                       <Toaster />
                     </ModelProvider>
                   </StrategyStudioProvider>
-                </WorkspacePrototypeProvider>
+                  </WorkspacePrototypeProvider>
+                </PortfolioBooksProvider>
               </OnboardingProvider>
             </AuthProvider>
           </MotionConfig>
@@ -158,7 +161,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <MotionConfig reducedMotion="user">
           <AuthProvider>
             <OnboardingProvider>
-              <WorkspacePrototypeProvider>
+              <PortfolioBooksProvider>
+                <WorkspacePrototypeProvider>
                 <StrategyStudioProvider>
                   <ModelProvider>
                 <MainWorkspace
@@ -188,7 +192,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <Toaster />
                   </ModelProvider>
                 </StrategyStudioProvider>
-              </WorkspacePrototypeProvider>
+                </WorkspacePrototypeProvider>
+              </PortfolioBooksProvider>
             </OnboardingProvider>
           </AuthProvider>
         </MotionConfig>

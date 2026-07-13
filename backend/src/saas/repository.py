@@ -16,11 +16,14 @@ from src.saas.models import (
     BacktestRunRead,
     BacktestTradeCreate,
     BacktestTradeRead,
+    ClassificationSource,
     HoldingCreate,
+    HoldingClassificationUpdate,
     HoldingRead,
     HoldingUpdate,
     JournalEntryCreate,
     JournalEntryRead,
+    PortfolioBookEventRead,
     PortfolioCreate,
     PortfolioRead,
     Plan,
@@ -59,6 +62,7 @@ class UserScopedStore:
         self._lock = Lock()
         self._portfolios: dict[UUID, PortfolioRead] = {}
         self._holdings: dict[UUID, list[HoldingRead]] = {}
+        self._portfolio_book_events: dict[UUID, list[PortfolioBookEventRead]] = {}
         self._recurring_buys: dict[UUID, list[RecurringBuyRead]] = {}
         self._watchlists: dict[UUID, WatchlistRead] = {}
         self._watchlist_assets: dict[UUID, list[WatchlistAssetRead]] = {}
@@ -80,6 +84,7 @@ class UserScopedStore:
         with self._lock:
             self._portfolios.clear()
             self._holdings.clear()
+            self._portfolio_book_events.clear()
             self._recurring_buys.clear()
             self._watchlists.clear()
             self._watchlist_assets.clear()
@@ -168,6 +173,7 @@ class UserScopedStore:
                 return False
             del self._portfolios[portfolio_id]
             self._holdings.pop(portfolio_id, None)
+            self._portfolio_book_events.pop(portfolio_id, None)
             self._recurring_buys.pop(portfolio_id, None)
             return True
 
@@ -206,6 +212,54 @@ class UserScopedStore:
             return None
         with self._lock:
             return list(self._holdings.get(portfolio_id, []))
+
+    def classify_holding(
+        self,
+        user_id: UUID,
+        portfolio_id: UUID,
+        holding_id: UUID,
+        payload: HoldingClassificationUpdate,
+    ) -> HoldingRead | None:
+        if self.get_portfolio(user_id, portfolio_id) is None:
+            return None
+        with self._lock:
+            holdings = self._holdings.get(portfolio_id, [])
+            for index, holding in enumerate(holdings):
+                if holding.id != holding_id:
+                    continue
+                if holding.book_type == payload.book_type:
+                    return holding
+                classified_at = datetime.now(timezone.utc)
+                updated = holding.model_copy(update={
+                    "book_type": payload.book_type,
+                    "classification_source": ClassificationSource.USER,
+                    "classified_at": classified_at,
+                    "classified_by": user_id,
+                })
+                holdings[index] = updated
+                self._portfolio_book_events.setdefault(portfolio_id, []).insert(0, PortfolioBookEventRead(
+                    user_id=user_id,
+                    portfolio_id=portfolio_id,
+                    holding_id=holding.id,
+                    symbol=holding.symbol,
+                    previous_book_type=holding.book_type,
+                    new_book_type=payload.book_type,
+                    classification_source=ClassificationSource.USER,
+                    actor_id=user_id,
+                    created_at=classified_at,
+                ))
+                return updated
+        return None
+
+    def list_portfolio_book_events(
+        self,
+        user_id: UUID,
+        portfolio_id: UUID,
+    ) -> list[PortfolioBookEventRead] | None:
+        if self.get_portfolio(user_id, portfolio_id) is None:
+            return None
+        with self._lock:
+            return list(self._portfolio_book_events.get(portfolio_id, []))
 
     def delete_holding(self, user_id: UUID, portfolio_id: UUID, holding_id: UUID) -> bool:
         if self.get_portfolio(user_id, portfolio_id) is None:
@@ -745,6 +799,47 @@ class SupabaseRestStore:
             return None
         rows = self._request("GET", "holdings", {"select": "*", "portfolio_id": f"eq.{portfolio_id}"})
         return [HoldingRead.model_validate(row) for row in rows]
+
+    def classify_holding(
+        self,
+        user_id: UUID,
+        portfolio_id: UUID,
+        holding_id: UUID,
+        payload: HoldingClassificationUpdate,
+    ) -> HoldingRead | None:
+        if self.get_portfolio(user_id, portfolio_id) is None:
+            return None
+        rows = self._request(
+            "PATCH",
+            "holdings",
+            {"id": f"eq.{holding_id}", "portfolio_id": f"eq.{portfolio_id}"},
+            body={
+                "book_type": payload.book_type.value,
+                "classification_source": "user",
+                "classified_at": datetime.now(timezone.utc).isoformat(),
+                "classified_by": str(user_id),
+            },
+        )
+        return HoldingRead.model_validate(rows[0]) if rows else None
+
+    def list_portfolio_book_events(
+        self,
+        user_id: UUID,
+        portfolio_id: UUID,
+    ) -> list[PortfolioBookEventRead] | None:
+        if self.get_portfolio(user_id, portfolio_id) is None:
+            return None
+        rows = self._request(
+            "GET",
+            "portfolio_book_events",
+            {
+                "select": "*",
+                "user_id": f"eq.{user_id}",
+                "portfolio_id": f"eq.{portfolio_id}",
+                "order": "created_at.desc",
+            },
+        )
+        return [PortfolioBookEventRead.model_validate(row) for row in rows]
 
     def delete_holding(self, user_id: UUID, portfolio_id: UUID, holding_id: UUID) -> bool:
         if self.get_portfolio(user_id, portfolio_id) is None:

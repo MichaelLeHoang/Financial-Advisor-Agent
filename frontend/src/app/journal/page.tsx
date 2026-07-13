@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useWorkspacePrototype, type JournalEvent } from "@/components/workspace/WorkspacePrototypeProvider";
+import { usePortfolioBooks } from "@/components/portfolio/PortfolioBooksProvider";
 
 const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, trader: 2, quant: 3, execution_addon: 4 };
 
@@ -31,6 +32,7 @@ export default function JournalPage() {
   const pathname = usePathname();
   const { user } = useAuth();
   const { state } = useWorkspacePrototype();
+  const { events: classificationEvents } = usePortfolioBooks();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [analytics, setAnalytics] = useState<JournalAnalytics | null>(null);
   const [form, setForm] = useState<JournalEntryRequest>(EMPTY_FORM);
@@ -40,7 +42,17 @@ export default function JournalPage() {
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
   const canUseJournal = PLAN_RANK[user.plan] >= PLAN_RANK.trader;
   const view = pathname === "/journal/investments" ? "investments" : pathname === "/journal/trades" ? "trades" : pathname === "/journal/strategies" ? "strategies" : pathname === "/journal/agent-actions" ? "agent-actions" : "all";
-  const visibleEvents = state.journal.filter((event) => view === "all" || (view === "investments" && event.workspace === "investment") || (view === "trades" && event.workspace === "trading") || (view === "strategies" && event.workspace === "strategy"));
+  const bookEvents: JournalEvent[] = classificationEvents.map((event) => ({
+    id: event.id,
+    workspace: event.new_book_type === "trading" ? "trading" : "investment",
+    symbol: event.symbol,
+    title: `Classified as ${event.new_book_type}`,
+    detail: `Moved from ${event.previous_book_type} by the portfolio owner.`,
+    createdAt: event.created_at,
+  }));
+  const visibleEvents = [...bookEvents, ...state.journal]
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .filter((event) => view === "all" || (view === "investments" && event.workspace === "investment") || (view === "trades" && event.workspace === "trading") || (view === "strategies" && event.workspace === "strategy"));
 
   useEffect(() => {
     if (!canUseJournal || view !== "trades") return;
@@ -51,7 +63,7 @@ export default function JournalPage() {
   const topTags = useMemo(() => Object.entries(analytics?.by_tag ?? {}).slice(0, 4), [analytics]);
 
   if (view !== "trades") {
-    const emptyMessage = view === "investments" ? "Investment decisions will appear after an Invest review is recorded." : view === "strategies" ? "Strategy versions and paper deployments will appear after they are approved in Strategy Studio." : view === "agent-actions" ? "Auditable agent actions will appear after automatic journal events are connected." : "Decisions from Invest, Trade, and Strategy Studio will appear here.";
+    const emptyMessage = view === "investments" ? "Investment classifications and decisions will appear after an Invest review is recorded." : view === "strategies" ? "Strategy versions and paper deployments will appear after they are approved in Strategy Studio." : view === "agent-actions" ? "Auditable agent actions will appear after automatic journal events are connected." : "Decisions from Invest, Trade, and Strategy Studio will appear here.";
     return <div className="flex-1 overflow-y-auto p-5 lg:p-8"><div className="mx-auto max-w-6xl"><PrototypeTimeline events={visibleEvents} emptyMessage={emptyMessage} /></div></div>;
   }
 

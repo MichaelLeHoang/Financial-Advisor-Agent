@@ -148,6 +148,10 @@ def test_recurring_buy_syncs_linked_holding_and_delete_removes_both():
             "quantity": 0.0177,
             "average_cost": 195.1999,
             "cost_currency": "USD",
+            "book_type": "unclassified",
+            "classification_source": "import",
+            "classified_at": None,
+            "classified_by": None,
             "created_at": holdings.json()[0]["created_at"],
         }
     ]
@@ -159,6 +163,92 @@ def test_recurring_buy_syncs_linked_holding_and_delete_removes_both():
 
     app.dependency_overrides.clear()
     store.reset()
+
+
+def test_portfolio_books_reconcile_and_classification_is_audited():
+    from src.api.app import app
+
+    user_id = uuid4()
+    client = TestClient(app)
+    store.reset()
+    app.dependency_overrides[get_current_or_guest_user] = _override_user(user_id)
+
+    created = client.post("/api/v1/portfolios", json={"name": "Core", "base_currency": "USD"})
+    portfolio_id = created.json()["id"]
+    holdings = []
+    for symbol, quantity, average_cost in (("NVDA", 10, 100), ("MSFT", 5, 200), ("AMD", 4, 125)):
+        response = client.post(
+            f"/api/v1/portfolios/{portfolio_id}/holdings",
+            json={"symbol": symbol, "quantity": quantity, "average_cost": average_cost},
+        )
+        assert response.status_code == 201
+        holdings.append(response.json())
+
+    for holding, book in zip(holdings[:2], ("investment", "trading"), strict=True):
+        response = client.patch(
+            f"/api/v1/portfolios/{portfolio_id}/holdings/{holding['id']}/classification",
+            json={"book_type": book},
+        )
+        assert response.status_code == 200
+        assert response.json()["book_type"] == book
+        assert response.json()["classification_source"] == "user"
+        assert response.json()["classified_by"] == str(user_id)
+        assert response.json()["classified_at"] is not None
+
+    summary = client.get(f"/api/v1/portfolios/{portfolio_id}/books")
+    assert summary.status_code == 200
+    body = summary.json()
+    totals = {book["book_type"]: book for book in body["books"]}
+    assert body["total_cost_basis"] == 2500
+    assert sum(book["cost_basis"] for book in body["books"]) == body["total_cost_basis"]
+    assert totals["investment"]["cost_basis"] == 1000
+    assert totals["trading"]["cost_basis"] == 1000
+    assert totals["unclassified"]["cost_basis"] == 500
+    assert body["risk"]["unclassified_count"] == 1
+    assert body["risk"]["unclassified_weight"] == 20
+    assert body["risk"]["largest_position_weight"] == 40
+
+    events = client.get(f"/api/v1/portfolios/{portfolio_id}/book-events")
+    assert events.status_code == 200
+    assert [event["symbol"] for event in events.json()] == ["MSFT", "NVDA"]
+    assert events.json()[0]["previous_book_type"] == "unclassified"
+    assert events.json()[0]["new_book_type"] == "trading"
+
+    repeated = client.patch(
+        f"/api/v1/portfolios/{portfolio_id}/holdings/{holdings[1]['id']}/classification",
+        json={"book_type": "trading"},
+    )
+    assert repeated.status_code == 200
+    assert len(client.get(f"/api/v1/portfolios/{portfolio_id}/book-events").json()) == 2
+
+
+def test_portfolio_book_routes_reject_invalid_books_and_cross_user_access():
+    from src.api.app import app
+
+    owner_id = uuid4()
+    other_id = uuid4()
+    client = TestClient(app)
+    store.reset()
+    app.dependency_overrides[get_current_or_guest_user] = _override_user(owner_id)
+
+    portfolio = client.post("/api/v1/portfolios", json={"name": "Core"}).json()
+    holding = client.post(
+        f"/api/v1/portfolios/{portfolio['id']}/holdings",
+        json={"symbol": "NVDA", "quantity": 1, "average_cost": 100},
+    ).json()
+    invalid = client.patch(
+        f"/api/v1/portfolios/{portfolio['id']}/holdings/{holding['id']}/classification",
+        json={"book_type": "investment", "classification_source": "agent_suggestion"},
+    )
+    assert invalid.status_code == 422
+
+    app.dependency_overrides[get_current_or_guest_user] = _override_user(other_id)
+    assert client.get(f"/api/v1/portfolios/{portfolio['id']}/books").status_code == 404
+    assert client.get(f"/api/v1/portfolios/{portfolio['id']}/book-events").status_code == 404
+    assert client.patch(
+        f"/api/v1/portfolios/{portfolio['id']}/holdings/{holding['id']}/classification",
+        json={"book_type": "investment"},
+    ).status_code == 404
 
 
 def test_recurring_buy_routes_are_user_scoped():

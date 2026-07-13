@@ -25,9 +25,10 @@ import {
 import { PieChart, Pie, Cell } from "recharts";
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
-import type { Holding, OptimizeResult, Portfolio, RecurringBuy } from "@/lib/api";
+import type { Holding, OptimizeResult, Portfolio, PositionBook, RecurringBuy } from "@/lib/api";
 import { fetchQuote } from "@/lib/quote-cache";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { usePortfolioBooks } from "@/components/portfolio/PortfolioBooksProvider";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
@@ -397,6 +398,7 @@ function formatRecurringSchedule(buy: RecurringBuy) {
 export default function PortfolioPage() {
   const pathname = usePathname();
   const { loading: authLoading, token } = useAuth();
+  const { refresh: refreshSharedBooks } = usePortfolioBooks();
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [holdings, setHoldings] = useState<HoldingRow[]>([]);
@@ -433,6 +435,7 @@ export default function PortfolioPage() {
   const [newCurrencySearch, setNewCurrencySearch] = useState("");
   const [portfolioToDelete, setPortfolioToDelete] = useState<Portfolio | null>(null);
   const [holdingToDelete, setHoldingToDelete] = useState<HoldingRow | null>(null);
+  const [bookUpdatingId, setBookUpdatingId] = useState<string | null>(null);
   const [recurringBuyToDelete, setRecurringBuyToDelete] = useState<RecurringBuy | null>(null);
   const [recurringBuyDraft, setRecurringBuyDraft] = useState<RecurringBuyDraft>(() => createRecurringBuyDraft());
   const [recurringTickerInput, setRecurringTickerInput] = useState("");
@@ -978,6 +981,28 @@ export default function PortfolioPage() {
   };
 
   const cancelEdit = () => setEdit(null);
+
+  const updateHoldingBook = async (holding: HoldingRow, book: PositionBook) => {
+    if (!activeId || holding.book_type === book) return;
+    const previous = holding;
+    setBookUpdatingId(holding.id);
+    setError(null);
+    setHoldings((current) => current.map((row) => row.id === holding.id ? {
+      ...row,
+      book_type: book,
+      classification_source: "user",
+    } : row));
+    try {
+      const saved = await api.classifyHolding(activeId, holding.id, book);
+      setHoldings((current) => current.map((row) => row.id === holding.id ? { ...row, ...saved } : row));
+      await refreshSharedBooks();
+    } catch (cause) {
+      setHoldings((current) => current.map((row) => row.id === holding.id ? previous : row));
+      setError(`${cause instanceof Error ? cause.message : "Unable to classify holding."} The previous book was restored.`);
+    } finally {
+      setBookUpdatingId(null);
+    }
+  };
 
   const handleEditKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
@@ -2048,15 +2073,16 @@ export default function PortfolioPage() {
                     </div>
                   ) : sortedHoldings.length > 0 ? (
                     <HorizontalScroll className="w-full">
-                      <table className="w-full min-w-[700px] table-fixed text-xs sm:text-sm">
+                      <table className="w-full min-w-[860px] table-fixed text-xs sm:text-sm">
                         <thead>
                           <tr className="border-b border-white/10 text-xs text-white/60">
-                            <th className="w-[32%] px-3 py-3 text-left font-medium">Holdings</th>
-                            <th className="w-[12%] px-3 py-3 text-right font-medium">% of portfolio</th>
-                            <th className="w-[13%] px-3 py-3 text-right font-medium">Position</th>
-                            <th className="w-[12%] px-3 py-3 text-center font-medium">Shares</th>
-                            <th className="w-[14%] px-3 py-3 text-right font-medium">Today&apos;s Return</th>
-                            <th className="w-[14%] px-3 py-3 text-right font-medium">All-Time Return</th>
+                            <th className="w-[24%] px-3 py-3 text-left font-medium">Holdings</th>
+                            <th className="w-[13%] px-3 py-3 text-left font-medium">Book</th>
+                            <th className="w-[11%] px-3 py-3 text-right font-medium">% of portfolio</th>
+                            <th className="w-[12%] px-3 py-3 text-right font-medium">Position</th>
+                            <th className="w-[11%] px-3 py-3 text-center font-medium">Shares</th>
+                            <th className="w-[13%] px-3 py-3 text-right font-medium">Today&apos;s Return</th>
+                            <th className="w-[13%] px-3 py-3 text-right font-medium">All-Time Return</th>
                             <th className="w-[3%] px-1 py-3" />
                           </tr>
                         </thead>
@@ -2085,6 +2111,19 @@ export default function PortfolioPage() {
                                       <p className="truncate text-xs text-white/56">{holdingName}</p>
                                     </div>
                                   </div>
+                                </td>
+                                <td className="px-3 py-3">
+                                  <select
+                                    aria-label={`Book for ${holding.symbol}`}
+                                    value={holding.book_type}
+                                    disabled={bookUpdatingId !== null}
+                                    onChange={(event) => void updateHoldingBook(holding, event.target.value as PositionBook)}
+                                    className="h-8 w-full border border-white/12 bg-black/25 px-2 text-xs text-white outline-none focus:ring-2 focus:ring-sky-300/35 disabled:opacity-45"
+                                  >
+                                    <option value="unclassified">Unclassified</option>
+                                    <option value="investment">Investment</option>
+                                    <option value="trading">Trading</option>
+                                  </select>
                                 </td>
                                 <td className="px-3 py-3 text-right font-semibold tabular-nums text-white">{rowWeight.toFixed(2)}%</td>
                                 <td className="px-3 py-3 text-right tabular-nums">

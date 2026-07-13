@@ -4,30 +4,37 @@ import Link from "next/link";
 import { ArrowRight, BookOpen, BriefcaseBusiness, LineChart, MessageSquareText, ShieldAlert } from "lucide-react";
 import { Metric, Panel, PanelHeading, PrimaryLink, SecondaryLink, Status, WorkspacePage } from "@/components/workspace/WorkspaceUI";
 import { useWorkspacePrototype } from "@/components/workspace/WorkspacePrototypeProvider";
+import { usePortfolioBooks } from "@/components/portfolio/PortfolioBooksProvider";
 
 export default function HomePage() {
   const { state } = useWorkspacePrototype();
-  const policyIssue = state.maximumPositionWeight !== null && 12.8 > state.maximumPositionWeight;
+  const { holdings, summary, loading: booksLoading, error: booksError, refreshedAt } = usePortfolioBooks();
+  const investment = summary?.books.find((book) => book.book_type === "investment");
+  const trading = summary?.books.find((book) => book.book_type === "trading");
+  const unresolved = holdings.find((holding) => holding.book_type === "unclassified");
+  const largestWeight = summary?.risk.largest_position_weight ?? 0;
+  const policyIssue = state.maximumPositionWeight !== null && largestWeight > state.maximumPositionWeight;
+  const currency = summary?.base_currency ?? "USD";
 
   return (
     <WorkspacePage eyebrow="Command center" title="Good morning" description="One view of your long-term capital, active risk, and the decisions that need attention today." actions={<><SecondaryLink href="/ai">Ask AI Desk</SecondaryLink><PrimaryLink href="/portfolio">Review portfolio</PrimaryLink></>}>
       <div className="grid gap-4 md:grid-cols-4">
-        <Metric label="Total portfolio" value="$124,820" detail="Across both books" />
+        <Metric label="Total portfolio" value={booksLoading ? "Loading" : formatMoney(summary?.total_cost_basis ?? 0, currency)} detail="Recorded cost basis across all books" />
         <Metric label="Today" value="+$842" detail="+0.68%" tone="positive" />
         <Metric label="Available cash" value="$14,520" detail="11.6% of portfolio" />
-        <Metric label="Total portfolio risk" value="Moderate" detail="Within policy" />
+        <Metric label="Total portfolio risk" value={summary?.risk.unclassified_count ? "Review" : "Moderate"} detail={summary?.risk.unclassified_count ? `${summary.risk.unclassified_count} position${summary.risk.unclassified_count === 1 ? "" : "s"} need a book` : "All positions classified"} tone={summary?.risk.unclassified_count ? "warning" : "neutral"} />
       </div>
 
       <div className="mt-8 grid gap-5 lg:grid-cols-2">
-        <WorkspaceSummary href="/invest" icon={BriefcaseBusiness} title="Investment Book" value="$94,300" result="+12.4% YTD" detail="7 holdings · 2 theses need review" accent="emerald" />
-        <WorkspaceSummary href="/trade" icon={LineChart} title="Trading Book" value="$30,520" result="+2.1% this month" detail="3 open positions · 3.2% portfolio heat" accent="sky" />
+        <WorkspaceSummary href="/invest" icon={BriefcaseBusiness} title="Investment Book" value={formatMoney(investment?.cost_basis ?? 0, currency)} result={`${(investment?.portfolio_weight ?? 0).toFixed(1)}% allocated`} detail={`${investment?.holding_count ?? 0} classified holdings`} accent="emerald" />
+        <WorkspaceSummary href="/trade" icon={LineChart} title="Trading Book" value={formatMoney(trading?.cost_basis ?? 0, currency)} result={`${(trading?.portfolio_weight ?? 0).toFixed(1)}% allocated`} detail={`${trading?.holding_count ?? 0} active book positions`} accent="sky" />
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
         <Panel>
           <PanelHeading title="Requires attention" detail="Material changes only" action={<ShieldAlert className="size-4 text-amber-300" />} />
           <div className="divide-y divide-[var(--theme-border)]">
-            <Attention href="/invest" title={policyIssue ? "NVDA exceeds its position policy" : "NVDA is ready to classify"} detail={policyIssue ? `12.8% current weight versus ${state.maximumPositionWeight}% maximum` : "Assign a portfolio purpose before creating a thesis"} tone="warning" />
+            {(policyIssue || unresolved) && <Attention href="/invest" title={policyIssue ? "Largest position exceeds its policy" : `${unresolved?.symbol ?? "Position"} is ready to classify`} detail={policyIssue ? `${largestWeight.toFixed(1)}% current weight versus ${state.maximumPositionWeight}% maximum` : "Assign a portfolio purpose before creating a thesis"} tone="warning" />}
             <Attention href="/trade" title="AMD is approaching its planned stop" detail="Review the plan before the next session" tone="neutral" />
             <Attention href="/trade/strategies" title="Momentum strategy generated a paper signal" detail="No order has been submitted" tone="neutral" />
           </div>
@@ -38,6 +45,7 @@ export default function HomePage() {
           <Link href="/discover/markets" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-sky-300">Open market context <ArrowRight className="size-4" /></Link>
         </Panel>
       </div>
+      {(booksError || refreshedAt) && <p role={booksError ? "alert" : undefined} className={`mt-4 text-xs ${booksError ? "text-rose-300" : "text-[var(--text-subtle)]"}`}>{booksError ?? `Portfolio data refreshed ${new Date(refreshedAt as string).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}</p>}
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
         <Panel>
@@ -53,6 +61,14 @@ export default function HomePage() {
       </div>
     </WorkspacePage>
   );
+}
+
+function formatMoney(value: number, currency: string) {
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(value);
+  } catch {
+    return `${currency} ${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  }
 }
 
 function WorkspaceSummary({ href, icon: Icon, title, value, result, detail, accent }: { href: string; icon: typeof BriefcaseBusiness; title: string; value: string; result: string; detail: string; accent: "emerald" | "sky" }) {

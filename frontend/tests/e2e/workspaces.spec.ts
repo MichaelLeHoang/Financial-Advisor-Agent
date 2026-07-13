@@ -121,6 +121,7 @@ test("investment decision is recorded in the shared journal", async ({ page }) =
   await waitForWorkspace(page);
   await expect(page.getByRole("heading", { name: /Build conviction/ })).toBeVisible({ timeout: 60_000 });
   await page.getByRole("button", { name: "Classify as Investment" }).click();
+  await expect(page.getByRole("button", { name: "Investment book" })).toBeVisible();
   await page.getByRole("button", { name: "Save thesis" }).click();
   await page.getByRole("button", { name: "Apply policy" }).click();
   await expect(page.getByText("Policy violation", { exact: true })).toBeVisible();
@@ -129,6 +130,7 @@ test("investment decision is recorded in the shared journal", async ({ page }) =
   await page.goto("/journal");
   await expect(page.getByText("NVDA · Trim decision recorded")).toBeVisible();
   await page.getByRole("navigation", { name: "Journal navigation" }).getByRole("link", { name: "Investments" }).click();
+  await expect(page.getByText("Classified as investment")).toBeVisible();
   await expect(page).toHaveURL(/\/journal\/investments$/);
   await expect(page.getByText("NVDA · Trim decision recorded")).toBeVisible();
 });

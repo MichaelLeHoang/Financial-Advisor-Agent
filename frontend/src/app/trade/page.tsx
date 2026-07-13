@@ -4,12 +4,15 @@ import { useMemo, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, Clock3, ShieldCheck } from "lucide-react";
 import { Panel, PanelHeading, Status, WorkspacePage } from "@/components/workspace/WorkspaceUI";
 import { calculateTradePlan, useWorkspacePrototype, type TradePlanInput } from "@/components/workspace/WorkspacePrototypeProvider";
+import { usePortfolioBooks } from "@/components/portfolio/PortfolioBooksProvider";
+import type { PortfolioBooks } from "@/lib/api";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 const QUOTES: Record<string, number> = { AMD: 170, NVDA: 132, AAPL: 226 };
 
 export default function TradePage() {
   const { state, previewPaperOrder, fillPaperOrder } = useWorkspacePrototype();
+  const { summary } = usePortfolioBooks();
   const [plan, setPlan] = useState<TradePlanInput>({ symbol: "AMD", entry: 170, stop: 164, target: 182, riskBudget: 600, buyingPower: 20_000, currentPortfolioHeat: 2.4 });
   const [reviewOpen, setReviewOpen] = useState(false);
   const [timeframe, setTimeframe] = useState("1h");
@@ -38,7 +41,7 @@ export default function TradePage() {
           </Panel>
           <Panel className="p-0">
             <div className="flex overflow-x-auto border-b border-[var(--theme-border)]" aria-label="Trading desk views">{["Positions", "Orders", "Fills", "Signals", "Journal", "Portfolio Risk"].map((tab) => <button key={tab} type="button" aria-pressed={activeTradeTab === tab} onClick={() => setActiveTradeTab(tab)} className={`h-10 shrink-0 px-4 text-xs font-semibold ${activeTradeTab === tab ? "border-b-2 border-sky-300 text-white" : "text-[var(--text-muted)]"}`}>{tab}</button>)}</div>
-            <div className="p-4" aria-live="polite"><TradeTabContent tab={activeTradeTab} status={state.paperOrderStatus} symbol={plan.symbol} quantity={result.quantity} entry={plan.entry} /></div>
+            <div className="p-4" aria-live="polite"><TradeTabContent tab={activeTradeTab} status={state.paperOrderStatus} symbol={plan.symbol} quantity={result.quantity} entry={plan.entry} summary={summary} /></div>
           </Panel>
         </div>
 
@@ -68,12 +71,12 @@ export default function TradePage() {
 function NumberInput({ label, value, onChange, wide = false }: { label: string; value: number; onChange: (value: number) => void; wide?: boolean }) { return <label className={wide ? "block" : "min-w-0"}><span className="mb-1 block text-[11px] text-[var(--text-muted)]">{label}</span><input type="number" step="0.01" value={value} onChange={(event) => onChange(Number(event.target.value))} className="h-9 w-full min-w-0 border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-2 text-sm outline-none focus:ring-2 focus:ring-sky-300/35" /></label>; }
 function Result({ label, value }: { label: string; value: string }) { return <div><p className="text-[11px] text-[var(--text-muted)]">{label}</p><p className="mt-1 text-sm font-semibold">{value}</p></div>; }
 function money(value: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value || 0); }
-function TradeTabContent({ tab, status, symbol, quantity, entry }: { tab: string; status: "draft" | "previewed" | "filled"; symbol: string; quantity: number; entry: number }) {
+function TradeTabContent({ tab, status, symbol, quantity, entry, summary }: { tab: string; status: "draft" | "previewed" | "filled"; symbol: string; quantity: number; entry: number; summary: PortfolioBooks | null }) {
   if (tab === "Fills" && status === "filled") return <div className="flex items-center justify-between gap-4"><div className="flex items-center gap-2 text-sm"><CheckCircle2 className="size-4 text-emerald-400" /> {quantity} {symbol} shares filled at ${entry.toFixed(2)}</div><Status tone="positive">Simulated fill</Status></div>;
   if (tab === "Orders") return <p className="text-sm text-[var(--text-muted)]">{status === "filled" ? `The ${symbol} paper order is filled.` : "No reviewed paper orders in this session."}</p>;
   if (tab === "Signals") return <p className="text-sm text-[var(--text-muted)]">Momentum setup active for {symbol}; no automatic order is enabled.</p>;
   if (tab === "Journal") return <p className="text-sm text-[var(--text-muted)]">Completed simulated fills are recorded in the shared Decision Journal.</p>;
-  if (tab === "Portfolio Risk") return <p className="text-sm text-[var(--text-muted)]">Current portfolio heat is included in the deterministic pre-trade check.</p>;
+  if (tab === "Portfolio Risk") return <div className="grid gap-3 sm:grid-cols-3"><Result label="Recorded exposure" value={money(summary?.risk.gross_exposure ?? 0)} /><Result label="Trading allocation" value={`${(summary?.risk.trading_weight ?? 0).toFixed(1)}%`} /><Result label="Needs classification" value={String(summary?.risk.unclassified_count ?? 0)} /></div>;
   return <p className="text-sm text-[var(--text-muted)]">{tab === "Fills" ? "No simulated fills in this session." : "No open paper positions from this prototype session."}</p>;
 }
 function TradeChart() { return <div className="absolute inset-x-0 bottom-0 top-[53px] bg-[linear-gradient(rgba(255,255,255,.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.035)_1px,transparent_1px)] bg-[size:48px_48px]"><svg viewBox="0 0 800 340" preserveAspectRatio="none" className="h-full w-full" aria-label="Illustrative AMD price chart" role="img"><defs><linearGradient id="trade-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#7dd3fc" stopOpacity=".28"/><stop offset="1" stopColor="#7dd3fc" stopOpacity="0"/></linearGradient></defs><path d="M0 270 C70 250 100 280 155 230 S250 195 300 220 S390 150 445 175 S530 125 585 145 S680 72 800 88 L800 340 L0 340Z" fill="url(#trade-fill)"/><path d="M0 270 C70 250 100 280 155 230 S250 195 300 220 S390 150 445 175 S530 125 585 145 S680 72 800 88" fill="none" stroke="#7dd3fc" strokeWidth="3" vectorEffect="non-scaling-stroke"/><line x1="0" x2="800" y1="88" y2="88" stroke="#34d399" strokeDasharray="5 5" opacity=".55"/><line x1="0" x2="800" y1="230" y2="230" stroke="#fb7185" strokeDasharray="5 5" opacity=".55"/></svg></div>; }

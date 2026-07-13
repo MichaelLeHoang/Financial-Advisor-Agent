@@ -439,6 +439,49 @@ export interface Holding {
   quantity: number;
   average_cost: number;
   cost_currency: string;
+  book_type: PositionBook;
+  classification_source: ClassificationSource;
+  classified_at?: string | null;
+  classified_by?: string | null;
+  created_at: string;
+}
+
+export type PositionBook = "investment" | "trading" | "unclassified";
+export type ClassificationSource = "user" | "import" | "agent_suggestion" | "strategy";
+
+export interface PortfolioBookTotal {
+  book_type: PositionBook;
+  holding_count: number;
+  cost_basis: number;
+  portfolio_weight: number;
+}
+
+export interface PortfolioBooks {
+  portfolio_id: string;
+  base_currency: string;
+  as_of: string;
+  total_cost_basis: number;
+  books: PortfolioBookTotal[];
+  risk: {
+    gross_exposure: number;
+    largest_position_weight: number;
+    investment_weight: number;
+    trading_weight: number;
+    unclassified_weight: number;
+    unclassified_count: number;
+  };
+}
+
+export interface PortfolioBookEvent {
+  id: string;
+  user_id: string;
+  portfolio_id: string;
+  holding_id?: string | null;
+  symbol: string;
+  previous_book_type: PositionBook;
+  new_book_type: PositionBook;
+  classification_source: ClassificationSource;
+  actor_id: string;
   created_at: string;
 }
 
@@ -1069,6 +1112,12 @@ export const api = {
   portfolioHoldings: (portfolioId: string) =>
     get<Holding[]>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings`),
 
+  portfolioBooks: (portfolioId: string) =>
+    get<PortfolioBooks>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/books`),
+
+  portfolioBookEvents: (portfolioId: string) =>
+    get<PortfolioBookEvent[]>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/book-events`),
+
   addHolding: (portfolioId: string, symbol: string, quantity: number, averageCost: number, costCurrency?: string) =>
     post<Holding>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings`, {
       symbol,
@@ -1080,6 +1129,12 @@ export const api = {
 
   updateHolding: (portfolioId: string, holdingId: string, updates: { quantity?: number; average_cost?: number; cost_currency?: string }) =>
     patch<Holding>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings/${encodeURIComponent(holdingId)}`, updates),
+
+  classifyHolding: (portfolioId: string, holdingId: string, bookType: PositionBook) =>
+    patch<Holding>(
+      `/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings/${encodeURIComponent(holdingId)}/classification`,
+      { book_type: bookType },
+    ),
 
   removeHolding: (portfolioId: string, holdingId: string) =>
     del<void>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings/${encodeURIComponent(holdingId)}`),
