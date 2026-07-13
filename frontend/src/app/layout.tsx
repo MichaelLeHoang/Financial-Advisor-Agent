@@ -10,11 +10,13 @@ import SettingsModal from "@/components/SettingsModal";
 import EditProfileModal from "@/components/EditProfileModal";
 import AlertsModal from "@/components/AlertsModal";
 import { AuthProvider, useAuth } from "@/components/auth/AuthProvider";
+import { OnboardingProvider, useOnboarding } from "@/components/onboarding/OnboardingProvider";
 import PublicAccessGate from "@/components/auth/PublicAccessGate";
 import { ModelProvider } from "@/components/ModelSelector";
 import Toaster from "@/components/ui/toast";
 import { WorkspacePrototypeProvider } from "@/components/workspace/WorkspacePrototypeProvider";
 import { StrategyStudioProvider } from "@/components/strategy-studio/StrategyStudioProvider";
+import { normalizeAppPath, onboardingHref } from "@/lib/workspace-routing";
 
 const hankenGrotesk = Hanken_Grotesk({
   subsets: ["latin"],
@@ -125,14 +127,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body data-theme={settings.theme} className="bg-space-black text-white font-sans antialiased overflow-x-hidden">
           <MotionConfig reducedMotion="user">
             <AuthProvider>
-              <WorkspacePrototypeProvider>
-                <StrategyStudioProvider>
-                  <ModelProvider>
-                    {children}
-                    <Toaster />
-                  </ModelProvider>
-                </StrategyStudioProvider>
-              </WorkspacePrototypeProvider>
+              <OnboardingProvider>
+                <WorkspacePrototypeProvider>
+                  <StrategyStudioProvider>
+                    <ModelProvider>
+                      {children}
+                      <Toaster />
+                    </ModelProvider>
+                  </StrategyStudioProvider>
+                </WorkspacePrototypeProvider>
+              </OnboardingProvider>
             </AuthProvider>
           </MotionConfig>
         </body>
@@ -153,9 +157,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body data-theme={settings.theme} className="flex h-screen overflow-hidden relative">
         <MotionConfig reducedMotion="user">
           <AuthProvider>
-            <WorkspacePrototypeProvider>
-              <StrategyStudioProvider>
-                <ModelProvider>
+            <OnboardingProvider>
+              <WorkspacePrototypeProvider>
+                <StrategyStudioProvider>
+                  <ModelProvider>
                 <MainWorkspace
                   isSidebarOpen={isSidebarOpen}
                   onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
@@ -181,9 +186,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   onClose={() => setIsAlertsOpen(false)}
                 />
                 <Toaster />
-                </ModelProvider>
-              </StrategyStudioProvider>
-            </WorkspacePrototypeProvider>
+                  </ModelProvider>
+                </StrategyStudioProvider>
+              </WorkspacePrototypeProvider>
+            </OnboardingProvider>
           </AuthProvider>
         </MotionConfig>
       </body>
@@ -207,9 +213,22 @@ function MainWorkspace({
   onAlertsClick: () => void;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, loading } = useAuth();
+  const { preferences, loading: onboardingLoading } = useOnboarding();
   const isPublicAppPath = pathname.startsWith("/ai") || pathname.startsWith("/discover/markets") || isStandalonePublicPath(pathname);
   const shouldGate = !loading && Boolean(user.is_guest) && !isPublicAppPath;
+  const shouldOnboard = !loading
+    && !onboardingLoading
+    && !user.is_guest
+    && preferences?.status === "pending"
+    && !isPublicAppPath;
+
+  useEffect(() => {
+    if (!shouldOnboard) return;
+    const requestedPath = normalizeAppPath(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+    router.replace(onboardingHref(requestedPath));
+  }, [router, shouldOnboard]);
 
   return (
     <>
@@ -223,9 +242,9 @@ function MainWorkspace({
 
       <main className={`flex-1 flex flex-col relative z-10 overflow-hidden ${isSidebarOpen ? "md:ml-72" : "md:ml-16"}`}>
         <div className="flex-1 overflow-y-auto">
-          {loading && !isPublicAppPath ? (
+          {(loading || onboardingLoading || shouldOnboard) && !isPublicAppPath ? (
             <div className="flex min-h-[50vh] items-center justify-center text-sm text-white/45" role="status">
-              Restoring your workspace...
+              {shouldOnboard ? "Opening workspace setup..." : "Restoring your workspace..."}
             </div>
           ) : shouldGate ? <PublicAccessGate /> : children}
         </div>

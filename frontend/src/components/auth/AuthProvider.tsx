@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import { clearLocalChatHistory, notifyChatPrivacyReset } from "@/lib/local-chat-history";
 import { clearAccountScopedBrowserState } from "@/lib/privacy-storage";
-import { normalizeAppPath } from "@/lib/workspace-routing";
+import { authCallbackHref, normalizeAppPath } from "@/lib/workspace-routing";
 
 export type Plan = "free" | "pro" | "trader" | "quant" | "execution_addon";
 
@@ -194,7 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/login?next=${encodeURIComponent(normalizeAppPath(nextPath))}`,
+        emailRedirectTo: `${window.location.origin}${authCallbackHref(nextPath)}`,
       },
     });
 
@@ -231,7 +231,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/login?next=${encodeURIComponent(safeNext)}`,
+        redirectTo: `${window.location.origin}${authCallbackHref(safeNext)}`,
         queryParams: provider === "google" ? { prompt: "select_account" } : undefined,
       },
     });

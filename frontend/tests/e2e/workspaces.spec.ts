@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+const E2E_USER_ID = "00000000-0000-0000-0000-000000000099";
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => window.localStorage.setItem("financial-advisor.coverSeen", "true"));
 });
@@ -54,6 +56,51 @@ test("external next destinations are rejected", async ({ page }) => {
   await expect(page).toHaveURL(/\/home$/);
 });
 
+test("auth callback preserves safe destinations and rejects encoded external paths", async ({ request }) => {
+  const safeResponse = await request.get("/auth/callback?code=safe-code&next=%2Ftrade%3Fsymbol%3DAMD", { maxRedirects: 0 });
+  expect(safeResponse.status()).toBe(307);
+  const safeLocation = new URL(safeResponse.headers().location);
+  expect(safeLocation.pathname).toBe("/login");
+  expect(safeLocation.searchParams.get("next")).toBe("/trade?symbol=AMD");
+  expect(safeLocation.searchParams.get("code")).toBe("safe-code");
+
+  const unsafeResponse = await request.get("/auth/callback?code=unsafe-code&next=%252f%252fevil.example%252fcollect", { maxRedirects: 0 });
+  expect(unsafeResponse.status()).toBe(307);
+  const unsafeLocation = new URL(unsafeResponse.headers().location);
+  expect(unsafeLocation.searchParams.get("next")).toBe("/home");
+});
+
+test("pending onboarding resumes once and restores the complete requested path", async ({ page }) => {
+  await page.addInitScript(({ userId }) => {
+    const storageKey = `quanfora.onboarding.user:${userId}`;
+    if (window.localStorage.getItem(storageKey)) return;
+    window.localStorage.setItem(storageKey, JSON.stringify({
+      status: "pending",
+      workspacePreference: "trading",
+      currentStep: "preferences",
+      investmentHorizon: "5-10-years",
+      riskTolerance: "moderate",
+      tradingHoldingPeriod: "swing",
+      paperTradingOnly: true,
+      completedAt: null,
+      skippedAt: null,
+      updatedAt: new Date().toISOString(),
+    }));
+  }, { userId: E2E_USER_ID });
+
+  await page.goto("/trade?symbol=AMD");
+  await waitForWorkspace(page);
+  await expect(page).toHaveURL(/\/onboarding\?next=%2Ftrade%3Fsymbol%3DAMD$/);
+  await expect(page.getByRole("heading", { name: "Set your starting guardrails" })).toBeVisible();
+  await page.getByRole("button", { name: "Skip for now" }).click();
+  await expect(page).toHaveURL(/\/trade\?symbol=AMD$/);
+  await expect(page.getByRole("heading", { name: "Paper Trading Desk" })).toBeVisible();
+
+  await page.goto("/invest");
+  await expect(page).toHaveURL(/\/invest$/);
+  await expect(page.getByRole("heading", { name: /Build conviction/ })).toBeVisible();
+});
+
 test("new account onboarding preserves the Invest destination", async ({ page }) => {
   await page.goto("/onboarding?next=%2Finvest");
   await waitForWorkspace(page);
@@ -64,6 +111,9 @@ test("new account onboarding preserves the Invest destination", async ({ page })
   await expect(page).toHaveURL(/\/invest$/);
   await expect(page.getByRole("heading", { name: /Build conviction/ })).toBeVisible();
   await expect.poll(() => page.evaluate(() => Object.keys(window.localStorage).some((key) => key.startsWith("quanfora.onboarding.user:")))).toBe(true);
+  await page.goto("/trade");
+  await expect(page).toHaveURL(/\/trade$/);
+  await expect(page.getByRole("heading", { name: "Paper Trading Desk" })).toBeVisible();
 });
 
 test("investment decision is recorded in the shared journal", async ({ page }) => {

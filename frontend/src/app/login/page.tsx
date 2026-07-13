@@ -78,6 +78,11 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
+    const callbackError = new URLSearchParams(window.location.search).get("error");
+    if (callbackError) setFormError(callbackError.slice(0, 300));
+  }, []);
+
+  useEffect(() => {
     if (!loading && !user.is_guest) {
       window.localStorage.setItem("financial-advisor.coverSeen", "true");
       const next = getSafeNextTarget();

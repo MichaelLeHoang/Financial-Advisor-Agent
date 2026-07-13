@@ -21,6 +21,6 @@ export default defineConfig({
     command: "npm run dev -- --hostname 127.0.0.1 --port 3100",
     url: "http://127.0.0.1:3100",
     reuseExistingServer: !process.env.CI,
-    env: { NEXT_PUBLIC_E2E_AUTH: "1", NEXT_DIST_DIR: ".next/e2e" },
+    env: { NEXT_PUBLIC_E2E_AUTH: "1", NEXT_DIST_DIR: ".next-e2e" },
   },
 });
