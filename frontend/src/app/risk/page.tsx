@@ -6,6 +6,7 @@ import { Activity, AlertTriangle, PieChart, ShieldCheck } from "lucide-react";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { Portfolio, RiskSnapshotResult } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { usePortfolioBookView } from "@/components/portfolio/PortfolioBookViewProvider";
 import { LockedFeature } from "@/components/LockedFeature";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, trader: 2, quant: 3
 
 export default function RiskPage() {
   const { user } = useAuth();
+  const { book } = usePortfolioBookView();
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [selectedPortfolioId, setSelectedPortfolioId] = useState("");
   const [result, setResult] = useState<RiskSnapshotResult | null>(null);
@@ -46,6 +48,11 @@ export default function RiskPage() {
   const correlations = result?.snapshot.correlation_matrix ?? {};
   const symbols = Object.keys(correlations);
 
+  useEffect(() => {
+    setResult(null);
+    setError(null);
+  }, [book]);
+
   if (!canUseRisk) {
     return (
       <LockedFeature
@@ -66,7 +73,7 @@ export default function RiskPage() {
     setError(null);
     setUpgradeMessage(null);
     try {
-      setResult(await api.portfolioRisk(selectedPortfolioId));
+      setResult(await api.portfolioRisk(selectedPortfolioId, book));
     } catch (err) {
       if (isUpgradeRequiredError(err)) setUpgradeMessage(err.detail.message);
       else setError(err instanceof Error ? err.message : "Unable to generate risk snapshot.");
@@ -82,7 +89,7 @@ export default function RiskPage() {
           <div>
             <h1 className="text-4xl font-bold text-[var(--text-primary)]">Portfolio Risk</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-muted)]">
-              Concentration, volatility, drawdown, and correlation research for saved portfolios.
+              Concentration, volatility, drawdown, and correlation research for the {book === "investment" ? "Investment" : "Trade"} book.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">

@@ -485,6 +485,88 @@ export interface PortfolioBookEvent {
   created_at: string;
 }
 
+export interface InvestmentPolicyPayload {
+  name: string;
+  status: "draft" | "active" | "archived";
+  goals: Record<string, unknown>;
+  time_horizon: string;
+  target_allocation: Record<string, number>;
+  max_position_weight: number;
+  max_sector_weight: number;
+  max_drawdown: number;
+  minimum_cash_weight: number;
+  permitted_assets: string[];
+  rebalancing_policy: Record<string, unknown>;
+  tax_preferences: Record<string, unknown>;
+}
+
+export interface InvestmentPolicy extends InvestmentPolicyPayload {
+  id: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InvestmentPolicyAlert {
+  code: string;
+  severity: "warning" | "breach";
+  message: string;
+  symbol?: string | null;
+  observed?: number | null;
+  limit?: number | null;
+  portfolio_ids?: string[];
+  holding_ids?: string[];
+}
+
+export interface InvestmentPolicyValidation {
+  policy_id: string;
+  portfolio_id: string;
+  compliant: boolean;
+  alerts: InvestmentPolicyAlert[];
+  validated_at: string;
+}
+
+export interface InvestmentPolicyScopeValidation {
+  policy_id: string;
+  portfolio_ids: string[];
+  compliant: boolean;
+  alerts: InvestmentPolicyAlert[];
+  validated_at: string;
+}
+
+export type InvestmentThesisStatus = "active" | "needs_review" | "invalidated";
+
+export interface InvestmentThesisPayload {
+  statement: string;
+  supporting_evidence: string[];
+  risk_evidence: string[];
+  invalidation_conditions: string[];
+  status: InvestmentThesisStatus;
+  next_review_at?: string | null;
+}
+
+export interface InvestmentThesis extends InvestmentThesisPayload {
+  id: string;
+  user_id: string;
+  portfolio_id: string;
+  holding_id: string;
+  symbol: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InvestmentDecisionRecord {
+  id: string;
+  user_id: string;
+  portfolio_id: string;
+  holding_id: string;
+  symbol: string;
+  action: "hold" | "trim";
+  rationale: string;
+  policy_exception?: string | null;
+  created_at: string;
+}
+
 export interface RecurringBuy {
   id: string;
   portfolio_id: string;
@@ -1017,6 +1099,19 @@ async function patch<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
+async function put<T>(path: string, body: unknown): Promise<T> {
+  const res = await request(`${BASE}${path}`, {
+    method: "PUT",
+    headers: requestHeaders(),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new ApiError(res.status, err.detail ?? err);
+  }
+  return res.json();
+}
+
 async function del<T>(path: string): Promise<T> {
   const res = await request(`${BASE}${path}`, {
     method: "DELETE",
@@ -1117,6 +1212,32 @@ export const api = {
 
   portfolioBookEvents: (portfolioId: string) =>
     get<PortfolioBookEvent[]>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/book-events`),
+
+  investmentPolicy: () => get<InvestmentPolicy | null>("/api/v1/investment-policy"),
+
+  saveInvestmentPolicy: (payload: InvestmentPolicyPayload) =>
+    put<InvestmentPolicy>("/api/v1/investment-policy", payload),
+
+  validateInvestmentPolicy: (portfolioId: string) =>
+    post<InvestmentPolicyValidation>("/api/v1/investment-policy/validate", { portfolio_id: portfolioId }),
+
+  validateInvestmentPolicyScope: (portfolioIds: string[]) =>
+    post<InvestmentPolicyScopeValidation>("/api/v1/investment-policy/validate-scope", { portfolio_ids: portfolioIds }),
+
+  investmentTheses: (portfolioId?: string) =>
+    get<InvestmentThesis[]>(`/api/v1/investment-theses${portfolioId ? `?portfolio_id=${encodeURIComponent(portfolioId)}` : ""}`),
+
+  saveInvestmentThesis: (holdingId: string, payload: InvestmentThesisPayload) =>
+    put<InvestmentThesis>(`/api/v1/investment-theses/${encodeURIComponent(holdingId)}`, payload),
+
+  investmentDecisions: (portfolioId?: string, limit = 50) => {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (portfolioId) query.set("portfolio_id", portfolioId);
+    return get<InvestmentDecisionRecord[]>(`/api/v1/investment-decisions?${query.toString()}`);
+  },
+
+  createInvestmentDecision: (payload: { holding_id: string; action: "hold" | "trim"; rationale: string; policy_exception?: string | null }) =>
+    post<InvestmentDecisionRecord>("/api/v1/investment-decisions", payload),
 
   addHolding: (portfolioId: string, symbol: string, quantity: number, averageCost: number, costCurrency?: string) =>
     post<Holding>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings`, {
@@ -1226,8 +1347,8 @@ export const api = {
 
   evaluateAlerts: () => post<{ evaluated: number; triggered: number }>("/api/v1/alerts/evaluate", {}),
 
-  portfolioRisk: (portfolioId: string) =>
-    get<RiskSnapshotResult>(`/api/v1/risk/portfolios/${encodeURIComponent(portfolioId)}`),
+  portfolioRisk: (portfolioId: string, book?: Exclude<PositionBook, "unclassified">) =>
+    get<RiskSnapshotResult>(`/api/v1/risk/portfolios/${encodeURIComponent(portfolioId)}${book ? `?book=${encodeURIComponent(book)}` : ""}`),
 
   riskSnapshots: (portfolioId: string) =>
     get<RiskSnapshot[]>(`/api/v1/risk/portfolios/${encodeURIComponent(portfolioId)}/snapshots`),

@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { FileText } from "lucide-react";
-import { useWorkspacePrototype } from "@/components/workspace/WorkspacePrototypeProvider";
+import { useInvestmentWorkspace } from "@/components/investment-workspace/InvestmentWorkspaceProvider";
 import { Panel, PanelHeading, Status, WorkspacePage } from "@/components/workspace/WorkspaceUI";
 
 export default function InvestmentThesesPage() {
-  const { state } = useWorkspacePrototype();
-  return <WorkspacePage eyebrow="Investment workspace" title="Theses" description="Review the ownership case, evidence state, and next checkpoint for each investment position."><Panel><PanelHeading title="Position theses" detail="Illustrative workspace records" /><div className="divide-y divide-[var(--theme-border)]"><Link href="/invest/positions/nvda" className="grid gap-3 py-4 sm:grid-cols-[100px_1fr_auto]"><strong>NVDA</strong><span className="text-sm text-[var(--text-muted)]">{state.thesis || "Ownership thesis has not been recorded."}</span><Status tone={state.thesisStatus === "healthy" ? "positive" : "warning"}>{state.thesisStatus}</Status></Link><div className="grid gap-3 py-4 sm:grid-cols-[100px_1fr_auto]"><strong>MSFT</strong><span className="text-sm text-[var(--text-muted)]">Durable cloud economics and recurring enterprise distribution support long-horizon ownership.</span><Status tone="positive">healthy</Status></div></div></Panel></WorkspacePage>;
+  const { investmentHoldings, theses, loading } = useInvestmentWorkspace();
+  const byHolding = new Map(theses.map((thesis) => [thesis.holding_id, thesis]));
+  return <WorkspacePage eyebrow="Investment workspace" title="Theses" description="Review the owner-authored investment case, evidence state, and next checkpoint for each position."><Panel><PanelHeading title="Position theses" detail="Durable Investment records" action={<FileText className="size-4 text-emerald-400" />} /><div className="divide-y divide-[var(--theme-border)]">{investmentHoldings.map(({ holding, portfolio }) => { const thesis = byHolding.get(holding.id); const health = thesisHealth(thesis); return <Link key={holding.id} href={`/invest/positions/${holding.symbol.toLowerCase()}`} className="grid gap-3 py-4 sm:grid-cols-[100px_140px_1fr_auto]"><strong>{holding.symbol}</strong><span className="text-sm text-[var(--text-muted)]">{portfolio.name}</span><span className="line-clamp-2 text-sm text-[var(--text-muted)]">{thesis?.statement || "Ownership thesis has not been recorded."}</span><Status tone={health === "Healthy" ? "positive" : health === "Invalidated" ? "danger" : "warning"}>{health}</Status></Link>; })}{!loading && !investmentHoldings.length && <p className="py-8 text-center text-sm text-[var(--text-muted)]">No Investment holdings are available in this scope.</p>}</div></Panel></WorkspacePage>;
 }
 
+function thesisHealth(thesis?: { status: string; next_review_at?: string | null }) { if (!thesis) return "Missing"; if (thesis.status === "invalidated") return "Invalidated"; if (thesis.status === "needs_review" || (thesis.next_review_at && new Date(thesis.next_review_at) < new Date())) return "Needs review"; return "Healthy"; }

@@ -12,6 +12,8 @@ const ACCOUNT_STATE_KEYS = [
 function shouldClearAccountStateKey(key: string) {
   return ACCOUNT_STATE_KEYS.includes(key)
     || key.startsWith("quanfora.workspace-prototype.")
+    || key.startsWith("quanfora.investment-overview.")
+    || key.startsWith("quanfora.investment-records.")
     || key.startsWith("financial-advisor.news-categories.")
     || key.startsWith("financial-advisor.wikipedia-profile.");
 }

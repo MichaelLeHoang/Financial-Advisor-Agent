@@ -5,15 +5,18 @@ import { ArrowRight, BookOpen, BriefcaseBusiness, LineChart, MessageSquareText, 
 import { Metric, Panel, PanelHeading, PrimaryLink, SecondaryLink, Status, WorkspacePage } from "@/components/workspace/WorkspaceUI";
 import { useWorkspacePrototype } from "@/components/workspace/WorkspacePrototypeProvider";
 import { usePortfolioBooks } from "@/components/portfolio/PortfolioBooksProvider";
+import { useInvestmentPolicy } from "@/components/investment-policy/InvestmentPolicyProvider";
 
 export default function HomePage() {
   const { state } = useWorkspacePrototype();
   const { holdings, summary, loading: booksLoading, error: booksError, refreshedAt } = usePortfolioBooks();
+  const { policy, validation } = useInvestmentPolicy();
   const investment = summary?.books.find((book) => book.book_type === "investment");
   const trading = summary?.books.find((book) => book.book_type === "trading");
   const unresolved = holdings.find((holding) => holding.book_type === "unclassified");
   const largestWeight = summary?.risk.largest_position_weight ?? 0;
-  const policyIssue = state.maximumPositionWeight !== null && largestWeight > state.maximumPositionWeight;
+  const positionLimit = policy?.max_position_weight ?? state.maximumPositionWeight;
+  const policyIssue = positionLimit !== null && largestWeight > positionLimit;
   const currency = summary?.base_currency ?? "USD";
 
   return (
@@ -34,7 +37,8 @@ export default function HomePage() {
         <Panel>
           <PanelHeading title="Requires attention" detail="Material changes only" action={<ShieldAlert className="size-4 text-amber-300" />} />
           <div className="divide-y divide-[var(--theme-border)]">
-            {(policyIssue || unresolved) && <Attention href="/invest" title={policyIssue ? "Largest position exceeds its policy" : `${unresolved?.symbol ?? "Position"} is ready to classify`} detail={policyIssue ? `${largestWeight.toFixed(1)}% current weight versus ${state.maximumPositionWeight}% maximum` : "Assign a portfolio purpose before creating a thesis"} tone="warning" />}
+            {(policyIssue || unresolved) && <Attention href="/invest" title={policyIssue ? "Largest position exceeds its policy" : `${unresolved?.symbol ?? "Position"} is ready to classify`} detail={policyIssue ? `${largestWeight.toFixed(1)}% current weight versus ${positionLimit}% maximum` : "Assign a portfolio purpose before creating a thesis"} tone="warning" />}
+            {validation?.alerts.find((alert) => alert.code === "minimum_cash_weight") && <Attention href="/invest/policy" title="Cash is below the investment policy minimum" detail="Review the deterministic policy evidence before allocating more capital" tone="warning" />}
             <Attention href="/trade" title="AMD is approaching its planned stop" detail="Review the plan before the next session" tone="neutral" />
             <Attention href="/trade/strategies" title="Momentum strategy generated a paper signal" detail="No order has been submitted" tone="neutral" />
           </div>

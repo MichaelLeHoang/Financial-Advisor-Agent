@@ -1087,7 +1087,7 @@ function QuoteDetailPanel({
               {CHART_MODE_LABELS[chartMode]}
               <ChevronDown
                 className={cn(
-                  "h-3.5 w-3.5 text-white/35 transition-transform duration-200",
+                  "h-3.5 w-3.5 text-white/35 transition-transform duration-150 motion-reduce:transition-none",
                   chartMenuOpen && "rotate-180"
                 )}
               />
@@ -1134,7 +1134,7 @@ function QuoteDetailPanel({
               Compare
               <ChevronDown
                 className={cn(
-                  "h-3.5 w-3.5 transition-transform duration-200",
+                  "h-3.5 w-3.5 transition-transform duration-150 motion-reduce:transition-none",
                   compareOpen ? "rotate-180 text-indigo-100/70" : "text-white/35"
                 )}
               />

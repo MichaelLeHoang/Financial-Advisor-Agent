@@ -27,8 +27,10 @@ import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { Holding, OptimizeResult, Portfolio, PositionBook, RecurringBuy } from "@/lib/api";
 import { fetchQuote } from "@/lib/quote-cache";
+import { fetchCurrencyRate } from "@/lib/currency";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { usePortfolioBooks } from "@/components/portfolio/PortfolioBooksProvider";
+import { usePortfolioBookView, type PortfolioBookView } from "@/components/portfolio/PortfolioBookViewProvider";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
@@ -176,46 +178,6 @@ function formatPrivateMoney(value: number, currency: string | null | undefined, 
 async function convertAmount(amount: number, sourceCurrency: string, targetCurrency: string) {
   const rate = await fetchCurrencyRate(sourceCurrency, targetCurrency);
   return amount * rate;
-}
-
-async function fetchCurrencyRate(sourceCurrency: string, targetCurrency: string): Promise<number> {
-  const source = normalizeCurrency(sourceCurrency);
-  const target = normalizeCurrency(targetCurrency);
-  if (source === target) return 1;
-
-  if (source === "USD" && target === "CAD") {
-    try {
-      const quote = await fetchQuote("CAD=X", "1d", "1d");
-      return quote.price || 1;
-    } catch {
-      return 1;
-    }
-  }
-
-  if (source === "CAD" && target === "USD") {
-    try {
-      const quote = await fetchQuote("CAD=X", "1d", "1d");
-      return quote.price ? 1 / quote.price : 1;
-    } catch {
-      return 1;
-    }
-  }
-
-  try {
-    const direct = await fetchQuote(`${source}${target}=X`, "1d", "1d");
-    if (direct.price) return direct.price;
-  } catch {
-    // Fall through to the inverse pair below.
-  }
-
-  try {
-    const inverse = await fetchQuote(`${target}${source}=X`, "1d", "1d");
-    if (inverse.price) return 1 / inverse.price;
-  } catch {
-    // Keep the portfolio usable if an uncommon FX pair is unavailable.
-  }
-
-  return 1;
 }
 
 function emptyMetrics(baseCurrency: string): Pick<
@@ -399,6 +361,15 @@ export default function PortfolioPage() {
   const pathname = usePathname();
   const { loading: authLoading, token } = useAuth();
   const { refresh: refreshSharedBooks } = usePortfolioBooks();
+  const { book: centralBook } = usePortfolioBookView();
+  const fixedBook: PortfolioBookView | null = pathname === "/invest" || pathname.startsWith("/invest/")
+    ? "investment"
+    : pathname === "/trade" || pathname.startsWith("/trade/")
+      ? "trading"
+      : null;
+  const activeBook = fixedBook ?? centralBook;
+  const isInvestmentBook = activeBook === "investment";
+  const bookLabel = isInvestmentBook ? "Investment" : "Trade";
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [holdings, setHoldings] = useState<HoldingRow[]>([]);
@@ -448,6 +419,7 @@ export default function PortfolioPage() {
       "/portfolio/performance": "portfolio-performance",
       "/portfolio/accounts": "portfolio-accounts",
       "/portfolio/activity": "portfolio-activity",
+      "/invest/holdings": "portfolio-holdings",
       "/invest/rebalance": "portfolio-rebalance",
     };
     const targetId = targetByPath[pathname];
@@ -756,7 +728,17 @@ export default function PortfolioPage() {
     setSaving(true);
     setError(null);
     try {
-      const holding = await api.addHolding(activeId, addSymbol.toUpperCase(), qty, cost, addCostCurrency);
+      const createdHolding = await api.addHolding(activeId, addSymbol.toUpperCase(), qty, cost, addCostCurrency);
+      let holding: Holding;
+      try {
+        holding = await api.classifyHolding(activeId, createdHolding.id, activeBook);
+        await refreshSharedBooks();
+      } catch (classificationError) {
+        await api.removeHolding(activeId, createdHolding.id).catch(() => undefined);
+        throw new Error(
+          `${classificationError instanceof Error ? classificationError.message : "Unable to select a portfolio book."} The incomplete holding was removed.`,
+        );
+      }
       const row: HoldingRow = { ...holding, ...emptyMetrics(activeBaseCurrency) };
       setHoldings((prev) => [...prev, row]);
       setTickerInput("");
@@ -1010,7 +992,7 @@ export default function PortfolioPage() {
   };
 
   const optimize = async () => {
-    const symbols = [...new Set(holdings.map((h) => h.symbol))];
+    const symbols = [...new Set(bookHoldings.map((h) => h.symbol))];
     if (symbols.length < 2) {
       setError("Add at least 2 holdings to run optimization.");
       return;
@@ -1028,15 +1010,20 @@ export default function PortfolioPage() {
     }
   };
 
-  const totalValue = holdings.reduce((s, h) => s + (h.value ?? 0), 0);
-  const totalCost = holdings.reduce((s, h) => s + (h.costBasis ?? h.quantity * h.average_cost), 0);
+  const bookHoldings = useMemo(
+    () => holdings.filter((holding) => holding.book_type === activeBook),
+    [activeBook, holdings],
+  );
+  const unclassifiedHoldingCount = holdings.filter((holding) => holding.book_type === "unclassified").length;
+  const totalValue = bookHoldings.reduce((s, h) => s + (h.value ?? 0), 0);
+  const totalCost = bookHoldings.reduce((s, h) => s + (h.costBasis ?? h.quantity * h.average_cost), 0);
   const totalPnl = totalValue > 0 ? totalValue - totalCost : null;
   const totalPnlPct = totalCost > 0 && totalPnl != null ? (totalPnl / totalCost) * 100 : null;
-  const totalDailyReturn = holdings.reduce((s, h) => s + (h.dailyChange ?? 0), 0);
+  const totalDailyReturn = bookHoldings.reduce((s, h) => s + (h.dailyChange ?? 0), 0);
   const priorPortfolioValue = totalValue - totalDailyReturn;
   const totalDailyReturnPct = priorPortfolioValue > 0 ? (totalDailyReturn / priorPortfolioValue) * 100 : null;
-  const pricedHoldingCount = holdings.filter((h) => h.value != null).length;
-  const canShowAccountSummary = holdings.length > 0;
+  const pricedHoldingCount = bookHoldings.filter((h) => h.value != null).length;
+  const canShowAccountSummary = bookHoldings.length > 0;
   const portfolioGoalProgress = portfolioGoal > 0 ? Math.min((totalValue / portfolioGoal) * 100, 100) : 0;
   const goalTargetLabel = formatGoalDate(goalTargetDate);
   const goalDateDelta = getGoalDateDelta(goalTargetDate);
@@ -1065,11 +1052,11 @@ export default function PortfolioPage() {
     };
   }, [activeBaseCurrency, displayBaseCurrency, totalValue]);
 
-  const uniqueSymbols = [...new Set(holdings.map((h) => h.symbol))];
+  const uniqueSymbols = [...new Set(bookHoldings.map((h) => h.symbol))];
 
   const allocationData = useMemo(() => {
     const bySymbol: Record<string, number> = {};
-    for (const h of holdings) {
+    for (const h of bookHoldings) {
       bySymbol[h.symbol] = (bySymbol[h.symbol] ?? 0) + (h.value ?? h.costBasis ?? h.quantity * h.average_cost);
     }
     return Object.entries(bySymbol).map(([symbol, value], i) => ({
@@ -1077,16 +1064,16 @@ export default function PortfolioPage() {
       value,
       fill: PALETTE[i % PALETTE.length],
     }));
-  }, [holdings]);
+  }, [bookHoldings]);
 
-  const crossCurrencyCount = holdings.filter(
+  const crossCurrencyCount = bookHoldings.filter(
     (h) => h.quoteCurrency && normalizeCurrency(h.quoteCurrency) !== activeBaseCurrency
   ).length;
   const topWeight = totalValue > 0
     ? Math.max(...allocationData.map((d) => (d.value / totalValue) * 100), 0)
     : 0;
   const portfolioBadges = [
-    `${holdings.length} holding${holdings.length !== 1 ? "s" : ""}`,
+    `${bookHoldings.length} holding${bookHoldings.length !== 1 ? "s" : ""}`,
     `${uniqueSymbols.length} symbol${uniqueSymbols.length !== 1 ? "s" : ""}`,
     crossCurrencyCount > 0 ? `${crossCurrencyCount} FX converted` : null,
     totalValue > 0 ? (topWeight >= 50 ? "Concentrated" : "Balanced") : null,
@@ -1102,7 +1089,7 @@ export default function PortfolioPage() {
     allocationData.find((d) => d.symbol === symbol)?.fill ?? PALETTE[0];
 
   const sortedHoldings = useMemo(() => {
-    return [...holdings].sort((a, b) => {
+    return [...bookHoldings].sort((a, b) => {
       const weightA = totalValue > 0 && a.value != null ? a.value / totalValue : 0;
       const weightB = totalValue > 0 && b.value != null ? b.value / totalValue : 0;
       if (sortBy === "symbol") return a.symbol.localeCompare(b.symbol);
@@ -1111,7 +1098,7 @@ export default function PortfolioPage() {
       if (sortBy === "allTime") return (b.pnl ?? Number.NEGATIVE_INFINITY) - (a.pnl ?? Number.NEGATIVE_INFINITY);
       return (b.value ?? Number.NEGATIVE_INFINITY) - (a.value ?? Number.NEGATIVE_INFINITY);
     });
-  }, [holdings, sortBy, totalValue]);
+  }, [bookHoldings, sortBy, totalValue]);
 
   const filteredCurrencies = useMemo(() => {
     const query = currencySearch.trim().toLowerCase();
@@ -1236,7 +1223,17 @@ export default function PortfolioPage() {
         )}
 
         <div>
-          <h1 className="text-3xl font-bold tracking-[-0.03em] text-white">Portfolio</h1>
+          <h1 className="text-3xl font-bold tracking-[-0.03em] text-white">
+            {fixedBook ? `${bookLabel} Portfolio` : "Portfolio"}
+          </h1>
+          <p className="mt-1 text-sm text-white/45">
+            {bookLabel} book · {bookHoldings.length} classified holding{bookHoldings.length === 1 ? "" : "s"}
+          </p>
+          {unclassifiedHoldingCount > 0 && (
+            <p className="mt-1 text-xs text-amber-300/75">
+              {unclassifiedHoldingCount} holding{unclassifiedHoldingCount === 1 ? " needs" : "s need"} a book before appearing in these totals.
+            </p>
+          )}
         </div>
 
         {activePortfolio && (
@@ -1251,7 +1248,7 @@ export default function PortfolioPage() {
                 >
                   Showing:
                   <span className="text-white">{activePortfolio?.name ?? "All Accounts"}</span>
-                  <ChevronDown className={cn("size-4 transition-transform", showAccountMenu && "rotate-180")} />
+                  <ChevronDown className={cn("size-4 transition-transform duration-150 motion-reduce:transition-none", showAccountMenu && "rotate-180")} />
                 </button>
                 {showAccountMenu && (
                   <div className="absolute right-0 top-8 z-40 w-80 rounded-2xl border border-white/12 bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]">
@@ -1500,7 +1497,7 @@ export default function PortfolioPage() {
                   </div>
                   <ActionButton
                     icon={<Building2 className="size-5" />}
-                    label="Add Investments"
+                    label={`Add ${isInvestmentBook ? "investments" : "trades"}`}
                     tone="green"
                     onClick={() => setShowAddPanel((value) => !value)}
                   />
@@ -1579,24 +1576,25 @@ export default function PortfolioPage() {
                     disabled={saving || !addSymbol || !addQty || !addCost}
                     className="h-10 rounded-xl bg-[#a78bfa] px-5 text-sm font-bold text-black hover:bg-[#b8a6ff]"
                   >
-                    {saving ? <Loader2 className="size-4 animate-spin" /> : "Add holding"}
+                    {saving ? <Loader2 className="size-4 animate-spin" /> : `Add ${bookLabel.toLowerCase()} holding`}
                   </Button>
                 </div>
               </section>
             )}
 
-            <section id="portfolio-activity" className="scroll-mt-16 rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
+            {isInvestmentBook && (
+              <section id="portfolio-activity" className="scroll-mt-16 rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-semibold text-white">Recurring buys</h2>
-                  <p className="mt-1 text-sm text-white/42">Completed recurring buys automatically keep linked holdings updated.</p>
+                  <h2 className="text-xl font-semibold text-white">Record recurring purchases</h2>
+                  <p className="mt-1 text-sm text-white/42">Records a completed purchase and updates its linked holding. It does not schedule or execute an order.</p>
                 </div>
                 <span className="rounded-full border border-white/10 bg-black/24 px-3 py-1.5 text-xs font-semibold text-white/55">
-                  {recurringBuys.length} synced
+                  {recurringBuys.length} recorded
                 </span>
               </div>
 
-              <div className="mt-4 grid gap-3 rounded-2xl border border-white/[0.07] bg-black/18 p-3 lg:grid-cols-4 xl:grid-cols-[minmax(150px,1fr)_96px_160px_130px_90px_120px_120px_120px_auto]">
+              <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 rounded-2xl border border-white/[0.07] bg-black/18 p-3 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0 [&_input]:w-full [&_select]:w-full">
                 {recurringBuyDraft.symbol ? (
                   <span className="flex h-10 items-center justify-between gap-1.5 rounded-xl bg-white/[0.06] px-3 text-xs font-semibold text-white ring-1 ring-white/10">
                     {recurringBuyDraft.symbol}
@@ -1744,9 +1742,9 @@ export default function PortfolioPage() {
                     || !recurringBuyDraft.symbol
                     || (recurringBuyDraft.purchaseMode === "amount" ? !recurringBuyDraft.enteredAmount : !recurringBuyDraft.filledQuantity)
                   }
-                  className="h-10 rounded-xl bg-white px-4 text-sm font-bold text-black hover:bg-white/86"
+                  className="h-10 w-full rounded-xl bg-white px-4 text-sm font-bold text-black hover:bg-white/86 sm:col-span-2 lg:col-span-4 lg:ml-auto lg:w-auto"
                 >
-                  {saving ? <Loader2 className="size-4 animate-spin" /> : "Price & sync"}
+                  {saving ? <Loader2 className="size-4 animate-spin" /> : "Price & record"}
                 </Button>
               </div>
 
@@ -1785,7 +1783,7 @@ export default function PortfolioPage() {
                             <span className="text-right text-lg font-bold tabular-nums text-white">
                               {formatPrivateMoney(totalCost, buy.entered_currency, hideAmounts)} {buy.entered_currency}
                             </span>
-                            <ChevronDown className={cn("size-5 text-white/72 transition-transform", expanded && "rotate-180")} />
+                            <ChevronDown className={cn("size-5 text-white/72 transition-transform duration-150 motion-reduce:transition-none", expanded && "rotate-180")} />
                           </div>
                         </button>
 
@@ -1836,7 +1834,7 @@ export default function PortfolioPage() {
                             <div className="flex items-center justify-between border-t border-white/[0.07] pt-4 md:col-span-2">
                               <div>
                                 <p className="text-sm font-semibold text-white">Total cost</p>
-                                <p className="mt-1 text-xs text-white/42">Synced to linked holding</p>
+                                <p className="mt-1 text-xs text-white/42">Recorded against the linked holding</p>
                               </div>
                               <div className="flex items-center gap-3">
                                 <span className="text-lg font-bold tabular-nums text-white">
@@ -1859,15 +1857,17 @@ export default function PortfolioPage() {
                   })
                 ) : (
                   <div className="flex min-h-28 items-center justify-center rounded-2xl border border-dashed border-white/[0.10] bg-black/14 text-sm text-white/42">
-                    No recurring buys yet.
+                    No recurring purchases recorded yet.
                   </div>
                 )}
               </div>
-            </section>
+              </section>
+            )}
 
             <div id="portfolio-performance" className="scroll-mt-16 grid min-w-0 gap-6 xl:grid-cols-[minmax(280px,420px)_minmax(0,1fr)]">
               <section className="min-w-0 space-y-5">
-                <div className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
+                {isInvestmentBook && (
+                  <div className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
                   <div className="flex items-center justify-between gap-4">
                     <h2 className="text-xl font-bold">Portfolio Goal</h2>
                     {editingGoal ? (
@@ -1972,7 +1972,8 @@ export default function PortfolioPage() {
                       </span>
                     )}
                   </div>
-                </div>
+                  </div>
+                )}
 
                 <div className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
                   <div className="flex flex-wrap items-center justify-between gap-4">
@@ -2037,7 +2038,7 @@ export default function PortfolioPage() {
                       <span className="text-white">
                         {sortBy === "total" ? "Total value" : sortBy === "allTime" ? "All-time return" : sortBy === "today" ? "Today" : sortBy === "weight" ? "% of portfolio" : "Symbol"}
                       </span>
-                      <ChevronDown className={cn("size-4 transition-transform", showSortMenu && "rotate-180")} />
+                      <ChevronDown className={cn("size-4 transition-transform duration-150 motion-reduce:transition-none", showSortMenu && "rotate-180")} />
                     </button>
                     {showSortMenu && (
                       <div className="absolute right-0 top-8 z-30 w-48 rounded-2xl border border-white/12 bg-[var(--surface-popover)] p-1 shadow-[var(--shadow-popover)]">
@@ -2182,7 +2183,7 @@ export default function PortfolioPage() {
                         onClick={() => setShowAddPanel(true)}
                         className="rounded-full bg-[#a78bfa] px-4 py-2 text-sm font-bold text-black hover:bg-[#b8a6ff]"
                       >
-                        Add your first investment
+                        Add your first {bookLabel.toLowerCase()} holding
                       </button>
                     </div>
                   )}
@@ -2199,7 +2200,7 @@ export default function PortfolioPage() {
               </section>
             </div>
 
-            {uniqueSymbols.length >= 2 && (
+            {isInvestmentBook && uniqueSymbols.length >= 2 && (
               <section id="portfolio-rebalance" className="scroll-mt-16 rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-6 shadow-[var(--shadow-card)]">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
@@ -2253,7 +2254,7 @@ export default function PortfolioPage() {
               </section>
             )}
 
-            {uniqueSymbols.length === 1 && (
+            {isInvestmentBook && uniqueSymbols.length === 1 && (
               <p className="text-center text-xs text-white/28">Add at least one more holding to enable optimization.</p>
             )}
           </>
@@ -2292,7 +2293,7 @@ export default function PortfolioPage() {
                       aria-label="Portfolio base currency"
                     >
                       {normalizeCurrency(newBaseCurrency)}
-                      <ChevronDown className={cn("size-4 text-white/45 transition-transform", showNewCurrencyMenu && "rotate-180")} />
+                      <ChevronDown className={cn("size-4 text-white/45 transition-transform duration-150 motion-reduce:transition-none", showNewCurrencyMenu && "rotate-180")} />
                     </button>
                     {showNewCurrencyMenu && (
                       <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-44 rounded-2xl border border-white/12 bg-[var(--surface-popover)] p-1 shadow-[var(--shadow-popover)]">

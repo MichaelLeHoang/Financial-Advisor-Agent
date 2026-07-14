@@ -44,10 +44,13 @@ export const WORKSPACE_NAVIGATION: Record<WorkspaceKey, WorkspaceNavigation> = {
     items: [
       { id: "overview", label: "Overview", href: "/invest" },
       { id: "holdings", label: "Holdings", href: "/invest/holdings", aliases: ["/invest/positions"] },
+      { id: "performance", label: "Performance", href: "/invest/performance" },
       { id: "research", label: "Research", href: "/invest/research" },
       { id: "theses", label: "Theses", href: "/invest/theses" },
       { id: "strategies", label: "Strategies", href: "/invest/strategies", minPlan: "trader", featureKey: "backtesting" },
       { id: "rebalance", label: "Rebalancing", href: "/invest/rebalance", minPlan: "pro", featureKey: "classical_optimization" },
+      { id: "accounts", label: "Accounts", href: "/invest/accounts" },
+      { id: "activity", label: "Activity", href: "/invest/activity" },
     ],
   },
   trade: {
