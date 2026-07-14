@@ -34,6 +34,230 @@ test("workspace subnavigation exposes focused Portfolio and Discover routes", as
   const discoverNav = page.getByRole("navigation", { name: "Discover navigation" });
   await expect(discoverNav.getByRole("link", { name: "Picks" })).toHaveAttribute("aria-current", "page");
   await expect(page.locator("header.introduction-nav")).toHaveCount(0);
+
+  await page.goto("/invest");
+  await waitForWorkspace(page);
+  const investNav = page.getByRole("navigation", { name: "Invest navigation" });
+  await investNav.getByRole("link", { name: "Accounts" }).click();
+  await expect(page).toHaveURL(/\/invest\/accounts$/);
+  await expect(page.getByRole("heading", { name: "Investment Accounts" })).toBeVisible();
+  await investNav.getByRole("link", { name: "Activity" }).click();
+  await expect(page).toHaveURL(/\/invest\/activity$/);
+  await expect(page.getByRole("heading", { name: "Investment Activity" })).toBeVisible();
+});
+
+test("desktop sidebar defaults collapsed and labels compact navigation on hover", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Compact desktop sidebar is hidden below the desktop breakpoint.");
+  await page.goto("/invest");
+  await waitForWorkspace(page);
+
+  await expect(page.getByRole("button", { name: "Open sidebar" })).toBeVisible();
+  const investLink = page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Invest" });
+  await investLink.hover();
+  await expect(investLink.getByRole("tooltip")).toHaveText("Invest");
+  await expect(investLink.getByRole("tooltip")).toBeVisible();
+
+  await page.getByRole("button", { name: "Open sidebar" }).click();
+  await expect(page.getByRole("button", { name: "Close sidebar" })).toBeVisible();
+});
+
+test("investment selectors stay anchored and expose their expanded state", async ({ page }) => {
+  await page.goto("/invest");
+  await waitForWorkspace(page);
+
+  const trigger = page.getByRole("button", { name: "Investment portfolio scope" });
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
+
+  const triggerBox = await trigger.boundingBox();
+  const menuBox = await menu.boundingBox();
+  expect(triggerBox).not.toBeNull();
+  expect(menuBox).not.toBeNull();
+  expect(menuBox!.y).toBeGreaterThanOrEqual(triggerBox!.y + triggerBox!.height - 2);
+  expect(Math.abs(menuBox!.x - triggerBox!.x)).toBeLessThan(16);
+
+  await page.keyboard.press("Escape");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await trigger.click();
+  const chevron = page.getByTestId("investment-portfolio-scope-chevron");
+  const reducedDuration = await chevron.evaluate((element) => Number.parseFloat(getComputedStyle(element).transitionDuration));
+  expect(reducedDuration).toBeLessThan(0.001);
+});
+
+test("notification center exposes workspace activity and product updates", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "The compact notification control is desktop navigation chrome.");
+  await page.goto("/invest");
+  await waitForWorkspace(page);
+
+  const notificationsButton = page.getByRole("button", { name: "Notifications", exact: true }).first();
+  await notificationsButton.hover();
+  await expect(notificationsButton.getByRole("tooltip")).toBeVisible();
+  await notificationsButton.click();
+
+  const dialog = page.getByRole("dialog", { name: "Notification center" });
+  await expect(dialog).toBeVisible();
+  const dialogBox = await dialog.boundingBox();
+  expect(dialogBox).not.toBeNull();
+  expect(dialogBox!.width).toBeLessThanOrEqual(430);
+  expect(dialogBox!.height).toBeLessThanOrEqual(690);
+  await expect(page.locator('[data-slot="dialog-backdrop"]')).toHaveCount(0);
+
+  const feed = dialog.locator(".notification-feed");
+  await feed.evaluate((element) => { element.scrollTop = 80; element.dispatchEvent(new Event("scroll")); });
+  await expect(feed).toHaveAttribute("data-scrolling", "true");
+  await expect(feed).toHaveAttribute("data-scrolling", "false", { timeout: 1_500 });
+
+  await expect(dialog.getByRole("tab", { name: "Notifications" })).toHaveAttribute("aria-selected", "true");
+  await dialog.getByRole("tab", { name: "What's new" }).click();
+  await expect(dialog.getByRole("tab", { name: "What's new" })).toHaveAttribute("aria-selected", "true");
+  const updatesBox = await dialog.boundingBox();
+  expect(updatesBox).not.toBeNull();
+  expect(Math.abs(updatesBox!.height - dialogBox!.height)).toBeLessThan(2);
+  await expect(dialog.getByRole("heading", { name: "Investment workspace, rebuilt" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Performance insights" })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(notificationsButton).toBeFocused();
+});
+
+test("compact profile menu exposes system appearance, language, and real shortcuts", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "The compact profile menu is desktop navigation chrome.");
+  await page.goto("/invest");
+  await waitForWorkspace(page);
+
+  const profileTrigger = page.getByRole("button", { name: "Open profile menu" });
+  await profileTrigger.press("Enter");
+  const profileMenu = page.locator('[data-slot="dropdown-menu-content"]');
+  await expect(profileMenu).toBeVisible();
+  const profileBox = await profileMenu.boundingBox();
+  expect(profileBox).not.toBeNull();
+  expect(profileBox!.width).toBeLessThanOrEqual(270);
+
+  const plansItem = page.getByRole("menuitem", { name: "Plans & billing" });
+  const iconSurface = plansItem.locator("svg").locator("..");
+  expect(await iconSurface.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+
+  const appearance = page.getByRole("menuitem", { name: "Appearance" });
+  await appearance.hover();
+  const appearanceMenu = page.getByRole("menu", { name: "Appearance" });
+  await expect(appearanceMenu).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(profileMenu).toBeHidden();
+  await profileTrigger.press("Enter");
+  await expect(profileMenu).toBeVisible();
+  const language = page.getByRole("menuitem", { name: "Language" });
+  await language.hover();
+  await expect(page.getByRole("menu", { name: "Language" }).getByRole("menuitem", { name: "English (US)" })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(profileMenu).toBeHidden();
+  await profileTrigger.press("Enter");
+  await expect(profileMenu).toBeVisible();
+  await page.getByRole("menuitem", { name: "Shortcuts" }).click();
+  const shortcuts = page.getByRole("dialog", { name: "Shortcuts" });
+  await expect(shortcuts).toBeVisible();
+  await expect(shortcuts.getByText("Toggle portfolio privacy")).toBeVisible();
+  const shortcutSwitch = shortcuts.getByRole("switch", { name: "Enable keyboard shortcuts" });
+  await shortcutSwitch.click();
+  await expect(shortcutSwitch).toHaveAttribute("aria-checked", "false");
+  await page.keyboard.press("Escape");
+  await expect(shortcuts).toBeHidden();
+  await page.keyboard.press("?");
+  await expect(shortcuts).toBeHidden();
+
+  await profileTrigger.press("Enter");
+  await page.getByRole("menuitem", { name: "Appearance" }).hover();
+  const systemTheme = page.getByRole("menu", { name: "Appearance" }).getByRole("menuitem", { name: "System" });
+  await expect(systemTheme).toBeVisible();
+  await systemTheme.click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(window.localStorage.getItem("financial-advisor.settings") || "{}").theme)).toBe("System");
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("body")).toHaveAttribute("data-theme", "White");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(page.locator("body")).toHaveAttribute("data-theme", "Deep Space");
+});
+
+test("collapsed account controls remain transparent in the red theme", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "The compact account controls are desktop navigation chrome.");
+  await page.addInitScript(() => window.localStorage.setItem("financial-advisor.settings", JSON.stringify({ theme: "Crimson" })));
+  await page.goto("/invest");
+  await waitForWorkspace(page);
+  await expect(page.locator("body")).toHaveAttribute("data-theme", "Crimson");
+
+  for (const control of [
+    page.getByRole("button", { name: "Notifications", exact: true }).first(),
+    page.getByRole("button", { name: "Open profile menu" }),
+  ]) {
+    expect(await control.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  }
+});
+
+test("central Portfolio keeps the selected position book across tabs and reloads", async ({ page }) => {
+  await page.goto("/portfolio");
+  await waitForWorkspace(page);
+
+  const bookSwitch = page.getByRole("group", { name: "Portfolio book" });
+  const investment = bookSwitch.getByRole("button", { name: /Investment Portfolio/ });
+  const trading = bookSwitch.getByRole("button", { name: /Trade Portfolio/ });
+  await expect(investment).toHaveAttribute("aria-pressed", "true");
+
+  await trading.click();
+  await expect(trading).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => page.evaluate(({ userId }) => (
+    window.localStorage.getItem(`quanfora.portfolio-book-view.user:${userId}`)
+  ), { userId: E2E_USER_ID })).toBe("trading");
+
+  await page.getByRole("navigation", { name: "Portfolio navigation" }).getByRole("link", { name: "Holdings" }).click();
+  await expect(page).toHaveURL(/\/portfolio\/holdings$/);
+  await expect(page.getByRole("group", { name: "Portfolio book" }).getByRole("button", { name: /Trade Portfolio/ })).toHaveAttribute("aria-pressed", "true");
+
+  await page.reload();
+  await waitForWorkspace(page);
+  await expect(page.getByRole("group", { name: "Portfolio book" }).getByRole("button", { name: /Trade Portfolio/ })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("Invest Holdings owns the detailed Investment positions and manual recorder", async ({ page }) => {
+  await page.goto("/invest/holdings");
+  await waitForWorkspace(page);
+
+  await expect(page.getByRole("heading", { name: "Investment Holdings" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Record recurring purchase" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Price & record" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Portfolio book" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Invest navigation" }).getByRole("link", { name: "Holdings" })).toHaveAttribute("aria-current", "page");
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
+test("Investment Holdings toolbar filters, switches data sets, and opens account export", async ({ page }) => {
+  await page.goto("/invest/holdings");
+  await waitForWorkspace(page);
+
+  await page.getByRole("button", { name: "Filter holdings" }).click();
+  await page.getByRole("menuitem", { name: "Needs thesis review" }).click();
+  await page.getByRole("button", { name: "Group holdings" }).click();
+  await page.getByRole("menuitem", { name: "Security" }).click();
+
+  await page.getByRole("tab", { name: "Watchlist" }).click();
+  await expect(page.getByRole("tab", { name: "Watchlist" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("link", { name: /MU/ }).first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Download holdings" }).click();
+  await expect(page.getByRole("dialog", { name: "Download holdings" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download CSV" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  const privacyToggle = page.getByRole("button", { name: "Toggle portfolio privacy" });
+  await privacyToggle.click();
+  await expect(privacyToggle).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
 
 test("locked workspace destinations remain visible and use canonical redirects", async ({ page }) => {
@@ -98,7 +322,7 @@ test("pending onboarding resumes once and restores the complete requested path",
 
   await page.goto("/invest");
   await expect(page).toHaveURL(/\/invest$/);
-  await expect(page.getByRole("heading", { name: /Build conviction/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Investment Portfolio", exact: true })).toBeVisible();
 });
 
 test("new account onboarding preserves the Invest destination", async ({ page }) => {
@@ -109,30 +333,86 @@ test("new account onboarding preserves the Invest destination", async ({ page })
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("button", { name: "Open Invest" }).click();
   await expect(page).toHaveURL(/\/invest$/);
-  await expect(page.getByRole("heading", { name: /Build conviction/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Investment Portfolio", exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => Object.keys(window.localStorage).some((key) => key.startsWith("quanfora.onboarding.user:")))).toBe(true);
   await page.goto("/trade");
   await expect(page).toHaveURL(/\/trade$/);
   await expect(page.getByRole("heading", { name: "Paper Trading Desk" })).toBeVisible();
 });
 
-test("investment decision is recorded in the shared journal", async ({ page }) => {
+test("investment review classifies a position and records a durable decision", async ({ page }) => {
   await page.goto("/invest");
   await waitForWorkspace(page);
-  await expect(page.getByRole("heading", { name: /Build conviction/ })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: "Investment Portfolio", exact: true })).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("button", { name: "Run review" }).click();
+  const drawer = page.getByRole("dialog", { name: "NVDA position review" });
+  await expect(drawer).toBeVisible();
   await page.getByRole("button", { name: "Classify as Investment" }).click();
-  await expect(page.getByRole("button", { name: "Investment book" })).toBeVisible();
+  await expect(drawer.getByLabel("Thesis statement")).toBeVisible();
+  await drawer.getByLabel("Thesis statement").fill("Accelerated computing demand supports durable earnings growth.");
   await page.getByRole("button", { name: "Save thesis" }).click();
-  await page.getByRole("button", { name: "Apply policy" }).click();
-  await expect(page.getByText("Policy violation", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Trim", exact: true }).click();
-  await page.getByRole("button", { name: "Record decision" }).click();
-  await page.goto("/journal");
-  await expect(page.getByText("NVDA · Trim decision recorded")).toBeVisible();
-  await page.getByRole("navigation", { name: "Journal navigation" }).getByRole("link", { name: "Investments" }).click();
-  await expect(page.getByText("Classified as investment")).toBeVisible();
-  await expect(page).toHaveURL(/\/journal\/investments$/);
-  await expect(page.getByText("NVDA · Trim decision recorded")).toBeVisible();
+  await drawer.getByLabel("Decision rationale").fill("Reduce concentration while preserving long-term ownership.");
+  await drawer.getByRole("button", { name: "Trim", exact: true }).click();
+  await drawer.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByText("Trim decision recorded")).toBeVisible();
+});
+
+test("investment policy persists and validates recorded positions", async ({ page }) => {
+  await page.goto("/invest/policy");
+  await waitForWorkspace(page);
+
+  await page.getByLabel("Maximum single-position weight").fill("12");
+  await page.getByRole("button", { name: "Save and validate" }).click();
+
+  await expect(page.getByText("1 breaches")).toBeVisible();
+  await expect(page.getByText("MSFT exceeds the maximum position weight.")).toBeVisible();
+  await page.getByRole("link", { name: "Back to Invest" }).click();
+  await expect(page.getByRole("heading", { name: "Investment Portfolio", exact: true })).toBeVisible();
+  await expect(page.getByText("MSFT exceeds the maximum position weight.")).toBeVisible();
+});
+
+test("Investment display state persists across workspace routes and the review drawer restores focus", async ({ page }) => {
+  await page.goto("/invest");
+  await waitForWorkspace(page);
+  await page.getByRole("button", { name: "6M" }).click();
+  await page.getByRole("button", { name: "returns" }).click();
+  await expect.poll(() => page.evaluate(({ userId }) => window.localStorage.getItem(`quanfora.investment-overview.user:${userId}`), { userId: E2E_USER_ID })).toContain('"period":"6M"');
+
+  await page.getByRole("navigation", { name: "Invest navigation" }).getByRole("link", { name: "Holdings" }).click();
+  await page.getByRole("link", { name: "Investment overview" }).click();
+  await expect(page.getByRole("button", { name: "6M" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "returns" })).toHaveAttribute("aria-pressed", "true");
+
+  const trigger = page.getByRole("button", { name: "Run review" });
+  await trigger.click();
+  await expect(page.getByRole("dialog", { name: "NVDA position review" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "NVDA position review" })).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
+test("Investment privacy and rail sorting persist into Performance Insights", async ({ page }) => {
+  await page.goto("/invest");
+  await waitForWorkspace(page);
+
+  const privacyToggle = page.getByRole("button", { name: "Toggle portfolio privacy" });
+  await privacyToggle.click();
+  await expect(privacyToggle).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => page.evaluate(({ userId }) => (
+    window.localStorage.getItem(`quanfora.investment-overview.user:${userId}`)
+  ), { userId: E2E_USER_ID })).toContain('"privacyMode":true');
+
+  await page.getByRole("button", { name: "Sort investment list: Value" }).click();
+  await page.getByRole("menuitem", { name: "Today's return" }).click();
+  await expect(page.getByRole("button", { name: "Sort investment list: 1D" })).toBeVisible();
+
+  await page.getByRole("link", { name: /Performance insights/ }).click();
+  await expect(page).toHaveURL(/\/invest\/performance$/);
+  await expect(page.getByRole("heading", { name: "Performance insights" })).toBeVisible();
+  const persistedPrivacyToggle = page.getByRole("button", { name: "Toggle portfolio privacy" });
+  await expect(persistedPrivacyToggle).toHaveAttribute("aria-pressed", "true");
+  await expect(persistedPrivacyToggle).toContainText("Show values");
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
 
 test("paper trade requires review and creates a simulated fill", async ({ page }) => {

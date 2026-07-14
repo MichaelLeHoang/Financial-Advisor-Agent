@@ -247,7 +247,7 @@ export default function LoginPage() {
               className="flex h-14 w-full items-center justify-center gap-2 border border-white/[0.08] bg-white/[0.045] px-5 text-sm font-medium text-white/82 transition-colors hover:bg-white/[0.075] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
             >
               Show other options
-              <ChevronDown className={cn("size-4 text-white/45 transition-transform", otherOptionsOpen && "rotate-180")} />
+              <ChevronDown className={cn("size-4 text-white/45 transition-transform duration-150 motion-reduce:transition-none", otherOptionsOpen && "rotate-180")} />
             </button>
 
             <AnimatePresence initial={false}>

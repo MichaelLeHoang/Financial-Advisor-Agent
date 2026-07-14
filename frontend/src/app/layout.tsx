@@ -9,6 +9,7 @@ import Sidebar from "@/components/Sidebar";
 import SettingsModal from "@/components/SettingsModal";
 import EditProfileModal from "@/components/EditProfileModal";
 import AlertsModal from "@/components/AlertsModal";
+import ShortcutsDialog from "@/components/ShortcutsDialog";
 import { AuthProvider, useAuth } from "@/components/auth/AuthProvider";
 import { OnboardingProvider, useOnboarding } from "@/components/onboarding/OnboardingProvider";
 import PublicAccessGate from "@/components/auth/PublicAccessGate";
@@ -17,7 +18,11 @@ import Toaster from "@/components/ui/toast";
 import { WorkspacePrototypeProvider } from "@/components/workspace/WorkspacePrototypeProvider";
 import { StrategyStudioProvider } from "@/components/strategy-studio/StrategyStudioProvider";
 import { PortfolioBooksProvider } from "@/components/portfolio/PortfolioBooksProvider";
+import { PortfolioBookViewProvider } from "@/components/portfolio/PortfolioBookViewProvider";
+import { InvestmentPolicyProvider } from "@/components/investment-policy/InvestmentPolicyProvider";
 import { normalizeAppPath, onboardingHref } from "@/lib/workspace-routing";
+import { resolveAppTheme, SETTINGS_STORAGE_KEY } from "@/lib/app-theme";
+import { isEditableShortcutTarget, keyboardShortcutsEnabled } from "@/lib/keyboard-shortcuts";
 
 const hankenGrotesk = Hanken_Grotesk({
   subsets: ["latin"],
@@ -36,7 +41,6 @@ const geist = Geist({
 
 const rootFontClasses = `${geist.variable} ${hankenGrotesk.variable} ${inter.variable}`;
 
-const SETTINGS_STORAGE_KEY = "financial-advisor.settings";
 const COVER_SEEN_STORAGE_KEY = "financial-advisor.coverSeen";
 const STANDALONE_PUBLIC_PATHS = [
   "/",
@@ -71,7 +75,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isAlertsOpen, setIsAlertsOpen] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(true);
   const [settings, setSettings] = useState({
     model: "Gemini 3 Flash",
     theme: "Deep Space",
@@ -92,14 +98,41 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   }, []);
 
   useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const sync = () => setSystemPrefersDark(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
     const handleThemeChange = (event: Event) => {
       const nextTheme = (event as CustomEvent<string>).detail;
       if (!nextTheme) return;
-      setSettings((current) => ({ ...current, theme: nextTheme }));
+      setSettings((current) => {
+        const next = { ...current, theme: nextTheme };
+        window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
+        return next;
+      });
     };
 
     window.addEventListener("financial-advisor:theme-change", handleThemeChange);
     return () => window.removeEventListener("financial-advisor:theme-change", handleThemeChange);
+  }, []);
+
+  useEffect(() => {
+    const openShortcuts = () => setIsShortcutsOpen(true);
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (event.key !== "?" || event.metaKey || event.ctrlKey || event.altKey || isEditableShortcutTarget(event.target) || !keyboardShortcutsEnabled()) return;
+      event.preventDefault();
+      setIsShortcutsOpen(true);
+    };
+    window.addEventListener("financial-advisor:shortcuts-open", openShortcuts);
+    window.addEventListener("keydown", handleShortcut);
+    return () => {
+      window.removeEventListener("financial-advisor:shortcuts-open", openShortcuts);
+      window.removeEventListener("keydown", handleShortcut);
+    };
   }, []);
 
   useEffect(() => {
@@ -121,24 +154,30 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     setSettings(next);
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
   };
+  const resolvedTheme = resolveAppTheme(settings.theme, systemPrefersDark);
+  const rootThemeClass = resolvedTheme === "White" ? "" : "dark";
 
   if (isStandalonePage) {
     return (
-      <html lang="en" className={`${rootFontClasses} dark`}>
-      <body data-theme={settings.theme} className="bg-space-black text-white font-sans antialiased overflow-x-hidden">
+      <html lang="en" className={`${rootFontClasses} ${rootThemeClass}`}>
+      <body data-theme={resolvedTheme} className="bg-space-black text-white font-sans antialiased overflow-x-hidden">
           <MotionConfig reducedMotion="user">
             <AuthProvider>
               <OnboardingProvider>
-                <PortfolioBooksProvider>
-                  <WorkspacePrototypeProvider>
+                <PortfolioBookViewProvider>
+                  <PortfolioBooksProvider>
+                  <InvestmentPolicyProvider>
+                    <WorkspacePrototypeProvider>
                   <StrategyStudioProvider>
                     <ModelProvider>
                       {children}
                       <Toaster />
                     </ModelProvider>
                   </StrategyStudioProvider>
-                  </WorkspacePrototypeProvider>
-                </PortfolioBooksProvider>
+                    </WorkspacePrototypeProvider>
+                  </InvestmentPolicyProvider>
+                  </PortfolioBooksProvider>
+                </PortfolioBookViewProvider>
               </OnboardingProvider>
             </AuthProvider>
           </MotionConfig>
@@ -149,20 +188,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   if (!entryChecked) {
     return (
-      <html lang="en" className={`${rootFontClasses} dark`}>
-        <body data-theme={settings.theme} className="flex h-screen overflow-hidden relative" />
+      <html lang="en" className={`${rootFontClasses} ${rootThemeClass}`}>
+        <body data-theme={resolvedTheme} className="flex h-screen overflow-hidden relative" />
       </html>
     );
   }
 
   return (
-    <html lang="en" className={`${rootFontClasses} dark`}>
-      <body data-theme={settings.theme} className="flex h-screen overflow-hidden relative">
+    <html lang="en" className={`${rootFontClasses} ${rootThemeClass}`}>
+      <body data-theme={resolvedTheme} className="flex h-screen overflow-hidden relative">
         <MotionConfig reducedMotion="user">
           <AuthProvider>
             <OnboardingProvider>
-              <PortfolioBooksProvider>
-                <WorkspacePrototypeProvider>
+              <PortfolioBookViewProvider>
+                <PortfolioBooksProvider>
+                <InvestmentPolicyProvider>
+                  <WorkspacePrototypeProvider>
                 <StrategyStudioProvider>
                   <ModelProvider>
                 <MainWorkspace
@@ -170,7 +211,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
                   onSettingsClick={() => setIsSettingsOpen(true)}
                   onProfileClick={() => setIsProfileOpen(true)}
-                  onAlertsClick={() => setIsAlertsOpen(true)}
+                  onAlertsClick={() => setIsAlertsOpen((open) => !open)}
                 >
                   {children}
                 </MainWorkspace>
@@ -188,12 +229,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <AlertsModal
                   isOpen={isAlertsOpen}
                   onClose={() => setIsAlertsOpen(false)}
+                  sidebarOpen={isSidebarOpen}
                 />
+                <ShortcutsDialog isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} />
                 <Toaster />
                   </ModelProvider>
                 </StrategyStudioProvider>
-                </WorkspacePrototypeProvider>
-              </PortfolioBooksProvider>
+                  </WorkspacePrototypeProvider>
+                </InvestmentPolicyProvider>
+                </PortfolioBooksProvider>
+              </PortfolioBookViewProvider>
             </OnboardingProvider>
           </AuthProvider>
         </MotionConfig>

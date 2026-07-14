@@ -33,6 +33,7 @@ import {
     Compass,
     CandlestickChart,
     BriefcaseBusiness,
+    Bell,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { ChatSession } from "@/lib/api";
@@ -44,6 +45,7 @@ import ChatSearchDialog from "@/components/ChatSearchDialog";
 import ProfileMenu from "@/components/ProfileMenu";
 import { showToast } from "@/components/ui/toast";
 import { PRIMARY_NAVIGATION } from "@/config/workspace-navigation";
+import { keyboardShortcutsEnabled } from "@/lib/keyboard-shortcuts";
 
 type NavItem = {
     href: string;
@@ -189,7 +191,7 @@ export default function Sidebar({
 
     useEffect(() => {
         const handleShortcut = (event: KeyboardEvent) => {
-            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+            if (keyboardShortcutsEnabled() && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
                 event.preventDefault();
                 openSearch();
             }
@@ -445,24 +447,27 @@ function MiniSidebar({
                 <span className="absolute flex h-10 w-10 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
                     <SidebarGlyph />
                 </span>
+                <MiniTooltip label="Open navigation" />
             </button>
 
             <button
                 type="button"
                 onClick={onNewAnalysis}
 	                aria-label="New chat"
-                className="mb-4 flex h-11 w-10 items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                className="group relative mb-4 flex h-11 w-10 items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
                 <PenLine className="h-5 w-5" />
+                <MiniTooltip label="New chat" />
             </button>
 
             <button
                 type="button"
                 onClick={onSearchClick}
                 aria-label="Search chats"
-                className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                className="group relative mb-4 flex h-10 w-10 items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
                 <Search className="h-5 w-5" />
+                <MiniTooltip label="Search chats" shortcut="⌘K" />
             </button>
 
             <div className="h-6" />
@@ -478,11 +483,12 @@ function MiniSidebar({
                             aria-label={label}
                             aria-current={active ? "page" : undefined}
                             className={cn(
-                                "flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                                "group relative flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                                 active ? "bg-white/[0.09] text-indigo-primary" : "text-white/42 hover:bg-white/[0.07] hover:text-white"
                             )}
                         >
                             <Icon className="h-5 w-5" />
+                            <MiniTooltip label={label} />
                         </Link>
                     );
                 })}
@@ -497,11 +503,12 @@ function MiniSidebar({
                         aria-expanded={moreOpen}
                         onClick={() => setMoreOpen((open) => !open)}
                         className={cn(
-                            "flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                            "group flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                             moreOpen || moreActive ? "bg-white/[0.09] text-indigo-primary" : "text-white/42 hover:bg-white/[0.07] hover:text-white"
                         )}
                     >
                         <MoreHorizontal className="h-5 w-5" />
+                        {!moreOpen && <MiniTooltip label="More sections" />}
                     </button>
                     <AnimatePresence>
                         {moreOpen && (
@@ -553,6 +560,7 @@ function MiniSidebar({
                 >
                     <RecentsGlyph />
                     <span className="sr-only">Recents</span>
+                    {!recentsOpen && <MiniTooltip label="Recent conversations" />}
                 </button>
 
                 <AnimatePresence>
@@ -591,10 +599,35 @@ function MiniSidebar({
                 </AnimatePresence>
             </div>
 
-            <div className="mt-auto">
+            <div className="mt-auto flex flex-col items-center gap-2">
+                {onAlertsClick && (
+                    <button
+                        type="button"
+                        aria-label="Notifications"
+                        data-notification-trigger
+                        onClick={onAlertsClick}
+                        className="group relative flex h-10 w-10 items-center justify-center rounded-xl bg-transparent text-white/72 transition-colors duration-150 hover:bg-[var(--surface-card-hover)] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 motion-reduce:transition-none"
+                    >
+                        <Bell className="size-5" />
+                        <span aria-hidden="true" className="absolute right-2 top-2 size-2 rounded-full bg-blue-400 ring-2 ring-[var(--surface-popover-strong)]" />
+                        <MiniTooltip label="Notifications" />
+                    </button>
+                )}
                 <ProfileMenu compact onSettingsClick={onSettingsClick} onProfileClick={onProfileClick} onAlertsClick={onAlertsClick} />
             </div>
         </div>
+    );
+}
+
+function MiniTooltip({ label, shortcut }: { label: string; shortcut?: string }) {
+    return (
+        <span
+            role="tooltip"
+            className="pointer-events-none absolute left-12 top-1/2 z-[90] hidden -translate-y-1/2 items-center gap-2 whitespace-nowrap rounded-xl border border-[var(--theme-border-strong)] bg-[var(--surface-popover)] px-3 py-2 text-xs font-medium text-[var(--text-primary)] opacity-0 shadow-[var(--shadow-popover)] transition-opacity duration-150 group-hover:flex group-hover:opacity-100 group-focus-visible:flex group-focus-visible:opacity-100 motion-reduce:transition-none"
+        >
+            {label}
+            {shortcut && <kbd className="text-[10px] text-[var(--text-muted)]">{shortcut}</kbd>}
+        </span>
     );
 }
 
@@ -650,6 +683,7 @@ function SidebarSurface({
                     {onToggle && (
                         <button
                             type="button"
+                            data-notification-trigger
                             aria-label="Close sidebar"
                             onClick={onToggle}
                             className="hidden h-10 w-10 cursor-w-resize items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.035] text-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-white/[0.07] hover:text-white md:flex"
@@ -728,7 +762,7 @@ function SidebarSurface({
                                     {(moreOpen || moreActive) && <span className="absolute inset-0 rounded-xl border border-indigo-primary/25 bg-gradient-to-r from-indigo-primary/14 to-cyan-secondary/5" />}
                                     <MoreHorizontal className={cn("relative h-5 w-5 shrink-0", moreOpen || moreActive ? "text-indigo-primary" : "text-white/40 group-hover:text-white/75")} />
                                     <span className="relative min-w-0 flex-1 text-left">More</span>
-                                    <ChevronRight className={cn("relative h-4 w-4 text-white/35 transition-transform", moreOpen && "rotate-90")} />
+                                    <ChevronRight className={cn("relative h-4 w-4 text-white/35 transition-transform duration-150 motion-reduce:transition-none", moreOpen && "rotate-90")} />
                                 </button>
                                 <AnimatePresence initial={false}>
                                     {moreOpen && (
@@ -821,6 +855,19 @@ function SidebarSurface({
                                 </Link>
                             </div>
                         </div>
+                    )}
+                    {onAlertsClick && (
+                        <button
+                            type="button"
+                            onClick={onAlertsClick}
+                            className="group flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium text-white/62 transition-colors duration-150 hover:bg-white/[0.06] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 motion-reduce:transition-none"
+                        >
+                            <span className="relative flex size-7 items-center justify-center">
+                                <Bell className="size-5 text-white/55 group-hover:text-white" />
+                                <span aria-hidden="true" className="absolute right-0 top-0 size-2 rounded-full bg-blue-400 ring-2 ring-[var(--surface-sidebar)]" />
+                            </span>
+                            <span className="flex-1 text-left">Notifications</span>
+                        </button>
                     )}
                     <ProfileMenu onSettingsClick={onSettingsClick} onProfileClick={onProfileClick} onAlertsClick={onAlertsClick} />
                 </div>

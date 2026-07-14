@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source not "../../.next";
 @source not "../../.next-e2e";
 
 @media (prefers-reduced-motion: reduce) {
@@ -121,6 +122,15 @@
   select,
   option {
     font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  }
+
+  select:not([multiple]) {
+    appearance: none;
+    padding-right: 2.5rem !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a3a3a3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-position: right 0.875rem center;
+    background-repeat: no-repeat;
+    background-size: 1rem;
   }
 
   h1,
@@ -2256,4 +2266,33 @@ body[data-theme="White"] .news-page [class*="text-sky-"],
 body[data-theme="White"] .news-page [class*="text-lime-"],
 body[data-theme="White"] .news-page [class*="text-rose-"] {
   color: var(--color-indigo-primary) !important;
+}
+
+.notification-feed {
+  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
+}
+
+.notification-feed::-webkit-scrollbar {
+  width: 8px;
+}
+
+.notification-feed::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.notification-feed::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  background-clip: padding-box;
+}
+
+.notification-feed[data-scrolling="true"] {
+  scrollbar-color: rgba(255, 255, 255, 0.72) transparent;
+}
+
+.notification-feed[data-scrolling="true"]::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.72);
+  background-clip: padding-box;
 }

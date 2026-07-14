@@ -50,6 +50,18 @@ const THEMES = [
         ring: "rgba(239, 68, 68, 0.32)",
         shadow: "0 0 0 1px rgba(239, 68, 68, 0.2), 0 12px 30px rgba(239, 68, 68, 0.22), inset 0 1px 0 rgba(255, 230, 232, 0.11)",
     },
+    {
+        name: "System",
+        primary: "#a3a3a3",
+        secondary: "#fafafa",
+        label: "System",
+        surface: "var(--surface-card)",
+        hover: "var(--surface-card-hover)",
+        selected: "var(--surface-selected)",
+        border: "var(--theme-border-strong)",
+        ring: "rgba(99, 102, 241, 0.32)",
+        shadow: "var(--shadow-control)",
+    },
 ];
 
 export default function SettingsModal({ isOpen, onClose, settings, setSettings }: SettingsModalProps) {
@@ -100,7 +112,7 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                     {/* Theme */}
                     <div className="space-y-4">
                         <label className="text-sm font-bold text-white/40 uppercase tracking-widest">Visual Theme</label>
-                        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
                             {THEMES.map((t) => (
                                 <Button
                                     key={t.name}

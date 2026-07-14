@@ -1370,7 +1370,7 @@ function ResearchModeSelector({
         <SlidersHorizontal className="size-4 text-cyan-300" />
         <span className="hidden md:inline">Research</span>
         <span className="hidden sm:inline text-[var(--text-subtle)]">{active.label}</span>
-        <ChevronDown className="size-4 text-[var(--text-subtle)]" />
+        <ChevronDown className={cn("size-4 text-[var(--text-subtle)] transition-transform duration-150 motion-reduce:transition-none", open && "rotate-180")} />
       </button>
 
       <AnimatePresence>

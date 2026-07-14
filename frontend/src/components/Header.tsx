@@ -24,6 +24,7 @@ import {
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 export default function Header({
     onSettingsClick,
@@ -155,7 +156,7 @@ export default function Header({
                         className="flex h-10 items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--surface-control)] px-4 text-sm font-semibold text-white/86 shadow-[var(--shadow-control)] transition-colors hover:bg-[var(--surface-control-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
                         Quanfora 1.0
-                        <ChevronDown className="h-4 w-4 text-white/45" />
+                        <ChevronDown className={cn("h-4 w-4 text-white/45 transition-transform duration-150 motion-reduce:transition-none", modelOpen && "rotate-180")} />
                     </button>
 
                     <AnimatePresence>

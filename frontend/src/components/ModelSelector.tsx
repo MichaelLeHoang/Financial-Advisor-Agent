@@ -107,7 +107,7 @@ export default function ModelSelector({
       >
         <ActiveIcon className={`size-4 ${version === "2.0" ? "text-emerald-400" : version === "2.1" ? "text-cyan-300" : "text-indigo-primary"}`} />
         <span className={compact ? "hidden sm:inline" : undefined}>{active.label}</span>
-        <ChevronDown className="size-4 text-[var(--text-subtle)]" />
+        <ChevronDown className={`size-4 text-[var(--text-subtle)] transition-transform duration-150 motion-reduce:transition-none ${open ? "rotate-180" : ""}`} />
       </button>
 
       <AnimatePresence>
