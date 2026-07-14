@@ -21,4 +21,4 @@ Route handlers should validate and translate requests only. Business logic belon
 Use FastAPI `TestClient` with mocked dependencies for route contracts, authorization, provider timeouts, overview/workspace payloads, status rollups, and error responses.
 
 ## Latest Change
-- Applied AI entitlements and quotas to RAG queries and restricted manual ingestion to authenticated development use.
+- Registered owner-scoped investment policy, thesis, decision, and scope-validation routes.

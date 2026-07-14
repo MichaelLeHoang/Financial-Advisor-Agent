@@ -25,4 +25,4 @@ Authentication comes from `auth/`; billing provider logic stays in `billing/`; d
 Cover plan matrices, user isolation, guest restrictions, resource limits, upgrade errors, portfolio reconciliation and classification events, portfolio sync behavior, and repository fallback behavior.
 
 ## Latest Change
-- Added shared investment, trading, and unclassified position books with deterministic aggregation, owner-only classification, and append-only decision events.
+- Extended user-scoped persistence with investment policy, thesis, and immutable decision records.

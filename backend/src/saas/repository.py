@@ -6,6 +6,13 @@ from uuid import UUID, uuid4
 from datetime import datetime, timezone
 
 from src.config import settings
+from src.investment_policy.models import InvestmentPolicyRead, InvestmentPolicyUpsert
+from src.investment_workspace.models import (
+    InvestmentDecisionCreate,
+    InvestmentDecisionRead,
+    InvestmentThesisRead,
+    InvestmentThesisUpsert,
+)
 from src.saas.models import (
     AlertCreate,
     AlertEventCreate,
@@ -61,6 +68,9 @@ class UserScopedStore:
     def __init__(self) -> None:
         self._lock = Lock()
         self._portfolios: dict[UUID, PortfolioRead] = {}
+        self._investment_policies: dict[UUID, InvestmentPolicyRead] = {}
+        self._investment_theses: dict[UUID, InvestmentThesisRead] = {}
+        self._investment_decisions: dict[UUID, InvestmentDecisionRead] = {}
         self._holdings: dict[UUID, list[HoldingRead]] = {}
         self._portfolio_book_events: dict[UUID, list[PortfolioBookEventRead]] = {}
         self._recurring_buys: dict[UUID, list[RecurringBuyRead]] = {}
@@ -83,6 +93,9 @@ class UserScopedStore:
     def reset(self) -> None:
         with self._lock:
             self._portfolios.clear()
+            self._investment_policies.clear()
+            self._investment_theses.clear()
+            self._investment_decisions.clear()
             self._holdings.clear()
             self._portfolio_book_events.clear()
             self._recurring_buys.clear()
@@ -148,6 +161,94 @@ class UserScopedStore:
         with self._lock:
             return [portfolio for portfolio in self._portfolios.values() if portfolio.user_id == user_id]
 
+    def get_investment_policy(self, user_id: UUID) -> InvestmentPolicyRead | None:
+        with self._lock:
+            return self._investment_policies.get(user_id)
+
+    def upsert_investment_policy(
+        self,
+        user_id: UUID,
+        payload: InvestmentPolicyUpsert,
+    ) -> InvestmentPolicyRead:
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            existing = self._investment_policies.get(user_id)
+            policy = InvestmentPolicyRead(
+                id=existing.id if existing else uuid4(),
+                user_id=user_id,
+                created_at=existing.created_at if existing else now,
+                updated_at=now,
+                **payload.model_dump(),
+            )
+            self._investment_policies[user_id] = policy
+            return policy
+
+    def list_investment_theses(
+        self,
+        user_id: UUID,
+        portfolio_id: UUID | None = None,
+    ) -> list[InvestmentThesisRead]:
+        with self._lock:
+            rows = [
+                thesis for thesis in self._investment_theses.values()
+                if thesis.user_id == user_id and (portfolio_id is None or thesis.portfolio_id == portfolio_id)
+            ]
+            return sorted(rows, key=lambda row: row.updated_at, reverse=True)
+
+    def upsert_investment_thesis(
+        self,
+        user_id: UUID,
+        holding: HoldingRead,
+        payload: InvestmentThesisUpsert,
+    ) -> InvestmentThesisRead:
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            existing = self._investment_theses.get(holding.id)
+            thesis = InvestmentThesisRead(
+                id=existing.id if existing else uuid4(),
+                user_id=user_id,
+                portfolio_id=holding.portfolio_id,
+                holding_id=holding.id,
+                symbol=holding.symbol,
+                created_at=existing.created_at if existing else now,
+                updated_at=now,
+                **payload.model_dump(),
+            )
+            self._investment_theses[holding.id] = thesis
+            return thesis
+
+    def list_investment_decisions(
+        self,
+        user_id: UUID,
+        portfolio_id: UUID | None = None,
+        limit: int = 50,
+    ) -> list[InvestmentDecisionRead]:
+        with self._lock:
+            rows = [
+                decision for decision in self._investment_decisions.values()
+                if decision.user_id == user_id and (portfolio_id is None or decision.portfolio_id == portfolio_id)
+            ]
+            return sorted(rows, key=lambda row: row.created_at, reverse=True)[:limit]
+
+    def create_investment_decision(
+        self,
+        user_id: UUID,
+        holding: HoldingRead,
+        payload: InvestmentDecisionCreate,
+    ) -> InvestmentDecisionRead:
+        decision = InvestmentDecisionRead(
+            user_id=user_id,
+            portfolio_id=holding.portfolio_id,
+            holding_id=holding.id,
+            symbol=holding.symbol,
+            action=payload.action,
+            rationale=payload.rationale,
+            policy_exception=payload.policy_exception,
+        )
+        with self._lock:
+            self._investment_decisions[decision.id] = decision
+        return decision
+
     def create_portfolio(self, user_id: UUID, payload: PortfolioCreate) -> PortfolioRead:
         portfolio = PortfolioRead(
             id=uuid4(),
@@ -166,6 +267,17 @@ class UserScopedStore:
                 return None
             return portfolio
 
+    def get_holding_by_id(self, user_id: UUID, holding_id: UUID) -> HoldingRead | None:
+        with self._lock:
+            for portfolio_id, holdings in self._holdings.items():
+                portfolio = self._portfolios.get(portfolio_id)
+                if portfolio is None or portfolio.user_id != user_id:
+                    continue
+                holding = next((item for item in holdings if item.id == holding_id), None)
+                if holding is not None:
+                    return holding
+        return None
+
     def delete_portfolio(self, user_id: UUID, portfolio_id: UUID) -> bool:
         with self._lock:
             portfolio = self._portfolios.get(portfolio_id)
@@ -175,6 +287,14 @@ class UserScopedStore:
             self._holdings.pop(portfolio_id, None)
             self._portfolio_book_events.pop(portfolio_id, None)
             self._recurring_buys.pop(portfolio_id, None)
+            self._investment_theses = {
+                holding_id: thesis for holding_id, thesis in self._investment_theses.items()
+                if thesis.portfolio_id != portfolio_id
+            }
+            self._investment_decisions = {
+                decision_id: decision for decision_id, decision in self._investment_decisions.items()
+                if decision.portfolio_id != portfolio_id
+            }
             return True
 
     def add_holding(self, user_id: UUID, portfolio_id: UUID, payload: HoldingCreate) -> HoldingRead | None:
@@ -745,6 +865,151 @@ class SupabaseRestStore:
         rows = self._request("GET", "portfolios", {"select": "*", "user_id": f"eq.{user_id}"})
         return [PortfolioRead.model_validate(row) for row in rows]
 
+    def get_investment_policy(self, user_id: UUID) -> InvestmentPolicyRead | None:
+        rows = self._request(
+            "GET",
+            "investment_policies",
+            {"select": "*", "user_id": f"eq.{user_id}", "limit": "1"},
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        return InvestmentPolicyRead.model_validate({
+            **row,
+            "goals": row.get("goals_json", {}),
+            "target_allocation": row.get("target_allocation_json", {}),
+            "permitted_assets": row.get("permitted_assets_json", []),
+            "rebalancing_policy": row.get("rebalancing_policy_json", {}),
+            "tax_preferences": row.get("tax_preferences_json", {}),
+        })
+
+    def list_investment_theses(
+        self,
+        user_id: UUID,
+        portfolio_id: UUID | None = None,
+    ) -> list[InvestmentThesisRead]:
+        query = {"select": "*", "user_id": f"eq.{user_id}", "order": "updated_at.desc"}
+        if portfolio_id is not None:
+            query["portfolio_id"] = f"eq.{portfolio_id}"
+        rows = self._request("GET", "investment_theses", query)
+        return [InvestmentThesisRead.model_validate({
+            **row,
+            "supporting_evidence": row.get("supporting_evidence_json", []),
+            "risk_evidence": row.get("risk_evidence_json", []),
+            "invalidation_conditions": row.get("invalidation_conditions_json", []),
+        }) for row in rows]
+
+    def upsert_investment_thesis(
+        self,
+        user_id: UUID,
+        holding: HoldingRead,
+        payload: InvestmentThesisUpsert,
+    ) -> InvestmentThesisRead:
+        body = {
+            "user_id": str(user_id),
+            "portfolio_id": str(holding.portfolio_id),
+            "holding_id": str(holding.id),
+            "symbol": holding.symbol,
+            "statement": payload.statement,
+            "supporting_evidence_json": payload.supporting_evidence,
+            "risk_evidence_json": payload.risk_evidence,
+            "invalidation_conditions_json": payload.invalidation_conditions,
+            "status": payload.status.value,
+            "next_review_at": payload.next_review_at.isoformat() if payload.next_review_at else None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        existing = self._request(
+            "GET",
+            "investment_theses",
+            {"select": "id", "user_id": f"eq.{user_id}", "holding_id": f"eq.{holding.id}", "limit": "1"},
+        )
+        if existing:
+            rows = self._request(
+                "PATCH",
+                "investment_theses",
+                {"id": f"eq.{existing[0]['id']}", "user_id": f"eq.{user_id}"},
+                body=body,
+            )
+        else:
+            rows = self._request("POST", "investment_theses", body=body)
+        row = rows[0]
+        return InvestmentThesisRead.model_validate({
+            **row,
+            "supporting_evidence": row.get("supporting_evidence_json", []),
+            "risk_evidence": row.get("risk_evidence_json", []),
+            "invalidation_conditions": row.get("invalidation_conditions_json", []),
+        })
+
+    def list_investment_decisions(
+        self,
+        user_id: UUID,
+        portfolio_id: UUID | None = None,
+        limit: int = 50,
+    ) -> list[InvestmentDecisionRead]:
+        query = {
+            "select": "*",
+            "user_id": f"eq.{user_id}",
+            "order": "created_at.desc",
+            "limit": str(limit),
+        }
+        if portfolio_id is not None:
+            query["portfolio_id"] = f"eq.{portfolio_id}"
+        rows = self._request("GET", "investment_decisions", query)
+        return [InvestmentDecisionRead.model_validate(row) for row in rows]
+
+    def create_investment_decision(
+        self,
+        user_id: UUID,
+        holding: HoldingRead,
+        payload: InvestmentDecisionCreate,
+    ) -> InvestmentDecisionRead:
+        rows = self._request("POST", "investment_decisions", body={
+            "user_id": str(user_id),
+            "portfolio_id": str(holding.portfolio_id),
+            "holding_id": str(holding.id),
+            "symbol": holding.symbol,
+            "action": payload.action.value,
+            "rationale": payload.rationale,
+            "policy_exception": payload.policy_exception,
+        })
+        return InvestmentDecisionRead.model_validate(rows[0])
+
+    def upsert_investment_policy(
+        self,
+        user_id: UUID,
+        payload: InvestmentPolicyUpsert,
+    ) -> InvestmentPolicyRead:
+        existing = self.get_investment_policy(user_id)
+        body = {
+            "user_id": str(user_id),
+            "name": payload.name,
+            "status": payload.status.value,
+            "goals_json": payload.goals,
+            "time_horizon": payload.time_horizon,
+            "target_allocation_json": payload.target_allocation,
+            "max_position_weight": payload.max_position_weight,
+            "max_sector_weight": payload.max_sector_weight,
+            "max_drawdown": payload.max_drawdown,
+            "minimum_cash_weight": payload.minimum_cash_weight,
+            "permitted_assets_json": payload.permitted_assets,
+            "rebalancing_policy_json": payload.rebalancing_policy,
+            "tax_preferences_json": payload.tax_preferences,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if existing:
+            rows = self._request("PATCH", "investment_policies", {"id": f"eq.{existing.id}", "user_id": f"eq.{user_id}"}, body=body)
+        else:
+            rows = self._request("POST", "investment_policies", body=body)
+        row = rows[0]
+        return InvestmentPolicyRead.model_validate({
+            **row,
+            "goals": row.get("goals_json", {}),
+            "target_allocation": row.get("target_allocation_json", {}),
+            "permitted_assets": row.get("permitted_assets_json", []),
+            "rebalancing_policy": row.get("rebalancing_policy_json", {}),
+            "tax_preferences": row.get("tax_preferences_json", {}),
+        })
+
     def create_portfolio(self, user_id: UUID, payload: PortfolioCreate) -> PortfolioRead:
         rows = self._request(
             "POST",
@@ -760,6 +1025,13 @@ class SupabaseRestStore:
             {"select": "*", "id": f"eq.{portfolio_id}", "user_id": f"eq.{user_id}", "limit": "1"},
         )
         return PortfolioRead.model_validate(rows[0]) if rows else None
+
+    def get_holding_by_id(self, user_id: UUID, holding_id: UUID) -> HoldingRead | None:
+        rows = self._request("GET", "holdings", {"select": "*", "id": f"eq.{holding_id}", "limit": "1"})
+        if not rows:
+            return None
+        holding = HoldingRead.model_validate(rows[0])
+        return holding if self.get_portfolio(user_id, holding.portfolio_id) is not None else None
 
     def delete_portfolio(self, user_id: UUID, portfolio_id: UUID) -> bool:
         if self.get_portfolio(user_id, portfolio_id) is None:

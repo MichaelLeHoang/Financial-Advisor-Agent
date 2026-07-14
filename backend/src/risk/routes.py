@@ -8,7 +8,7 @@ from src.auth.supabase import get_current_or_guest_user
 from src.risk.calculations import calculate_portfolio_risk
 from src.risk.market_data import YFinanceRiskDataProvider
 from src.saas.entitlements import FeatureKey, enforce_feature
-from src.saas.models import AuthenticatedUser, RiskSnapshotCreate, RiskSnapshotRead
+from src.saas.models import AuthenticatedUser, PositionBook, RiskSnapshotCreate, RiskSnapshotRead
 from src.saas.repository import get_store
 
 
@@ -24,6 +24,7 @@ class RiskSnapshotResponse(BaseModel):
 async def create_portfolio_risk_snapshot(
     portfolio_id: UUID,
     lookback_days: int = 365,
+    book: PositionBook | None = None,
     user: AuthenticatedUser = Depends(get_current_or_guest_user),
 ) -> RiskSnapshotResponse:
     enforce_feature(user, FeatureKey.RISK_DASHBOARD)
@@ -34,12 +35,16 @@ async def create_portfolio_risk_snapshot(
     holdings = data_store.list_holdings(user.id, portfolio_id)
     if holdings is None:
         raise HTTPException(status_code=404, detail="Portfolio not found")
+    if book is not None:
+        holdings = [holding for holding in holdings if holding.book_type == book]
 
     end_date = date.today() + timedelta(days=1)
     start_date = end_date - timedelta(days=max(30, min(lookback_days, 1095)))
     try:
         history = YFinanceRiskDataProvider().fetch_history([holding.symbol for holding in holdings], start_date, end_date)
         snapshot_payload = calculate_portfolio_risk(portfolio, holdings, history)
+        if book is not None:
+            snapshot_payload["metrics"]["book_type"] = book.value
         snapshot = data_store.create_risk_snapshot(
             user.id,
             RiskSnapshotCreate(portfolio_id=portfolio_id, **snapshot_payload),

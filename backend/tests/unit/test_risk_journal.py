@@ -4,7 +4,7 @@ import pandas as pd
 from fastapi.testclient import TestClient
 
 from src.auth.supabase import get_current_or_guest_user
-from src.saas.models import AuthenticatedUser, HoldingCreate, Plan, PortfolioCreate
+from src.saas.models import AuthenticatedUser, HoldingClassificationUpdate, HoldingCreate, Plan, PortfolioCreate, PositionBook
 from src.saas.repository import get_store, store
 
 
@@ -71,6 +71,51 @@ def test_pro_user_can_generate_risk_snapshot(monkeypatch):
     assert snapshot["metrics"]["total_value"] == 2690
     assert snapshot["allocations"]["by_asset"]["AAPL"]["weight"] > 0
     assert "Risk snapshots are research tools" in response.json()["disclaimer"]
+
+    app.dependency_overrides.clear()
+    store.reset()
+
+
+def test_risk_snapshot_filters_holdings_by_position_book(monkeypatch):
+    from src.api.app import app
+    from src.risk import routes
+
+    _use_memory_store(monkeypatch)
+    user_id = uuid4()
+    client = TestClient(app)
+    store.reset()
+    app.dependency_overrides[get_current_or_guest_user] = _override_user(user_id, plan=Plan.PRO)
+
+    data_store = get_store()
+    portfolio = data_store.create_portfolio(user_id, PortfolioCreate(name="Split", base_currency="USD"))
+    investment = data_store.add_holding(user_id, portfolio.id, HoldingCreate(
+        symbol="AAPL", asset_type="equity", quantity=10, average_cost=100,
+    ))
+    trading = data_store.add_holding(user_id, portfolio.id, HoldingCreate(
+        symbol="AMD", asset_type="equity", quantity=2, average_cost=200,
+    ))
+    assert investment is not None and trading is not None
+    data_store.classify_holding(
+        user_id, portfolio.id, investment.id, HoldingClassificationUpdate(book_type=PositionBook.INVESTMENT),
+    )
+    data_store.classify_holding(
+        user_id, portfolio.id, trading.id, HoldingClassificationUpdate(book_type=PositionBook.TRADING),
+    )
+
+    class FakeProvider:
+        def fetch_history(self, symbols, start_date, end_date):
+            assert symbols == ["AMD"]
+            return {"AMD": _prices([200, 202, 204, 206])}
+
+    monkeypatch.setattr(routes, "YFinanceRiskDataProvider", FakeProvider)
+
+    response = client.get(f"/api/v1/risk/portfolios/{portfolio.id}?book=trading")
+
+    assert response.status_code == 200, response.text
+    snapshot = response.json()["snapshot"]
+    assert snapshot["metrics"]["book_type"] == "trading"
+    assert snapshot["metrics"]["holdings_count"] == 1
+    assert list(snapshot["allocations"]["by_asset"]) == ["AMD"]
 
     app.dependency_overrides.clear()
     store.reset()
