@@ -59,6 +59,11 @@ test("desktop sidebar defaults collapsed and labels compact navigation on hover"
 
   await page.getByRole("button", { name: "Open sidebar" }).click();
   await expect(page.getByRole("button", { name: "Close sidebar" })).toBeVisible();
+  const primaryAction = page.locator(".theme-accent-surface").filter({ hasText: "New chat" });
+  await expect.poll(() => primaryAction.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { backgroundColor: style.backgroundColor, backgroundImage: style.backgroundImage, boxShadow: style.boxShadow };
+  })).toEqual({ backgroundColor: "rgb(99, 102, 241)", backgroundImage: "none", boxShadow: "none" });
 });
 
 test("investment selectors stay anchored and expose their expanded state", async ({ page }) => {
@@ -102,6 +107,14 @@ test("notification center exposes workspace activity and product updates", async
   await expect(dialog).toBeVisible();
   const dialogBox = await dialog.boundingBox();
   expect(dialogBox).not.toBeNull();
+  const dialogHeight = await dialog.evaluate((element) => getComputedStyle(element).height);
+  const dialogStyle = await dialog.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { backgroundColor: style.backgroundColor, backgroundImage: style.backgroundImage, boxShadow: style.boxShadow };
+  });
+  expect(dialogStyle.backgroundColor).toBe("rgb(8, 9, 13)");
+  expect(dialogStyle.backgroundImage).toBe("none");
+  expect(dialogStyle.boxShadow).not.toContain("99, 102, 241");
   expect(dialogBox!.width).toBeLessThanOrEqual(430);
   expect(dialogBox!.height).toBeLessThanOrEqual(690);
   await expect(page.locator('[data-slot="dialog-backdrop"]')).toHaveCount(0);
@@ -114,9 +127,7 @@ test("notification center exposes workspace activity and product updates", async
   await expect(dialog.getByRole("tab", { name: "Notifications" })).toHaveAttribute("aria-selected", "true");
   await dialog.getByRole("tab", { name: "What's new" }).click();
   await expect(dialog.getByRole("tab", { name: "What's new" })).toHaveAttribute("aria-selected", "true");
-  const updatesBox = await dialog.boundingBox();
-  expect(updatesBox).not.toBeNull();
-  expect(Math.abs(updatesBox!.height - dialogBox!.height)).toBeLessThan(2);
+  await expect.poll(() => dialog.evaluate((element) => getComputedStyle(element).height)).toBe(dialogHeight);
   await expect(dialog.getByRole("heading", { name: "Investment workspace, rebuilt" })).toBeVisible();
   await expect(dialog.getByRole("heading", { name: "Performance insights" })).toBeVisible();
 
@@ -137,6 +148,12 @@ test("compact profile menu exposes system appearance, language, and real shortcu
   const profileBox = await profileMenu.boundingBox();
   expect(profileBox).not.toBeNull();
   expect(profileBox!.width).toBeLessThanOrEqual(270);
+  const profileStyle = await profileMenu.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { backgroundImage: style.backgroundImage, boxShadow: style.boxShadow };
+  });
+  expect(profileStyle.backgroundImage).toBe("none");
+  expect(profileStyle.boxShadow).not.toContain("99, 102, 241");
 
   const plansItem = page.getByRole("menuitem", { name: "Plans & billing" });
   const iconSurface = plansItem.locator("svg").locator("..");
@@ -185,7 +202,7 @@ test("compact profile menu exposes system appearance, language, and real shortcu
   await expect(page.locator("body")).toHaveAttribute("data-theme", "Deep Space");
 });
 
-test("collapsed account controls remain transparent in the red theme", async ({ page }, testInfo) => {
+test("red theme keeps account controls transparent and primary actions flat red", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "The compact account controls are desktop navigation chrome.");
   await page.addInitScript(() => window.localStorage.setItem("financial-advisor.settings", JSON.stringify({ theme: "Crimson" })));
   await page.goto("/invest");
@@ -198,6 +215,14 @@ test("collapsed account controls remain transparent in the red theme", async ({ 
   ]) {
     expect(await control.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
   }
+
+  await page.getByRole("button", { name: "Open sidebar" }).click();
+  const primaryAction = page.locator(".theme-accent-surface").filter({ hasText: "New chat" });
+  await expect(primaryAction).toBeVisible();
+  await expect.poll(() => primaryAction.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { backgroundColor: style.backgroundColor, backgroundImage: style.backgroundImage, boxShadow: style.boxShadow };
+  })).toEqual({ backgroundColor: "rgb(239, 68, 68)", backgroundImage: "none", boxShadow: "none" });
 });
 
 test("central Portfolio keeps the selected position book across tabs and reloads", async ({ page }) => {
@@ -422,9 +447,14 @@ test("paper trade requires review and creates a simulated fill", async ({ page }
   await expect(page.getByText("Policy passed", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "15m" }).click();
   await expect(page.getByRole("button", { name: "15m" })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Signals", exact: true }).click();
+  await page.getByRole("tab", { name: "Signals", exact: true }).click();
   await expect(page.getByText(/Momentum setup active for AMD/)).toBeVisible();
-  await page.getByRole("button", { name: "Review paper order" }).click();
+  const reviewButton = page.getByRole("button", { name: "Review paper order" });
+  await expect.poll(() => reviewButton.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { backgroundColor: style.backgroundColor, backgroundImage: style.backgroundImage, boxShadow: style.boxShadow };
+  })).toEqual({ backgroundColor: "rgb(99, 102, 241)", backgroundImage: "none", boxShadow: "none" });
+  await reviewButton.click();
   await expect(page.getByRole("alertdialog", { name: "Buy 100 AMD" })).toBeVisible();
   await page.getByRole("button", { name: "Confirm simulated fill" }).click();
   await expect(page.getByText("100 AMD shares filled at $170.00")).toBeVisible();
