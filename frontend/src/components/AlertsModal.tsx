@@ -98,7 +98,7 @@ export default function AlertsModal({ isOpen, onClose, sidebarOpen = false }: { 
           exit={{ opacity: 0, x: -8, scale: 0.985 }}
           transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
           className={cn(
-            "fixed inset-x-3 bottom-3 z-[230] flex h-[min(680px,calc(100dvh-1.5rem))] flex-col overflow-hidden rounded-3xl border border-white/15 bg-[#242424] text-[var(--text-primary)] shadow-[var(--shadow-dialog)] md:inset-x-auto md:bottom-4 md:w-[min(420px,calc(100vw-6rem))]",
+            "fixed inset-x-3 bottom-3 z-[230] flex h-[min(680px,calc(100dvh-1.5rem))] flex-col overflow-hidden rounded-3xl border border-[var(--theme-border-strong)] bg-[var(--surface-dialog)] text-[var(--text-primary)] shadow-[var(--shadow-dialog)] md:inset-x-auto md:bottom-4 md:w-[min(420px,calc(100vw-6rem))]",
             sidebarOpen ? "md:left-[18.75rem] md:w-[min(420px,calc(100vw-19.75rem))]" : "md:left-20",
           )}
         >

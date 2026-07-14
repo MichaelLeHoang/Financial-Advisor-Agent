@@ -235,7 +235,7 @@ export default function Sidebar({
                         src="/close-svgrepo-com.svg"
                         alt=""
                         aria-hidden="true"
-                        className="h-5 w-5 opacity-70 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]"
+                        className="h-5 w-5 opacity-70 transition-opacity duration-200 group-hover:opacity-100"
                     />
                 ) : (
                     <Menu className="h-5 w-5 transition-colors group-hover:text-[var(--text-primary)]" />
@@ -434,7 +434,7 @@ function MiniSidebar({
     const moreActive = moreNav.some((item) => path === item.href);
 
     return (
-        <div className="relative flex h-full flex-col items-center border-r border-[var(--theme-border)] bg-[var(--surface-popover-strong)] py-4 shadow-[var(--shadow-sidebar)]">
+        <div className="relative flex h-full flex-col items-center border-r border-[var(--theme-border)] bg-[var(--surface-sidebar)] py-4 shadow-[var(--shadow-sidebar)]">
             <button
                 type="button"
                 aria-label="Open sidebar"
@@ -696,7 +696,7 @@ function SidebarSurface({
                 <button
                     type="button"
                     onClick={onNewAnalysis}
-                    className="accent-gradient-surface on-accent mb-4 flex h-11 items-center justify-between rounded-xl px-3 text-sm font-semibold shadow-[var(--shadow-create-action)] outline-none transition-[box-shadow,transform] duration-150 hover:shadow-[var(--shadow-create-action-hover)] active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-space-black"
+                    className="theme-accent-surface on-accent mb-4 flex h-11 items-center justify-between rounded-xl px-3 text-sm font-semibold outline-none transition-transform duration-150 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-space-black"
                 >
                     <span className="flex items-center gap-2">
                         <PenLine className="h-5 w-5" />
@@ -738,7 +738,7 @@ function SidebarSurface({
                                                 : "text-white/55 hover:bg-white/[0.055] hover:text-white"
                                         )}
                                     >
-                                        {active && <span className="absolute inset-0 rounded-xl border border-indigo-primary/25 bg-gradient-to-r from-indigo-primary/14 to-cyan-secondary/5" />}
+                                        {active && <span className="absolute inset-0 rounded-xl border border-indigo-primary/25 bg-[var(--surface-accent-soft)]" />}
                                         <Icon className={cn("relative h-5 w-5 shrink-0", active ? "text-indigo-primary" : "text-white/40 group-hover:text-white/75")} />
                                         <span className="relative min-w-0 flex-1 truncate">{label}</span>
                                         {active && <ChevronRight className="relative h-4 w-4 text-white/35" />}
@@ -759,7 +759,7 @@ function SidebarSurface({
                                             : "text-white/55 hover:bg-white/[0.055] hover:text-white"
                                     )}
                                 >
-                                    {(moreOpen || moreActive) && <span className="absolute inset-0 rounded-xl border border-indigo-primary/25 bg-gradient-to-r from-indigo-primary/14 to-cyan-secondary/5" />}
+                                    {(moreOpen || moreActive) && <span className="absolute inset-0 rounded-xl border border-indigo-primary/25 bg-[var(--surface-accent-soft)]" />}
                                     <MoreHorizontal className={cn("relative h-5 w-5 shrink-0", moreOpen || moreActive ? "text-indigo-primary" : "text-white/40 group-hover:text-white/75")} />
                                     <span className="relative min-w-0 flex-1 text-left">More</span>
                                     <ChevronRight className={cn("relative h-4 w-4 text-white/35 transition-transform duration-150 motion-reduce:transition-none", moreOpen && "rotate-90")} />
@@ -837,11 +837,11 @@ function SidebarSurface({
                                 onClick={() => setShowProCard(false)}
                                 className="group absolute right-2 top-2 z-10 flex size-6 items-center justify-center rounded-lg text-white/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                             >
-                                <img src="/close-svgrepo-com.svg" alt="" aria-hidden="true" className="size-3.5 opacity-70 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_7px_rgba(255,255,255,0.65)]" />
+                                <img src="/close-svgrepo-com.svg" alt="" aria-hidden="true" className="size-3.5 opacity-70 transition-opacity duration-200 group-hover:opacity-100" />
                             </button>
                             <div className="relative pr-6">
                                 <div className="text-sm font-semibold text-white">
-                                    Upgrade to <span className="bg-gradient-to-r from-cyan-secondary to-indigo-primary bg-clip-text text-transparent">PRO</span>
+                                    Upgrade to <span className="text-indigo-primary">PRO</span>
                                 </div>
                                 <p className="mt-1 text-xs leading-relaxed text-white/38">
                                     Unlock deeper portfolio simulations, faster agents, and premium market memory.

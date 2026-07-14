@@ -305,7 +305,7 @@ export function ResearchDemoProgressLoop({ surface = "dark" }: { surface?: "dark
       </div>
       <div className={cn("h-1.5 overflow-hidden rounded-full", isLight ? "bg-slate-200" : "bg-white/[0.06]")}>
         <div
-          className="h-full rounded-full bg-gradient-to-r from-indigo-primary via-cyan-secondary to-emerald-300 transition-[width] duration-200"
+          className="h-full rounded-full bg-indigo-primary transition-[width] duration-200"
           style={{ width: `${((active + 1) / steps.length) * 100}%` }}
         />
       </div>
@@ -1077,7 +1077,7 @@ export function ResearchRunCompactResult({
       {showOpenLink && (
         <Link
           href={fullReportHref}
-          className="on-accent accent-gradient-surface mt-4 inline-flex h-9 w-full items-center justify-center rounded-full px-3 text-sm font-semibold"
+          className="on-accent theme-accent-surface mt-4 inline-flex h-9 w-full items-center justify-center rounded-full px-3 text-sm font-semibold"
         >
           Open Full Report
         </Link>

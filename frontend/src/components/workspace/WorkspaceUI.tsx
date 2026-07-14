@@ -20,7 +20,7 @@ export function WorkspacePage({
   dense?: boolean;
 }) {
   return (
-    <div className={cn("min-h-full bg-[var(--theme-bg)] text-[var(--text-primary)]", dense ? "px-4 py-5 lg:px-6" : "px-5 py-7 lg:px-10 lg:py-9")}>
+    <div className={cn("min-h-full bg-[var(--background)] text-[var(--text-primary)]", dense ? "px-4 py-5 lg:px-7" : "px-4 py-6 lg:px-10 lg:py-9")}>
       <div className="mx-auto max-w-[1500px]">
         <div className="flex flex-col gap-5 border-b border-[var(--theme-border)] pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -51,7 +51,7 @@ export function ContextBar() {
 }
 
 export function Panel({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <section className={cn("border border-[var(--theme-border)] bg-[var(--surface-card)] p-5", className)}>{children}</section>;
+  return <section className={cn("rounded-lg border border-[var(--theme-border)] bg-[var(--surface-card)] p-5", className)}>{children}</section>;
 }
 
 export function PanelHeading({ title, detail, action }: { title: string; detail?: string; action?: React.ReactNode }) {
@@ -67,7 +67,7 @@ export function Metric({ label, value, detail, tone = "neutral" }: { label: stri
   return (
     <div className="min-w-0 border-l-2 border-[var(--theme-border-strong)] pl-4">
       <p className="text-xs text-[var(--text-muted)]">{label}</p>
-      <p className={cn("mt-1 text-xl font-semibold", tone === "positive" && "text-emerald-400", tone === "warning" && "text-amber-300")}>{value}</p>
+      <p className={cn("mt-1 text-xl font-semibold tabular-nums", tone === "positive" && "text-emerald-400", tone === "warning" && "text-amber-300")}>{value}</p>
       {detail && <p className="mt-1 truncate text-xs text-[var(--text-subtle)]">{detail}</p>}
     </div>
   );
@@ -88,9 +88,9 @@ export function Status({ tone, children }: { tone: "positive" | "warning" | "neu
 }
 
 export function PrimaryLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return <Link href={href} className="inline-flex h-10 items-center justify-center bg-white px-4 text-sm font-semibold text-black transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">{children}</Link>;
+  return <Link href={href} className="theme-solid-action inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50">{children}</Link>;
 }
 
 export function SecondaryLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return <Link href={href} className="inline-flex h-10 items-center justify-center border border-[var(--theme-border-strong)] px-4 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30">{children}</Link>;
+  return <Link href={href} className="inline-flex h-10 items-center justify-center rounded-full border border-[var(--theme-border-strong)] px-4 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/40">{children}</Link>;
 }

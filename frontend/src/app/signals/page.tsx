@@ -68,7 +68,7 @@ export default function SignalsPage() {
             <Input value={symbols} onChange={(event) => setSymbols(event.target.value)} className="h-11 rounded-xl" />
             <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-11 rounded-xl" />
             <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-11 rounded-xl" />
-            <Button onClick={run} disabled={loading} className="accent-gradient-surface on-accent h-11 rounded-xl">{loading ? "Ranking..." : "Rank"}</Button>
+            <Button onClick={run} disabled={loading} className="theme-accent-surface on-accent h-11 rounded-xl">{loading ? "Ranking..." : "Rank"}</Button>
           </CardContent>
         </Card>
         <Card className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] py-0 text-[var(--text-primary)] shadow-[var(--shadow-card)]">

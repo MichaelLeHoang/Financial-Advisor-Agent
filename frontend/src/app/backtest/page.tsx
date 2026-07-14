@@ -319,7 +319,7 @@ export default function BacktestPage() {
 
               {error && <div className="text-sm text-red-negative">{error}</div>}
 
-              <Button onClick={run} disabled={loading} className="accent-gradient-surface on-accent h-12 w-full rounded-xl text-sm font-semibold">
+              <Button onClick={run} disabled={loading} className="theme-accent-surface on-accent h-12 w-full rounded-xl text-sm font-semibold">
                 {loading ? "Running simulation..." : "Run backtest"}
               </Button>
             </CardContent>

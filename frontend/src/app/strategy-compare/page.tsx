@@ -103,7 +103,7 @@ export default function StrategyComparePage() {
             </div>
             <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card-hover)] p-4 text-sm leading-6 text-[var(--text-secondary)]">
               Comparing buy and hold, moving average crossover, and RSI mean reversion with identical assumptions.
-              <Button onClick={run} disabled={loading || symbols.length === 0} className="accent-gradient-surface on-accent mt-4 h-11 w-full rounded-xl">
+              <Button onClick={run} disabled={loading || symbols.length === 0} className="theme-accent-surface on-accent mt-4 h-11 w-full rounded-xl">
                 {loading ? "Comparing..." : "Compare strategies"}
               </Button>
             </div>

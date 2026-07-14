@@ -78,7 +78,7 @@ export default function ValidationPage() {
             <Input value={symbols} onChange={(event) => setSymbols(event.target.value)} className="h-11 rounded-xl" />
             <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-11 rounded-xl" />
             <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-11 rounded-xl" />
-            <Button onClick={run} disabled={loading} className="accent-gradient-surface on-accent h-11 rounded-xl">{loading ? "Running..." : "Validate"}</Button>
+            <Button onClick={run} disabled={loading} className="theme-accent-surface on-accent h-11 rounded-xl">{loading ? "Running..." : "Validate"}</Button>
           </CardContent>
         </Card>
 

@@ -227,7 +227,7 @@ export default function ChatSearchDialog({
                           className={cn(
                             "rounded-2xl px-4 py-3 text-sm leading-6",
                             message.role === "user"
-                              ? "ml-auto max-w-[86%] accent-gradient-surface on-accent"
+                              ? "ml-auto max-w-[86%] theme-accent-surface on-accent"
                               : "mr-auto max-w-[92%] bg-[var(--surface-card-hover)] text-[var(--text-secondary)]"
                           )}
                         >

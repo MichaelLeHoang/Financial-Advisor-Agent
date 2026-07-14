@@ -223,7 +223,7 @@ export default function Header({
                     >
                         <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-primary/20 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/30">
                             {initial}
-                            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-space-black bg-green-positive shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-space-black bg-green-positive" />
                         </div>
                         <div className="hidden min-w-0 sm:block">
                             <div className="truncate text-sm font-medium text-white/85">{currentUserName}</div>

@@ -65,7 +65,7 @@ export function LockedFeature({
         <button
           type="button"
           onClick={() => router.push("/pricing")}
-          className="mt-8 inline-flex h-11 items-center gap-2 rounded-xl bg-indigo-500 px-6 text-sm font-semibold text-white shadow-[0_0_0_1px_rgba(99,102,241,0.5),0_6px_18px_rgba(99,102,241,0.3)] transition-[background-color,transform] duration-150 hover:bg-indigo-400 active:scale-[0.98]"
+          className="theme-accent-surface on-accent mt-8 inline-flex h-11 items-center gap-2 rounded-xl px-6 text-sm font-semibold transition-transform duration-150 active:scale-[0.98]"
         >
           {label}
           <ArrowRight className="h-4 w-4" />

@@ -46,7 +46,7 @@ export default function HomePage() {
         <Panel>
           <PanelHeading title="Daily brief" detail="Saturday, July 11" />
           <p className="text-sm leading-6 text-[var(--text-secondary)]">Semiconductors remain constructive but crowded. Portfolio concentration is the main constraint; active trade risk remains inside the paper policy.</p>
-          <Link href="/discover/markets" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-sky-300">Open market context <ArrowRight className="size-4" /></Link>
+          <Link href="/discover/markets" className="mt-5 inline-flex h-10 items-center gap-2 rounded-full px-3 text-sm font-semibold text-indigo-primary transition-colors hover:bg-[var(--surface-accent-soft)]">Open market context <ArrowRight className="size-4" /></Link>
         </Panel>
       </div>
       {(booksError || refreshedAt) && <p role={booksError ? "alert" : undefined} className={`mt-4 text-xs ${booksError ? "text-rose-300" : "text-[var(--text-subtle)]"}`}>{booksError ?? `Portfolio data refreshed ${new Date(refreshedAt as string).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}</p>}
@@ -76,9 +76,9 @@ function formatMoney(value: number, currency: string) {
 }
 
 function WorkspaceSummary({ href, icon: Icon, title, value, result, detail, accent }: { href: string; icon: typeof BriefcaseBusiness; title: string; value: string; result: string; detail: string; accent: "emerald" | "sky" }) {
-  return <Link href={href} className="group border border-[var(--theme-border)] bg-[var(--surface-card)] p-6 transition-colors hover:bg-[var(--surface-card-hover)]"><div className="flex items-center justify-between"><Icon className={accent === "emerald" ? "size-5 text-emerald-400" : "size-5 text-sky-300"} /><ArrowRight className="size-4 text-[var(--text-subtle)] transition-transform group-hover:translate-x-1" /></div><p className="mt-8 text-sm font-semibold">{title}</p><div className="mt-2 flex items-baseline gap-3"><span className="text-3xl font-semibold">{value}</span><span className={accent === "emerald" ? "text-sm text-emerald-400" : "text-sm text-sky-300"}>{result}</span></div><p className="mt-3 text-xs text-[var(--text-muted)]">{detail}</p></Link>;
+  return <Link href={href} className="group rounded-lg border border-[var(--theme-border)] bg-[var(--surface-card)] p-6 transition-colors hover:bg-[var(--surface-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/40"><div className="flex items-center justify-between"><span className={accent === "emerald" ? "inline-flex size-10 items-center justify-center rounded-full bg-emerald-400/10 text-emerald-400" : "inline-flex size-10 items-center justify-center rounded-full bg-sky-400/10 text-sky-300"}><Icon className="size-5" /></span><ArrowRight className="size-4 text-[var(--text-subtle)] transition-transform group-hover:translate-x-1" /></div><p className="mt-7 text-sm font-semibold">{title}</p><div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1"><span className="font-heading text-3xl font-semibold tabular-nums">{value}</span><span className={accent === "emerald" ? "text-sm text-emerald-400" : "text-sm text-sky-300"}>{result}</span></div><p className="mt-3 text-xs text-[var(--text-muted)]">{detail}</p></Link>;
 }
 
 function Attention({ href, title, detail, tone }: { href: string; title: string; detail: string; tone: "warning" | "neutral" }) {
-  return <Link href={href} className="flex items-center justify-between gap-4 py-4 hover:text-white"><div><p className="text-sm font-semibold">{title}</p><p className="mt-1 text-xs text-[var(--text-muted)]">{detail}</p></div><Status tone={tone}>{tone === "warning" ? "Review" : "Monitor"}</Status></Link>;
+  return <Link href={href} className="flex items-center justify-between gap-4 rounded-lg px-2 py-4 transition-colors hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)]"><div><p className="text-sm font-semibold">{title}</p><p className="mt-1 text-xs text-[var(--text-muted)]">{detail}</p></div><Status tone={tone}>{tone === "warning" ? "Review" : "Monitor"}</Status></Link>;
 }

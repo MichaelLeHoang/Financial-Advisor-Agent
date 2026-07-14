@@ -317,7 +317,7 @@ function ResearchJourneyFrame({ step, reduceMotion }: { step: JourneyStep; reduc
               </div>
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.10]">
                 <motion.div
-                  className="h-full origin-left rounded-full bg-gradient-to-r from-indigo-primary to-emerald-300"
+                  className="h-full origin-left rounded-full bg-indigo-primary"
                   initial={reduceMotion ? false : { scaleX: 0.2 }}
                   animate={{ scaleX: step.id === "decision" ? 0.92 : step.id === "risk" ? 0.74 : step.id === "evidence" ? 0.56 : 0.34 }}
                   transition={{ duration: reduceMotion ? 0 : 0.28, ease: "easeOut" }}

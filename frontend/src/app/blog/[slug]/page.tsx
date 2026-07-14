@@ -27,7 +27,7 @@ export default function BlogPostPage({
           <p className="mt-2 text-white/40">The article you're looking for doesn't exist.</p>
           <Link
             href="/blog"
-            className="mt-6 inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-500 px-5 text-sm font-medium text-white transition-colors hover:bg-indigo-400"
+            className="theme-accent-surface on-accent mt-6 inline-flex h-10 items-center gap-2 rounded-xl px-5 text-sm font-medium"
           >
             <ArrowLeft className="size-4" />
             Back to blog
@@ -175,7 +175,7 @@ export default function BlogPostPage({
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.3 }}
-          className="mt-14 rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-indigo-500/10 to-cyan-500/5 p-6 text-center sm:p-8"
+          className="mt-14 rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-6 text-center sm:p-8"
         >
           <h3 className="text-lg font-bold text-white/90">Try Quanfora</h3>
           <p className="mt-2 text-sm text-white/40">
@@ -183,7 +183,7 @@ export default function BlogPostPage({
           </p>
           <Link
             href="/"
-            className="mt-5 inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-400 px-6 text-sm font-semibold text-white shadow-[0_0_24px_rgba(99,102,241,0.25)] transition-all hover:shadow-[0_0_36px_rgba(99,102,241,0.35)]"
+            className="theme-accent-surface on-accent mt-5 inline-flex h-11 items-center gap-2 rounded-xl px-6 text-sm font-semibold"
           >
             Get started
             <ChevronRight className="size-4" />

@@ -103,7 +103,7 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                             aria-label="Close settings"
                             className="group inline-flex size-9 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                         >
-                            <img src="/close-svgrepo-com.svg" alt="" aria-hidden="true" className="size-5 opacity-70 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" />
+                            <img src="/close-svgrepo-com.svg" alt="" aria-hidden="true" className="size-5 opacity-70 transition-opacity duration-200 group-hover:opacity-100" />
                         </button>
                     </CardHeader>
 
@@ -150,7 +150,7 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                         <div className="mt-5 flex shrink-0 gap-4 sm:mt-8">
                             <Button
                                 onClick={onClose}
-                                className="on-accent accent-gradient-surface h-12 flex-1 rounded-2xl font-bold glow-indigo hover:shadow-[var(--shadow-primary-action-hover)]"
+                                className="on-accent theme-accent-surface h-12 flex-1 rounded-2xl font-bold"
                             >
                                 Save Changes
                             </Button>

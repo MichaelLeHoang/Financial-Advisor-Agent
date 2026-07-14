@@ -1317,7 +1317,7 @@ export default function PortfolioPage() {
                               type="button"
                               onClick={createPortfolio}
                               disabled={saving || !newPortfolioName.trim()}
-                              className="h-10 flex-1 rounded-xl bg-[#a78bfa] text-sm font-bold text-black hover:bg-[#b8a6ff]"
+                              className="theme-accent-surface on-accent h-10 flex-1 rounded-xl text-sm font-bold"
                             >
                               {saving ? <Loader2 className="size-4 animate-spin" /> : "Create"}
                             </Button>
@@ -1327,7 +1327,7 @@ export default function PortfolioPage() {
                         <button
                           type="button"
                           onClick={() => setShowNewForm(true)}
-                          className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/12 text-sm text-white/55 transition-colors hover:border-[#a78bfa]/60 hover:text-white"
+                          className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/12 text-sm text-white/55 transition-colors hover:border-indigo-primary/60 hover:text-white"
                         >
                           <Plus className="size-4" />
                           New portfolio
@@ -1524,7 +1524,7 @@ export default function PortfolioPage() {
               <section className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
                 <div className="flex flex-wrap items-center gap-2">
                   {addSymbol ? (
-                    <span className="flex h-10 items-center gap-1.5 rounded-xl bg-[#a78bfa]/15 px-3 text-xs font-semibold text-[#c4b5fd] ring-1 ring-[#a78bfa]/25">
+                    <span className="flex h-10 items-center gap-1.5 rounded-xl bg-indigo-primary/15 px-3 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/25">
                       {addSymbol}
                       <button type="button" onClick={() => setAddSymbol("")} className="opacity-60 hover:opacity-100" aria-label="Clear ticker">
                         ×
@@ -1538,7 +1538,7 @@ export default function PortfolioPage() {
                       existingTickers={holdings.map((holding) => holding.symbol)}
                       placeholder="Symbol or company name"
                       className="w-64"
-                      inputClassName="h-10 rounded-xl border border-white/[0.10] bg-black/20 text-sm focus-visible:ring-0 focus-visible:border-[#a78bfa]/60"
+                      inputClassName="h-10 rounded-xl border border-white/[0.10] bg-black/20 text-sm focus-visible:ring-0 focus-visible:border-indigo-primary/60"
                     />
                   )}
                   <input
@@ -1548,7 +1548,7 @@ export default function PortfolioPage() {
                     placeholder="Qty"
                     value={addQty}
                     onChange={(event) => setAddQty(event.target.value)}
-                    className="h-10 w-24 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-[#a78bfa]/60"
+                    className="h-10 w-24 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-indigo-primary/60"
                   />
                   <input
                     type="number"
@@ -1557,12 +1557,12 @@ export default function PortfolioPage() {
                     placeholder={`Avg cost (${addCostCurrency})`}
                     value={addCost}
                     onChange={(event) => setAddCost(event.target.value)}
-                    className="h-10 w-36 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-[#a78bfa]/60"
+                    className="h-10 w-36 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-indigo-primary/60"
                   />
                   <select
                     value={addCostCurrency}
                     onChange={(event) => setAddCostCurrency(event.target.value as (typeof SUPPORTED_BASE_CURRENCIES)[number])}
-                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none focus:border-[#a78bfa]/60"
+                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none focus:border-indigo-primary/60"
                     aria-label="Average cost currency"
                   >
                     {SUPPORTED_BASE_CURRENCIES.map((currency) => (
@@ -1574,7 +1574,7 @@ export default function PortfolioPage() {
                   <Button
                     onClick={addHolding}
                     disabled={saving || !addSymbol || !addQty || !addCost}
-                    className="h-10 rounded-xl bg-[#a78bfa] px-5 text-sm font-bold text-black hover:bg-[#b8a6ff]"
+                    className="theme-accent-surface on-accent h-10 rounded-xl px-5 text-sm font-bold"
                   >
                     {saving ? <Loader2 className="size-4 animate-spin" /> : `Add ${bookLabel.toLowerCase()} holding`}
                   </Button>
@@ -1884,29 +1884,29 @@ export default function PortfolioPage() {
                               setEditingGoal(false);
                             }
                           }}
-                          className="h-9 w-32 rounded-xl border border-white/[0.12] bg-black/20 px-3 text-right text-sm text-white outline-none focus:border-[#a78bfa]/60"
+                          className="h-9 w-32 rounded-xl border border-white/[0.12] bg-black/20 px-3 text-right text-sm text-white outline-none focus:border-indigo-primary/60"
                           autoFocus
                         />
-                        <button type="button" onClick={commitGoal} className="text-sm text-[#c4b5fd] hover:text-white">
+                        <button type="button" onClick={commitGoal} className="text-sm text-indigo-primary hover:text-white">
                           Save
                         </button>
                       </div>
                     ) : (
-                      <button type="button" onClick={() => setEditingGoal(true)} className="text-base text-white/86 transition-colors hover:text-[#c4b5fd]">
+                      <button type="button" onClick={() => setEditingGoal(true)} className="text-base text-white/86 transition-colors hover:text-indigo-primary">
                         Edit goal
                       </button>
                     )}
                   </div>
                   <div className="mt-4 text-xl font-semibold tracking-[-0.04em]">
-                    <span className="text-[#a78bfa]">{formatPrivateMoney(totalValue, activeBaseCurrency, hideAmounts)}</span>
+                    <span className="text-indigo-primary">{formatPrivateMoney(totalValue, activeBaseCurrency, hideAmounts)}</span>
                     <span className="text-white/82">/{formatMoney(portfolioGoal, activeBaseCurrency, 0)}</span>
                   </div>
                   <div className="mt-4 h-3 overflow-visible rounded-full bg-black/30">
                     <div
-                      className="relative h-full rounded-full bg-[#a78bfa]"
+                      className="relative h-full rounded-full bg-indigo-primary"
                       style={{ width: `${portfolioGoalProgress}%` }}
                     >
-                      <span className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 rounded-full bg-[#a78bfa] px-1.5 py-0.5 text-xs font-semibold text-space-black">
+                      <span className="on-accent absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 rounded-full bg-indigo-primary px-1.5 py-0.5 text-xs font-semibold">
                         {portfolioGoalProgress.toFixed(0)}%
                       </span>
                     </div>
@@ -1927,11 +1927,11 @@ export default function PortfolioPage() {
                                 setEditingGoalDate(false);
                               }
                             }}
-                            className="h-9 rounded-xl border border-white/[0.12] bg-black/20 px-3 text-sm text-white outline-none [color-scheme:dark] focus:border-[#a78bfa]/60"
+                            className="h-9 rounded-xl border border-white/[0.12] bg-black/20 px-3 text-sm text-white outline-none [color-scheme:dark] focus:border-indigo-primary/60"
                             aria-label="Portfolio goal target date"
                             autoFocus
                           />
-                          <button type="button" onClick={commitGoalDate} className="text-sm text-[#c4b5fd] hover:text-white">
+                          <button type="button" onClick={commitGoalDate} className="text-sm text-indigo-primary hover:text-white">
                             Save
                           </button>
                           <button
@@ -1952,7 +1952,7 @@ export default function PortfolioPage() {
                             setGoalDateDraft(goalTargetDate);
                             setEditingGoalDate(true);
                           }}
-                          className="mt-1.5 inline-flex items-center gap-2 text-sm text-[#c4b5fd] transition-colors hover:text-white"
+                          className="mt-1.5 inline-flex items-center gap-2 text-sm text-indigo-primary transition-colors hover:text-white"
                         >
                           <CalendarDays className="size-4" />
                           <span>{goalTargetLabel}</span>
@@ -1965,7 +1965,7 @@ export default function PortfolioPage() {
                           "rounded-full border px-2.5 py-1 text-xs font-semibold",
                           goalDateDelta != null && goalDateDelta < 0
                             ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
-                            : "border-[#a78bfa]/24 bg-[#a78bfa]/10 text-[#c4b5fd]"
+                            : "border-indigo-primary/25 bg-indigo-primary/10 text-indigo-primary"
                         )}
                       >
                         {goalDateDeltaLabel}
@@ -2181,7 +2181,7 @@ export default function PortfolioPage() {
                       <button
                         type="button"
                         onClick={() => setShowAddPanel(true)}
-                        className="rounded-full bg-[#a78bfa] px-4 py-2 text-sm font-bold text-black hover:bg-[#b8a6ff]"
+                        className="theme-accent-surface on-accent rounded-full px-4 py-2 text-sm font-bold"
                       >
                         Add your first {bookLabel.toLowerCase()} holding
                       </button>
@@ -2231,7 +2231,7 @@ export default function PortfolioPage() {
                       <ThinSlider min={0.1} max={3} step={0.1} value={risk} onValueChange={(value) => { setRisk(value); setResult(null); }} aria-label="Risk tolerance" />
                       <span className="w-8 text-right text-sm text-white/55">{risk.toFixed(1)}</span>
                     </div>
-                    <Button onClick={optimize} disabled={optimizing} className="rounded-full bg-[#a78bfa] px-5 text-sm font-bold text-black hover:bg-[#b8a6ff]">
+                    <Button onClick={optimize} disabled={optimizing} className="theme-accent-surface on-accent rounded-full px-5 text-sm font-bold">
                       {optimizing ? <Loader2 className="size-4 animate-spin" /> : "Run Optimization"}
                     </Button>
                   </div>
@@ -2242,7 +2242,7 @@ export default function PortfolioPage() {
                     {[
                       { label: "Expected Return", value: `${((result.expected_annual_return ?? 0) * 100).toFixed(1)}%`, cls: "text-green-positive" },
                       { label: "Volatility", value: `${((result.annual_volatility ?? 0) * 100).toFixed(1)}%`, cls: "text-amber-warning" },
-                      { label: "Sharpe", value: (result.sharpe_ratio ?? 0).toFixed(2), cls: "text-[#a78bfa]" },
+                      { label: "Sharpe", value: (result.sharpe_ratio ?? 0).toFixed(2), cls: "text-indigo-primary" },
                     ].map((metric) => (
                       <div key={metric.label} className="rounded-2xl border border-white/[0.08] bg-black/16 p-4">
                         <p className="text-xs text-white/42">{metric.label}</p>
@@ -2273,7 +2273,7 @@ export default function PortfolioPage() {
                   }}
                   placeholder="Portfolio name"
                   autoFocus
-                  className="h-11 w-full rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-[#a78bfa]/60"
+                  className="h-11 w-full rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-indigo-primary/60"
                 />
                 <div className="flex gap-2">
                   <div ref={newCurrencyMenuRef} className="relative w-32 shrink-0">
@@ -2289,7 +2289,7 @@ export default function PortfolioPage() {
                           return next;
                         });
                       }}
-                      className="flex h-11 w-full items-center justify-between rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none transition-colors hover:border-white/18 focus:border-[#a78bfa]/60"
+                      className="flex h-11 w-full items-center justify-between rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none transition-colors hover:border-white/18 focus:border-indigo-primary/60"
                       aria-label="Portfolio base currency"
                     >
                       {normalizeCurrency(newBaseCurrency)}
@@ -2388,7 +2388,7 @@ export default function PortfolioPage() {
                     type="button"
                     onClick={createPortfolio}
                     disabled={saving || !newPortfolioName.trim()}
-                    className="h-11 flex-1 rounded-xl bg-[#a78bfa] text-sm font-bold text-black hover:bg-[#b8a6ff]"
+                    className="theme-accent-surface on-accent h-11 flex-1 rounded-xl text-sm font-bold"
                   >
                     {saving ? <Loader2 className="size-4 animate-spin" /> : "Create portfolio"}
                   </Button>
@@ -2405,7 +2405,7 @@ export default function PortfolioPage() {
               <button
                 type="button"
                 onClick={() => setShowNewForm(true)}
-                className="mt-4 rounded-full bg-[#a78bfa] px-5 py-2 text-sm font-bold text-black hover:bg-[#b8a6ff]"
+                className="theme-accent-surface on-accent mt-4 rounded-full px-5 py-2 text-sm font-bold"
               >
                 New portfolio
               </button>
@@ -2562,7 +2562,7 @@ function ActionButton({
     <button
       type="button"
       onClick={onClick}
-      className="group flex h-full min-h-[74px] w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl text-center transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a78bfa]/50"
+      className="group flex h-full min-h-[74px] w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl text-center transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
     >
       <span className={cn("flex size-8 items-center justify-center rounded-full transition-transform group-hover:scale-105", styles[tone])}>
         {icon}

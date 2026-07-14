@@ -75,9 +75,9 @@ export default function QuantumPage() {
                             <div key={t} className="flex items-center gap-6">
                                 <div className="w-16 font-mono text-sm text-white/40">{t}</div>
                                 <div className="flex-1 h-[2px] bg-white/10 relative flex items-center gap-12 px-12">
-                                    <div className="w-10 h-10 rounded bg-indigo-primary flex items-center justify-center text-xs font-bold glow-indigo">H</div>
-                                    <div className="w-10 h-10 rounded bg-cyan-secondary flex items-center justify-center text-xs font-bold glow-cyan">Rz</div>
-                                    <div className="w-10 h-10 rounded bg-indigo-primary flex items-center justify-center text-xs font-bold glow-indigo">H</div>
+                                    <div className="w-10 h-10 rounded bg-indigo-primary flex items-center justify-center text-xs font-bold">H</div>
+                                    <div className="w-10 h-10 rounded bg-cyan-secondary flex items-center justify-center text-xs font-bold">Rz</div>
+                                    <div className="w-10 h-10 rounded bg-indigo-primary flex items-center justify-center text-xs font-bold">H</div>
                                     <div className="ml-auto w-8 h-8 rounded-full border-2 border-amber-warning flex items-center justify-center">
                                         <div className="w-1 h-4 bg-amber-warning rotate-45" />
                                     </div>
@@ -123,7 +123,7 @@ export default function QuantumPage() {
                                             src="/close-svgrepo-com.svg"
                                             alt=""
                                             aria-hidden="true"
-                                            className="size-3 opacity-55 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.65)]"
+                                            className="size-3 opacity-55 transition-opacity duration-200 group-hover:opacity-100"
                                         />
                                     </button>
                                 </Badge>

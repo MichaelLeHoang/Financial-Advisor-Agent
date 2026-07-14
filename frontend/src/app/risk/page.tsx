@@ -102,7 +102,7 @@ export default function RiskPage() {
                 <option key={portfolio.id} value={portfolio.id}>{portfolio.name}</option>
               ))}
             </select>
-            <Button onClick={generateSnapshot} disabled={loading} className="accent-gradient-surface on-accent h-11 rounded-xl px-5">
+            <Button onClick={generateSnapshot} disabled={loading} className="theme-accent-surface on-accent h-11 rounded-xl px-5">
               {loading ? "Analyzing..." : "Generate snapshot"}
             </Button>
           </div>

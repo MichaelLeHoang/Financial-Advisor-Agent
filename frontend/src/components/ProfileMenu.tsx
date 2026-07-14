@@ -161,7 +161,7 @@ export default function ProfileMenu({
                 )}
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent side="right" align="end" sideOffset={compact ? 8 : 14} className="w-64 bg-[var(--surface-popover-strong)] p-2 text-[var(--text-secondary)]">
+            <DropdownMenuContent side="right" align="end" sideOffset={compact ? 8 : 14} className="w-64 p-2 text-[var(--text-secondary)]">
                 <DropdownMenuGroup>
                     <DropdownMenuItem
                         closeOnClick={false}
@@ -374,7 +374,7 @@ function ProfileAvatar({
             >
                 {initial}
             </AvatarFallback>
-            <AvatarBadge className="bg-green-positive shadow-[0_0_8px_rgba(52,211,153,0.72)] ring-[var(--surface-sidebar)]" />
+            <AvatarBadge className="bg-green-positive shadow-none ring-[var(--surface-sidebar)]" />
         </Avatar>
     );
 }

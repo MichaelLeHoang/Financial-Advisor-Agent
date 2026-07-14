@@ -1121,7 +1121,7 @@ export default function ChatPage() {
                   onClick={handleSend}
                   disabled={isLoading || !input.trim()}
                   size="icon"
-                  className="on-accent accent-gradient-surface h-10 w-10 shrink-0 rounded-full shadow-[var(--shadow-primary-action)] hover:shadow-[var(--shadow-primary-action-hover)] disabled:opacity-45"
+                  className="on-accent theme-accent-surface h-10 w-10 shrink-0 rounded-full disabled:opacity-45"
                   aria-label="Send message"
                 >
                   <Send className="w-4 h-4" />
@@ -1268,7 +1268,7 @@ export default function ChatPage() {
                         className={cn(
                           "min-w-0 max-w-[92%] break-words rounded-2xl px-4 py-3 text-[15px] leading-relaxed sm:max-w-[75%] sm:px-5 sm:py-4",
                           msg.role === "user"
-                            ? "on-accent accent-gradient-surface glow-indigo whitespace-pre-wrap"
+                            ? "on-accent theme-accent-surface whitespace-pre-wrap"
                             : "glass text-white/90"
                         )}
                       >

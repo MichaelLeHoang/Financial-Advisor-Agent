@@ -596,8 +596,8 @@ function MeasurementOverlay({
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
-      <div className="absolute bottom-0 top-0 w-px bg-indigo-200/80 shadow-[0_0_12px_rgba(165,180,252,0.6)]" style={{ left: measurement.startX }} />
-      <div className="absolute bottom-0 top-0 w-px bg-indigo-200/80 shadow-[0_0_12px_rgba(165,180,252,0.6)]" style={{ left: measurement.endX }} />
+      <div className="absolute bottom-0 top-0 w-px bg-indigo-200/80" style={{ left: measurement.startX }} />
+      <div className="absolute bottom-0 top-0 w-px bg-indigo-200/80" style={{ left: measurement.endX }} />
       <div className="absolute bottom-0 top-0 border-x border-indigo-300/20 bg-indigo-300/[0.055]" style={{ left, width }} />
       <div
         className="absolute top-3 min-w-56 rounded-xl border border-white/12 bg-[#08090d]/88 px-3 py-2 text-xs text-white shadow-xl shadow-black/30 backdrop-blur-md"

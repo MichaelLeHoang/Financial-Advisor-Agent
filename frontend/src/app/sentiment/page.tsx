@@ -542,7 +542,7 @@ export default function SentimentPage() {
                             aria-live="polite"
                             title="Fast keyword-based preview only. Final classification comes from FinBERT after analysis."
                           >
-                            <span className="h-2 w-2 rounded-full bg-current shadow-[0_0_12px_currentColor]" />
+                            <span className="h-2 w-2 rounded-full bg-current" />
                             Draft read: {currentGuess.label} {currentGuess.score > 0 ? "+" : ""}{currentGuess.score.toFixed(2)}
                           </div>
                         </div>
@@ -606,7 +606,7 @@ export default function SentimentPage() {
               <Button
                 onClick={analyze}
                 disabled={headlines.length === 0 || loading}
-                className="on-accent accent-gradient-surface h-10 rounded-xl px-4 text-sm font-bold shadow-[var(--shadow-primary-action)]"
+                className="on-accent theme-accent-surface h-10 rounded-xl px-4 text-sm font-bold"
               >
                 {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Analyzing...</> : `Analyze ${headlines.length} headline${headlines.length !== 1 ? "s" : ""}`}
               </Button>

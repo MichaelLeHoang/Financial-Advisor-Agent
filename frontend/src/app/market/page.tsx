@@ -797,7 +797,7 @@ function MarketSearch({
                         src="/close-svgrepo-com.svg"
                         alt=""
                         aria-hidden="true"
-                        className="size-4 opacity-55 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_7px_rgba(255,255,255,0.65)]"
+                        className="size-4 opacity-55 transition-opacity duration-200 group-hover:opacity-100"
                     />
                 </button>
             )}
@@ -951,7 +951,7 @@ function MarketCard({
                                     alt=""
                                     aria-hidden="true"
                                     data-icon="inline-start"
-                                    className="size-4 opacity-55 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_7px_rgba(255,255,255,0.65)]"
+                                    className="size-4 opacity-55 transition-opacity duration-200 group-hover:opacity-100"
                                 />
                             </button>
                         </div>
@@ -1059,7 +1059,7 @@ function MarketResearchDrawer({
                         </p>
                     </div>
                     {error && <p className="text-sm text-red-negative">{error}</p>}
-                    <Button onClick={onStart} disabled={starting} className="on-accent accent-gradient-surface w-full rounded-xl">
+                    <Button onClick={onStart} disabled={starting} className="on-accent theme-accent-surface w-full rounded-xl">
                         {starting ? (
                             <>
                                 <Loader2 className="size-4 animate-spin" />

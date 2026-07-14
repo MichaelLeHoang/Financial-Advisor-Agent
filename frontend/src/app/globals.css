@@ -85,26 +85,26 @@
     --border-card: rgba(255, 255, 255, 0.06);
     --shadow-control: 0 0 0 1px rgba(255, 255, 255, 0.025), 0 10px 28px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.05);
     --shadow-card: 0 0 0 1px rgba(255, 255, 255, 0.025), 0 14px 38px rgba(0, 0, 0, 0.28);
-    --shadow-popover: 0 0 0 1px rgba(255, 255, 255, 0.025), 0 24px 70px rgba(0, 0, 0, 0.58), 0 0 52px rgba(99, 102, 241, 0.12);
-    --shadow-dialog: 0 0 0 1px rgba(255, 255, 255, 0.025), 0 30px 90px rgba(0, 0, 0, 0.68), 0 0 86px rgba(99, 102, 241, 0.16);
+    --shadow-popover: 0 0 0 1px rgba(255, 255, 255, 0.025), 0 24px 70px rgba(0, 0, 0, 0.58);
+    --shadow-dialog: 0 0 0 1px rgba(255, 255, 255, 0.025), 0 30px 90px rgba(0, 0, 0, 0.68);
     --shadow-settings: 0 0 0 1px rgba(255, 255, 255, 0.025), 0 24px 70px rgba(0, 0, 0, 0.42);
     --shadow-tooltip: 0 16px 46px rgba(0, 0, 0, 0.48);
-    --shadow-row-hover: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 34px rgba(99, 102, 241, 0.12);
-    --shadow-row-hover-alt: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 34px rgba(34, 211, 238, 0.12);
+    --shadow-row-hover: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --shadow-row-hover-alt: inset 0 1px 0 rgba(255, 255, 255, 0.06);
     --shadow-sidebar: 12px 0 42px rgba(0, 0, 0, 0.36);
-    --pro-card-bg: radial-gradient(circle at top left, rgba(99, 102, 241, 0.22), transparent 44%), rgba(255, 255, 255, 0.045);
-    --pro-card-shadow: 0 0 0 1px rgba(255, 255, 255, 0.025), 0 14px 36px rgba(0, 0, 0, 0.34), 0 0 46px rgba(99, 102, 241, 0.12);
-    --shadow-brand-mark: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 10px 28px rgba(99, 102, 241, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-    --shadow-brand-mark-strong: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 10px 28px rgba(99, 102, 241, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-    --shadow-primary-action: 0 0 0 1px rgba(99, 102, 241, 0.55), 0 8px 22px rgba(99, 102, 241, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-    --shadow-primary-action-hover: 0 0 0 1px rgba(99, 102, 241, 0.65), 0 12px 30px rgba(99, 102, 241, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.24);
-    --shadow-primary-wide: 0 0 0 1px rgba(99, 102, 241, 0.55), 0 12px 34px rgba(99, 102, 241, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.22);
-    --shadow-primary-wide-hover: 0 0 0 1px rgba(99, 102, 241, 0.65), 0 16px 44px rgba(99, 102, 241, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.26);
-    --shadow-create-action: 0 0 0 1px rgba(99, 102, 241, 0.55), 0 8px 22px rgba(99, 102, 241, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.22);
-    --shadow-create-action-hover: 0 0 0 1px rgba(99, 102, 241, 0.65), 0 12px 30px rgba(99, 102, 241, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-    --shadow-selected-nav: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 26px rgba(99, 102, 241, 0.14);
-    --shadow-accent-card: 0 0 0 1px rgba(255, 255, 255, 0.025), 0 14px 38px rgba(0, 0, 0, 0.28), 0 0 34px rgba(99, 102, 241, 0.06);
-    --shadow-accent-composer: 0 0 0 1px rgba(255, 255, 255, 0.025), 0 18px 50px rgba(0, 0, 0, 0.34), 0 0 54px rgba(99, 102, 241, 0.08);
+    --pro-card-bg: var(--surface-card);
+    --pro-card-shadow: 0 0 0 1px rgba(255, 255, 255, 0.025), 0 14px 36px rgba(0, 0, 0, 0.34);
+    --shadow-brand-mark: 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    --shadow-brand-mark-strong: 0 0 0 1px rgba(255, 255, 255, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    --shadow-primary-action: none;
+    --shadow-primary-action-hover: none;
+    --shadow-primary-wide: none;
+    --shadow-primary-wide-hover: none;
+    --shadow-create-action: none;
+    --shadow-create-action-hover: none;
+    --shadow-selected-nav: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    --shadow-accent-card: 0 0 0 1px rgba(255, 255, 255, 0.025), 0 14px 38px rgba(0, 0, 0, 0.28);
+    --shadow-accent-composer: 0 0 0 1px rgba(255, 255, 255, 0.025), 0 18px 50px rgba(0, 0, 0, 0.34);
     --chart-grid: rgba(255, 255, 255, 0.06);
     --chart-axis: rgba(255, 255, 255, 0.42);
     --chart-cursor: rgba(99, 102, 241, 0.46);
@@ -170,11 +170,11 @@
 }
 
 .glow-indigo {
-  box-shadow: 0 8px 22px -16px rgba(99, 102, 241, 0.45);
+  box-shadow: none;
 }
 
 .glow-cyan {
-  box-shadow: 0 8px 22px -16px rgba(34, 211, 238, 0.45);
+  box-shadow: none;
 }
 
 .glow-text {
@@ -183,14 +183,20 @@
 
 .gradient-highlight {
   display: inline-block;
-  background: linear-gradient(90deg, var(--color-indigo-primary), var(--color-cyan-secondary));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  background: none;
+  color: var(--color-indigo-primary);
 }
 
-.accent-gradient-surface {
-  background-image: linear-gradient(135deg, var(--color-indigo-primary), var(--color-cyan-secondary));
+.theme-accent-surface {
+  background-color: var(--color-indigo-primary);
+  background-image: none;
+  box-shadow: none;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.theme-accent-surface:is(button, a, [role="button"]):not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--color-indigo-primary) 90%, rgb(18 16 28));
+  box-shadow: none;
 }
 
 .on-accent {
@@ -203,7 +209,7 @@
   border-color: transparent;
   background-color: var(--color-indigo-primary);
   color: rgba(255, 250, 252, 0.98) !important;
-  box-shadow: var(--shadow-primary-action);
+  box-shadow: none;
 }
 
 .theme-primary-action:hover,
@@ -211,24 +217,24 @@
 .theme-solid-action:hover {
   background-color: color-mix(in srgb, var(--color-indigo-primary) 90%, rgb(18 16 28));
   color: rgba(255, 250, 252, 0.98) !important;
-  box-shadow: var(--shadow-primary-action-hover);
+  box-shadow: none;
 }
 
 .theme-primary-action-wide {
-  box-shadow: var(--shadow-primary-wide);
+  box-shadow: none;
 }
 
 .theme-primary-action-wide:hover {
-  box-shadow: var(--shadow-primary-wide-hover);
+  box-shadow: none;
 }
 
 .theme-primary-action:disabled,
 .theme-primary-action-wide:disabled {
-  box-shadow: var(--shadow-primary-action);
+  box-shadow: none;
 }
 
 .theme-primary-action-wide:disabled {
-  box-shadow: var(--shadow-primary-wide);
+  box-shadow: none;
 }
 
 .theme-section-button,
@@ -614,7 +620,7 @@ body[data-theme="White"] .news-page .news-rail-panel:hover {
 }
 
 body[data-theme="White"] .news-page .news-rail-line-active {
-  box-shadow: 0 0 10px rgba(79, 70, 229, 0.35) !important;
+  box-shadow: none !important;
 }
 
 .profile-field {
@@ -643,7 +649,7 @@ body[data-theme="White"] .news-page .news-rail-line-active {
   background: linear-gradient(
     90deg,
     var(--color-indigo-primary) 0%,
-    var(--color-cyan-secondary) var(--slider-progress),
+    var(--color-indigo-primary) var(--slider-progress),
     rgba(255, 255, 255, 0.12) var(--slider-progress),
     rgba(255, 255, 255, 0.12) 100%
   );
@@ -656,7 +662,7 @@ body[data-theme="White"] .news-page .news-rail-line-active {
   border-radius: 999px;
   border: 2px solid rgba(255, 250, 252, 0.98);
   background: var(--color-indigo-primary);
-  box-shadow: 0 8px 18px rgba(99, 102, 241, 0.28);
+  box-shadow: none;
 }
 
 .thin-slider::-moz-range-thumb {
@@ -665,7 +671,7 @@ body[data-theme="White"] .news-page .news-rail-line-active {
   border-radius: 999px;
   border: 2px solid rgba(255, 250, 252, 0.98);
   background: var(--color-indigo-primary);
-  box-shadow: 0 8px 18px rgba(99, 102, 241, 0.28);
+  box-shadow: none;
 }
 
 .portfolio-range {
@@ -673,7 +679,7 @@ body[data-theme="White"] .news-page .news-rail-line-active {
   background: linear-gradient(
     90deg,
     var(--color-indigo-primary) 0%,
-    var(--color-cyan-secondary) var(--risk-progress),
+    var(--color-indigo-primary) var(--risk-progress),
     rgba(255, 255, 255, 0.1) var(--risk-progress),
     rgba(255, 255, 255, 0.1) 100%
   );
@@ -686,7 +692,7 @@ body[data-theme="White"] .news-page .news-rail-line-active {
   border-radius: 999px;
   border: 2px solid rgba(255, 250, 252, 0.96);
   background: var(--color-indigo-primary);
-  box-shadow: var(--shadow-primary-action);
+  box-shadow: none;
 }
 
 .portfolio-range::-moz-range-thumb {
@@ -695,7 +701,7 @@ body[data-theme="White"] .news-page .news-rail-line-active {
   border-radius: 999px;
   border: 2px solid rgba(255, 250, 252, 0.96);
   background: var(--color-indigo-primary);
-  box-shadow: var(--shadow-primary-action);
+  box-shadow: none;
 }
 
 /* Custom Scrollbar */
@@ -784,15 +790,15 @@ body[data-theme="White"] {
   --shadow-sidebar: 1px 0 0 #e3e1dc;
   --pro-card-bg: #fbfaf8;
   --pro-card-shadow: 0 1px 2px rgba(18, 26, 44, 0.035), 0 6px 18px rgba(18, 26, 44, 0.04);
-  --shadow-brand-mark: 0 4px 12px rgba(79, 70, 229, 0.16);
-  --shadow-brand-mark-strong: 0 6px 18px rgba(79, 70, 229, 0.2);
-  --shadow-primary-action: 0 4px 12px rgba(79, 70, 229, 0.18);
-  --shadow-primary-action-hover: 0 6px 18px rgba(79, 70, 229, 0.24);
-  --shadow-primary-wide: 0 5px 16px rgba(79, 70, 229, 0.18);
-  --shadow-primary-wide-hover: 0 8px 22px rgba(79, 70, 229, 0.24);
-  --shadow-create-action: 0 4px 12px rgba(79, 70, 229, 0.18);
-  --shadow-create-action-hover: 0 6px 18px rgba(79, 70, 229, 0.24);
-  --shadow-selected-nav: 0 4px 12px rgba(79, 70, 229, 0.1);
+  --shadow-brand-mark: 0 0 0 1px rgba(18, 26, 44, 0.08);
+  --shadow-brand-mark-strong: 0 0 0 1px rgba(18, 26, 44, 0.1);
+  --shadow-primary-action: none;
+  --shadow-primary-action-hover: none;
+  --shadow-primary-wide: none;
+  --shadow-primary-wide-hover: none;
+  --shadow-create-action: none;
+  --shadow-create-action-hover: none;
+  --shadow-selected-nav: none;
   --shadow-accent-card: 0 1px 2px rgba(18, 26, 44, 0.035), 0 6px 18px rgba(18, 26, 44, 0.04);
   --shadow-accent-composer: 0 7px 24px rgba(18, 26, 44, 0.06);
   --chart-grid: rgba(15, 23, 42, 0.1);
@@ -911,7 +917,7 @@ body[data-theme="White"] .shadow-none {
 
 body[data-theme="White"] .glow-indigo,
 body[data-theme="White"] .glow-cyan {
-  box-shadow: var(--shadow-primary-action);
+  box-shadow: none;
 }
 
 body[data-theme="White"] .gradient-highlight {
@@ -920,7 +926,7 @@ body[data-theme="White"] .gradient-highlight {
   -webkit-text-fill-color: currentColor;
 }
 
-body[data-theme="White"] .accent-gradient-surface {
+body[data-theme="White"] .theme-accent-surface {
   background-color: var(--color-indigo-primary) !important;
   background-image: none !important;
 }
@@ -1654,20 +1660,20 @@ body[data-theme="White"] .landing-pricing-frame .landing-execution-card {
 body[data-theme="White"] .landing-pricing-frame .landing-plan-card.border-indigo-500\/55 {
   border-color: rgba(99, 102, 241, 0.55) !important;
   background: #101225 !important;
-  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.24), 0 20px 60px rgba(99, 102, 241, 0.16) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.24) !important;
 }
 
 body[data-theme="White"] .landing-pricing-frame .landing-plan-card:hover {
   border-color: rgba(99, 102, 241, 0.45) !important;
   background: #141827 !important;
-  box-shadow: 0 24px 76px rgba(0, 0, 0, 0.28), 0 0 32px rgba(99, 102, 241, 0.12) !important;
+  box-shadow: 0 24px 76px rgba(0, 0, 0, 0.28) !important;
   transform: translateY(-0.25rem) !important;
 }
 
 body[data-theme="White"] .landing-pricing-frame .landing-plan-card.border-indigo-500\/55:hover {
   border-color: rgba(99, 102, 241, 0.55) !important;
   background: #101225 !important;
-  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.48), 0 28px 82px rgba(99, 102, 241, 0.28) !important;
+  box-shadow: 0 28px 82px rgba(0, 0, 0, 0.32) !important;
   transform: translateY(-0.25rem) !important;
 }
 
@@ -1765,7 +1771,7 @@ body[data-theme="White"] .landing-feature-card .landing-feature-icon {
 body[data-theme="White"] .landing-feature-card:hover .landing-feature-icon {
   border-color: #a5b4fc !important;
   background-color: #e2e0ff !important;
-  box-shadow: 0 12px 28px rgba(79, 70, 229, 0.18) !important;
+  box-shadow: none !important;
 }
 
 body[data-theme="White"] .landing-feature-card .landing-feature-title {
@@ -1980,26 +1986,26 @@ body[data-theme="Crimson"] {
   --border-card: rgba(255, 230, 232, 0.095);
   --shadow-control: 0 0 0 1px rgba(255, 230, 232, 0.04), 0 10px 28px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 230, 232, 0.06);
   --shadow-card: 0 0 0 1px rgba(255, 230, 232, 0.025), 0 14px 38px rgba(0, 0, 0, 0.3);
-  --shadow-popover: 0 0 0 1px rgba(255, 230, 232, 0.04), 0 24px 70px rgba(0, 0, 0, 0.62), 0 0 52px rgba(239, 68, 68, 0.15);
-  --shadow-dialog: 0 0 0 1px rgba(255, 230, 232, 0.04), 0 30px 90px rgba(0, 0, 0, 0.72), 0 0 86px rgba(239, 68, 68, 0.18);
+  --shadow-popover: 0 0 0 1px rgba(255, 230, 232, 0.04), 0 24px 70px rgba(0, 0, 0, 0.62);
+  --shadow-dialog: 0 0 0 1px rgba(255, 230, 232, 0.04), 0 30px 90px rgba(0, 0, 0, 0.72);
   --shadow-settings: 0 0 0 1px rgba(255, 230, 232, 0.04), 0 24px 70px rgba(0, 0, 0, 0.52), 0 0 56px rgba(239, 68, 68, 0.1);
   --shadow-tooltip: 0 16px 46px rgba(0, 0, 0, 0.52);
-  --shadow-row-hover: inset 0 1px 0 rgba(255, 230, 232, 0.07), 0 0 34px rgba(239, 68, 68, 0.15);
-  --shadow-row-hover-alt: inset 0 1px 0 rgba(255, 230, 232, 0.07), 0 0 34px rgba(249, 115, 22, 0.14);
+  --shadow-row-hover: inset 0 1px 0 rgba(255, 230, 232, 0.07);
+  --shadow-row-hover-alt: inset 0 1px 0 rgba(255, 230, 232, 0.07);
   --shadow-sidebar: 12px 0 42px rgba(0, 0, 0, 0.42);
-  --pro-card-bg: radial-gradient(circle at top left, rgba(239, 68, 68, 0.18), transparent 44%), rgba(255, 230, 232, 0.045);
-  --pro-card-shadow: 0 0 0 1px rgba(255, 230, 232, 0.025), 0 14px 36px rgba(0, 0, 0, 0.38), 0 0 46px rgba(239, 68, 68, 0.12);
-  --shadow-brand-mark: 0 0 0 1px rgba(255, 230, 232, 0.14), 0 10px 28px rgba(239, 68, 68, 0.26), inset 0 1px 0 rgba(255, 230, 232, 0.24);
-  --shadow-brand-mark-strong: 0 0 0 1px rgba(255, 230, 232, 0.14), 0 10px 28px rgba(239, 68, 68, 0.32), inset 0 1px 0 rgba(255, 230, 232, 0.24);
-  --shadow-primary-action: 0 0 0 1px rgba(239, 68, 68, 0.52), 0 8px 22px rgba(239, 68, 68, 0.28), inset 0 1px 0 rgba(255, 230, 232, 0.2);
-  --shadow-primary-action-hover: 0 0 0 1px rgba(239, 68, 68, 0.62), 0 12px 30px rgba(239, 68, 68, 0.34), inset 0 1px 0 rgba(255, 230, 232, 0.24);
-  --shadow-primary-wide: 0 0 0 1px rgba(239, 68, 68, 0.52), 0 12px 34px rgba(239, 68, 68, 0.28), inset 0 1px 0 rgba(255, 230, 232, 0.22);
-  --shadow-primary-wide-hover: 0 0 0 1px rgba(239, 68, 68, 0.62), 0 16px 44px rgba(239, 68, 68, 0.34), inset 0 1px 0 rgba(255, 230, 232, 0.26);
-  --shadow-create-action: 0 0 0 1px rgba(239, 68, 68, 0.52), 0 8px 22px rgba(239, 68, 68, 0.26), inset 0 1px 0 rgba(255, 230, 232, 0.22);
-  --shadow-create-action-hover: 0 0 0 1px rgba(239, 68, 68, 0.62), 0 12px 30px rgba(239, 68, 68, 0.32), inset 0 1px 0 rgba(255, 230, 232, 0.25);
-  --shadow-selected-nav: inset 0 1px 0 rgba(255, 230, 232, 0.06), 0 0 26px rgba(239, 68, 68, 0.14);
-  --shadow-accent-card: 0 0 0 1px rgba(255, 230, 232, 0.025), 0 14px 38px rgba(0, 0, 0, 0.3), 0 0 34px rgba(239, 68, 68, 0.08);
-  --shadow-accent-composer: 0 0 0 1px rgba(255, 230, 232, 0.025), 0 18px 50px rgba(0, 0, 0, 0.36), 0 0 54px rgba(239, 68, 68, 0.1);
+  --pro-card-bg: var(--surface-card);
+  --pro-card-shadow: 0 0 0 1px rgba(255, 230, 232, 0.025), 0 14px 36px rgba(0, 0, 0, 0.38);
+  --shadow-brand-mark: 0 0 0 1px rgba(255, 230, 232, 0.14), inset 0 1px 0 rgba(255, 230, 232, 0.2);
+  --shadow-brand-mark-strong: 0 0 0 1px rgba(255, 230, 232, 0.16), inset 0 1px 0 rgba(255, 230, 232, 0.22);
+  --shadow-primary-action: none;
+  --shadow-primary-action-hover: none;
+  --shadow-primary-wide: none;
+  --shadow-primary-wide-hover: none;
+  --shadow-create-action: none;
+  --shadow-create-action-hover: none;
+  --shadow-selected-nav: inset 0 1px 0 rgba(255, 230, 232, 0.06);
+  --shadow-accent-card: 0 0 0 1px rgba(255, 230, 232, 0.025), 0 14px 38px rgba(0, 0, 0, 0.3);
+  --shadow-accent-composer: 0 0 0 1px rgba(255, 230, 232, 0.025), 0 18px 50px rgba(0, 0, 0, 0.36);
   --chart-grid: rgba(255, 230, 232, 0.08);
   --chart-axis: rgba(255, 230, 232, 0.48);
   --chart-cursor: rgba(239, 68, 68, 0.48);

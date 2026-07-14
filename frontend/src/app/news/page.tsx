@@ -1049,7 +1049,7 @@ function ReportTickerRail({
                 <span
                   className={cn(
                     "h-1 w-7 shrink-0 rounded-full transition-[background-color,box-shadow] duration-150",
-                    active ? "news-rail-line-active shadow-[0_0_10px_rgba(255,255,255,0.65)]" : "news-rail-line"
+                    active ? "news-rail-line-active" : "news-rail-line"
                   )}
                 />
                 <span className="hidden min-w-0 flex-1 overflow-hidden whitespace-nowrap opacity-0 transition-opacity duration-150 group-hover:block group-hover:opacity-100">

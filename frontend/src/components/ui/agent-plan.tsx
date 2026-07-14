@@ -368,7 +368,6 @@ export default function Plan({ mode = "single", isActive = true, activeTool = nu
         <div className="flex items-center gap-2.5">
           {isActive ? (
             <div className="relative flex h-2 w-2 items-center justify-center">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500" />
             </div>
           ) : (
@@ -394,7 +393,7 @@ export default function Plan({ mode = "single", isActive = true, activeTool = nu
       {/* Progress bar */}
       <div className="h-[2px] w-full bg-white/[0.04]">
         <motion.div
-          className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400"
+          className="h-full bg-indigo-primary"
           initial={{ width: "0%" }}
           animate={{ width: `${visualProgress}%` }}
           transition={{ duration: 0.2, ease: "easeOut" }}

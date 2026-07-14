@@ -44,7 +44,7 @@ function DropdownMenuContent({
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"
           className={cn(
-            "max-h-[min(34rem,calc(100dvh-1rem))] w-80 scale-100 overflow-y-auto rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover-strong)] p-2 text-[var(--text-primary)] opacity-100 shadow-[var(--shadow-popover)] outline-none transition-[opacity,scale] duration-150 ease-out data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 motion-reduce:transition-none",
+            "max-h-[min(34rem,calc(100dvh-1rem))] w-80 scale-100 overflow-y-auto rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 text-[var(--text-primary)] opacity-100 shadow-[var(--shadow-popover)] outline-none transition-[opacity,scale] duration-150 ease-out data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 motion-reduce:transition-none",
             className
           )}
           {...props}
@@ -117,7 +117,7 @@ function DropdownMenuSubmenuContent({
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-submenu-content"
           className={cn(
-            "w-56 rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-popover-strong)] p-2 text-[var(--text-primary)] shadow-[var(--shadow-popover)] outline-none transition-[opacity,scale] duration-150 data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 motion-reduce:transition-none",
+            "w-56 rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-popover)] p-2 text-[var(--text-primary)] shadow-[var(--shadow-popover)] outline-none transition-[opacity,scale] duration-150 data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 motion-reduce:transition-none",
             className
           )}
           {...props}

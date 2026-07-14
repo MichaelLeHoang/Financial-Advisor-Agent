@@ -143,7 +143,7 @@ export default function BacktestSessionsPage() {
               Reopen saved strategy runs or practice trading bar-by-bar in manual replay sessions.
             </p>
           </div>
-          <Button onClick={() => setShowCreate((current) => !current)} className="accent-gradient-surface on-accent h-11 rounded-xl text-sm font-semibold">
+          <Button onClick={() => setShowCreate((current) => !current)} className="theme-accent-surface on-accent h-11 rounded-xl text-sm font-semibold">
             <Plus className="mr-2 h-4 w-4" />
             New replay session
           </Button>
@@ -189,7 +189,7 @@ export default function BacktestSessionsPage() {
                 </Field>
               </div>
               <div className="flex gap-2">
-                <Button onClick={createSession} disabled={creating} className="accent-gradient-surface on-accent h-11 rounded-xl text-sm font-semibold">
+                <Button onClick={createSession} disabled={creating} className="theme-accent-surface on-accent h-11 rounded-xl text-sm font-semibold">
                   {creating ? "Creating..." : "Create and open"}
                 </Button>
                 <Button variant="outline" onClick={() => setShowCreate(false)} className="h-11 rounded-xl text-sm">

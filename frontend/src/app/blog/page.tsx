@@ -28,7 +28,7 @@ export default function BlogPage() {
           className="mb-10"
         >
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-400 shadow-[0_0_24px_rgba(99,102,241,0.25)]">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-indigo-primary">
               <BookOpen className="size-5 text-white" />
             </div>
             <div>
@@ -52,7 +52,7 @@ export default function BlogPage() {
               onClick={() => setActiveCategory(cat)}
               className={`rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 ${
                 activeCategory === cat
-                  ? "border-indigo-500/50 bg-indigo-500/15 text-indigo-300 shadow-[0_0_16px_rgba(99,102,241,0.1)]"
+                  ? "border-indigo-500/50 bg-indigo-500/15 text-indigo-300"
                   : "border-white/[0.06] bg-white/[0.03] text-white/50 hover:border-white/[0.12] hover:bg-white/[0.06] hover:text-white/70"
               }`}
             >
@@ -73,7 +73,7 @@ export default function BlogPage() {
               >
                 <Link
                   href={`/blog/${post.slug}`}
-                  className="group block overflow-hidden rounded-3xl border border-white/[0.06] transition-all duration-300 hover:border-white/[0.12] hover:shadow-[0_0_64px_rgba(99,102,241,0.08)]"
+                  className="group block overflow-hidden rounded-3xl border border-white/[0.06] transition-colors duration-300 hover:border-white/[0.12]"
                 >
                   {/* Hero gradient card */}
                   <div className={`relative h-56 w-full overflow-hidden bg-gradient-to-br ${post.heroGradient} sm:h-72`}>
