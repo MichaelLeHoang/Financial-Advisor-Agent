@@ -102,11 +102,37 @@ export function useTradingWorkspace() {
     setWorkspaces(next); setWorkspace(copy); setSaveState("unsaved"); persistCollection(next, copy.id);
   }, [persistCollection, workspace, workspaces]);
   const createWorkspace = useCallback((template: TradingWorkspaceTemplate) => {
-    const created = createWorkspaceFromTemplate(template);
-    if (created.presetType === "paper_trading") { setWorkspace(created); persistCollection(workspaces, created.id); }
-    else { const next = [...workspaces, created]; setWorkspaces(next); setWorkspace(created); persistCollection(next, created.id); }
+    const generated = createWorkspaceFromTemplate(template);
+    const replacingBlank = workspace.presetType === "custom" && workspace.widgets.length === 0;
+    const created = replacingBlank && generated.presetType === "custom" ? { ...generated, id: workspace.id, createdAt: workspace.createdAt } : generated;
+    if (created.presetType === "paper_trading") {
+      const next = replacingBlank ? workspaces.filter((item) => item.id !== workspace.id) : workspaces;
+      setWorkspaces(next); setWorkspace(created); persistCollection(next, created.id);
+    } else {
+      const next = replacingBlank ? workspaces.map((item) => item.id === workspace.id ? created : item) : [...workspaces, created];
+      setWorkspaces(next); setWorkspace(created); persistCollection(next, created.id);
+    }
     setSaveState(created.presetType === "paper_trading" ? "saved" : "unsaved");
-  }, [persistCollection, workspaces]);
+  }, [persistCollection, workspace, workspaces]);
+  const createEmptyWorkspace = useCallback(() => {
+    const existingNames = new Set(workspaces.map((item) => item.name));
+    let name = "Untitled trading workspace";
+    let suffix = 2;
+    while (existingNames.has(name)) { name = `Untitled trading workspace ${suffix}`; suffix += 1; }
+    const now = new Date().toISOString();
+    const created: TradingWorkspace = { id: uid("workspace"), name, presetType: "custom", basePresetType: "paper_trading", isDefault: false, layoutVersion: 1, selectedSymbol: workspace.selectedSymbol, widgets: [], createdAt: now, updatedAt: now };
+    const next = [...workspaces, created];
+    setWorkspaces(next); setWorkspace(created); setSaveState("saved"); setIsEditing(false); persistCollection(next, created.id);
+  }, [persistCollection, workspace.selectedSymbol, workspaces]);
+  const deleteWorkspace = useCallback(() => {
+    if (workspace.presetType !== "custom") return;
+    const next = workspaces.filter((item) => item.id !== workspace.id);
+    const fallback = next.find((item) => item.presetType === "paper_trading") ?? createPaperTradingPreset();
+    setWorkspaces(next.some((item) => item.id === fallback.id) ? next : [fallback, ...next]);
+    setWorkspace(fallback); setSaveState("saved"); setIsEditing(false); editSnapshot.current = null;
+    try { window.sessionStorage.setItem(storageKey, JSON.stringify(fallback)); } catch {}
+    persistCollection(next, fallback.id);
+  }, [persistCollection, storageKey, workspace, workspaces]);
   const selectWorkspace = useCallback((id: string) => {
     const selected = workspaces.find((item) => item.id === id); if (!selected) return;
     setWorkspace(selected.presetType === "paper_trading" ? createPaperTradingPreset() : selected); setSaveState("saved"); setIsEditing(false); persistCollection(workspaces, id);
@@ -115,7 +141,7 @@ export function useTradingWorkspace() {
   const hiddenTypes = useMemo(() => new Set(workspace.widgets.filter((widget) => !widget.isVisible).map((widget) => widget.type)), [workspace.widgets]);
 
   return {
-    workspace, workspaces, selectWorkspace, createWorkspace,
+    workspace, workspaces, selectWorkspace, createWorkspace, createEmptyWorkspace, deleteWorkspace,
     setSelectedSymbol: (selectedSymbol: string) => setWorkspace((current) => { const next = { ...current, selectedSymbol, updatedAt: new Date().toISOString() }; try { window.sessionStorage.setItem(storageKey, JSON.stringify(next)); } catch {} return next; }),
     isEditing, saveState, enterEdit, cancelEdit, save, reset, duplicateWorkspace, addWidget, hiddenTypes, resolvePlacement,
     hideWidget: (id: string) => updateWidget(id, (widget) => ({ ...widget, isVisible: false })),
