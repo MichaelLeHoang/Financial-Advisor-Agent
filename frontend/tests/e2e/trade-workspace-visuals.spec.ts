@@ -23,7 +23,7 @@ test("captures the Paper Trading workspace acceptance states", async ({ page }, 
   if (testInfo.project.name === "desktop") {
     const chartWidget = page.locator('[data-widget-type="price_chart"]');
     await chartWidget.locator("canvas").first().hover({ position: { x: 240, y: 160 }, force: true });
-    await expect(chartWidget.getByText("AMD price", { exact: false })).toBeVisible();
+    await expect(chartWidget.getByText("AMD close", { exact: false })).toBeVisible();
     await capture(page, testInfo, "paper-trading-chart-tooltip");
     await page.getByRole("button", { name: "Order type" }).click();
     await expect(page.getByTestId("order-type-options-menu")).toBeVisible();
@@ -46,13 +46,18 @@ test("captures the Paper Trading workspace acceptance states", async ({ page }, 
     await expect(page.getByTestId("workspace-presets-menu")).toBeVisible();
     await page.waitForTimeout(200);
     await capture(page, testInfo, "paper-trading-presets");
-    await page.keyboard.press("Escape");
+    const presetMenu = page.getByTestId("workspace-presets-menu");
+    await presetMenu.getByRole("menuitem", { name: /^Options trading/ }).click();
+    await expect(presetMenu).toBeHidden();
+    await page.waitForTimeout(200);
+    await expect(page.getByRole("heading", { name: "Options Chain" })).toBeVisible();
+    await capture(page, testInfo, "options-trading-preset");
     await page.getByRole("button", { name: "Workspace actions" }).click();
     await page.getByRole("menuitem", { name: "Delete workspace" }).click();
-    await expect(page.getByRole("alertdialog", { name: /Delete Untitled trading workspace/ })).toBeVisible();
+    await expect(page.getByRole("alertdialog", { name: /Delete Options Trading/ })).toBeVisible();
     await capture(page, testInfo, "delete-workspace-warning");
     await page.getByRole("button", { name: "Keep workspace" }).click();
-    await page.getByRole("button", { name: /Untitled trading workspace/ }).click();
+    await page.getByRole("button", { name: "Options Trading" }).click();
     await page.getByRole("menu", { name: "Workspace selector" }).getByRole("menuitem", { name: "Paper Trading Desk" }).click();
   }
 

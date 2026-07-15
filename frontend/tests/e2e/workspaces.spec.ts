@@ -562,12 +562,14 @@ test("empty workspaces expose compact presets, navigation, and confirmed deletio
   await expect(page.getByRole("heading", { name: "Start from a template", exact: true })).toBeVisible();
   await expect(page.getByText("Chart spotlight", { exact: true })).toBeVisible();
   await expect(page.getByText("Market monitoring", { exact: true })).toBeVisible();
+  await expect(page.getByText("Options trading", { exact: true })).toBeVisible();
+  await expect(page.getByText("Positions analysis", { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
   await page.getByRole("button", { name: "Presets" }).click();
   const presets = page.getByTestId("workspace-presets-menu");
   await expect(presets).toBeVisible();
-  await expect(presets.getByTestId("preset-preview")).toHaveCount(3);
+  await expect(presets.getByTestId("preset-preview")).toHaveCount(9);
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Workspace actions" }).click();
   await page.getByRole("menuitem", { name: "Delete workspace" }).click();
@@ -577,6 +579,27 @@ test("empty workspaces expose compact presets, navigation, and confirmed deletio
   await warning.getByRole("button", { name: "Delete workspace" }).click();
   await expect(page.getByRole("button", { name: "Paper Trading Desk" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Start from a template", exact: true })).toBeHidden();
+});
+
+test("workspace library exposes professional templates and focused widgets", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Workspace layout controls are desktop-only.");
+  await page.goto("/trade");
+  await waitForWorkspace(page);
+  await page.getByRole("button", { name: "Workspace actions" }).click();
+  await page.getByRole("menuitem", { name: "New empty workspace" }).click();
+
+  await page.getByRole("button", { name: "Add widget" }).click();
+  const widgets = page.getByTestId("add-widget-menu");
+  for (const name of ["Price Chart", "Account", "Options Chain", "Watchlist", "Recent Orders", "Positions"]) await expect(widgets.getByRole("menuitem", { name: new RegExp(`^${name}`) })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Presets" }).click();
+  const presets = page.getByTestId("workspace-presets-menu");
+  for (const name of ["Stock trading", "Options trading", "Advanced options trading", "Chart spotlight", "Positions analysis", "Positions monitoring", "Watchlist monitoring", "Market monitoring"]) await expect(presets.getByText(name, { exact: true })).toBeVisible();
+  await presets.getByRole("menuitem", { name: /^Options trading/ }).click();
+  await expect(page.getByRole("button", { name: "Options Trading" })).toBeVisible();
+  for (const name of ["Account", "Price Chart", "Options Chain", "Watchlist", "Positions", "Recent Orders"]) await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+  await expect(page.getByText("Illustrative chain", { exact: false })).toBeVisible();
 });
 
 test("desktop widget drag uses grid tracks and does not overlap the chart", async ({ page }, testInfo) => {
@@ -629,8 +652,12 @@ test("paper workspace uses functional chart tools and a stacked mobile layout", 
   const chartWidget = page.locator('[data-widget-type="price_chart"]');
   const chartCanvas = chartWidget.locator("canvas").first();
   await chartCanvas.hover({ position: { x: 240, y: 160 }, force: true });
-  await expect(chartWidget.getByText("AMD price", { exact: false })).toBeVisible();
+  await expect(chartWidget.getByText("AMD close", { exact: false })).toBeVisible();
   await expect(chartWidget.getByText(/SMA 20 \d/)).toBeVisible();
+  await expect(chartWidget.getByText("Entry 170.00", { exact: true })).toBeVisible();
+  await expect(chartWidget.getByText("Stop 164.00", { exact: true })).toBeVisible();
+  await expect(chartWidget.getByText("Target 182.00", { exact: true })).toBeVisible();
+  await expect(chartWidget.getByText(/Volume [\d,]+/)).toBeVisible();
   const indicators = page.getByRole("button", { name: "Indicators" });
   await expect(indicators).toHaveAttribute("aria-pressed", "true");
   if (testInfo.project.name === "mobile") await indicators.focus();
