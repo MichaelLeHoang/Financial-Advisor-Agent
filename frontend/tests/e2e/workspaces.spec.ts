@@ -445,6 +445,8 @@ test("paper trade requires review and creates a simulated fill", async ({ page }
   await waitForWorkspace(page);
   await expect(page.getByRole("heading", { name: "Paper Trading Desk" })).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText("Policy passed", { exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Order type" })).toHaveValue("limit");
+  await expect(page.getByRole("combobox", { name: "Time in force" })).toHaveValue("day");
   await page.getByRole("button", { name: "15m" }).click();
   await expect(page.getByRole("button", { name: "15m" })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("tab", { name: "Signals", exact: true }).click();
@@ -455,9 +457,13 @@ test("paper trade requires review and creates a simulated fill", async ({ page }
     return { backgroundColor: style.backgroundColor, backgroundImage: style.backgroundImage, boxShadow: style.boxShadow };
   })).toEqual({ backgroundColor: "rgb(99, 102, 241)", backgroundImage: "none", boxShadow: "none" });
   await reviewButton.click();
-  await expect(page.getByRole("alertdialog", { name: "Buy 100 AMD" })).toBeVisible();
-  await page.getByRole("button", { name: "Confirm simulated fill" }).click();
-  await expect(page.getByText("100 AMD shares filled at $170.00")).toBeVisible();
+  const review = page.getByRole("alertdialog", { name: "Buy 100 AMD" });
+  await expect(review).toBeVisible();
+  await expect(review.getByText("Limit · DAY")).toBeVisible();
+  await page.getByRole("button", { name: "Submit paper order" }).click();
+  await expect(page.getByRole("cell", { name: "AMD" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "limit · DAY · Paper", exact: true })).toBeVisible();
+  await expect(page.getByText("Paper order submitted")).toBeVisible();
   await page.goto("/journal");
   await expect(page.getByText("AMD · Paper order filled")).toBeVisible();
 });
@@ -469,10 +475,139 @@ test("consequential paper review traps focus, closes with Escape, and restores i
   await trigger.click();
   const dialog = page.getByRole("alertdialog", { name: "Buy 100 AMD" });
   await expect(dialog).toBeVisible();
-  await expect(page.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Back to edit" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
+});
+
+test("paper workspace links watchlist selection to chart, plan, signals, and persistence", async ({ page }) => {
+  await page.goto("/trade");
+  await waitForWorkspace(page);
+  await page.getByRole("option", { name: /NVDA/ }).click();
+  await expect(page.getByText("Linked to NVDA")).toBeVisible();
+  await expect(page.getByText("NVDA remains above the short-term trend")).toBeVisible();
+  const chartWidget = page.locator("section").filter({ has: page.getByRole("heading", { name: "Price Chart" }) });
+  await expect(chartWidget.getByText("NVDA", { exact: true })).toBeVisible();
+  await page.reload();
+  await waitForWorkspace(page);
+  await expect(page.getByText("Linked to NVDA")).toBeVisible();
+});
+
+test("paper policy blocks invalid levels before review", async ({ page }) => {
+  await page.goto("/trade");
+  await waitForWorkspace(page);
+  await page.getByRole("spinbutton", { name: "Stop" }).fill("175");
+  await expect(page.locator("#stop-error")).toHaveText("Stop must be below entry for a long trade.");
+  await expect(page.getByText("Policy blocked", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Review paper order" })).toBeDisabled();
+});
+
+test("layout editing hides, restores, cancels, and saves widgets", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Freeform layout editing is desktop-only.");
+  await page.goto("/trade");
+  await waitForWorkspace(page);
+  await page.getByRole("button", { name: "Edit layout" }).click();
+  await expect(page.getByRole("button", { name: "Save layout" })).toBeVisible();
+  const signalsWidget = page.locator("section").filter({ has: page.getByRole("heading", { name: "Active Signals" }) });
+  await signalsWidget.getByTitle("Hide widget").click();
+  await expect(page.getByRole("heading", { name: "Active Signals" })).toBeHidden();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("heading", { name: "Active Signals" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Edit layout" }).click();
+  await page.locator("section").filter({ has: page.getByRole("heading", { name: "Active Signals" }) }).getByTitle("Hide widget").click();
+  await page.getByRole("button", { name: "Add widget" }).click();
+  await expect(page.getByRole("dialog", { name: "Add widget" })).toBeVisible();
+  await page.getByRole("button", { name: "Restore" }).click();
+  await page.getByRole("button", { name: "Close add widget" }).click();
+  await page.getByRole("button", { name: "Save layout" }).click();
+  await page.reload();
+  await waitForWorkspace(page);
+  await expect(page.getByRole("heading", { name: "Active Signals" })).toBeVisible();
+});
+
+test("workspace library uses a template gallery and custom layouts are explicitly navigable", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "The full workspace library is a desktop editing tool.");
+  await page.goto("/trade");
+  await waitForWorkspace(page);
+  await page.getByRole("button", { name: "Workspace actions" }).click();
+  await expect(page.getByRole("menuitem", { name: "Duplicate current layout" })).toBeVisible();
+  await page.getByRole("menuitem", { name: "Duplicate current layout" }).click();
+  await expect(page.getByRole("button", { name: /Paper Trading Desk copy/ })).toBeVisible();
+
+  await page.getByRole("button", { name: /Paper Trading Desk copy/ }).click();
+  const selector = page.getByRole("menu", { name: "Workspace selector" });
+  await expect(selector.getByRole("menuitem", { name: /Paper Trading Desk copy/ })).toBeVisible();
+  await selector.getByRole("button", { name: "New trading workspace" }).click();
+  const library = page.getByRole("dialog", { name: /Add widget or start from a template/ });
+  await expect(library.getByRole("heading", { name: "Start from a template", exact: true })).toBeVisible();
+  const libraryBox = await library.boundingBox();
+  expect(libraryBox).not.toBeNull();
+  expect(libraryBox!.width).toBeGreaterThan(900);
+  await expect(library.getByText("Chart spotlight", { exact: true })).toBeVisible();
+  await expect(library.getByText("Market monitoring", { exact: true })).toBeVisible();
+});
+
+test("desktop widget drag uses grid tracks and does not overlap the chart", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Freeform layout editing is desktop-only.");
+  await page.goto("/trade");
+  await waitForWorkspace(page);
+  await page.getByRole("button", { name: "Edit layout" }).click();
+  const signals = page.locator('[data-widget-type="active_signals"]');
+  const canvas = page.locator("[data-workspace-canvas]");
+  const before = await signals.boundingBox();
+  const canvasBox = await canvas.boundingBox();
+  expect(before).not.toBeNull();
+  expect(canvasBox).not.toBeNull();
+  const handle = signals.getByRole("button", { name: "Move Active Signals" });
+  const handleBox = await handle.boundingBox();
+  expect(handleBox).not.toBeNull();
+  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(canvasBox!.x + 40, canvasBox!.y + canvasBox!.height - 24, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await signals.boundingBox())?.y ?? 0).toBeGreaterThan(before!.y + 100);
+  const chart = await page.locator('[data-widget-type="price_chart"]').boundingBox();
+  const moved = await signals.boundingBox();
+  expect(chart).not.toBeNull(); expect(moved).not.toBeNull();
+  expect(moved!.y >= chart!.y + chart!.height || moved!.x + moved!.width <= chart!.x || moved!.x >= chart!.x + chart!.width).toBe(true);
+});
+
+test("desktop resize snaps to rows and cannot cross another widget", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Freeform layout editing is desktop-only.");
+  await page.goto("/trade");
+  await waitForWorkspace(page);
+  await page.getByRole("button", { name: "Edit layout" }).click();
+  const policy = page.locator('[data-widget-type="policy_check"]');
+  const handle = policy.getByRole("button", { name: "Resize Policy Check" });
+  await handle.scrollIntoViewIfNeeded();
+  const before = await policy.boundingBox();
+  const handleBox = await handle.boundingBox();
+  expect(before).not.toBeNull(); expect(handleBox).not.toBeNull();
+  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2 + 64, { steps: 6 });
+  await expect.poll(async () => (await policy.boundingBox())?.height ?? 0).toBeGreaterThan(before!.height + 30);
+  await page.mouse.up();
+  await expect.poll(async () => (await policy.boundingBox())?.height ?? 0).toBeGreaterThan(before!.height + 30);
+});
+
+test("paper workspace uses functional chart tools and a stacked mobile layout", async ({ page }, testInfo) => {
+  await page.goto("/trade");
+  await waitForWorkspace(page);
+  const indicators = page.getByRole("button", { name: "Indicators" });
+  await expect(indicators).toHaveAttribute("aria-pressed", "true");
+  await indicators.hover();
+  await expect(page.getByRole("tooltip", { name: "Indicators" })).toBeVisible();
+  await indicators.click();
+  await expect(indicators).toHaveAttribute("aria-pressed", "false");
+  await page.getByRole("button", { name: "Chart type" }).click();
+  await expect(page.getByRole("button", { name: "Measure range" })).toBeVisible();
+  if (testInfo.project.name === "mobile") {
+    await expect(page.getByRole("button", { name: "Edit layout" })).toBeHidden();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  }
 });
 
 test("Strategy Studio validates changes, versions a draft, and records paper approval", async ({ page }) => {
