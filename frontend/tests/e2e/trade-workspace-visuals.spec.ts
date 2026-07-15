@@ -21,13 +21,39 @@ test("captures the Paper Trading workspace acceptance states", async ({ page }, 
   await capture(page, testInfo, "paper-trading-default");
 
   if (testInfo.project.name === "desktop") {
+    const chartWidget = page.locator('[data-widget-type="price_chart"]');
+    await chartWidget.locator("canvas").first().hover({ position: { x: 240, y: 160 }, force: true });
+    await expect(chartWidget.getByText("AMD price", { exact: false })).toBeVisible();
+    await capture(page, testInfo, "paper-trading-chart-tooltip");
+    await page.getByRole("button", { name: "Order type" }).click();
+    await expect(page.getByTestId("order-type-options-menu")).toBeVisible();
+    await page.waitForTimeout(200);
+    await capture(page, testInfo, "paper-trading-order-type-menu");
+    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "Edit layout" }).click();
     await capture(page, testInfo, "paper-trading-edit-layout");
     await page.getByRole("button", { name: "Add widget" }).click();
-    await expect(page.getByRole("dialog", { name: "Add widget" })).toBeVisible();
+    await expect(page.getByTestId("add-widget-menu")).toBeVisible();
+    await page.waitForTimeout(200);
     await capture(page, testInfo, "paper-trading-add-widget");
-    await page.getByRole("button", { name: "Close add widget" }).click();
+    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "Cancel" }).click();
+    await page.getByRole("button", { name: "Workspace actions" }).click();
+    await page.getByRole("menuitem", { name: "New empty workspace" }).click();
+    await expect(page.getByRole("heading", { name: "Start from a template", exact: true })).toBeVisible();
+    await capture(page, testInfo, "empty-trading-workspace");
+    await page.getByRole("button", { name: "Presets" }).click();
+    await expect(page.getByTestId("workspace-presets-menu")).toBeVisible();
+    await page.waitForTimeout(200);
+    await capture(page, testInfo, "paper-trading-presets");
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Workspace actions" }).click();
+    await page.getByRole("menuitem", { name: "Delete workspace" }).click();
+    await expect(page.getByRole("alertdialog", { name: /Delete Untitled trading workspace/ })).toBeVisible();
+    await capture(page, testInfo, "delete-workspace-warning");
+    await page.getByRole("button", { name: "Keep workspace" }).click();
+    await page.getByRole("button", { name: /Untitled trading workspace/ }).click();
+    await page.getByRole("menu", { name: "Workspace selector" }).getByRole("menuitem", { name: "Paper Trading Desk" }).click();
   }
 
   await page.getByRole("spinbutton", { name: "Stop" }).fill("175");

@@ -445,8 +445,8 @@ test("paper trade requires review and creates a simulated fill", async ({ page }
   await waitForWorkspace(page);
   await expect(page.getByRole("heading", { name: "Paper Trading Desk" })).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText("Policy passed", { exact: true })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Order type" })).toHaveValue("limit");
-  await expect(page.getByRole("combobox", { name: "Time in force" })).toHaveValue("day");
+  await expect(page.getByRole("button", { name: "Order type" })).toContainText("Limit");
+  await expect(page.getByRole("button", { name: "Time in force" })).toContainText("Day");
   await page.getByRole("button", { name: "15m" }).click();
   await expect(page.getByRole("button", { name: "15m" })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("tab", { name: "Signals", exact: true }).click();
@@ -494,6 +494,25 @@ test("paper workspace links watchlist selection to chart, plan, signals, and per
   await expect(page.getByText("Linked to NVDA")).toBeVisible();
 });
 
+test("paper watchlist removes symbols safely and uses themed trade-plan menus", async ({ page }) => {
+  await page.goto("/trade");
+  await waitForWorkspace(page);
+  await page.getByRole("option", { name: /NVDA/ }).click();
+  await page.getByRole("button", { name: "Remove NVDA from watchlist" }).click();
+  await expect(page.getByRole("option", { name: /NVDA/ })).toBeHidden();
+  await expect(page.getByText("Linked to AMD")).toBeVisible();
+
+  await page.getByRole("button", { name: "Order type" }).click();
+  const orderTypeMenu = page.getByTestId("order-type-options-menu");
+  await expect(orderTypeMenu).toBeVisible();
+  await orderTypeMenu.getByRole("menuitem", { name: "Stop market" }).click();
+  await expect(page.getByRole("button", { name: "Order type" })).toContainText("Stop market");
+
+  await page.reload();
+  await waitForWorkspace(page);
+  await expect(page.getByRole("option", { name: /NVDA/ })).toBeHidden();
+});
+
 test("paper policy blocks invalid levels before review", async ({ page }) => {
   await page.goto("/trade");
   await waitForWorkspace(page);
@@ -518,17 +537,17 @@ test("layout editing hides, restores, cancels, and saves widgets", async ({ page
   await page.getByRole("button", { name: "Edit layout" }).click();
   await page.locator("section").filter({ has: page.getByRole("heading", { name: "Active Signals" }) }).getByTitle("Hide widget").click();
   await page.getByRole("button", { name: "Add widget" }).click();
-  await expect(page.getByRole("dialog", { name: "Add widget" })).toBeVisible();
-  await page.getByRole("button", { name: "Restore" }).click();
-  await page.getByRole("button", { name: "Close add widget" }).click();
+  const widgetMenu = page.getByTestId("add-widget-menu");
+  await expect(widgetMenu).toBeVisible();
+  await widgetMenu.getByRole("menuitem", { name: /Active Signals.*Restore/ }).click();
   await page.getByRole("button", { name: "Save layout" }).click();
   await page.reload();
   await waitForWorkspace(page);
   await expect(page.getByRole("heading", { name: "Active Signals" })).toBeVisible();
 });
 
-test("workspace library uses a template gallery and custom layouts are explicitly navigable", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "The full workspace library is a desktop editing tool.");
+test("empty workspaces expose compact presets, navigation, and confirmed deletion", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Workspace layout controls are desktop-only.");
   await page.goto("/trade");
   await waitForWorkspace(page);
   await page.getByRole("button", { name: "Workspace actions" }).click();
@@ -540,13 +559,24 @@ test("workspace library uses a template gallery and custom layouts are explicitl
   const selector = page.getByRole("menu", { name: "Workspace selector" });
   await expect(selector.getByRole("menuitem", { name: /Paper Trading Desk copy/ })).toBeVisible();
   await selector.getByRole("button", { name: "New trading workspace" }).click();
-  const library = page.getByRole("dialog", { name: /Add widget or start from a template/ });
-  await expect(library.getByRole("heading", { name: "Start from a template", exact: true })).toBeVisible();
-  const libraryBox = await library.boundingBox();
-  expect(libraryBox).not.toBeNull();
-  expect(libraryBox!.width).toBeGreaterThan(900);
-  await expect(library.getByText("Chart spotlight", { exact: true })).toBeVisible();
-  await expect(library.getByText("Market monitoring", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Start from a template", exact: true })).toBeVisible();
+  await expect(page.getByText("Chart spotlight", { exact: true })).toBeVisible();
+  await expect(page.getByText("Market monitoring", { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
+  await page.getByRole("button", { name: "Presets" }).click();
+  const presets = page.getByTestId("workspace-presets-menu");
+  await expect(presets).toBeVisible();
+  await expect(presets.getByTestId("preset-preview")).toHaveCount(3);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Workspace actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete workspace" }).click();
+  const warning = page.getByRole("alertdialog", { name: /Delete Untitled trading workspace/ });
+  await expect(warning).toBeVisible();
+  await expect(warning).toContainText("Paper orders and journal records will not be deleted");
+  await warning.getByRole("button", { name: "Delete workspace" }).click();
+  await expect(page.getByRole("button", { name: "Paper Trading Desk" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Start from a template", exact: true })).toBeHidden();
 });
 
 test("desktop widget drag uses grid tracks and does not overlap the chart", async ({ page }, testInfo) => {
@@ -596,9 +626,15 @@ test("desktop resize snaps to rows and cannot cross another widget", async ({ pa
 test("paper workspace uses functional chart tools and a stacked mobile layout", async ({ page }, testInfo) => {
   await page.goto("/trade");
   await waitForWorkspace(page);
+  const chartWidget = page.locator('[data-widget-type="price_chart"]');
+  const chartCanvas = chartWidget.locator("canvas").first();
+  await chartCanvas.hover({ position: { x: 240, y: 160 }, force: true });
+  await expect(chartWidget.getByText("AMD price", { exact: false })).toBeVisible();
+  await expect(chartWidget.getByText(/SMA 20 \d/)).toBeVisible();
   const indicators = page.getByRole("button", { name: "Indicators" });
   await expect(indicators).toHaveAttribute("aria-pressed", "true");
-  await indicators.hover();
+  if (testInfo.project.name === "mobile") await indicators.focus();
+  else await indicators.hover();
   await expect(page.getByRole("tooltip", { name: "Indicators" })).toBeVisible();
   await indicators.click();
   await expect(indicators).toHaveAttribute("aria-pressed", "false");
