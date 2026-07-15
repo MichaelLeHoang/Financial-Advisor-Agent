@@ -57,6 +57,8 @@ interface InteractiveMarketChartProps<T extends InteractiveChartPoint> {
   onRequestLongerRange?: () => void;
   className?: string;
   tooltipClassName?: string;
+  fitKey?: number;
+  measurementEnabled?: boolean;
 }
 
 const BASE_TIME = 946_684_800 as Time;
@@ -171,6 +173,8 @@ export default function InteractiveMarketChart<T extends InteractiveChartPoint>(
   onRequestLongerRange,
   className,
   tooltipClassName,
+  fitKey = 0,
+  measurementEnabled = true,
 }: InteractiveMarketChartProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -184,6 +188,7 @@ export default function InteractiveMarketChart<T extends InteractiveChartPoint>(
   const rangeRequestLockedRef = useRef(false);
   const lastDataChangeAtRef = useRef(0);
   const measurementStartRef = useRef<number | null>(null);
+  const measurementEnabledRef = useRef(measurementEnabled);
   const measurementDraftRef = useRef<{ startX: number; moved: boolean }>({ startX: 0, moved: false });
   const [hoverPoint, setHoverPoint] = useState<{ point: T; x: number; y: number } | null>(null);
   const [measurement, setMeasurement] = useState<MeasurementState | null>(null);
@@ -236,6 +241,8 @@ export default function InteractiveMarketChart<T extends InteractiveChartPoint>(
     timeFormatterRef.current = timeFormatter;
   }, [timeFormatter]);
 
+  useEffect(() => { measurementEnabledRef.current = measurementEnabled; if (!measurementEnabled) setMeasurement(null); }, [measurementEnabled]);
+
   useEffect(() => {
     didFitRef.current = false;
     rangeRequestLockedRef.current = false;
@@ -244,6 +251,8 @@ export default function InteractiveMarketChart<T extends InteractiveChartPoint>(
     const timer = window.setTimeout(() => setIsRangeTransitioning(false), 220);
     return () => window.clearTimeout(timer);
   }, [rangeKey]);
+
+  useEffect(() => { if (fitKey > 0) fitChart(chartRef.current); }, [fitKey]);
 
   const measurementFromLogical = (startLogical: number, endLogical: number): MeasurementState | null => {
     const chart = chartRef.current;
@@ -303,12 +312,12 @@ export default function InteractiveMarketChart<T extends InteractiveChartPoint>(
       autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "rgba(255,255,255,0.52)",
+        textColor: resolveChartColor("var(--text-muted)", "rgba(255,255,255,0.52)"),
         attributionLogo: false,
       },
       grid: {
-        vertLines: { color: "rgba(255,255,255,0.045)" },
-        horzLines: { color: "rgba(255,255,255,0.07)" },
+        vertLines: { color: resolveChartColor("var(--theme-border)", "rgba(255,255,255,0.045)") },
+        horzLines: { color: resolveChartColor("var(--theme-border)", "rgba(255,255,255,0.07)") },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
@@ -365,7 +374,7 @@ export default function InteractiveMarketChart<T extends InteractiveChartPoint>(
     };
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (event.button !== 0) return;
+      if (event.button !== 0 || !measurementEnabledRef.current) return;
       const logical = logicalFromPointer(event);
       if (logical == null) return;
       measurementStartRef.current = Number(logical);
@@ -600,20 +609,20 @@ function MeasurementOverlay({
       <div className="absolute bottom-0 top-0 w-px bg-indigo-200/80" style={{ left: measurement.endX }} />
       <div className="absolute bottom-0 top-0 border-x border-indigo-300/20 bg-indigo-300/[0.055]" style={{ left, width }} />
       <div
-        className="absolute top-3 min-w-56 rounded-xl border border-white/12 bg-[#08090d]/88 px-3 py-2 text-xs text-white shadow-xl shadow-black/30 backdrop-blur-md"
+        className="absolute top-3 min-w-56 rounded-xl border border-[var(--theme-border-strong)] bg-[var(--surface-popover)] px-3 py-2 text-xs text-[var(--text-primary)] shadow-[var(--shadow-popover)]"
         style={{ left: Math.min(Math.max(left + width / 2 - 112, 8), Math.max((typeof window !== "undefined" ? window.innerWidth : 320) - 260, 8)) }}
       >
         <div className="mb-1 flex items-center justify-between gap-4">
-          <span className="text-white/45">Average</span>
-          <span className="font-mono font-semibold text-white">{formatter(measurement.average)}</span>
+          <span className="text-[var(--text-muted)]">Average</span>
+          <span className="font-mono font-semibold text-[var(--text-primary)]">{formatter(measurement.average)}</span>
         </div>
         <div className="flex items-center justify-between gap-4">
-          <span className="text-white/45">{measurement.bars} bars</span>
+          <span className="text-[var(--text-muted)]">{measurement.bars} bars</span>
           <span className={cn("font-mono font-semibold", measurement.change >= 0 ? "text-emerald-300" : "text-red-300")}>
             {measurement.change >= 0 ? "+" : ""}{formatter(measurement.change)} · {measurement.percent >= 0 ? "+" : ""}{measurement.percent.toFixed(2)}%
           </span>
         </div>
-        <div className="mt-1 truncate text-[11px] text-white/35">
+        <div className="mt-1 truncate text-[11px] text-[var(--text-subtle)]">
           {measurement.startLabel} - {measurement.endLabel}
         </div>
       </div>
