@@ -265,7 +265,10 @@ test("Investment Holdings toolbar filters, switches data sets, and opens account
   await page.goto("/invest/holdings");
   await waitForWorkspace(page);
 
-  await page.getByRole("button", { name: "Filter holdings" }).click();
+  const filterButton = page.getByRole("button", { name: "Filter holdings" });
+  await filterButton.hover();
+  await expect(page.getByRole("tooltip", { name: "Filter holdings" })).toBeVisible();
+  await filterButton.click();
   await page.getByRole("menuitem", { name: "Needs thesis review" }).click();
   await page.getByRole("button", { name: "Group holdings" }).click();
   await page.getByRole("menuitem", { name: "Security" }).click();
@@ -277,6 +280,15 @@ test("Investment Holdings toolbar filters, switches data sets, and opens account
   await page.getByRole("button", { name: "Download holdings" }).click();
   await expect(page.getByRole("dialog", { name: "Download holdings" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Download CSV" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  const addHolding = page.getByRole("button", { name: "Add investment holding" });
+  await addHolding.hover();
+  await expect(page.getByRole("tooltip", { name: "Add investment holding" })).toBeVisible();
+  await addHolding.click();
+  await expect(page.getByRole("dialog", { name: "Add investment holding" })).toBeVisible();
+  await page.getByRole("button", { name: "Add holding" }).click();
+  await expect(page.getByRole("alert")).toContainText("positive quantity");
   await page.keyboard.press("Escape");
 
   const privacyToggle = page.getByRole("button", { name: "Toggle portfolio privacy" });
@@ -399,6 +411,14 @@ test("investment policy persists and validates recorded positions", async ({ pag
 test("Investment display state persists across workspace routes and the review drawer restores focus", async ({ page }) => {
   await page.goto("/invest");
   await waitForWorkspace(page);
+  const performance = page.locator("#performance");
+  const portfolioLegend = performance.getByText("Portfolio", { exact: true }).locator("..");
+  const benchmarkLegend = performance.getByText("SPY", { exact: true }).locator("..");
+  await expect(portfolioLegend.locator(".bg-emerald-400")).toHaveCount(1);
+  await expect(benchmarkLegend.locator(".bg-slate-400")).toHaveCount(1);
+  await performance.locator("canvas").first().hover({ position: { x: 280, y: 140 }, force: true });
+  await expect(performance.locator('[role="tooltip"]')).toContainText("Portfolio");
+  await expect(performance.locator('[role="tooltip"]')).toContainText("SPY");
   await page.getByRole("button", { name: "6M" }).click();
   await page.getByRole("button", { name: "returns" }).click();
   await expect.poll(() => page.evaluate(({ userId }) => window.localStorage.getItem(`quanfora.investment-overview.user:${userId}`), { userId: E2E_USER_ID })).toContain('"period":"6M"');
