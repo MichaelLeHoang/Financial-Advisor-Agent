@@ -40,7 +40,7 @@ function DropdownMenuContent({
   Pick<React.ComponentProps<typeof MenuPrimitive.Positioner>, "side" | "align" | "sideOffset">) {
   return (
     <DropdownMenuPortal>
-      <MenuPrimitive.Positioner side={side} align={align} sideOffset={sideOffset} className="z-[180]">
+      <MenuPrimitive.Positioner side={side} align={align} sideOffset={sideOffset} className="z-[260]">
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"
           className={cn(
@@ -113,7 +113,7 @@ function DropdownMenuSubmenuContent({
   Pick<React.ComponentProps<typeof MenuPrimitive.Positioner>, "side" | "align" | "sideOffset">) {
   return (
     <DropdownMenuPortal>
-      <MenuPrimitive.Positioner side={side} align={align} sideOffset={sideOffset} className="z-[190]">
+      <MenuPrimitive.Positioner side={side} align={align} sideOffset={sideOffset} className="z-[270]">
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-submenu-content"
           className={cn(
