@@ -25,7 +25,7 @@ export default function InvestmentPositionPage() {
   const history = decisions.filter((item) => item.holding_id === holding?.id);
 
   return (
-    <WorkspacePage eyebrow="Investment position" title={symbol} description="Ownership purpose, thesis evidence, policy state, and owner decisions attached to this Investment position." actions={<SecondaryLink href="/invest">Back to Invest</SecondaryLink>}>
+    <WorkspacePage dense eyebrow="Investment position" title={symbol} description="Ownership purpose, thesis evidence, policy state, and owner decisions attached to this Investment position." actions={<SecondaryLink href="/invest">Back to Invest</SecondaryLink>}>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Investment weight" value={holding ? `${weight.toFixed(1)}%` : "Not found"} />
         <Metric label="Policy status" value={positionAlert ? "Needs attention" : "Within recorded limits"} tone={positionAlert ? "warning" : "neutral"} />

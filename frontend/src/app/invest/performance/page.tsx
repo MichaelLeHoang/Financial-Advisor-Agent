@@ -35,14 +35,14 @@ export default function InvestmentPerformancePage() {
   const hidden = preferences.privacyMode;
 
   return (
-    <div className="min-h-full bg-[var(--theme-bg)] px-4 py-6 text-[var(--text-primary)] lg:px-7 xl:px-10">
-      <div className="mx-auto max-w-[1180px]">
+    <div className="min-h-full bg-[var(--theme-bg)] px-4 py-4 text-[var(--text-primary)] lg:px-6 xl:px-8">
+      <div className="mx-auto max-w-[1380px]">
         <div className="flex items-center justify-between gap-3">
           <Link href="/invest" className="inline-flex h-10 items-center gap-2 rounded-full px-3 text-sm font-semibold hover:bg-[var(--surface-card-hover)]"><ArrowLeft className="size-4" /> Back</Link>
           <button type="button" aria-label="Toggle portfolio privacy" aria-pressed={hidden} onClick={() => setPreference("privacyMode", !hidden)} className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-4 text-sm font-semibold hover:bg-[var(--surface-card-hover)]">{hidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}{hidden ? "Show values" : "Hide values"}</button>
         </div>
 
-        <header className="mt-10">
+        <header className="mt-6">
           <WorkspaceSelectMenu
             ariaLabel="Performance portfolio scope"
             value={preferences.portfolioScope}
@@ -51,19 +51,19 @@ export default function InvestmentPerformancePage() {
             className="h-9 max-w-full border-transparent bg-transparent px-0 shadow-none hover:bg-transparent"
             contentClassName="min-w-64"
           />
-          <h1 className="mt-3 font-heading text-4xl font-semibold">Performance insights</h1>
-          <p className="mt-8 font-heading text-5xl font-semibold tabular-nums">{hidden ? "••••••" : formatMoney(metrics.value, preferences.displayCurrency)}</p>
+          <h1 className="mt-2 font-heading text-3xl font-semibold">Performance insights</h1>
+          <p className="mt-5 font-heading text-4xl font-semibold tabular-nums">{hidden ? "••••••" : formatMoney(metrics.value, preferences.displayCurrency)}</p>
           <p className="mt-2 text-sm text-[var(--text-muted)]">Estimated from current positions; historical contributions and realized lots are not reconstructed.</p>
-          <dl className="mt-10 grid gap-6 border-b border-[var(--theme-border)] pb-10 sm:grid-cols-3">
+          <dl className="mt-6 grid gap-4 border-b border-[var(--theme-border)] pb-6 sm:grid-cols-3">
             <TopMetric label={`${preferences.period} estimated start`} value={hidden ? "••••••" : formatMoney(metrics.periodStart, preferences.displayCurrency)} />
             <TopMetric label={`${preferences.period} estimated return`} value={hidden ? "••••••" : formatSignedMoney(metrics.returnAmount, preferences.displayCurrency)} tone={metrics.returnAmount >= 0 ? "positive" : "negative"} />
             <TopMetric label={`${preferences.benchmark} relative return`} value={hidden ? "••••" : formatSignedPercent(metrics.returnPercent - metrics.benchmarkReturn)} tone={metrics.returnPercent >= metrics.benchmarkReturn ? "positive" : "negative"} />
           </dl>
         </header>
 
-        <section className="mt-12">
-          <div className="flex flex-wrap items-center justify-between gap-4"><h2 className="font-heading text-3xl font-semibold">Overview</h2><WorkspaceSelectMenu ariaLabel="Performance period" value={preferences.period} options={PERIODS.map((period) => ({ value: period, label: period }))} onValueChange={(value) => setPreference("period", value as InvestmentPeriod)} className="min-w-28" align="end" /></div>
-          <div className="mt-6 rounded-lg border border-[var(--theme-border)] p-6 sm:p-8">
+        <section className="mt-7">
+          <div className="flex flex-wrap items-center justify-between gap-4"><h2 className="font-heading text-2xl font-semibold">Overview</h2><WorkspaceSelectMenu ariaLabel="Performance period" value={preferences.period} options={PERIODS.map((period) => ({ value: period, label: period }))} onValueChange={(value) => setPreference("period", value as InvestmentPeriod)} className="min-w-28" align="end" /></div>
+          <div className="mt-4 rounded-lg border border-[var(--theme-border)] p-5">
             <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-[var(--text-muted)]">Estimated total return</p><p className={cn("mt-2 text-2xl font-semibold tabular-nums", metrics.returnAmount >= 0 ? "text-emerald-400" : "text-rose-400")}>{hidden ? "••••••" : formatSignedMoney(metrics.returnAmount, preferences.displayCurrency)}</p></div><Info className="size-4 text-[var(--text-muted)]" /></div>
             <dl className="mt-8 space-y-4"><DetailMetric label="Estimated return rate" value={hidden ? "••••" : formatSignedPercent(metrics.returnPercent)} tone={metrics.returnPercent >= 0 ? "positive" : "negative"} /><DetailMetric label={`${preferences.benchmark} return`} value={hidden ? "••••" : formatSignedPercent(metrics.benchmarkReturn)} tone={metrics.benchmarkReturn >= 0 ? "positive" : "negative"} /></dl>
           </div>

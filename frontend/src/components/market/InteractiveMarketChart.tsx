@@ -583,7 +583,7 @@ export default function InteractiveMarketChart<T extends InteractiveChartPoint>(
       <div ref={containerRef} className={cn("h-full w-full transition-opacity duration-200", isRangeTransitioning && "opacity-70")} />
       {measurement && <MeasurementOverlay measurement={measurement} axisFormatter={axisFormatter} />}
       {hoverPoint && tooltip && (
-        <div className={cn("pointer-events-none absolute z-20", tooltipClassName)} style={tooltipStyle}>
+        <div role="tooltip" className={cn("pointer-events-none absolute z-20", tooltipClassName)} style={tooltipStyle}>
           {tooltip(hoverPoint.point)}
         </div>
       )}

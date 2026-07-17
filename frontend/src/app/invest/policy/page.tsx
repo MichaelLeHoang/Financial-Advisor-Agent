@@ -31,7 +31,7 @@ export default function InvestmentPolicyPage() {
   };
 
   return (
-    <WorkspacePage eyebrow="Investment policy" title="Define the boundaries before the decision" description="Saved constraints generate deterministic alerts and never change positions automatically." actions={<SecondaryLink href="/invest">Back to Invest</SecondaryLink>}>
+    <WorkspacePage dense eyebrow="Investment policy" title="Define the boundaries before the decision" description="Saved constraints generate deterministic alerts and never change positions automatically." actions={<SecondaryLink href="/invest">Back to Invest</SecondaryLink>}>
       <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
         <Panel>
           <PanelHeading title="Position and portfolio limits" detail={loading ? "Loading account policy" : policy ? `Saved ${new Date(policy.updated_at).toLocaleDateString()}` : "Not saved yet"} />

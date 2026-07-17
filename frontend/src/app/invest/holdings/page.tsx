@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, CircleAlert, Download, Eye, EyeOff, ListFilter, Loader2, Rows3, Search } from "lucide-react";
+import { ArrowLeft, Check, CircleAlert, Download, Eye, EyeOff, ListFilter, Loader2, Plus, Rows3, Search } from "lucide-react";
 import { useInvestmentWorkspace } from "@/components/investment-workspace/InvestmentWorkspaceProvider";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -36,6 +36,14 @@ export default function InvestmentHoldingsPage() {
   const [group, setGroup] = useState<HoldingGroup>("none");
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [downloadPortfolioIds, setDownloadPortfolioIds] = useState<string[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addSymbol, setAddSymbol] = useState("");
+  const [addQuantity, setAddQuantity] = useState("");
+  const [addAverageCost, setAddAverageCost] = useState("");
+  const [addCurrency, setAddCurrency] = useState(preferences.displayCurrency);
+  const [addPortfolioId, setAddPortfolioId] = useState("");
+  const [addError, setAddError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
   const thesisByHolding = useMemo(() => new Map(theses.map((thesis) => [thesis.holding_id, thesis])), [theses]);
   const selectedPortfolio = preferences.portfolioScope === "all" ? portfolios[0] : portfolios.find((item) => item.id === preferences.portfolioScope) ?? portfolios[0];
   const holdings = investmentHoldings.map((record) => {
@@ -72,6 +80,44 @@ export default function InvestmentHoldingsPage() {
     anchor.click();
     URL.revokeObjectURL(url);
     setDownloadOpen(false);
+  };
+
+  const openAddHolding = () => {
+    setAddPortfolioId(selectedPortfolio?.id ?? portfolios[0]?.id ?? "");
+    setAddCurrency(selectedPortfolio?.base_currency ?? preferences.displayCurrency);
+    setAddError(null);
+    setAddOpen(true);
+  };
+
+  const addHolding = async () => {
+    const ticker = addSymbol.trim().toUpperCase();
+    const quantity = Number(addQuantity);
+    const averageCost = Number(addAverageCost);
+    if (!addPortfolioId || !ticker || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(averageCost) || averageCost <= 0) {
+      setAddError("Choose a portfolio and enter a symbol, positive quantity, and positive average cost.");
+      return;
+    }
+    setAdding(true);
+    setAddError(null);
+    try {
+      const holding = await api.addHolding(addPortfolioId, ticker, quantity, averageCost, addCurrency);
+      try {
+        await api.classifyHolding(addPortfolioId, holding.id, "investment");
+      } catch (cause) {
+        await api.removeHolding(addPortfolioId, holding.id).catch(() => undefined);
+        throw cause;
+      }
+      setAddOpen(false);
+      setAddSymbol("");
+      setAddQuantity("");
+      setAddAverageCost("");
+      setNotice(`${ticker} was added to Investment Holdings.`);
+      await refresh();
+    } catch (cause) {
+      setAddError(cause instanceof Error ? cause.message : "The holding could not be added.");
+    } finally {
+      setAdding(false);
+    }
   };
 
   const recordPurchase = async () => {
@@ -121,32 +167,33 @@ export default function InvestmentHoldingsPage() {
   };
 
   return (
-    <div className="min-h-full bg-[var(--theme-bg)] px-4 py-5 text-[var(--text-primary)] lg:px-8">
-      <div className="mx-auto max-w-[1540px]">
-        <header className="border-b border-[var(--theme-border)] pb-5">
+    <div className="min-h-full bg-[var(--theme-bg)] px-4 py-4 text-[var(--text-primary)] lg:px-6">
+      <div className="mx-auto max-w-[1720px]">
+        <header className="border-b border-[var(--theme-border)] pb-4">
           <Link href="/invest" className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)]"><ArrowLeft className="size-3.5" /> Investment overview</Link>
-          <div className="mt-3 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div><h1 className="font-heading text-3xl font-semibold">Investment Holdings</h1><p className="mt-2 text-sm text-[var(--text-muted)]">{holdings.length} positions · {preferences.privacyMode ? "Values hidden" : formatMoney(totalValue, preferences.displayCurrency)}</p></div>
+          <div className="mt-2 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div><h1 className="font-heading text-2xl font-semibold">Investment Holdings</h1><p className="mt-1 text-sm text-[var(--text-muted)]">{holdings.length} positions · {preferences.privacyMode ? "Values hidden" : formatMoney(totalValue, preferences.displayCurrency)}</p></div>
             <div className="flex flex-wrap items-center gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger aria-label="Filter holdings" className="inline-flex size-11 items-center justify-center rounded-full border border-[var(--theme-border-strong)] bg-[var(--surface-control)] hover:bg-[var(--surface-card-hover)]"><ListFilter className="size-4" /></DropdownMenuTrigger>
+              <ToolbarTip label="Filter holdings"><DropdownMenu>
+                <DropdownMenuTrigger aria-label="Filter holdings" className="inline-flex size-10 items-center justify-center rounded-full border border-[var(--theme-border-strong)] bg-[var(--surface-control)] hover:bg-[var(--surface-card-hover)]"><ListFilter className="size-4" /></DropdownMenuTrigger>
                 <DropdownMenuContent side="bottom" align="end" className="w-72 rounded-3xl p-4"><p className="px-2 pb-3 text-base font-semibold">Filter holdings</p>{([{ value: "all", label: "All positions" }, { value: "needs_review", label: "Needs thesis review" }, { value: "concentrated", label: "Above 10% weight" }] as const).map((option) => <DropdownMenuItem key={option.value} onClick={() => setFilter(option.value)} className="justify-between"><span>{option.label}</span>{filter === option.value && <Check className="size-4" />}</DropdownMenuItem>)}</DropdownMenuContent>
-              </DropdownMenu>
-              <DropdownMenu>
-                <DropdownMenuTrigger aria-label="Group holdings" className="inline-flex size-11 items-center justify-center rounded-full border border-[var(--theme-border-strong)] bg-[var(--surface-control)] hover:bg-[var(--surface-card-hover)]"><Rows3 className="size-4" /></DropdownMenuTrigger>
+              </DropdownMenu></ToolbarTip>
+              <ToolbarTip label="Group holdings"><DropdownMenu>
+                <DropdownMenuTrigger aria-label="Group holdings" className="inline-flex size-10 items-center justify-center rounded-full border border-[var(--theme-border-strong)] bg-[var(--surface-control)] hover:bg-[var(--surface-card-hover)]"><Rows3 className="size-4" /></DropdownMenuTrigger>
                 <DropdownMenuContent side="bottom" align="end" className="w-64 rounded-3xl p-4"><p className="px-2 pb-3 text-base font-semibold">Group by</p>{([{ value: "none", label: "No grouping" }, { value: "security", label: "Security" }, { value: "portfolio", label: "Portfolio" }] as const).map((option) => <DropdownMenuItem key={option.value} onClick={() => setGroup(option.value)} className="justify-between"><span>{option.label}</span>{group === option.value && <Check className="size-4" />}</DropdownMenuItem>)}</DropdownMenuContent>
-              </DropdownMenu>
-              <button type="button" aria-label="Download holdings" onClick={() => setDownloadOpen(true)} className="inline-flex size-11 items-center justify-center rounded-full border border-[var(--theme-border-strong)] bg-[var(--surface-control)] hover:bg-[var(--surface-card-hover)]"><Download className="size-4" /></button>
-              <div role="tablist" aria-label="Holdings table mode" className="flex h-11 rounded-full border border-[var(--theme-border-strong)] bg-[var(--surface-control)] p-1">
+              </DropdownMenu></ToolbarTip>
+              <ToolbarTip label="Download holdings"><button type="button" aria-label="Download holdings" onClick={() => setDownloadOpen(true)} className="inline-flex size-10 items-center justify-center rounded-full border border-[var(--theme-border-strong)] bg-[var(--surface-control)] hover:bg-[var(--surface-card-hover)]"><Download className="size-4" /></button></ToolbarTip>
+              <ToolbarTip label="Add investment holding"><button type="button" aria-label="Add investment holding" onClick={openAddHolding} className="theme-solid-action inline-flex size-10 items-center justify-center rounded-full"><Plus className="size-4" /></button></ToolbarTip>
+              <div role="tablist" aria-label="Holdings table mode" className="flex h-10 rounded-full border border-[var(--theme-border-strong)] bg-[var(--surface-control)] p-1">
                 {(["holdings", "watchlist"] as const).map((mode) => <button key={mode} type="button" role="tab" aria-selected={preferences.railMode === mode} onClick={() => setPreference("railMode", mode)} className={cn("rounded-full px-4 text-sm font-semibold capitalize text-[var(--text-muted)]", preferences.railMode === mode && "bg-white/[0.11] text-[var(--text-primary)]")}>{mode}</button>)}
               </div>
-              <button type="button" aria-label="Toggle portfolio privacy" aria-pressed={preferences.privacyMode} onClick={() => setPreference("privacyMode", !preferences.privacyMode)} className="inline-flex size-11 items-center justify-center rounded-full border border-[var(--theme-border-strong)] bg-[var(--surface-control)] hover:bg-[var(--surface-card-hover)]">{preferences.privacyMode ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</button>
+              <ToolbarTip label={preferences.privacyMode ? "Show portfolio values" : "Hide portfolio values"}><button type="button" aria-label="Toggle portfolio privacy" aria-pressed={preferences.privacyMode} onClick={() => setPreference("privacyMode", !preferences.privacyMode)} className="inline-flex size-10 items-center justify-center rounded-full border border-[var(--theme-border-strong)] bg-[var(--surface-control)] hover:bg-[var(--surface-card-hover)]">{preferences.privacyMode ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</button></ToolbarTip>
             </div>
           </div>
         </header>
 
-        <section className="mt-6">
-          <div className="hidden overflow-hidden rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] shadow-[var(--shadow-card)] md:block">
+        <section className="mt-4">
+          <div className="hidden overflow-hidden rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] md:block">
             <HorizontalScroll className="w-full">
               {preferences.railMode === "holdings" ? <table className="w-full min-w-[1120px] table-fixed text-xs sm:text-sm">
                 <thead><tr className="border-b border-white/10 text-xs text-white/60"><th className="w-[18%] px-3 py-3 text-left font-medium">Holdings</th><th className="w-[12%] px-3 py-3 text-left font-medium">Portfolio</th><th className="w-[9%] px-3 py-3 text-left font-medium">Currency</th><th className="w-[10%] px-3 py-3 text-right font-medium">Quantity</th><th className="w-[12%] px-3 py-3 text-right font-medium">Value</th><th className="w-[9%] px-3 py-3 text-right font-medium">Weight</th><th className="w-[13%] px-3 py-3 text-right font-medium">Today&apos;s return</th><th className="w-[8%] px-3 py-3 text-left font-medium">Thesis</th><th className="w-[9%] px-3 py-3 text-left font-medium">Next review</th></tr></thead>
@@ -159,7 +206,7 @@ export default function InvestmentHoldingsPage() {
           {!loading && preferences.railMode === "watchlist" && !watchlistAssets.length && <div className="rounded-lg border border-dashed border-[var(--theme-border)] py-12 text-center text-sm text-[var(--text-muted)]">No saved securities in this scope.</div>}
         </section>
 
-        <section className="mt-8 rounded-lg border border-[var(--theme-border)] bg-[var(--surface-card)] p-4 sm:p-5">
+        <section className="mt-6 rounded-lg border border-[var(--theme-border)] bg-[var(--surface-card)] p-4">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-semibold">Record recurring purchase</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--text-muted)]">Records a completed purchase and updates its linked holding. It does not schedule or execute an order.</p></div><span className="text-xs font-semibold text-[var(--text-muted)]">{recurringBuys.length} recorded</span></div>
           {error && <p role="alert" className="mt-4 flex items-center gap-2 text-sm text-rose-300"><CircleAlert className="size-4" />{error}</p>}
           {notice && <p role="status" className="mt-4 text-sm text-emerald-300">{notice}</p>}
@@ -189,12 +236,27 @@ export default function InvestmentHoldingsPage() {
           <div className="flex justify-center border-t border-[var(--theme-border)] px-7 py-5"><button type="button" onClick={downloadCsv} disabled={!holdings.length} className="inline-flex h-11 items-center gap-2 rounded-full bg-white px-6 text-sm font-semibold text-black disabled:opacity-45"><Download className="size-4" /> Download CSV</button></div>
         </DialogContent>
       </Dialog>
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-lg p-0">
+          <DialogHeader className="border-b border-[var(--theme-border)] px-6 pb-4 pt-6"><DialogTitle className="text-xl">Add investment holding</DialogTitle><DialogDescription>Record a stock position in an existing portfolio. This does not place a trade.</DialogDescription></DialogHeader>
+          <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
+            <label className="text-xs font-semibold text-[var(--text-muted)]">Symbol<input autoFocus value={addSymbol} onChange={(event) => setAddSymbol(event.target.value.toUpperCase())} placeholder="AAPL" className={inputClass} /></label>
+            <label className="text-xs font-semibold text-[var(--text-muted)]">Portfolio<WorkspaceSelectMenu ariaLabel="Holding portfolio" value={addPortfolioId} options={portfolios.map((portfolio) => ({ value: portfolio.id, label: portfolio.name }))} onValueChange={setAddPortfolioId} className="mt-2 h-11 w-full rounded-lg" /></label>
+            <label className="text-xs font-semibold text-[var(--text-muted)]">Quantity<input type="number" min="0" step="any" value={addQuantity} onChange={(event) => setAddQuantity(event.target.value)} placeholder="10" className={inputClass} /></label>
+            <label className="text-xs font-semibold text-[var(--text-muted)]">Average cost<input type="number" min="0" step="any" value={addAverageCost} onChange={(event) => setAddAverageCost(event.target.value)} placeholder="175.00" className={inputClass} /></label>
+            <label className="text-xs font-semibold text-[var(--text-muted)] sm:col-span-2">Cost currency<WorkspaceSelectMenu ariaLabel="Holding cost currency" value={addCurrency} options={[preferences.displayCurrency, "USD", "CAD", "EUR", "GBP"].filter((value, index, values) => values.indexOf(value) === index).map((value) => ({ value, label: value }))} onValueChange={setAddCurrency} className="mt-2 h-11 w-full rounded-lg" /></label>
+            {addError && <p role="alert" className="text-sm text-rose-300 sm:col-span-2">{addError}</p>}
+          </div>
+          <div className="flex justify-end gap-2 border-t border-[var(--theme-border)] px-6 py-4"><button type="button" onClick={() => setAddOpen(false)} className="h-10 rounded-full px-4 text-sm font-semibold hover:bg-[var(--surface-card-hover)]">Cancel</button><button type="button" onClick={() => void addHolding()} disabled={adding || !portfolios.length} className="theme-solid-action inline-flex h-10 items-center gap-2 rounded-full px-5 text-sm font-semibold disabled:opacity-45">{adding && <Loader2 className="size-4 animate-spin" />}{adding ? "Adding…" : "Add holding"}</button></div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
 const inputClass = "mt-2 h-11 w-full min-w-0 rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-3 text-sm text-[var(--text-primary)] outline-none focus:ring-2 focus:ring-emerald-400/30";
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="min-w-0 text-xs font-semibold text-[var(--text-muted)]">{label}{children}</label>; }
+function ToolbarTip({ label, children }: { label: string; children: React.ReactNode }) { return <span className="group relative inline-flex">{children}<span role="tooltip" className="pointer-events-none absolute left-1/2 top-full z-40 mt-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--theme-border)] bg-[var(--surface-popover)] px-2 py-1 text-[10px] font-semibold text-[var(--text-primary)] shadow-[var(--shadow-popover)] group-hover:block group-focus-within:block">{label}</span></span>; }
 function SymbolMark({ symbol }: { symbol: string }) { const colors = ["bg-cyan-400/20 text-cyan-200", "bg-emerald-400/20 text-emerald-200", "bg-indigo-400/20 text-indigo-200", "bg-amber-400/20 text-amber-100"]; const index = symbol.split("").reduce((sum, character) => sum + character.charCodeAt(0), 0) % colors.length; return <span aria-hidden="true" className={cn("inline-flex size-9 shrink-0 items-center justify-center rounded-full text-[10px] font-bold", colors[index])}>{symbol.slice(0, 4)}</span>; }
 function Status({ value }: { value: string }) { return <span className={cn("text-xs font-semibold", value === "Healthy" ? "text-emerald-400" : value === "Invalidated" ? "text-rose-400" : "text-amber-300")}>{value}</span>; }
 function thesisStatus(thesis?: { status: string; next_review_at?: string | null }) { if (!thesis) return "Missing"; if (thesis.status === "invalidated") return "Invalidated"; if (thesis.status === "needs_review" || (thesis.next_review_at && new Date(thesis.next_review_at) < new Date())) return "Needs review"; return "Healthy"; }

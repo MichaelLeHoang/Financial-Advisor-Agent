@@ -72,9 +72,9 @@ export default function InvestPage() {
   const activity = buildInvestmentActivity(decisions, theses, events, recurringBuys).slice(0, 8);
 
   return (
-    <div className="min-h-full bg-[var(--theme-bg)] px-4 py-5 text-[var(--text-primary)] lg:px-7 xl:px-10">
-      <div className="mx-auto max-w-[1680px]">
-        <header className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+    <div className="min-h-full bg-[var(--theme-bg)] px-4 py-4 text-[var(--text-primary)] lg:px-6 xl:px-8">
+      <div className="mx-auto max-w-[1840px]">
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="font-heading text-2xl font-semibold">Investment Portfolio</h1>
@@ -107,7 +107,7 @@ export default function InvestPage() {
 
         {error && <div role="alert" className="mt-4 flex items-start gap-2 border border-red-400/25 bg-red-400/8 p-3 text-sm text-red-200"><CircleAlert className="mt-0.5 size-4 shrink-0" />{error}</div>}
 
-        <div className="mt-8 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,2.2fr)_minmax(340px,0.8fr)]">
+        <div className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,2.35fr)_minmax(320px,0.65fr)]">
           <div className="min-w-0">
             <section id="performance" aria-labelledby="performance-heading" className="min-w-0 scroll-mt-16">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
@@ -117,12 +117,12 @@ export default function InvestPage() {
                 </div>
                 <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
                   <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-emerald-400" />Portfolio</span>
-                  <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-3 bg-slate-400" />{preferences.benchmark}</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-slate-400" />{preferences.benchmark}</span>
                 </div>
               </div>
-              <div className="mt-5 h-[340px] min-w-0 sm:h-[430px]">
+              <div className="mt-4 h-[280px] min-w-0 sm:h-[360px]">
               {quotesLoading ? <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">Loading estimated history…</div> : series.length > 1 ? (
-                <InteractiveMarketChart data={series} mode="area" color="#34d399" valueKey="price" volume={false} compareMode compareLines={[{ key: "benchmark", color: "#94a3b8", lineWidth: 2 }]} rangeKey={`${preferences.period}-${preferences.performanceMode}-${preferences.benchmark}`} axisFormatter={(value) => preferences.privacyMode ? "•••" : preferences.performanceMode === "value" ? compactMoney(value, preferences.displayCurrency) : `${value.toFixed(1)}%`} timeFormatter={shortChartDate} tooltip={(point) => <div className="space-y-1 text-xs"><p className="font-semibold">{point.label}</p>{preferences.privacyMode ? <p className="text-[var(--text-muted)]">Values hidden</p> : <><p>Portfolio {preferences.performanceMode === "value" ? formatMoney(point.price, preferences.displayCurrency) : formatSignedPercent(point.price)}</p><p>{preferences.benchmark} {preferences.performanceMode === "value" ? formatMoney(point.benchmark, preferences.displayCurrency) : formatSignedPercent(point.benchmark)}</p></>}</div>} tooltipClassName="rounded-lg border border-white/15 bg-black/55 p-3 shadow-2xl backdrop-blur-xl" className="h-full w-full" />
+                <InteractiveMarketChart data={series} mode="area" color="#34d399" valueKey="price" volume={false} compareMode compareLines={[{ key: "benchmark", color: "#94a3b8", lineWidth: 2 }]} rangeKey={`${preferences.period}-${preferences.performanceMode}-${preferences.benchmark}`} axisFormatter={(value) => preferences.privacyMode ? "•••" : preferences.performanceMode === "value" ? compactMoney(value, preferences.displayCurrency) : `${value.toFixed(1)}%`} timeFormatter={shortChartDate} tooltip={(point) => <div className="space-y-1.5 text-xs"><p className="font-semibold">{point.label}</p>{preferences.privacyMode ? <p className="text-[var(--text-muted)]">Values hidden</p> : <><p className="flex items-center gap-2"><span className="size-2 rounded-full bg-emerald-400" />Portfolio {preferences.performanceMode === "value" ? formatMoney(point.price, preferences.displayCurrency) : formatSignedPercent(point.price)}</p><p className="flex items-center gap-2"><span className="size-2 rounded-full bg-slate-400" />{preferences.benchmark} {preferences.performanceMode === "value" ? formatMoney(point.benchmark, preferences.displayCurrency) : formatSignedPercent(point.benchmark)}</p></>}</div>} tooltipClassName="rounded-lg border border-white/15 bg-black/55 p-3 shadow-2xl backdrop-blur-xl" className="h-full w-full" />
               ) : <div className="flex h-full items-center justify-center border border-dashed border-[var(--theme-border)] text-center text-sm text-[var(--text-muted)]">Add and classify Investment holdings to build an estimated performance view.</div>}
               </div>
               <div className="mt-2 flex flex-col gap-3 border-t border-[var(--theme-border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
@@ -135,7 +135,7 @@ export default function InvestPage() {
               </div>
             </section>
 
-            <section aria-label="Portfolio insights" className="mt-8 grid gap-4 sm:grid-cols-2">
+            <section aria-label="Portfolio insights" className="mt-6 grid gap-3 sm:grid-cols-2">
               <MetricCard title="Performance insights" icon={<BarChart3 className="size-4" />}>
                 <Insight label="Best contributor" value={preferences.privacyMode ? "••••••" : contributors[0] ? `${contributors[0].record.holding.symbol} ${formatSignedMoney(contributors[0].contribution, preferences.displayCurrency)}` : "Not available"} />
                 <Insight label="Largest detractor" value={preferences.privacyMode ? "••••••" : contributors.at(-1) && contributors.at(-1)!.contribution < 0 ? `${contributors.at(-1)!.record.holding.symbol} ${formatSignedMoney(contributors.at(-1)!.contribution, preferences.displayCurrency)}` : "No negative move"} />
@@ -149,8 +149,8 @@ export default function InvestPage() {
             </section>
           </div>
 
-          <aside className="space-y-5 xl:sticky xl:top-16 xl:self-start">
-            <section className="rounded-lg border border-[var(--theme-border)] bg-[var(--surface-card)] p-5">
+          <aside className="space-y-4 xl:sticky xl:top-16 xl:self-start">
+            <section className="rounded-lg border border-[var(--theme-border)] bg-[var(--surface-card)] p-4">
               <div className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">Portfolio review</h2><p className="mt-1 text-xs text-[var(--text-muted)]">{reviewItems.length} positions need attention</p></div><Scale className="size-5 text-amber-300" /></div>
               <div className="mt-4 divide-y divide-[var(--theme-border)]">
                 {reviewItems.length ? reviewItems.slice(0, 3).map((item) => <button key={item.record.holding.id} type="button" onClick={() => openReview(item.record)} className="flex w-full items-start justify-between gap-3 py-4 text-left hover:bg-[var(--surface-card-hover)]"><div className="min-w-0"><p className="font-semibold">{item.record.holding.symbol}</p><p className={cn("mt-1 text-xs leading-5", item.tone === "danger" ? "text-rose-300" : "text-amber-200")}>{item.reasons.join(" · ")}</p></div><ChevronRight className="mt-1 size-4 shrink-0 text-[var(--text-muted)]" /></button>) : <div className="py-8 text-center"><ShieldCheck className="mx-auto size-6 text-emerald-400" /><p className="mt-3 text-sm font-semibold">No recorded review issues</p><p className="mt-1 text-xs text-[var(--text-muted)]">Policy and thesis checks are current.</p></div>}
@@ -161,7 +161,7 @@ export default function InvestPage() {
           </aside>
         </div>
 
-        <section id="accounts" className="mt-10 scroll-mt-16 border-t border-[var(--theme-border)] pt-8">
+        <section id="accounts" className="mt-8 scroll-mt-16 border-t border-[var(--theme-border)] pt-6">
           <div className="flex items-end justify-between gap-4"><div><h2 className="text-xl font-semibold">Investment portfolios</h2><p className="mt-1 text-sm text-[var(--text-muted)]">Investment positions only; Trading remains in its own workspace.</p></div><Link href="/portfolio" className="hidden items-center gap-1 text-sm font-semibold text-emerald-400 sm:inline-flex">View complete portfolio picture <ArrowRight className="size-4" /></Link></div>
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {portfolios.map((portfolio) => {
