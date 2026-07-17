@@ -25,4 +25,4 @@ Authentication comes from `auth/`; billing provider logic stays in `billing/`; d
 Cover plan matrices, user isolation, guest restrictions, resource limits, upgrade errors, portfolio reconciliation and classification events, portfolio sync behavior, and repository fallback behavior.
 
 ## Latest Change
-- Extended user-scoped persistence with investment policy, thesis, and immutable decision records.
+- Recurring-buy reads now tolerate an unapplied optional Supabase schema, while writes return a clear service-unavailable response and validate the schema before synchronizing holdings.

@@ -1,5 +1,9 @@
+import json
+import logging
+from io import BytesIO
 from threading import Lock
 from typing import Any
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from uuid import UUID, uuid4
@@ -56,6 +60,17 @@ from src.saas.models import (
     WatchlistCreate,
     WatchlistRead,
 )
+
+
+logger = logging.getLogger(__name__)
+
+
+class SupabaseSchemaUnavailableError(RuntimeError):
+    """Raised when PostgREST cannot find a required table or column."""
+
+    def __init__(self, table: str) -> None:
+        self.table = table
+        super().__init__(f"Supabase schema is unavailable for {table}")
 
 
 class UserScopedStore:
@@ -836,8 +851,6 @@ class SupabaseRestStore:
 
         data = None
         if body is not None:
-            import json
-
             data = json.dumps(body).encode("utf-8")
 
         request = Request(
@@ -851,15 +864,36 @@ class SupabaseRestStore:
                 "Prefer": "return=representation",
             },
         )
-        with urlopen(request, timeout=20) as response:
-            raw = response.read().decode("utf-8")
-            if not raw:
-                return []
+        try:
+            with urlopen(request, timeout=20) as response:
+                raw = response.read().decode("utf-8")
+                if not raw:
+                    return []
 
-            import json
+                payload = json.loads(raw)
+                return payload if isinstance(payload, list) else [payload]
+        except HTTPError as error:
+            raw_error = error.read()
+            try:
+                error_payload = json.loads(raw_error.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                error_payload = {}
 
-            payload = json.loads(raw)
-            return payload if isinstance(payload, list) else [payload]
+            error_code = str(error_payload.get("code", ""))
+            error_context = json.dumps(error_payload).lower()
+            if (
+                error.code in {400, 404}
+                and error_code in {"PGRST204", "PGRST205", "42P01"}
+                and table.lower() in error_context
+            ):
+                raise SupabaseSchemaUnavailableError(table) from error
+            raise HTTPError(
+                error.filename,
+                error.code,
+                error.msg,
+                error.hdrs,
+                BytesIO(raw_error),
+            ) from error
 
     def list_portfolios(self, user_id: UUID) -> list[PortfolioRead]:
         rows = self._request("GET", "portfolios", {"select": "*", "user_id": f"eq.{user_id}"})
@@ -1155,17 +1189,37 @@ class SupabaseRestStore:
     def list_recurring_buys(self, user_id: UUID, portfolio_id: UUID) -> list[RecurringBuyRead] | None:
         if self.get_portfolio(user_id, portfolio_id) is None:
             return None
-        rows = self._request(
+        try:
+            rows = self._request(
+                "GET",
+                "portfolio_recurring_buys",
+                {"select": "*", "portfolio_id": f"eq.{portfolio_id}", "order": "executed_at.desc"},
+            )
+        except SupabaseSchemaUnavailableError:
+            logger.warning("Recurring-buy storage is unavailable; apply Supabase migrations 014 and 015.")
+            return []
+        return [RecurringBuyRead.model_validate(row) for row in rows]
+
+    def _ensure_recurring_buy_schema(self) -> None:
+        self._request(
             "GET",
             "portfolio_recurring_buys",
-            {"select": "*", "portfolio_id": f"eq.{portfolio_id}", "order": "executed_at.desc"},
+            {
+                "select": (
+                    "id,linked_holding_id,purchase_mode,recurrence_frequency,"
+                    "schedule_time,schedule_day_of_week,schedule_day_of_month,schedule_month"
+                ),
+                "limit": "0",
+            },
         )
-        return [RecurringBuyRead.model_validate(row) for row in rows]
 
     def add_recurring_buy(self, user_id: UUID, portfolio_id: UUID, payload: RecurringBuyCreate) -> RecurringBuyRead | None:
         portfolio = self.get_portfolio(user_id, portfolio_id)
         if portfolio is None:
             return None
+        # Validate the optional schema before creating or updating a linked
+        # holding, so a missing migration cannot leave a partial write behind.
+        self._ensure_recurring_buy_schema()
         recurring = RecurringBuyRead(
             portfolio_id=portfolio_id,
             symbol=payload.symbol,
@@ -1222,6 +1276,7 @@ class SupabaseRestStore:
         portfolio = self.get_portfolio(user_id, portfolio_id)
         if portfolio is None:
             return None
+        self._ensure_recurring_buy_schema()
         existing_rows = self._request(
             "GET",
             "portfolio_recurring_buys",

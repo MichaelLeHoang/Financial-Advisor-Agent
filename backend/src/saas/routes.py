@@ -22,7 +22,7 @@ from src.saas.models import (
     WatchlistCreate,
     WatchlistRead,
 )
-from src.saas.repository import get_store
+from src.saas.repository import SupabaseSchemaUnavailableError, get_store
 from src.saas.portfolio_books import build_portfolio_books
 
 
@@ -32,6 +32,13 @@ router = APIRouter(prefix="/api/v1", tags=["saas"])
 def require_signed_in(user: AuthenticatedUser) -> None:
     if user.is_guest:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to save workspace data.")
+
+
+def _recurring_buy_storage_unavailable() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Recurring-buy storage is unavailable. Apply Supabase migrations 014 and 015.",
+    )
 
 
 @router.get("/me", response_model=AuthenticatedUser)
@@ -191,7 +198,10 @@ async def create_recurring_buy(
     user: AuthenticatedUser = Depends(get_current_or_guest_user),
 ) -> RecurringBuyRead:
     require_signed_in(user)
-    recurring_buy = get_store(user).add_recurring_buy(user.id, portfolio_id, payload)
+    try:
+        recurring_buy = get_store(user).add_recurring_buy(user.id, portfolio_id, payload)
+    except SupabaseSchemaUnavailableError as error:
+        raise _recurring_buy_storage_unavailable() from error
     if recurring_buy is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
     return recurring_buy
@@ -205,7 +215,10 @@ async def update_recurring_buy(
     user: AuthenticatedUser = Depends(get_current_or_guest_user),
 ) -> RecurringBuyRead:
     require_signed_in(user)
-    recurring_buy = get_store(user).update_recurring_buy(user.id, portfolio_id, recurring_buy_id, payload)
+    try:
+        recurring_buy = get_store(user).update_recurring_buy(user.id, portfolio_id, recurring_buy_id, payload)
+    except SupabaseSchemaUnavailableError as error:
+        raise _recurring_buy_storage_unavailable() from error
     if recurring_buy is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recurring buy not found")
     return recurring_buy
@@ -218,7 +231,10 @@ async def delete_recurring_buy(
     user: AuthenticatedUser = Depends(get_current_or_guest_user),
 ) -> None:
     require_signed_in(user)
-    removed = get_store(user).delete_recurring_buy(user.id, portfolio_id, recurring_buy_id)
+    try:
+        removed = get_store(user).delete_recurring_buy(user.id, portfolio_id, recurring_buy_id)
+    except SupabaseSchemaUnavailableError as error:
+        raise _recurring_buy_storage_unavailable() from error
     if not removed:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recurring buy not found")
 
