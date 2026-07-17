@@ -287,6 +287,10 @@ test("Investment Holdings toolbar filters, switches data sets, and opens account
   await expect(page.getByRole("tooltip", { name: "Add investment holding" })).toBeVisible();
   await addHolding.click();
   await expect(page.getByRole("dialog", { name: "Add investment holding" })).toBeVisible();
+  const currencyMenu = page.getByRole("button", { name: "Holding cost currency" });
+  await currencyMenu.click();
+  await page.getByRole("menuitem", { name: "CAD" }).click();
+  await expect(currencyMenu).toContainText("CAD");
   await page.getByRole("button", { name: "Add holding" }).click();
   await expect(page.getByRole("alert")).toContainText("positive quantity");
   await page.keyboard.press("Escape");
