@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from src.auth.supabase import GUEST_USER_ID, get_current_or_guest_user
 from src.saas.models import AuthenticatedUser, Plan
-from src.saas.repository import store
+from src.saas.repository import SupabaseSchemaUnavailableError, store
 
 
 @pytest.fixture(autouse=True)
@@ -163,6 +163,36 @@ def test_recurring_buy_syncs_linked_holding_and_delete_removes_both():
 
     app.dependency_overrides.clear()
     store.reset()
+
+
+def test_recurring_buy_write_reports_missing_supabase_schema(monkeypatch):
+    from src.api.app import app
+
+    class MissingRecurringBuyStore:
+        def add_recurring_buy(self, user_id, portfolio_id, payload):
+            raise SupabaseSchemaUnavailableError("portfolio_recurring_buys")
+
+    user_id = uuid4()
+    client = TestClient(app)
+    app.dependency_overrides[get_current_or_guest_user] = _override_user(user_id)
+    monkeypatch.setattr(
+        "src.saas.routes.get_store", lambda user=None: MissingRecurringBuyStore()
+    )
+
+    response = client.post(
+        f"/api/v1/portfolios/{uuid4()}/recurring-buys",
+        json={
+            "symbol": "AMD",
+            "entered_amount": 100,
+            "filled_quantity": 1,
+            "fill_price": 100,
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "Recurring-buy storage is unavailable. Apply Supabase migrations 014 and 015."
+    )
 
 
 def test_portfolio_books_reconcile_and_classification_is_audited():
