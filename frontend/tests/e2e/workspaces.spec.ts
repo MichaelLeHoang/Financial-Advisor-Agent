@@ -19,6 +19,24 @@ test("legacy dashboard redirects to the unified Home", async ({ page }) => {
   await expect(page.getByText("Trading Book", { exact: true })).toBeVisible();
 });
 
+test("AI Desk defaults to recommended Sabi with manual capability overrides", async ({ page }) => {
+  await page.goto("/session");
+  await waitForWorkspace(page);
+
+  const sabiTrigger = page.getByRole("button", { name: "Sabi", exact: true });
+  await expect(sabiTrigger).toBeVisible();
+  await sabiTrigger.click();
+
+  const modeMenu = page.getByRole("menu");
+  await expect(modeMenu.getByRole("menuitem", { name: /Sabi Recommended/ })).toBeVisible();
+  await expect(modeMenu.getByRole("menuitem", { name: /Quick/ })).toBeVisible();
+  await expect(modeMenu.getByRole("menuitem", { name: /Consensus/ })).toBeVisible();
+  await expect(modeMenu.getByRole("menuitem", { name: /Research/ })).toBeVisible();
+
+  await modeMenu.getByRole("menuitem", { name: /Quick/ }).click();
+  await expect(page.getByRole("button", { name: "Quick", exact: true })).toBeVisible();
+});
+
 test("workspace subnavigation exposes focused Portfolio and Discover routes", async ({ page }) => {
   await page.goto("/portfolio");
   await waitForWorkspace(page);

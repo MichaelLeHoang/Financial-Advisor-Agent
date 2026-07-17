@@ -122,11 +122,20 @@ def test_agent_chat_job_endpoints_use_queue(monkeypatch):
     client = TestClient(api_app.app)
     create = client.post(
         "/api/v1/agent/chat/jobs",
-        json={"message": "What is AAPL?", "session_id": "s1", "mode": "single"},
+        json={"message": "What is AAPL?", "session_id": "s1"},
     )
 
     assert create.status_code == 200
     assert create.json() == {"job_id": "job-1", "status": "queued", "queue_position": 1}
+    assert fake_queue.record["payload"]["mode"] == "sabi"
+
+    sabi = client.post(
+        "/api/v1/agent/chat/jobs",
+        json={"message": "Should I buy NVDA?", "session_id": "sabi-1", "mode": "sabi"},
+    )
+    assert sabi.status_code == 200
+    assert fake_queue.record["kind"] == "consensus"
+    assert fake_queue.record["payload"]["mode"] == "sabi"
 
     status = client.get("/api/v1/agent/chat/jobs/job-1")
     assert status.status_code == 200
