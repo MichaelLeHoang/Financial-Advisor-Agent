@@ -1,4 +1,5 @@
 import asyncio
+from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -134,7 +135,7 @@ class AgentChatRequest(BaseModel):
     remember: bool = True  # maintain multi-turn conversation history
     session_id: str = "default"
     preferred_mode: LLMMode | None = None
-    mode: str = "single"  # "single" | "consensus" | "auto"
+    mode: Literal["sabi", "single", "consensus", "research", "auto"] = "sabi"
 
 class AgentSessionRenameRequest(BaseModel):
     title: str
@@ -757,9 +758,11 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
     """
     Chat with the Financial Advisor AI Agent.
 
-    Supports three modes:
-    - "single": Fast single-agent ReAct (default)
+    Supports four user-facing modes plus the legacy auto mode:
+    - "sabi": Select an existing capability from the request (default)
+    - "single": Fast single-agent ReAct
     - "consensus": Quanfora 2.0 multi-agent consensus analysis
+    - "research": Request the existing Equity Research Desk workflow
     - "auto": Auto-detect based on query complexity
 
     POST /api/v1/agent/chat
@@ -838,13 +841,21 @@ async def create_agent_chat_job(req: AgentChatRequest, user: AuthenticatedUser =
     Use GET /api/v1/agent/chat/jobs/{job_id} to poll status/result.
     """
     from src.agent.agent import _is_consensus_query
+    from src.agent.sabi import build_sabi_plan
     from src.agent.llm_queue import get_llm_job_queue
 
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
     _ensure_chat_session_available(req.session_id, user)
 
-    kind = "consensus" if req.mode == "consensus" or (req.mode == "auto" and _is_consensus_query(req.message)) else "single"
+    sabi_plan = build_sabi_plan(req.message) if req.mode == "sabi" else None
+    kind = (
+        "consensus"
+        if req.mode == "consensus"
+        or (req.mode == "auto" and _is_consensus_query(req.message))
+        or (sabi_plan is not None and sabi_plan.queue_kind == "consensus")
+        else "single"
+    )
     payload = {
         "user_id": str(user.id),
         "plan": user.plan.value if hasattr(user.plan, "value") else str(user.plan),

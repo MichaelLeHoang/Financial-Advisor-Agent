@@ -3,15 +3,16 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, ChevronDown, Cpu, FileSearch, Network, Zap } from "lucide-react";
+import { Check, ChevronDown, Cpu, FileSearch, Network, Sparkles, Zap } from "lucide-react";
+import type { AiDeskMode } from "@/lib/api";
 
 // ─── Mode types ────────────────────────────
 
-export type QuanforaVersion = "1.0" | "2.0" | "2.1";
+export type QuanforaVersion = "sabi" | "1.0" | "2.0" | "2.1";
 
 /** Translates the frontend version pick into the API mode field. */
-export function apiModeFromVersion(version: Exclude<QuanforaVersion, "2.1">): "single" | "consensus" {
-  return version === "2.0" ? "consensus" : "single";
+export function apiModeFromVersion(version: Exclude<QuanforaVersion, "2.1">): Exclude<AiDeskMode, "research"> {
+  return version === "sabi" ? "sabi" : version === "2.0" ? "consensus" : "single";
 }
 
 // ─── Context ───────────────────────────────
@@ -22,7 +23,7 @@ interface ModelContextValue {
 }
 
 const ModelContext = createContext<ModelContextValue>({
-  version: "1.0",
+  version: "sabi",
   setVersion: () => {},
 });
 
@@ -31,7 +32,7 @@ export function useModel() {
 }
 
 export function ModelProvider({ children }: { children: ReactNode }) {
-  const [version, setVersion] = useState<QuanforaVersion>("1.0");
+  const [version, setVersion] = useState<QuanforaVersion>("sabi");
   return (
     <ModelContext.Provider value={{ version, setVersion }}>
       {children}
@@ -49,23 +50,30 @@ const QUANFORA_MODES: {
   accentClass: string;
 }[] = [
   {
+    version: "sabi",
+    label: "Sabi",
+    tagline: "Automatically chooses the right tools, analysis depth, and approved context.",
+    icon: Sparkles,
+    accentClass: "text-indigo-primary bg-indigo-primary/18 ring-indigo-primary/25",
+  },
+  {
     version: "1.0",
-    label: "Quanfora 1.0",
-    tagline: "Fast single-agent advisor for market, portfolio, and sentiment work.",
+    label: "Quick",
+    tagline: "Fast market, platform, and portfolio answers.",
     icon: Zap,
     accentClass: "text-indigo-primary bg-indigo-primary/18 ring-indigo-primary/25",
   },
   {
     version: "2.0",
-    label: "Quanfora 2.0",
-    tagline: "Multi-agent consensus — 5 specialists analyze independently.",
+    label: "Consensus",
+    tagline: "Independent review from specialist agents.",
     icon: Network,
     accentClass: "text-emerald-400 bg-emerald-400/18 ring-emerald-400/25",
   },
   {
     version: "2.1",
-    label: "Quanfora 2.1",
-    tagline: "Equity Research Desk for ticker-based reports and risk review.",
+    label: "Research",
+    tagline: "Complete investment or trading research.",
     icon: FileSearch,
     accentClass: "text-cyan-300 bg-cyan-300/16 ring-cyan-300/25",
   },
@@ -124,7 +132,9 @@ export default function ModelSelector({
             {QUANFORA_MODES.map((model) => {
               const Icon = model.icon;
               const isActive = model.version === version;
-              const badgeClass = model.version === "2.1"
+              const badgeClass = model.version === "sabi"
+                ? "bg-indigo-primary/12 text-indigo-200 ring-indigo-primary/20"
+                : model.version === "2.1"
                 ? "bg-cyan-300/12 text-cyan-200 ring-cyan-300/20"
                 : "bg-emerald-400/12 text-emerald-400 ring-emerald-400/20";
               return (
@@ -148,9 +158,9 @@ export default function ModelSelector({
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-[var(--text-primary)]">
                       {model.label}
-                      {model.version !== "1.0" && (
+                      {model.version === "sabi" && (
                         <span className={`ml-1.5 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${badgeClass}`}>
-                          {model.version === "2.1" ? "Research" : "New"}
+                          Recommended
                         </span>
                       )}
                     </div>

@@ -7,7 +7,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Brain, Check, ChevronDown, ClipboardList, FileText, Image, Loader2, Paperclip, PieChart, Send, SlidersHorizontal, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
-import type { ChatJobProgress, ChatJobStatusResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, Overview, ResearchDepth, ResearchReportType } from "@/lib/api";
+import type { AiDeskMode, ChatJobProgress, ChatJobStatusResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, Overview, ResearchDepth, ResearchReportType, SabiCapability } from "@/lib/api";
 import { notifyCompletion, requestCompletionNotification } from "@/lib/completion-notifications";
 import { loadLocalChatMessages, saveLocalChatMessages } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
@@ -33,6 +33,7 @@ interface Message {
   researchReports?: EquityResearchReport[];
   consensusOpinions?: ConsensusOpinion[];
   overview?: Overview | null;
+  selectedCapability?: SabiCapability;
 }
 
 const GREETING: Message = {
@@ -45,10 +46,11 @@ function messageFromChatHistory(message: {
   id: number | string;
   role: "user" | "assistant";
   content: string;
-  metadata?: { consensus?: { opinions?: ConsensusOpinion[] }; researchReports?: EquityResearchReport[]; overview?: Overview | null } | null;
+  metadata?: { consensus?: { opinions?: ConsensusOpinion[] }; researchReports?: EquityResearchReport[]; overview?: Overview | null; selected_capability?: SabiCapability } | null;
   consensusOpinions?: ConsensusOpinion[];
   researchReports?: EquityResearchReport[];
   overview?: Overview | null;
+  selectedCapability?: SabiCapability;
 }): Message {
   return {
     id: String(message.id),
@@ -57,6 +59,7 @@ function messageFromChatHistory(message: {
     consensusOpinions: message.consensusOpinions ?? message.metadata?.consensus?.opinions,
     researchReports: message.researchReports ?? message.metadata?.researchReports,
     overview: message.overview ?? message.metadata?.overview,
+    selectedCapability: message.selectedCapability ?? message.metadata?.selected_capability,
   };
 }
 
@@ -91,6 +94,14 @@ function extractResearchCommand(message: string) {
     depth: depth as "shallow" | "medium" | "deep",
     reportType: detectResearchReportType(message),
   };
+}
+
+function isSabiResearchRequest(message: string) {
+  return [
+    /^\/(?:research|analyze)\b/i,
+    /\b(?:create|generate|prepare|write|build|run)\s+(?:a\s+)?(?:(?:full|complete|deep|comprehensive)\s+)?(?:(?:investment|trading|equity|stock)\s+)?(?:research\s+)?report\b/i,
+    /\b(?:full|complete|deep|comprehensive)\s+(?:investment\s+|trading\s+|equity\s+)?research\b/i,
+  ].some((pattern) => pattern.test(message));
 }
 
 function detectResearchReportType(message: string): ResearchReportType {
@@ -352,8 +363,14 @@ const PLACEHOLDERS = [
   "What are the risks of holding SMCI right now?",
 ];
 
-function firstChatProgressTool(mode: "single" | "consensus") {
+function firstChatProgressTool(mode: Exclude<AiDeskMode, "research">) {
   return mode === "consensus" ? "quant_researcher" : "single_scope";
+}
+
+function sabiCapabilityLabel(capability: SabiCapability) {
+  return capability === "trade_proposal"
+    ? "Trade Proposal"
+    : capability.charAt(0).toUpperCase() + capability.slice(1);
 }
 
 const RESEARCH_MODES: {
@@ -429,6 +446,7 @@ export default function ChatPage() {
   const [agentRunState, setAgentRunState] = useState<"queued" | "running">("running");
   const [agentRunStartedAt, setAgentRunStartedAt] = useState<number | null>(null);
   const [useAgentSyntheticProgress, setUseAgentSyntheticProgress] = useState(false);
+  const [activePlanMode, setActivePlanMode] = useState<"single" | "consensus" | "research">("single");
   const [researchDepth, setResearchDepth] = useState<ResearchDepth>("shallow");
   const lastJobProgressSequenceRef = useRef(0);
   const progressEventQueueRef = useRef<ChatJobProgress[]>([]);
@@ -496,6 +514,7 @@ export default function ChatPage() {
       setAgentRunState("running");
       setAgentRunStartedAt(null);
       setUseAgentSyntheticProgress(false);
+      setActivePlanMode("single");
       lastJobProgressSequenceRef.current = 0;
       progressEventQueueRef.current = [];
       progressDrainActiveRef.current = false;
@@ -634,6 +653,7 @@ export default function ChatPage() {
   const isStreamingRef = useRef(false);
 
   const applyProgressEvent = (progress: ChatJobProgress, job: ChatJobStatusResponse, fallbackLabel: string) => {
+    setActivePlanMode(progress.mode);
     setAgentRunState(job.status === "queued" ? "queued" : "running");
     setAgentRunStartedAt((current) => current ?? (job.started_at ? job.started_at * 1000 : Date.now()));
     setActiveTool(progress.active_tool ?? null);
@@ -716,7 +736,7 @@ export default function ChatPage() {
     const researchCommand = extractResearchCommand(text);
     const investmentTicker = researchCommand?.ticker ?? extractInvestmentTicker(text);
 
-    if (researchCommand || version === "2.1") {
+    if (researchCommand || version === "2.1" || (version === "sabi" && isSabiResearchRequest(text))) {
       const seedTicker = researchCommand?.ticker ?? extractTickerForResearch(text);
       let ticker = await resolveResearchTicker(seedTicker ?? text);
       if (signal.aborted) return;
@@ -740,6 +760,7 @@ export default function ChatPage() {
       setAgentRunState("running");
       setAgentRunStartedAt(Date.now());
       setUseAgentSyntheticProgress(false);
+      setActivePlanMode("research");
       setActiveTool("equity_snapshot");
       setCompletedTools([]);
       showLongRunningToast("Quanfora 2.1 research may take a little while.");
@@ -812,7 +833,15 @@ export default function ChatPage() {
 
         if (!user.is_guest) {
           await api.appendChatSessionMessage(targetSessionId, "user", text);
-          await api.appendChatSessionMessage(targetSessionId, "assistant", finalMarkdown, { researchReports: latestDetail.reports, overview: latestDetail.overview });
+          await api.appendChatSessionMessage(targetSessionId, "assistant", finalMarkdown, {
+            researchReports: latestDetail.reports,
+            overview: latestDetail.overview,
+            ...(version === "sabi" ? {
+              selected_mode: "sabi" as const,
+              selected_capability: "research" as const,
+              action_status: "analysis_only" as const,
+            } : {}),
+          });
         }
         setMessages((prev) =>
           prev.filter((m) => m.status !== "fetching").concat({
@@ -823,6 +852,7 @@ export default function ChatPage() {
             researchRunId: latestDetail.run.run_id,
             researchReports: latestDetail.reports,
             overview: latestDetail.overview,
+            selectedCapability: version === "sabi" ? "research" : undefined,
           })
         );
         finishLongRunningToast(
@@ -860,9 +890,11 @@ export default function ChatPage() {
       return;
     }
 
-    const fetchingLabel = version === "2.0"
-      ? "Running multi-agent consensus analysis..."
-      : "Analyzing market context...";
+    const fetchingLabel = version === "sabi"
+      ? "Sabi is choosing the right analysis..."
+      : version === "2.0"
+        ? "Running multi-agent consensus analysis..."
+        : "Analyzing market context...";
     const mode = apiModeFromVersion(version);
     const shouldNotifyLongRun = mode === "consensus";
     const fetchingMsg: Message = { id: getUniqueId(), role: "assistant", content: fetchingLabel, status: "fetching" };
@@ -876,6 +908,7 @@ export default function ChatPage() {
     setAgentRunState("queued");
     setAgentRunStartedAt(null);
     setUseAgentSyntheticProgress(false);
+    setActivePlanMode(mode === "consensus" ? "consensus" : "single");
     lastJobProgressSequenceRef.current = 0;
     progressEventQueueRef.current = [];
     progressDrainActiveRef.current = false;
@@ -934,8 +967,9 @@ export default function ChatPage() {
       }
       const consensusOpinions = res.consensus?.opinions;
       const overview = res.overview;
+      const selectedCapability = version === "sabi" ? res.selected_capability : undefined;
 
-      const minimumPlanDuration = mode === "consensus" ? 3200 : 1800;
+      const minimumPlanDuration = mode === "consensus" || selectedCapability === "consensus" ? 3200 : 1800;
       const elapsedBeforeAnswer = Date.now() - loadingStartedAt;
       if (elapsedBeforeAnswer < minimumPlanDuration) {
         await delay(minimumPlanDuration - elapsedBeforeAnswer, signal);
@@ -949,6 +983,7 @@ export default function ChatPage() {
           content: res.response || "I'm sorry, I couldn't process that request.",
           consensusOpinions,
           overview,
+          selectedCapability,
         }).concat(investmentTicker ? [{
           id: getUniqueId(),
           role: "assistant",
@@ -1254,12 +1289,12 @@ export default function ChatPage() {
                     {msg.status === "fetching" ? (
                       <div className="w-full max-w-[92%] sm:max-w-[75%]">
                         <Plan
-                          mode={version === "2.1" ? "research" : version === "2.0" ? "consensus" : "single"}
+                          mode={activePlanMode}
                           isActive={true}
                           activeTool={activeTool}
                           completedTools={completedTools}
-                          runState={version === "2.1" ? "running" : agentRunState}
-                          runStartedAt={version === "2.1" ? null : agentRunStartedAt}
+                          runState={activePlanMode === "research" ? "running" : agentRunState}
+                          runStartedAt={activePlanMode === "research" ? null : agentRunStartedAt}
                           useSyntheticFallback={useAgentSyntheticProgress}
                         />
                       </div>
@@ -1273,40 +1308,47 @@ export default function ChatPage() {
                         )}
                       >
                         {msg.role === "assistant" ? (
-                          msg.researchTicker ? (
-                            <div className="space-y-3">
-                              <ResearchMessageTabs content={msg.content} reports={msg.researchReports} overview={msg.overview} />
-                              <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
-                                <p className="text-sm font-semibold text-white">
-                                  {msg.researchRunId ? "Quanfora 2.1 Agent Reports" : "Generate a full Quanfora 2.1 Research Report?"}
-                                </p>
-                                <p className="mt-1 text-xs leading-5 text-white/55">
-                                  {msg.researchRunId
-                                    ? `Open the full workspace to review each analyst report, tool event, and the shared data snapshot for ${msg.researchTicker}.`
-                                    : `Run market, news, sentiment, fundamentals, trading, and risk-management agents for ${msg.researchTicker}.`}
-                                </p>
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  <Link
-                                    href={msg.researchRunId ? `/research/${msg.researchRunId}?from=ai_advisor` : `/research?ticker=${encodeURIComponent(msg.researchTicker)}&source=ai_advisor&report_type=investment`}
-                                    className="inline-flex h-9 items-center rounded-lg bg-indigo-primary px-3 text-xs font-semibold text-white hover:bg-indigo-primary/90"
-                                  >
-                                    {msg.researchRunId ? "View full agent reports" : "Generate Full Report"}
-                                  </Link>
-                                  {!msg.researchRunId && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setInput(`Give me a quick answer on ${msg.researchTicker}.`)}
-                                      className="inline-flex h-9 items-center rounded-lg border border-white/[0.10] px-3 text-xs font-semibold text-white/60 hover:text-white"
+                          <div className="space-y-2">
+                            {msg.selectedCapability && (
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-subtle)]">
+                                Sabi used {sabiCapabilityLabel(msg.selectedCapability)}
+                              </p>
+                            )}
+                            {msg.researchTicker ? (
+                              <div className="space-y-3">
+                                <ResearchMessageTabs content={msg.content} reports={msg.researchReports} overview={msg.overview} />
+                                <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
+                                  <p className="text-sm font-semibold text-white">
+                                    {msg.researchRunId ? "Quanfora 2.1 Agent Reports" : "Generate a full Quanfora 2.1 Research Report?"}
+                                  </p>
+                                  <p className="mt-1 text-xs leading-5 text-white/55">
+                                    {msg.researchRunId
+                                      ? `Open the full workspace to review each analyst report, tool event, and the shared data snapshot for ${msg.researchTicker}.`
+                                      : `Run market, news, sentiment, fundamentals, trading, and risk-management agents for ${msg.researchTicker}.`}
+                                  </p>
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    <Link
+                                      href={msg.researchRunId ? `/research/${msg.researchRunId}?from=ai_advisor` : `/research?ticker=${encodeURIComponent(msg.researchTicker)}&source=ai_advisor&report_type=investment`}
+                                      className="inline-flex h-9 items-center rounded-lg bg-indigo-primary px-3 text-xs font-semibold text-white hover:bg-indigo-primary/90"
                                     >
-                                      Quick Answer
-                                    </button>
-                                  )}
+                                      {msg.researchRunId ? "View full agent reports" : "Generate Full Report"}
+                                    </Link>
+                                    {!msg.researchRunId && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setInput(`Give me a quick answer on ${msg.researchTicker}.`)}
+                                        className="inline-flex h-9 items-center rounded-lg border border-white/[0.10] px-3 text-xs font-semibold text-white/60 hover:text-white"
+                                      >
+                                        Quick Answer
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ) : (
-                            <AssistantMessageContent content={msg.content} consensusOpinions={msg.consensusOpinions} overview={msg.overview} />
-                          )
+                            ) : (
+                              <AssistantMessageContent content={msg.content} consensusOpinions={msg.consensusOpinions} overview={msg.overview} />
+                            )}
+                          </div>
                         ) : (
                           msg.content
                         )}

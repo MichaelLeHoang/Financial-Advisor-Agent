@@ -25,6 +25,12 @@ from src.agent.overview import (
     build_single_response_overview,
     overview_to_metadata,
 )
+from src.agent.sabi import (
+    SabiCapability,
+    SabiOrchestrator,
+    SabiResult,
+    is_complex_analysis_request,
+)
 from src.agent.tools import ALL_TOOLS
 from src.llm.gateway import LLMGateway, RoutedChatModel, llm_gateway
 from src.llm.routing_policy import LLMMode
@@ -103,23 +109,6 @@ RULES:
 ProgressCallback = Callable[[dict[str, Any]], None]
 
 
-# Keywords that suggest a complex investment query (triggers consensus mode).
-_CONSENSUS_KEYWORDS = {
-    "should i invest",
-    "should i buy",
-    "should i sell",
-    "is it a good time",
-    "investment analysis",
-    "full analysis",
-    "comprehensive analysis",
-    "deep analysis",
-    "consensus",
-    "multi-agent",
-    "quanad",
-    "risk assessment",
-    "portfolio review",
-}
-
 _TICKER_STOP_WORDS = {
     "AI",
     "API",
@@ -196,8 +185,7 @@ def _contextualize_follow_up(message: str, history: list[dict[str, Any]]) -> str
 
 def _is_consensus_query(message: str) -> bool:
     """Heuristic: detect if the query warrants multi-agent consensus analysis."""
-    lower = message.lower()
-    return any(kw in lower for kw in _CONSENSUS_KEYWORDS)
+    return is_complex_analysis_request(message)
 
 
 def _is_deep_market_analysis_query(message: str) -> bool:
@@ -248,6 +236,7 @@ class FinancialAdvisorAgent:
 
         # Lazy-init the Quanfora orchestrator only when needed.
         self._orchestrator = None
+        self._sabi = SabiOrchestrator()
 
     def _create_llm(self, provider: str) -> RoutedChatModel:
         """
@@ -296,6 +285,28 @@ class FinancialAdvisorAgent:
         """
         self.last_response_metadata = None
 
+        sabi_plan = None
+        if mode in {"sabi", "research"}:
+            sabi_plan = self._sabi.plan(
+                message,
+                force_capability=(
+                    SabiCapability.RESEARCH if mode == "research" else None
+                ),
+            )
+
+        if sabi_plan and sabi_plan.capability == SabiCapability.RESEARCH:
+            result = self._sabi.run(
+                plan=sabi_plan,
+                quick=lambda: self._chat_single(
+                    message, remember, progress_callback=progress_callback
+                ),
+                consensus=lambda: self._chat_consensus(
+                    message, remember, progress_callback=progress_callback
+                ),
+            )
+            self.last_response_metadata = result.metadata()
+            return result.response
+
         if is_market_quote_query(message) and not _is_deep_market_analysis_query(
             message
         ):
@@ -304,12 +315,31 @@ class FinancialAdvisorAgent:
                 self.last_response_metadata = overview_to_metadata(
                     build_market_quote_overview(message, grounded)
                 )
+                if sabi_plan:
+                    self.last_response_metadata = self.last_response_metadata or {}
+                    self.last_response_metadata.update(
+                        SabiResult(response=grounded.response, plan=sabi_plan).metadata()
+                    )
                 if remember:
                     self._history.append({"role": "user", "content": message})
                     self._history.append(
                         {"role": "assistant", "content": grounded.response}
                     )
                 return grounded.response
+
+        if sabi_plan:
+            result = self._sabi.run(
+                plan=sabi_plan,
+                quick=lambda: self._chat_single(
+                    message, remember, progress_callback=progress_callback
+                ),
+                consensus=lambda: self._chat_consensus(
+                    message, remember, progress_callback=progress_callback
+                ),
+            )
+            self.last_response_metadata = self.last_response_metadata or {}
+            self.last_response_metadata.update(result.metadata())
+            return result.response
 
         use_consensus = mode == "consensus" or (
             mode == "auto" and _is_consensus_query(message)

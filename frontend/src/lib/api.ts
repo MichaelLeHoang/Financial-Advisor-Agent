@@ -4,10 +4,22 @@ const GUEST_SESSION_STORAGE_KEY = "quanfora.guestResearchSession";
 
 // ─── Types ────────────────────
 
+export type AiDeskMode = "sabi" | "single" | "consensus" | "research";
+export type AgentChatMode = AiDeskMode | "auto";
+export type SabiCapability = "quick" | "consensus" | "research" | "portfolio" | "risk" | "backtest" | "trade_proposal";
+
 export interface ChatResponse {
   response: string;
   session_id: string;
-  mode?: "single" | "consensus" | "auto";
+  mode?: AgentChatMode;
+  selected_mode?: AiDeskMode;
+  selected_capability?: SabiCapability;
+  action_status?: "analysis_only" | "research_requested" | "proposal_only";
+  research_request?: {
+    ticker?: string | null;
+    report_type: ResearchReportType;
+    research_depth: ResearchDepth | "auto";
+  };
   consensus?: ConsensusMetadata;
   overview?: Overview | null;
 }
@@ -279,10 +291,14 @@ export interface ChatMessage {
     consensus?: ConsensusMetadata;
     researchReports?: EquityResearchReport[];
     overview?: Overview | null;
+    selected_mode?: AiDeskMode;
+    selected_capability?: SabiCapability;
+    action_status?: "analysis_only" | "research_requested" | "proposal_only";
   } | null;
   consensusOpinions?: ConsensusOpinion[];
   researchReports?: EquityResearchReport[];
   overview?: Overview | null;
+  selectedCapability?: SabiCapability;
 }
 
 export interface ChatSession {
@@ -1373,11 +1389,11 @@ export const api = {
     post<StrategyExportResult>("/api/v1/quant/export", payload),
 
   /** Chat with the LangGraph agent — mode controls Quanfora version */
-  chat: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single", signal?: AbortSignal) =>
+  chat: (message: string, sessionId = "default", remember = true, mode: AgentChatMode = "sabi", signal?: AbortSignal) =>
     post<ChatResponse>("/api/v1/agent/chat", { message, session_id: sessionId, remember, mode }, signal),
 
   /** Queue AI chat work and poll the job status/result */
-  chatJob: (message: string, sessionId = "default", remember = true, mode: "single" | "consensus" | "auto" = "single", signal?: AbortSignal) =>
+  chatJob: (message: string, sessionId = "default", remember = true, mode: AgentChatMode = "sabi", signal?: AbortSignal) =>
     post<ChatJobCreateResponse>("/api/v1/agent/chat/jobs", { message, session_id: sessionId, remember, mode }, signal),
 
   chatJobStatus: (jobId: string, signal?: AbortSignal) =>
