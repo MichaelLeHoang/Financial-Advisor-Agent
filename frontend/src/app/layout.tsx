@@ -2,14 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { Geist, Hanken_Grotesk, Inter } from "next/font/google";
 import { MotionConfig } from "motion/react";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
-import SettingsModal from "@/components/SettingsModal";
-import EditProfileModal from "@/components/EditProfileModal";
-import AlertsModal from "@/components/AlertsModal";
-import ShortcutsDialog from "@/components/ShortcutsDialog";
 import { AuthProvider, useAuth } from "@/components/auth/AuthProvider";
 import { OnboardingProvider, useOnboarding } from "@/components/onboarding/OnboardingProvider";
 import PublicAccessGate from "@/components/auth/PublicAccessGate";
@@ -23,6 +20,11 @@ import { InvestmentPolicyProvider } from "@/components/investment-policy/Investm
 import { normalizeAppPath, onboardingHref } from "@/lib/workspace-routing";
 import { resolveAppTheme, SETTINGS_STORAGE_KEY } from "@/lib/app-theme";
 import { isEditableShortcutTarget, keyboardShortcutsEnabled } from "@/lib/keyboard-shortcuts";
+
+const SettingsModal = dynamic(() => import("@/components/SettingsModal"), { ssr: false });
+const EditProfileModal = dynamic(() => import("@/components/EditProfileModal"), { ssr: false });
+const AlertsModal = dynamic(() => import("@/components/AlertsModal"), { ssr: false });
+const ShortcutsDialog = dynamic(() => import("@/components/ShortcutsDialog"), { ssr: false });
 
 const hankenGrotesk = Hanken_Grotesk({
   subsets: ["latin"],
@@ -216,22 +218,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   {children}
                 </MainWorkspace>
 
-                <SettingsModal
-                  isOpen={isSettingsOpen}
-                  onClose={() => setIsSettingsOpen(false)}
-                  settings={settings}
-                  setSettings={updateSettings}
-                />
-                <EditProfileModal
-                  isOpen={isProfileOpen}
-                  onClose={() => setIsProfileOpen(false)}
-                />
-                <AlertsModal
-                  isOpen={isAlertsOpen}
-                  onClose={() => setIsAlertsOpen(false)}
-                  sidebarOpen={isSidebarOpen}
-                />
-                <ShortcutsDialog isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} />
+                {isSettingsOpen && (
+                  <SettingsModal
+                    isOpen={true}
+                    onClose={() => setIsSettingsOpen(false)}
+                    settings={settings}
+                    setSettings={updateSettings}
+                  />
+                )}
+                {isProfileOpen && (
+                  <EditProfileModal isOpen={true} onClose={() => setIsProfileOpen(false)} />
+                )}
+                {isAlertsOpen && (
+                  <AlertsModal
+                    isOpen={true}
+                    onClose={() => setIsAlertsOpen(false)}
+                    sidebarOpen={isSidebarOpen}
+                  />
+                )}
+                {isShortcutsOpen && (
+                  <ShortcutsDialog isOpen={true} onClose={() => setIsShortcutsOpen(false)} />
+                )}
                 <Toaster />
                   </ModelProvider>
                 </StrategyStudioProvider>

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { usePortfolioBooks } from "@/components/portfolio/PortfolioBooksProvider";
 import {
@@ -40,6 +41,7 @@ type InvestmentPolicyContextValue = {
 const InvestmentPolicyContext = createContext<InvestmentPolicyContextValue | null>(null);
 
 export function InvestmentPolicyProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const { user, loading: authLoading } = useAuth();
   const { portfolio, holdings, summary } = usePortfolioBooks();
   const [policy, setPolicy] = useState<InvestmentPolicy | null>(null);
@@ -48,6 +50,10 @@ export function InvestmentPolicyProvider({ children }: { children: React.ReactNo
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const storageKey = `quanfora.investment-policy.user:${user.id}`;
+  const routeNeedsInvestmentPolicy = pathname === "/home"
+    || pathname.startsWith("/home/")
+    || pathname === "/invest"
+    || pathname.startsWith("/invest/");
 
   const validateLocal = useCallback((saved: InvestmentPolicy): InvestmentPolicyValidation | null => {
     if (!portfolio || !summary) return null;
@@ -68,6 +74,10 @@ export function InvestmentPolicyProvider({ children }: { children: React.ReactNo
 
   const refresh = useCallback(async () => {
     if (authLoading) return;
+    if (!routeNeedsInvestmentPolicy) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -89,7 +99,7 @@ export function InvestmentPolicyProvider({ children }: { children: React.ReactNo
     } finally {
       setLoading(false);
     }
-  }, [authLoading, portfolio, storageKey, user.is_guest, validateLocal]);
+  }, [authLoading, portfolio, routeNeedsInvestmentPolicy, storageKey, user.is_guest, validateLocal]);
 
   useEffect(() => {
     void refresh();

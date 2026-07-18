@@ -1,6 +1,16 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 let authToken: string | null = null;
 const GUEST_SESSION_STORAGE_KEY = "quanfora.guestResearchSession";
+const ACCOUNT_READ_CACHE_MS = 5_000;
+const DISCOVERY_READ_CACHE_MS = 30_000;
+
+type ReadCacheEntry = { expiresAt: number; value: unknown };
+
+// Memory-only and auth-scoped: avoids duplicate provider hydration without
+// persisting account data or serving it across identity changes.
+const readCache = new Map<string, ReadCacheEntry>();
+const inflightReads = new Map<string, Promise<unknown>>();
+let authScopeVersion = 0;
 
 // ─── Types ────────────────────
 
@@ -1079,7 +1089,13 @@ export interface StrategyExportResult {
 
 // ─── API helpers ────────────────────
 
-async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+function invalidateReadCache() {
+  authScopeVersion += 1;
+  readCache.clear();
+  inflightReads.clear();
+}
+
+async function post<T>(path: string, body: unknown, signal?: AbortSignal, invalidatesReads = false): Promise<T> {
   const res = await request(`${BASE}${path}`, {
     method: "POST",
     headers: requestHeaders(),
@@ -1090,16 +1106,40 @@ async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promi
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new ApiError(res.status, err.detail ?? err);
   }
+  if (invalidatesReads) invalidateReadCache();
   return res.json();
 }
 
-async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const res = await request(`${BASE}${path}`, { headers: requestHeaders(false), cache: "no-store", signal });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new ApiError(res.status, err.detail ?? err);
   }
   return res.json();
+}
+
+async function get<T>(path: string, signal?: AbortSignal, cacheMs = 0): Promise<T> {
+  if (signal) return fetchJson<T>(path, signal);
+
+  const key = `${authScopeVersion}:${path}`;
+  const cached = readCache.get(key);
+  if (cacheMs > 0 && cached && cached.expiresAt > Date.now()) return cached.value as T;
+  if (cached) readCache.delete(key);
+
+  const inflight = inflightReads.get(key);
+  if (inflight) return inflight as Promise<T>;
+
+  const pending = fetchJson<T>(path)
+    .then((value) => {
+      if (cacheMs > 0) readCache.set(key, { expiresAt: Date.now() + cacheMs, value });
+      return value;
+    })
+    .finally(() => {
+      inflightReads.delete(key);
+    });
+  inflightReads.set(key, pending);
+  return pending;
 }
 
 async function patch<T>(path: string, body: unknown): Promise<T> {
@@ -1112,6 +1152,7 @@ async function patch<T>(path: string, body: unknown): Promise<T> {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new ApiError(res.status, err.detail ?? err);
   }
+  invalidateReadCache();
   return res.json();
 }
 
@@ -1125,6 +1166,7 @@ async function put<T>(path: string, body: unknown): Promise<T> {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new ApiError(res.status, err.detail ?? err);
   }
+  invalidateReadCache();
   return res.json();
 }
 
@@ -1137,6 +1179,7 @@ async function del<T>(path: string): Promise<T> {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new ApiError(res.status, err.detail ?? err);
   }
+  invalidateReadCache();
   if (res.status === 204) return undefined as T;
   return res.json();
 }
@@ -1206,30 +1249,34 @@ function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
 
 export const api = {
   setAuthToken: (token: string | null) => {
+    if (authToken !== token) {
+      invalidateReadCache();
+    }
     authToken = token;
   },
   getToken: () => authToken,
+  invalidateReadCache,
 
-  me: () => get<AuthUser>("/api/v1/me"),
+  me: () => get<AuthUser>("/api/v1/me", undefined, ACCOUNT_READ_CACHE_MS),
 
-  portfolios: () => get<Portfolio[]>("/api/v1/portfolios"),
+  portfolios: () => get<Portfolio[]>("/api/v1/portfolios", undefined, ACCOUNT_READ_CACHE_MS),
 
   createPortfolio: (name: string, baseCurrency = "USD") =>
-    post<Portfolio>("/api/v1/portfolios", { name, base_currency: baseCurrency }),
+    post<Portfolio>("/api/v1/portfolios", { name, base_currency: baseCurrency }, undefined, true),
 
   deletePortfolio: (portfolioId: string) =>
     del<void>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}`),
 
   portfolioHoldings: (portfolioId: string) =>
-    get<Holding[]>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings`),
+    get<Holding[]>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings`, undefined, ACCOUNT_READ_CACHE_MS),
 
   portfolioBooks: (portfolioId: string) =>
-    get<PortfolioBooks>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/books`),
+    get<PortfolioBooks>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/books`, undefined, ACCOUNT_READ_CACHE_MS),
 
   portfolioBookEvents: (portfolioId: string) =>
-    get<PortfolioBookEvent[]>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/book-events`),
+    get<PortfolioBookEvent[]>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/book-events`, undefined, ACCOUNT_READ_CACHE_MS),
 
-  investmentPolicy: () => get<InvestmentPolicy | null>("/api/v1/investment-policy"),
+  investmentPolicy: () => get<InvestmentPolicy | null>("/api/v1/investment-policy", undefined, ACCOUNT_READ_CACHE_MS),
 
   saveInvestmentPolicy: (payload: InvestmentPolicyPayload) =>
     put<InvestmentPolicy>("/api/v1/investment-policy", payload),
@@ -1241,7 +1288,7 @@ export const api = {
     post<InvestmentPolicyScopeValidation>("/api/v1/investment-policy/validate-scope", { portfolio_ids: portfolioIds }),
 
   investmentTheses: (portfolioId?: string) =>
-    get<InvestmentThesis[]>(`/api/v1/investment-theses${portfolioId ? `?portfolio_id=${encodeURIComponent(portfolioId)}` : ""}`),
+    get<InvestmentThesis[]>(`/api/v1/investment-theses${portfolioId ? `?portfolio_id=${encodeURIComponent(portfolioId)}` : ""}`, undefined, ACCOUNT_READ_CACHE_MS),
 
   saveInvestmentThesis: (holdingId: string, payload: InvestmentThesisPayload) =>
     put<InvestmentThesis>(`/api/v1/investment-theses/${encodeURIComponent(holdingId)}`, payload),
@@ -1249,11 +1296,11 @@ export const api = {
   investmentDecisions: (portfolioId?: string, limit = 50) => {
     const query = new URLSearchParams({ limit: String(limit) });
     if (portfolioId) query.set("portfolio_id", portfolioId);
-    return get<InvestmentDecisionRecord[]>(`/api/v1/investment-decisions?${query.toString()}`);
+    return get<InvestmentDecisionRecord[]>(`/api/v1/investment-decisions?${query.toString()}`, undefined, ACCOUNT_READ_CACHE_MS);
   },
 
   createInvestmentDecision: (payload: { holding_id: string; action: "hold" | "trim"; rationale: string; policy_exception?: string | null }) =>
-    post<InvestmentDecisionRecord>("/api/v1/investment-decisions", payload),
+    post<InvestmentDecisionRecord>("/api/v1/investment-decisions", payload, undefined, true),
 
   addHolding: (portfolioId: string, symbol: string, quantity: number, averageCost: number, costCurrency?: string) =>
     post<Holding>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings`, {
@@ -1262,7 +1309,7 @@ export const api = {
       quantity,
       average_cost: averageCost,
       cost_currency: costCurrency,
-    }),
+    }, undefined, true),
 
   updateHolding: (portfolioId: string, holdingId: string, updates: { quantity?: number; average_cost?: number; cost_currency?: string }) =>
     patch<Holding>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings/${encodeURIComponent(holdingId)}`, updates),
@@ -1277,10 +1324,10 @@ export const api = {
     del<void>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/holdings/${encodeURIComponent(holdingId)}`),
 
   recurringBuys: (portfolioId: string) =>
-    get<RecurringBuy[]>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/recurring-buys`),
+    get<RecurringBuy[]>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/recurring-buys`, undefined, ACCOUNT_READ_CACHE_MS),
 
   addRecurringBuy: (portfolioId: string, payload: RecurringBuyRequest) =>
-    post<RecurringBuy>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/recurring-buys`, payload),
+    post<RecurringBuy>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/recurring-buys`, payload, undefined, true),
 
   updateRecurringBuy: (portfolioId: string, recurringBuyId: string, payload: Partial<RecurringBuyRequest>) =>
     patch<RecurringBuy>(
@@ -1291,19 +1338,19 @@ export const api = {
   removeRecurringBuy: (portfolioId: string, recurringBuyId: string) =>
     del<void>(`/api/v1/portfolios/${encodeURIComponent(portfolioId)}/recurring-buys/${encodeURIComponent(recurringBuyId)}`),
 
-  watchlists: () => get<Watchlist[]>("/api/v1/watchlists"),
+  watchlists: () => get<Watchlist[]>("/api/v1/watchlists", undefined, ACCOUNT_READ_CACHE_MS),
 
   createWatchlist: (name: string) =>
-    post<Watchlist>("/api/v1/watchlists", { name }),
+    post<Watchlist>("/api/v1/watchlists", { name }, undefined, true),
 
   deleteWatchlist: (watchlistId: string) =>
     del<void>(`/api/v1/watchlists/${encodeURIComponent(watchlistId)}`),
 
   watchlistAssets: (watchlistId: string) =>
-    get<WatchlistAsset[]>(`/api/v1/watchlists/${encodeURIComponent(watchlistId)}/assets`),
+    get<WatchlistAsset[]>(`/api/v1/watchlists/${encodeURIComponent(watchlistId)}/assets`, undefined, ACCOUNT_READ_CACHE_MS),
 
   addWatchlistAsset: (watchlistId: string, symbol: string, assetType = "equity") =>
-    post<WatchlistAsset>(`/api/v1/watchlists/${encodeURIComponent(watchlistId)}/assets`, { symbol, asset_type: assetType }),
+    post<WatchlistAsset>(`/api/v1/watchlists/${encodeURIComponent(watchlistId)}/assets`, { symbol, asset_type: assetType }, undefined, true),
 
   removeWatchlistAsset: (watchlistId: string, assetId: string) =>
     del<void>(`/api/v1/watchlists/${encodeURIComponent(watchlistId)}/assets/${encodeURIComponent(assetId)}`),
@@ -1316,7 +1363,7 @@ export const api = {
   createCustomerPortalSession: (returnUrl?: string) =>
     post<{ url: string }>("/api/v1/billing/create-customer-portal-session", { return_url: returnUrl }),
 
-  backtestStrategyOptions: () => get<StrategyOption[]>("/api/v1/backtests/strategies/options"),
+  backtestStrategyOptions: () => get<StrategyOption[]>("/api/v1/backtests/strategies/options", undefined, DISCOVERY_READ_CACHE_MS),
 
   backtestStrategies: () => get<Strategy[]>("/api/v1/backtests/strategies"),
 
@@ -1446,10 +1493,10 @@ export const api = {
     get<PublicEquityResearchReport>(`/api/v1/equity-research/shared/${encodeURIComponent(shareSlug)}`),
 
   /** Conversation sessions */
-  chatSessions: () => get<ChatSession[]>("/api/v1/agent/sessions"),
+  chatSessions: () => get<ChatSession[]>("/api/v1/agent/sessions", undefined, ACCOUNT_READ_CACHE_MS),
 
   createChatSession: (sessionId: string, title = "New chat") =>
-    post<ChatSession>("/api/v1/agent/sessions", { session_id: sessionId, title }),
+    post<ChatSession>("/api/v1/agent/sessions", { session_id: sessionId, title }, undefined, true),
 
   chatSessionMessages: (sessionId = "default") =>
     get<ChatSessionMessages>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`),
@@ -1488,13 +1535,13 @@ export const api = {
     get<MarketSymbolSearchResult[]>(`/api/v1/market/search?q=${encodeURIComponent(query)}&limit=${limit}`),
 
   /** News */
-  newsCategories: () => get<CategoryInfo[]>("/api/v1/news/categories"),
+  newsCategories: () => get<CategoryInfo[]>("/api/v1/news/categories", undefined, DISCOVERY_READ_CACHE_MS),
 
   news: (categories: string[], limit = 20) =>
-    get<NewsResponse>(`/api/v1/news?categories=${encodeURIComponent(categories.join(","))}&limit=${limit}`),
+    get<NewsResponse>(`/api/v1/news?categories=${encodeURIComponent(categories.join(","))}&limit=${limit}`, undefined, DISCOVERY_READ_CACHE_MS),
 
   marketIntelligence: (categories: string[], limit = 30) =>
-    get<MarketIntelligenceResponse>(`/api/v1/market-intelligence?categories=${encodeURIComponent(categories.join(","))}&limit=${limit}`),
+    get<MarketIntelligenceResponse>(`/api/v1/market-intelligence?categories=${encodeURIComponent(categories.join(","))}&limit=${limit}`, undefined, DISCOVERY_READ_CACHE_MS),
 
   /** Health check */
   health: () => get<{ status: string }>("/health"),

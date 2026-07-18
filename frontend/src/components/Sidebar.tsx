@@ -90,7 +90,7 @@ export default function Sidebar({
     const [mobileOpen, setMobileOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
     const [sessions, setSessions] = useState<ChatSession[]>([]);
-    const [sessionsLoading, setSessionsLoading] = useState(true);
+    const [sessionsLoading, setSessionsLoading] = useState(false);
     const isGuest = !authLoading && Boolean(user?.is_guest);
     const visibleNav = isGuest
         ? NAV.filter((item) => item.href === "/ai" || item.href === "/discover/markets")
@@ -99,6 +99,7 @@ export default function Sidebar({
     const isSessionPath = path === "/ai" || path.startsWith("/ai/");
     const routeSessionId = isSessionPath && path !== "/ai" ? decodeURIComponent(path.split("/")[2] || "") : null;
     const activeSessionId = isSessionPath ? routeSessionId || searchParams.get("session") || "default" : null;
+    const shouldLoadSessions = isSessionPath || isOpen || mobileOpen || searchOpen;
     const displaySessions = useMemo(() => sessions, [sessions]);
     const creatingSessionRef = useRef(false);
 
@@ -108,8 +109,8 @@ export default function Sidebar({
     }, []);
 
     const refreshSessions = useCallback(async () => {
-        setSessionsLoading(true);
         if (authLoading) return;
+        setSessionsLoading(true);
         if (user?.is_guest) {
             setSessions(listLocalChatSessions());
             setSessionsLoading(false);
@@ -205,9 +206,11 @@ export default function Sidebar({
     }, [openSearch]);
 
     useEffect(() => {
-        refreshSessions();
+        if (shouldLoadSessions) refreshSessions();
 
-        const handleChanged = () => refreshSessions();
+        const handleChanged = () => {
+            if (shouldLoadSessions) refreshSessions();
+        };
         const handlePrivacyReset = () => {
             setSessions([]);
             setSessionsLoading(false);
@@ -219,7 +222,7 @@ export default function Sidebar({
             window.removeEventListener("chat-sessions:changed", handleChanged);
             window.removeEventListener("chat-privacy:reset", handlePrivacyReset);
         };
-    }, [refreshSessions]);
+    }, [refreshSessions, shouldLoadSessions]);
 
     return (
         <>

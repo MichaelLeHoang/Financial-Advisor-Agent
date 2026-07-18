@@ -77,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(!E2E_AUTH_ENABLED);
   const [error, setError] = useState<string | null>(null);
   const previousIdentityRef = useRef<string | null>(null);
+  const appliedAccessTokenRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     let mounted = true;
@@ -95,13 +96,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const supabase = getSupabaseBrowserClient();
 
-    const applySession = async (nextSession: Session | null) => {
+    const applySession = async (nextSession: Session | null, forceProfileRefresh = false) => {
       if (!mounted) return;
+      const nextAccessToken = nextSession?.access_token ?? null;
+      if (!forceProfileRefresh && appliedAccessTokenRef.current === nextAccessToken) return;
+      appliedAccessTokenRef.current = nextAccessToken;
       const generation = ++sessionGeneration;
       const isCurrent = () => mounted && generation === sessionGeneration;
 
       setAuthSession(nextSession);
-      api.setAuthToken(nextSession?.access_token ?? null);
+      api.setAuthToken(nextAccessToken);
 
       if (!nextSession) {
         setUser(GUEST_USER);
@@ -111,28 +115,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       let fallbackUser = normalizeUser(nextSession.user);
       setUser(fallbackUser);
+      // The verified session already gives the app a safe identity and token.
+      // Release route hydration now while fresher profile/plan data loads in parallel.
+      setLoading(false);
 
-      try {
-        const { data: freshUserData } = await supabase.auth.getUser();
-        if (freshUserData.user) {
-          fallbackUser = normalizeUser(freshUserData.user);
-          if (isCurrent()) setUser(fallbackUser);
-        }
+      const [freshUserResult, apiUserResult] = await Promise.allSettled([
+        supabase.auth.getUser(),
+        api.me(),
+      ]);
+      if (!isCurrent()) return;
 
-        const apiUser = await api.me();
-        if (isCurrent() && !apiUser.is_guest) {
-          setUser({
-            ...fallbackUser,
-            ...apiUser,
-            display_name: apiUser.display_name ?? fallbackUser.display_name,
-            username: apiUser.username ?? fallbackUser.username,
-            avatar_url: apiUser.avatar_url ?? fallbackUser.avatar_url,
-          });
-        }
-      } catch {
-        if (isCurrent()) setUser(fallbackUser);
-      } finally {
-        if (isCurrent()) setLoading(false);
+      if (freshUserResult.status === "fulfilled" && freshUserResult.value.data.user) {
+        fallbackUser = normalizeUser(freshUserResult.value.data.user);
+      }
+      if (apiUserResult.status === "fulfilled" && !apiUserResult.value.is_guest) {
+        const apiUser = apiUserResult.value;
+        setUser({
+          ...fallbackUser,
+          ...apiUser,
+          display_name: apiUser.display_name ?? fallbackUser.display_name,
+          username: apiUser.username ?? fallbackUser.username,
+          avatar_url: apiUser.avatar_url ?? fallbackUser.avatar_url,
+        });
+      } else {
+        setUser(fallbackUser);
       }
     };
 
@@ -149,8 +155,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      void applySession(nextSession);
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      void applySession(nextSession, event === "USER_UPDATED");
     });
 
     return () => {

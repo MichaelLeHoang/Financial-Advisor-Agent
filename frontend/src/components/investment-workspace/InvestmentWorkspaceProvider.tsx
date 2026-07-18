@@ -182,21 +182,25 @@ export function InvestmentWorkspaceProvider({ children }: { children: React.Reac
         setWatchlistAssets([]);
         setPolicyValidation(null);
       } else {
-        const nextPortfolios = await api.portfolios();
-        const portfolioData = await Promise.all(nextPortfolios.map(async (portfolio) => {
-          const [holdings, bookEvents, buys] = await Promise.all([
-            api.portfolioHoldings(portfolio.id),
-            api.portfolioBookEvents(portfolio.id),
-            api.recurringBuys(portfolio.id).catch(() => []),
-          ]);
-          return { portfolio, holdings, bookEvents, buys };
-        }));
-        const [nextTheses, nextDecisions, watchlists] = await Promise.all([
+        const [nextPortfolios, nextTheses, nextDecisions, watchlists] = await Promise.all([
+          api.portfolios(),
           api.investmentTheses().catch(() => []),
           api.investmentDecisions(undefined, 100).catch(() => []),
           api.watchlists().catch(() => []),
         ]);
-        const assets = (await Promise.all(watchlists.map((watchlist) => api.watchlistAssets(watchlist.id).catch(() => [])))).flat();
+        const [portfolioData, watchlistAssetGroups] = await Promise.all([
+          Promise.all(nextPortfolios.map(async (portfolio) => {
+            const sharedPortfolio = books.portfolio?.id === portfolio.id;
+            const [holdings, bookEvents, buys] = await Promise.all([
+              sharedPortfolio ? Promise.resolve(books.holdings) : api.portfolioHoldings(portfolio.id),
+              sharedPortfolio ? Promise.resolve(books.events) : api.portfolioBookEvents(portfolio.id),
+              api.recurringBuys(portfolio.id).catch(() => []),
+            ]);
+            return { portfolio, holdings, bookEvents, buys };
+          })),
+          Promise.all(watchlists.map((watchlist) => api.watchlistAssets(watchlist.id).catch(() => []))),
+        ]);
+        const assets = watchlistAssetGroups.flat();
         setPortfolios(nextPortfolios);
         setAllHoldings(portfolioData.flatMap(({ portfolio, holdings }) => holdings.map((holding) => ({ portfolio, holding }))));
         setEvents(portfolioData.flatMap(({ bookEvents }) => bookEvents).sort((a, b) => b.created_at.localeCompare(a.created_at)));

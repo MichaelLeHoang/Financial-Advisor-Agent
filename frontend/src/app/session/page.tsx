@@ -678,7 +678,7 @@ export default function ChatPage() {
         const event = progressEventQueueRef.current.shift();
         if (event) {
           applyProgressEvent(event, job, fallbackLabel);
-          await delay(420);
+          await delay(160);
         }
       }
       progressDrainActiveRef.current = false;
@@ -697,17 +697,6 @@ export default function ChatPage() {
     progressEventQueueRef.current = [...progressEventQueueRef.current, ...newEvents];
     drainProgressEvents(job, fallbackLabel);
     return true;
-  };
-
-  const waitForProgressEvents = async (signal?: AbortSignal) => {
-    while (progressDrainPromiseRef.current || progressEventQueueRef.current.length > 0) {
-      signal?.throwIfAborted();
-      if (progressDrainPromiseRef.current) {
-        await progressDrainPromiseRef.current;
-      } else {
-        await delay(80, signal);
-      }
-    }
   };
 
   const handleSend = async () => {
@@ -764,7 +753,6 @@ export default function ChatPage() {
       setActiveTool("equity_snapshot");
       setCompletedTools([]);
       showLongRunningToast("Quanfora 2.1 research may take a little while.");
-      const loadingStartedAt = Date.now();
       try {
         const reportType = researchCommand?.reportType ?? detectResearchReportType(text);
         const run = await api.createEquityResearchRun({
@@ -814,7 +802,7 @@ export default function ChatPage() {
             break;
           }
 
-          await delay(900, signal);
+          await delay(600, signal);
         }
 
         if (!latestDetail || latestDetail.run.status !== "completed") {
@@ -824,11 +812,6 @@ export default function ChatPage() {
         const finalMarkdown = finalResearchMarkdown(latestDetail);
         if (!finalMarkdown) {
           throw new Error("The research run completed but the final decision report was unavailable.");
-        }
-
-        const elapsedBeforeAnswer = Date.now() - loadingStartedAt;
-        if (elapsedBeforeAnswer < 2200) {
-          await delay(2200 - elapsedBeforeAnswer, signal);
         }
 
         if (!user.is_guest) {
@@ -901,7 +884,6 @@ export default function ChatPage() {
 
     setMessages((prev) => [...prev, userMsg, fetchingMsg]);
     setIsLoading(true);
-    const loadingStartedAt = Date.now();
     setUpgradeMessage(null);
     setActiveTool(firstChatProgressTool(mode));
     setCompletedTools([]);
@@ -950,7 +932,7 @@ export default function ChatPage() {
               )
             );
           }
-        }, 1500, signal);
+        }, 750, signal);
       } catch (queueError) {
         if (!isRedisUnavailableError(queueError)) throw queueError;
         setAgentRunState("running");
@@ -969,12 +951,8 @@ export default function ChatPage() {
       const overview = res.overview;
       const selectedCapability = version === "sabi" ? res.selected_capability : undefined;
 
-      const minimumPlanDuration = mode === "consensus" || selectedCapability === "consensus" ? 3200 : 1800;
-      const elapsedBeforeAnswer = Date.now() - loadingStartedAt;
-      if (elapsedBeforeAnswer < minimumPlanDuration) {
-        await delay(minimumPlanDuration - elapsedBeforeAnswer, signal);
-      }
-      await waitForProgressEvents(signal);
+      // Never hold a completed answer open solely to finish decorative progress steps.
+      progressEventQueueRef.current = [];
 
       setMessages((prev) =>
         prev.filter((m) => m.status !== "fetching").concat({

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
   api,
@@ -93,6 +94,7 @@ function e2eFixture(userId: string): { portfolio: Portfolio; holdings: Holding[]
 }
 
 export function PortfolioBooksProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const { user, loading: authLoading } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
@@ -103,9 +105,15 @@ export function PortfolioBooksProvider({ children }: { children: React.ReactNode
   const [updatingHoldingId, setUpdatingHoldingId] = useState<string | null>(null);
   const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
   const storageKey = `quanfora.portfolio-books.user:${user.id}`;
+  const routeNeedsPortfolioBooks = ["/home", "/invest", "/portfolio", "/trade", "/journal"]
+    .some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 
   const refresh = useCallback(async () => {
     if (authLoading) return;
+    if (!routeNeedsPortfolioBooks) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -146,7 +154,7 @@ export function PortfolioBooksProvider({ children }: { children: React.ReactNode
     } finally {
       setLoading(false);
     }
-  }, [authLoading, storageKey, user.id, user.is_guest]);
+  }, [authLoading, routeNeedsPortfolioBooks, storageKey, user.id, user.is_guest]);
 
   useEffect(() => {
     void refresh();
