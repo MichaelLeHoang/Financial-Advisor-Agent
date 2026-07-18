@@ -84,6 +84,23 @@ test("desktop sidebar defaults collapsed and labels compact navigation on hover"
   })).toEqual({ backgroundColor: "rgb(99, 102, 241)", backgroundImage: "none", boxShadow: "none" });
 });
 
+test("collapsed navigation defers chat history until the user needs it", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "The persistent compact sidebar is desktop-only.");
+  let sessionRequests = 0;
+  await page.route("**/api/v1/agent/sessions", async (route) => {
+    sessionRequests += 1;
+    await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+  });
+
+  await page.goto("/invest");
+  await waitForWorkspace(page);
+  await page.waitForTimeout(250);
+  expect(sessionRequests).toBe(0);
+
+  await page.getByRole("button", { name: "Open sidebar" }).click();
+  await expect.poll(() => sessionRequests).toBe(1);
+});
+
 test("investment selectors stay anchored and expose their expanded state", async ({ page }) => {
   await page.goto("/invest");
   await waitForWorkspace(page);
