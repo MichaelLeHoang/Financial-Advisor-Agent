@@ -19,6 +19,34 @@ test("legacy dashboard redirects to the unified Home", async ({ page }) => {
   await expect(page.getByText("Trading Book", { exact: true })).toBeVisible();
 });
 
+test("Home derives command-center values from saved holdings and current quotes", async ({ page }) => {
+  const quotes: Record<string, { price: number; change: number }> = {
+    NVDA: { price: 140, change: 2 },
+    MSFT: { price: 400, change: -1 },
+    AMD: { price: 180, change: 3 },
+  };
+  await page.route("**/api/v1/market/quote/**", async (route) => {
+    const ticker = new URL(route.request().url()).pathname.split("/").at(-1) ?? "";
+    const quote = quotes[ticker] ?? { price: 100, change: 0 };
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ticker, name: ticker, currency: "USD", history: [], ...quote }),
+    });
+  });
+
+  await page.goto("/home");
+  await waitForWorkspace(page);
+
+  await expect(page.getByText("$41,940", { exact: true })).toBeVisible();
+  await expect(page.getByText("+$352", { exact: true })).toBeVisible();
+  await expect(page.getByText("3", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("$14,520", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("+$842", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("AMD is approaching its planned stop", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("NVDA is ready to classify", { exact: true })).toBeVisible();
+});
+
 test("AI Desk defaults to recommended Sabi with manual capability overrides", async ({ page }) => {
   await page.goto("/session");
   await waitForWorkspace(page);
@@ -126,6 +154,24 @@ test("investment selectors stay anchored and expose their expanded state", async
   const chevron = page.getByTestId("investment-portfolio-scope-chevron");
   const reducedDuration = await chevron.evaluate((element) => Number.parseFloat(getComputedStyle(element).transitionDuration));
   expect(reducedDuration).toBeLessThan(0.001);
+});
+
+test("investment rail keeps tabs and controls separated at compact width", async ({ page }) => {
+  await page.goto("/invest");
+  await waitForWorkspace(page);
+
+  const tabs = page.getByRole("tablist", { name: "Investment list" });
+  const sort = page.getByRole("button", { name: /Sort investment list/ });
+  await expect(tabs).toBeVisible();
+  await expect(sort).toBeVisible();
+
+  const tabsBox = await tabs.boundingBox();
+  const sortBox = await sort.boundingBox();
+  expect(tabsBox).not.toBeNull();
+  expect(sortBox).not.toBeNull();
+  const overlapWidth = Math.max(0, Math.min(tabsBox!.x + tabsBox!.width, sortBox!.x + sortBox!.width) - Math.max(tabsBox!.x, sortBox!.x));
+  const overlapHeight = Math.max(0, Math.min(tabsBox!.y + tabsBox!.height, sortBox!.y + sortBox!.height) - Math.max(tabsBox!.y, sortBox!.y));
+  expect(overlapWidth * overlapHeight).toBe(0);
 });
 
 test("notification center exposes workspace activity and product updates", async ({ page }, testInfo) => {
