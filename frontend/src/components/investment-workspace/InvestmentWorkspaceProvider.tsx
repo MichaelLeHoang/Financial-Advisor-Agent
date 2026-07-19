@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useInvestmentPolicy } from "@/components/investment-policy/InvestmentPolicyProvider";
 import { usePortfolioBooks } from "@/components/portfolio/PortfolioBooksProvider";
@@ -19,6 +19,7 @@ import {
 } from "@/lib/api";
 import { fetchQuotes } from "@/lib/quote-cache";
 import { fetchCurrencyRate } from "@/lib/currency";
+import { readSessionSnapshot, SESSION_CACHE_MAX_AGE, writeSessionSnapshot } from "@/lib/session-data-cache";
 
 export type InvestmentPeriod = "1D" | "1W" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "ALL";
 export type PerformanceMode = "value" | "returns";
@@ -77,6 +78,7 @@ interface InvestmentWorkspaceContextValue {
   policyValidation: InvestmentPolicyScopeValidation | null;
   preferences: Preferences;
   loading: boolean;
+  refreshing: boolean;
   quotesLoading: boolean;
   saving: boolean;
   error: string | null;
@@ -90,6 +92,19 @@ interface InvestmentWorkspaceContextValue {
 
 const InvestmentWorkspaceContext = createContext<InvestmentWorkspaceContextValue | null>(null);
 const E2E_ENABLED = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_E2E_AUTH === "1";
+const SNAPSHOT_KEY = "investment-workspace";
+
+type InvestmentWorkspaceSnapshot = {
+  portfolios: Portfolio[];
+  allHoldings: InvestmentHoldingRecord[];
+  events: PortfolioBookEvent[];
+  recurringBuys: RecurringBuy[];
+  theses: InvestmentThesis[];
+  decisions: InvestmentDecisionRecord[];
+  watchlistAssets: WatchlistAsset[];
+  policyValidation: InvestmentPolicyScopeValidation | null;
+  refreshedAt: string;
+};
 
 function e2eQuote(symbol: string): MarketQuote {
   const seed = symbol.split("").reduce((sum, letter) => sum + letter.charCodeAt(0), 0);
@@ -135,10 +150,16 @@ export function InvestmentWorkspaceProvider({ children }: { children: React.Reac
   const [policyValidation, setPolicyValidation] = useState<InvestmentPolicyScopeValidation | null>(null);
   const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
+  const dataAvailableRef = useRef(false);
+  const identityRef = useRef("");
+  const generationRef = useRef(0);
+  const booksRef = useRef(books);
+  const policyRef = useRef(policy);
   const preferenceKey = `quanfora.investment-overview.user:${user.id}`;
 
   useEffect(() => {
@@ -153,25 +174,62 @@ export function InvestmentWorkspaceProvider({ children }: { children: React.Reac
   }, [authLoading, preferenceKey]);
 
   const refresh = useCallback(async () => {
-    if (authLoading || (E2E_ENABLED && books.loading)) return;
-    setLoading(true);
+    const currentBooks = booksRef.current;
+    if (authLoading || (E2E_ENABLED && currentBooks.loading)) return;
+    const owner = user.is_guest ? "guest" : `user:${user.id}`;
+    const generation = ++generationRef.current;
+    if (identityRef.current !== owner) {
+      identityRef.current = owner;
+      dataAvailableRef.current = false;
+      setPortfolios([]);
+      setAllHoldings([]);
+      setEvents([]);
+      setRecurringBuys([]);
+      setTheses([]);
+      setDecisions([]);
+      setWatchlistAssets([]);
+      setPolicyValidation(null);
+      setRefreshedAt(null);
+    }
+    if (!dataAvailableRef.current && !E2E_ENABLED && !user.is_guest) {
+      const snapshot = readSessionSnapshot<InvestmentWorkspaceSnapshot>({ owner, key: SNAPSHOT_KEY, maxAgeMs: SESSION_CACHE_MAX_AGE.account });
+      if (snapshot) {
+        setPortfolios(snapshot.data.portfolios);
+        setAllHoldings(snapshot.data.allHoldings);
+        setEvents(snapshot.data.events);
+        setRecurringBuys(snapshot.data.recurringBuys);
+        setTheses(snapshot.data.theses);
+        setDecisions(snapshot.data.decisions);
+        setWatchlistAssets(snapshot.data.watchlistAssets);
+        setPolicyValidation(snapshot.data.policyValidation);
+        setRefreshedAt(snapshot.data.refreshedAt);
+        dataAvailableRef.current = true;
+      }
+    }
+    setLoading(!dataAvailableRef.current);
+    setRefreshing(dataAvailableRef.current);
     setError(null);
     try {
+      let snapshot: InvestmentWorkspaceSnapshot;
       if (E2E_ENABLED) {
-        const nextPortfolios = books.portfolio ? [books.portfolio] : [];
-        setPortfolios(nextPortfolios);
-        setAllHoldings(books.portfolio ? books.holdings.map((holding) => ({ portfolio: books.portfolio!, holding })) : []);
-        setEvents(books.events);
-        setRecurringBuys([]);
-        const records = readE2ERecords(user.id);
-        setTheses(records.theses);
-        setDecisions(records.decisions);
-        setWatchlistAssets([
+        const nextPortfolios = currentBooks.portfolio ? [currentBooks.portfolio] : [];
+        const nextHoldings = currentBooks.portfolio ? currentBooks.holdings.map((holding) => ({ portfolio: currentBooks.portfolio!, holding })) : [];
+        const nextRecords = readE2ERecords(user.id);
+        const nextWatchlistAssets = [
           { id: "watch-mu", watchlist_id: "watch-main", symbol: "MU", asset_type: "equity", created_at: new Date().toISOString() },
           { id: "watch-googl", watchlist_id: "watch-main", symbol: "GOOGL", asset_type: "equity", created_at: new Date().toISOString() },
-        ]);
-        const portfolioRecords = books.portfolio ? books.holdings.map((holding) => ({ portfolio: books.portfolio!, holding })) : [];
-        setPolicyValidation(policy ? validateE2EPolicy(policy, portfolioRecords) : null);
+        ] satisfies WatchlistAsset[];
+        setPortfolios(nextPortfolios);
+        setAllHoldings(nextHoldings);
+        setEvents(currentBooks.events);
+        setRecurringBuys([]);
+        setTheses(nextRecords.theses);
+        setDecisions(nextRecords.decisions);
+        setWatchlistAssets(nextWatchlistAssets);
+        const currentPolicy = policyRef.current;
+        const nextValidation = currentPolicy ? validateE2EPolicy(currentPolicy, nextHoldings) : null;
+        setPolicyValidation(nextValidation);
+        snapshot = { portfolios: nextPortfolios, allHoldings: nextHoldings, events: currentBooks.events, recurringBuys: [], theses: nextRecords.theses, decisions: nextRecords.decisions, watchlistAssets: nextWatchlistAssets, policyValidation: nextValidation, refreshedAt: new Date().toISOString() };
       } else if (user.is_guest) {
         setPortfolios([]);
         setAllHoldings([]);
@@ -181,6 +239,7 @@ export function InvestmentWorkspaceProvider({ children }: { children: React.Reac
         setDecisions([]);
         setWatchlistAssets([]);
         setPolicyValidation(null);
+        snapshot = { portfolios: [], allHoldings: [], events: [], recurringBuys: [], theses: [], decisions: [], watchlistAssets: [], policyValidation: null, refreshedAt: new Date().toISOString() };
       } else {
         const [nextPortfolios, nextTheses, nextDecisions, watchlists] = await Promise.all([
           api.portfolios(),
@@ -190,38 +249,62 @@ export function InvestmentWorkspaceProvider({ children }: { children: React.Reac
         ]);
         const [portfolioData, watchlistAssetGroups] = await Promise.all([
           Promise.all(nextPortfolios.map(async (portfolio) => {
-            const sharedPortfolio = books.portfolio?.id === portfolio.id;
+            const sharedPortfolio = currentBooks.portfolio?.id === portfolio.id;
             const [holdings, bookEvents, buys] = await Promise.all([
-              sharedPortfolio ? Promise.resolve(books.holdings) : api.portfolioHoldings(portfolio.id),
-              sharedPortfolio ? Promise.resolve(books.events) : api.portfolioBookEvents(portfolio.id),
+              sharedPortfolio ? Promise.resolve(currentBooks.holdings) : api.portfolioHoldings(portfolio.id),
+              sharedPortfolio ? Promise.resolve(currentBooks.events) : api.portfolioBookEvents(portfolio.id),
               api.recurringBuys(portfolio.id).catch(() => []),
             ]);
             return { portfolio, holdings, bookEvents, buys };
           })),
           Promise.all(watchlists.map((watchlist) => api.watchlistAssets(watchlist.id).catch(() => []))),
         ]);
+        if (generation !== generationRef.current) return;
         const assets = watchlistAssetGroups.flat();
+        const nextHoldings = portfolioData.flatMap(({ portfolio, holdings }) => holdings.map((holding) => ({ portfolio, holding })));
+        const nextEvents = portfolioData.flatMap(({ bookEvents }) => bookEvents).sort((a, b) => b.created_at.localeCompare(a.created_at));
+        const nextBuys = portfolioData.flatMap(({ buys }) => buys).sort((a, b) => b.executed_at.localeCompare(a.executed_at));
         setPortfolios(nextPortfolios);
-        setAllHoldings(portfolioData.flatMap(({ portfolio, holdings }) => holdings.map((holding) => ({ portfolio, holding }))));
-        setEvents(portfolioData.flatMap(({ bookEvents }) => bookEvents).sort((a, b) => b.created_at.localeCompare(a.created_at)));
-        setRecurringBuys(portfolioData.flatMap(({ buys }) => buys).sort((a, b) => b.executed_at.localeCompare(a.executed_at)));
+        setAllHoldings(nextHoldings);
+        setEvents(nextEvents);
+        setRecurringBuys(nextBuys);
         setTheses(nextTheses);
         setDecisions(nextDecisions);
         setWatchlistAssets(assets);
         setPolicyValidation(null);
-        if (nextPortfolios[0] && preferences.displayCurrency === DEFAULT_PREFERENCES.displayCurrency) {
-          setPreferences((current) => ({ ...current, displayCurrency: nextPortfolios[0].base_currency }));
+        snapshot = { portfolios: nextPortfolios, allHoldings: nextHoldings, events: nextEvents, recurringBuys: nextBuys, theses: nextTheses, decisions: nextDecisions, watchlistAssets: assets, policyValidation: null, refreshedAt: new Date().toISOString() };
+        if (nextPortfolios[0]) {
+          setPreferences((current) => current.displayCurrency === DEFAULT_PREFERENCES.displayCurrency ? { ...current, displayCurrency: nextPortfolios[0].base_currency } : current);
         }
       }
-      setRefreshedAt(new Date().toISOString());
+      if (generation !== generationRef.current) return;
+      dataAvailableRef.current = true;
+      setRefreshedAt(snapshot.refreshedAt);
+      if (!user.is_guest && !E2E_ENABLED) writeSessionSnapshot({ owner, key: SNAPSHOT_KEY, data: snapshot });
     } catch (cause) {
+      if (generation !== generationRef.current) return;
       setError(cause instanceof Error ? cause.message : "Investment workspace data could not be loaded.");
     } finally {
-      setLoading(false);
+      if (generation === generationRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, [authLoading, books.events, books.holdings, books.loading, books.portfolio, policy, preferences.displayCurrency, user.id, user.is_guest]);
+  }, [authLoading, user.id, user.is_guest]);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    booksRef.current = books;
+    if (E2E_ENABLED && !books.loading) void refresh();
+  }, [books, refresh]);
+
+  useEffect(() => {
+    policyRef.current = policy;
+    if (E2E_ENABLED && !booksRef.current.loading) void refresh();
+  }, [policy, refresh]);
+
+  useEffect(() => {
+    if (!E2E_ENABLED) void refresh();
+  }, [refresh]);
 
   const selectedHoldings = useMemo(() => allHoldings.filter(({ portfolio }) => (
     preferences.portfolioScope === "all" || portfolio.id === preferences.portfolioScope
@@ -282,6 +365,26 @@ export function InvestmentWorkspaceProvider({ children }: { children: React.Reac
     });
   }, [preferenceKey]);
 
+  const persistSnapshot = useCallback((overrides: Partial<InvestmentWorkspaceSnapshot> = {}) => {
+    if (user.is_guest || E2E_ENABLED) return;
+    writeSessionSnapshot({
+      owner: `user:${user.id}`,
+      key: SNAPSHOT_KEY,
+      data: {
+        portfolios,
+        allHoldings,
+        events,
+        recurringBuys,
+        theses,
+        decisions,
+        watchlistAssets,
+        policyValidation,
+        refreshedAt: new Date().toISOString(),
+        ...overrides,
+      },
+    });
+  }, [allHoldings, decisions, events, policyValidation, portfolios, recurringBuys, theses, user.id, user.is_guest, watchlistAssets]);
+
   const classifyAsInvestment = useCallback(async (record: InvestmentHoldingRecord) => {
     setSaving(true);
     setError(null);
@@ -291,10 +394,12 @@ export function InvestmentWorkspaceProvider({ children }: { children: React.Reac
       } else {
         await api.classifyHolding(record.portfolio.id, record.holding.id, "investment");
       }
-      setAllHoldings((current) => current.map((item) => item.holding.id === record.holding.id ? {
+      const nextHoldings: InvestmentHoldingRecord[] = allHoldings.map((item) => item.holding.id === record.holding.id ? {
         ...item,
-        holding: { ...item.holding, book_type: "investment", classification_source: "user", classified_at: new Date().toISOString(), classified_by: user.id },
-      } : item));
+        holding: { ...item.holding, book_type: "investment" as const, classification_source: "user" as const, classified_at: new Date().toISOString(), classified_by: user.id },
+      } : item);
+      setAllHoldings(nextHoldings);
+      persistSnapshot({ allHoldings: nextHoldings });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Position classification failed.";
       setError(message);
@@ -302,7 +407,7 @@ export function InvestmentWorkspaceProvider({ children }: { children: React.Reac
     } finally {
       setSaving(false);
     }
-  }, [books, user.id]);
+  }, [allHoldings, books, persistSnapshot, user.id]);
 
   const saveThesis = useCallback(async (holdingId: string, payload: InvestmentThesisPayload) => {
     setSaving(true);
@@ -320,12 +425,13 @@ export function InvestmentWorkspaceProvider({ children }: { children: React.Reac
       }
       const next = [saved, ...theses.filter((thesis) => thesis.holding_id !== holdingId)];
       setTheses(next);
+      persistSnapshot({ theses: next });
       if (E2E_ENABLED) window.sessionStorage.setItem(`quanfora.investment-records.user:${user.id}`, JSON.stringify({ theses: next, decisions }));
       return saved;
     } finally {
       setSaving(false);
     }
-  }, [allHoldings, decisions, theses, user.id]);
+  }, [allHoldings, decisions, persistSnapshot, theses, user.id]);
 
   const recordDecision = useCallback(async (holdingId: string, action: "hold" | "trim", rationale: string, policyException?: string) => {
     setSaving(true);
@@ -341,18 +447,19 @@ export function InvestmentWorkspaceProvider({ children }: { children: React.Reac
       }
       const next = [saved, ...decisions];
       setDecisions(next);
+      persistSnapshot({ decisions: next });
       if (E2E_ENABLED) window.sessionStorage.setItem(`quanfora.investment-records.user:${user.id}`, JSON.stringify({ theses, decisions: next }));
       return saved;
     } finally {
       setSaving(false);
     }
-  }, [allHoldings, decisions, theses, user.id]);
+  }, [allHoldings, decisions, persistSnapshot, theses, user.id]);
 
   const value = useMemo<InvestmentWorkspaceContextValue>(() => ({
     portfolios, allHoldings, selectedHoldings, investmentHoldings, unclassifiedHoldings, events, recurringBuys,
     theses, decisions, watchlistAssets, quotes, currencyRates, policyValidation, preferences, loading, quotesLoading, saving,
-    error, refreshedAt, setPreference, classifyAsInvestment, saveThesis, recordDecision, refresh,
-  }), [portfolios, allHoldings, selectedHoldings, investmentHoldings, unclassifiedHoldings, events, recurringBuys, theses, decisions, watchlistAssets, quotes, currencyRates, policyValidation, preferences, loading, quotesLoading, saving, error, refreshedAt, setPreference, classifyAsInvestment, saveThesis, recordDecision, refresh]);
+    error, refreshedAt, setPreference, classifyAsInvestment, saveThesis, recordDecision, refresh, refreshing,
+  }), [portfolios, allHoldings, selectedHoldings, investmentHoldings, unclassifiedHoldings, events, recurringBuys, theses, decisions, watchlistAssets, quotes, currencyRates, policyValidation, preferences, loading, quotesLoading, saving, error, refreshedAt, setPreference, classifyAsInvestment, saveThesis, recordDecision, refresh, refreshing]);
 
   return <InvestmentWorkspaceContext.Provider value={value}>{children}</InvestmentWorkspaceContext.Provider>;
 }

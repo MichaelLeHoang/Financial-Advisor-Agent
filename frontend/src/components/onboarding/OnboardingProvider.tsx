@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+import { readSessionSnapshot, SESSION_CACHE_MAX_AGE, writeSessionSnapshot } from "@/lib/session-data-cache";
 import { normalizeAppPath } from "@/lib/workspace-routing";
 
 export type WorkspacePreference = "investing" | "trading" | "both";
@@ -31,6 +32,7 @@ type PreferencePatch = Partial<Omit<OnboardingPreferences, "updatedAt">>;
 interface OnboardingContextValue {
   preferences: OnboardingPreferences | null;
   loading: boolean;
+  refreshing: boolean;
   saving: boolean;
   error: string | null;
   savePreferences: (patch: PreferencePatch) => Promise<OnboardingPreferences>;
@@ -52,6 +54,7 @@ interface OnboardingRow {
 
 const OnboardingContext = createContext<OnboardingContextValue | null>(null);
 const STORAGE_PREFIX = "quanfora.onboarding.user:";
+const SNAPSHOT_KEY = "onboarding-preferences";
 const E2E_LOCAL_PERSISTENCE = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_E2E_AUTH === "1";
 
 function defaultPreferences(status: OnboardingStatus): OnboardingPreferences {
@@ -159,6 +162,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const { user, loading: authLoading } = useAuth();
   const [preferences, setPreferences] = useState<OnboardingPreferences | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const generationRef = useRef(0);
@@ -170,22 +174,35 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       setPreferences(null);
       setError(null);
       setLoading(false);
+      setRefreshing(false);
       return;
     }
 
-    setLoading(true);
+    const owner = `user:${user.id}`;
+    const snapshot = readSessionSnapshot<OnboardingPreferences>({
+      owner,
+      key: SNAPSHOT_KEY,
+      maxAgeMs: SESSION_CACHE_MAX_AGE.onboarding,
+    });
+    if (snapshot) setPreferences(snapshot.data);
+    setLoading(!snapshot);
+    setRefreshing(Boolean(snapshot));
     setError(null);
     loadPreferences(user.id)
       .then((next) => {
-        if (generation === generationRef.current) setPreferences(next);
+        if (generation !== generationRef.current) return;
+        setPreferences(next);
+        writeSessionSnapshot({ owner, key: SNAPSHOT_KEY, data: next });
       })
       .catch((loadError: Error) => {
         if (generation !== generationRef.current) return;
         setError(loadError.message);
-        setPreferences(defaultPreferences("skipped"));
+        if (!snapshot) setPreferences(defaultPreferences("skipped"));
       })
       .finally(() => {
-        if (generation === generationRef.current) setLoading(false);
+        if (generation !== generationRef.current) return;
+        setLoading(false);
+        setRefreshing(false);
       });
   }, [authLoading, user.id, user.is_guest]);
 
@@ -201,6 +218,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       };
       const saved = await persistPreferences(user.id, next);
       setPreferences(saved);
+      writeSessionSnapshot({ owner: `user:${user.id}`, key: SNAPSHOT_KEY, data: saved });
       return saved;
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : "Workspace setup could not be saved.";
@@ -226,11 +244,12 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const value = useMemo<OnboardingContextValue>(() => ({
     preferences,
     loading: authLoading || loading,
+    refreshing,
     saving,
     error,
     savePreferences,
     recordEntryEvent,
-  }), [authLoading, error, loading, preferences, recordEntryEvent, savePreferences, saving]);
+  }), [authLoading, error, loading, preferences, recordEntryEvent, refreshing, savePreferences, saving]);
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;
 }
