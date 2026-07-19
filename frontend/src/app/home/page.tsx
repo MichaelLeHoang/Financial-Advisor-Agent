@@ -11,7 +11,7 @@ import { fetchQuotes } from "@/lib/quote-cache";
 
 export default function HomePage() {
   const { portfolio, holdings, summary, events, loading: booksLoading, error: booksError, refreshedAt, refresh } = usePortfolioBooks();
-  const { policy, validation, loading: policyLoading, error: policyError } = useInvestmentPolicy();
+  const { policy, validation, loading: policyLoading, error: policyError, refresh: refreshPolicy } = useInvestmentPolicy();
   const [quotes, setQuotes] = useState<Map<string, MarketQuote>>(new Map());
   const tickerKey = useMemo(() => holdings.map((holding) => holding.symbol.toUpperCase()).sort().join(","), [holdings]);
 
@@ -90,7 +90,7 @@ export default function HomePage() {
           <Link href="/portfolio" className="mt-5 inline-flex h-10 items-center gap-2 rounded-full px-3 text-sm font-semibold text-indigo-primary transition-colors hover:bg-[var(--surface-accent-soft)]">Open portfolio details <ArrowRight className="size-4" /></Link>
         </Panel>
       </div>
-      {(booksError || policyError) && <div role="alert" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-400/25 bg-rose-400/[0.06] px-4 py-3 text-sm text-rose-200"><span className="inline-flex items-center gap-2"><CircleAlert className="size-4 shrink-0" />Some portfolio data is unavailable. Saved values are shown where possible.</span><button type="button" onClick={() => void refresh()} className="inline-flex h-9 items-center gap-2 rounded-full border border-rose-300/25 px-3 font-semibold hover:bg-rose-300/10"><RefreshCw className="size-3.5" /> Retry</button></div>}
+      {(booksError || policyError) && <div role="alert" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-400/25 bg-rose-400/[0.06] px-4 py-3 text-sm text-rose-200"><span className="inline-flex items-center gap-2"><CircleAlert className="size-4 shrink-0" />Some portfolio data is unavailable. Saved values are shown where possible.</span><button type="button" onClick={() => void Promise.all([refresh(), refreshPolicy()])} className="inline-flex h-9 items-center gap-2 rounded-full border border-rose-300/25 px-3 font-semibold hover:bg-rose-300/10"><RefreshCw className="size-3.5" /> Retry</button></div>}
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
         <Panel>
