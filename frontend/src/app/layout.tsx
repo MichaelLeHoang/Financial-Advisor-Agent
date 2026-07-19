@@ -20,6 +20,7 @@ import { InvestmentPolicyProvider } from "@/components/investment-policy/Investm
 import { normalizeAppPath, onboardingHref } from "@/lib/workspace-routing";
 import { resolveAppTheme, SETTINGS_STORAGE_KEY } from "@/lib/app-theme";
 import { isEditableShortcutTarget, keyboardShortcutsEnabled } from "@/lib/keyboard-shortcuts";
+import { WorkspaceLoadingShell } from "@/components/ui/DataLoading";
 
 const SettingsModal = dynamic(() => import("@/components/SettingsModal"), { ssr: false });
 const EditProfileModal = dynamic(() => import("@/components/EditProfileModal"), { ssr: false });
@@ -300,9 +301,7 @@ function MainWorkspace({
       <main className={`flex-1 flex flex-col relative z-10 overflow-hidden ${isSidebarOpen ? "md:ml-72" : "md:ml-16"}`}>
         <div className="flex-1 overflow-y-auto">
           {(loading || onboardingLoading || shouldOnboard) && !isPublicAppPath ? (
-            <div className="flex min-h-[50vh] items-center justify-center text-sm text-white/45" role="status">
-              {shouldOnboard ? "Opening workspace setup..." : "Restoring your workspace..."}
-            </div>
+            <WorkspaceLoadingShell label={shouldOnboard ? "Opening workspace setup" : "Restoring your workspace"} />
           ) : shouldGate ? <PublicAccessGate /> : children}
         </div>
       </main>

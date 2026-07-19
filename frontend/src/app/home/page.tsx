@@ -8,16 +8,17 @@ import { usePortfolioBooks } from "@/components/portfolio/PortfolioBooksProvider
 import { useInvestmentPolicy } from "@/components/investment-policy/InvestmentPolicyProvider";
 import type { Holding, InvestmentPolicyAlert, MarketQuote, PositionBook } from "@/lib/api";
 import { fetchQuotes } from "@/lib/quote-cache";
+import { DelayedSkeleton, RefreshingIndicator } from "@/components/ui/DataLoading";
 
 export default function HomePage() {
-  const { portfolio, holdings, summary, events, loading: booksLoading, error: booksError, refreshedAt, refresh } = usePortfolioBooks();
-  const { policy, validation, loading: policyLoading, error: policyError, refresh: refreshPolicy } = useInvestmentPolicy();
+  const { portfolio, holdings, summary, events, loading: booksLoading, refreshing: booksRefreshing, error: booksError, refreshedAt, refresh } = usePortfolioBooks();
+  const { policy, validation, loading: policyLoading, refreshing: policyRefreshing, error: policyError, refresh: refreshPolicy } = useInvestmentPolicy();
   const [quotes, setQuotes] = useState<Map<string, MarketQuote>>(new Map());
   const tickerKey = useMemo(() => holdings.map((holding) => holding.symbol.toUpperCase()).sort().join(","), [holdings]);
 
   useEffect(() => {
     let active = true;
-    if (booksLoading || booksError || !tickerKey) {
+    if (booksLoading || !tickerKey) {
       setQuotes(new Map());
       return () => { active = false; };
     }
@@ -61,7 +62,7 @@ export default function HomePage() {
       title="Good morning"
       description="One view of your long-term capital, active risk, and the decisions that need attention today."
       actions={<><SecondaryLink href="/ai">Ask AI Desk</SecondaryLink><PrimaryLink href="/portfolio">Review portfolio</PrimaryLink></>}
-      contextBar={<HomeContextBar portfolioName={portfolio?.name} currency={currency} positionCount={holdings.length} quoteCoverage={quoteCoverage} loading={booksLoading} error={Boolean(booksError)} refreshedAt={refreshedAt} />}
+      contextBar={<HomeContextBar portfolioName={portfolio?.name} currency={currency} positionCount={holdings.length} quoteCoverage={quoteCoverage} loading={booksLoading} refreshing={booksRefreshing || policyRefreshing} error={Boolean(booksError)} refreshedAt={refreshedAt} />}
     >
       <div className="grid gap-4 md:grid-cols-4">
         <Metric label="Total portfolio" value={totalValueLabel} detail={totalValueDetail} />
@@ -81,7 +82,7 @@ export default function HomePage() {
           <div className="divide-y divide-[var(--theme-border)]">
             {alerts.slice(0, 4).map((alert) => <Attention key={alert.key} href={alert.href} title={alert.title} detail={alert.detail} tone={alert.tone} />)}
             {!booksLoading && !alerts.length && <div className="py-8 text-center"><p className="text-sm font-semibold">No recorded issues need attention</p><p className="mt-1 text-xs text-[var(--text-muted)]">New classification and policy alerts will appear here.</p></div>}
-            {booksLoading && <p className="py-8 text-center text-sm text-[var(--text-muted)]">Loading portfolio checks…</p>}
+            {booksLoading && <div className="space-y-3 py-5"><DelayedSkeleton className="h-12 w-full rounded-sm" label="Loading portfolio checks" /><DelayedSkeleton className="h-12 w-full rounded-sm" label="Loading portfolio checks" /></div>}
           </div>
         </Panel>
         <Panel>
@@ -158,8 +159,8 @@ function buildNextStep(unresolved: Holding[], alerts: HomeAttention[], holdings:
   return { title: "Add your first holding", detail: "Connect or create a portfolio to replace the empty command center with your own positions.", href: "/portfolio/holdings", action: "Add holding" };
 }
 
-function HomeContextBar({ portfolioName, currency, positionCount, quoteCoverage, loading, error, refreshedAt }: { portfolioName?: string; currency: string; positionCount: number; quoteCoverage: number; loading: boolean; error: boolean; refreshedAt: string | null }) {
-  return <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-[var(--theme-border)] py-3 text-xs text-[var(--text-muted)]"><span className="inline-flex items-center gap-2 font-semibold text-[var(--text-primary)]"><WalletCards className="size-4" /> {portfolioName ?? "No portfolio"}</span><span>{loading ? "Loading positions" : `${positionCount} position${positionCount === 1 ? "" : "s"}`}</span><span>{currency} books</span><span className="ml-auto inline-flex items-center gap-1.5"><Database className="size-3.5" /> {error ? "Portfolio unavailable" : quoteCoverage ? `${quoteCoverage} live quote${quoteCoverage === 1 ? "" : "s"}` : "Recorded position data"}{refreshedAt ? ` · ${formatRelativeTime(refreshedAt)}` : ""}</span></div>;
+function HomeContextBar({ portfolioName, currency, positionCount, quoteCoverage, loading, refreshing, error, refreshedAt }: { portfolioName?: string; currency: string; positionCount: number; quoteCoverage: number; loading: boolean; refreshing: boolean; error: boolean; refreshedAt: string | null }) {
+  return <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-[var(--theme-border)] py-3 text-xs text-[var(--text-muted)]"><span className="inline-flex items-center gap-2 font-semibold text-[var(--text-primary)]"><WalletCards className="size-4" /> {portfolioName ?? "No portfolio"}</span><span>{loading ? "Loading positions" : `${positionCount} position${positionCount === 1 ? "" : "s"}`}</span><span>{currency} books</span><RefreshingIndicator refreshing={refreshing} /><span className="ml-auto inline-flex items-center gap-1.5"><Database className="size-3.5" /> {error ? "Portfolio unavailable" : quoteCoverage ? `${quoteCoverage} live quote${quoteCoverage === 1 ? "" : "s"}` : "Recorded position data"}{refreshedAt ? ` · ${formatRelativeTime(refreshedAt)}` : ""}</span></div>;
 }
 
 function formatSignedMoney(value: number, currency: string) {

@@ -2302,3 +2302,40 @@ body[data-theme="White"] .news-page [class*="text-rose-"] {
   background: rgba(255, 255, 255, 0.72);
   background-clip: padding-box;
 }
+
+/* Data state motion: short, one-time feedback for first availability only. */
+@keyframes data-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes data-skeleton-pulse {
+  0%, 100% { opacity: 0.48; }
+  50% { opacity: 0.78; }
+}
+
+.data-reveal {
+  animation: data-reveal 160ms ease-out both;
+}
+
+.data-skeleton {
+  background: var(--surface-card-hover, rgba(255, 255, 255, 0.07));
+  animation: data-skeleton-pulse 1.25s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .data-reveal {
+    animation: none;
+  }
+
+  .data-skeleton {
+    animation: none;
+    opacity: 0.65;
+  }
+}

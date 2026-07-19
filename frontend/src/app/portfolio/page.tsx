@@ -52,6 +52,7 @@ import {
   ChartTooltip,
 } from "@/components/ui/chart";
 import { showToast } from "@/components/ui/toast";
+import { DelayedSkeleton } from "@/components/ui/DataLoading";
 
 const PALETTE = [
   "#6366f1",
@@ -360,7 +361,8 @@ function formatRecurringSchedule(buy: RecurringBuy) {
 export default function PortfolioPage() {
   const pathname = usePathname();
   const { loading: authLoading, token } = useAuth();
-  const { refresh: refreshSharedBooks } = usePortfolioBooks();
+  const sharedBooks = usePortfolioBooks();
+  const { refresh: refreshSharedBooks } = sharedBooks;
   const { book: centralBook } = usePortfolioBookView();
   const fixedBook: PortfolioBookView | null = pathname === "/invest" || pathname.startsWith("/invest/")
     ? "investment"
@@ -508,7 +510,7 @@ export default function PortfolioPage() {
   useEffect(() => {
     if (!canLoadPortfolioData) return;
     let cancelled = false;
-    setPortfoliosLoading(true);
+    setPortfoliosLoading(!sharedBooks.portfolio);
     setError(null);
     api.portfolios()
       .then((list) => {
@@ -599,15 +601,37 @@ export default function PortfolioPage() {
   }, []);
 
   useEffect(() => {
+    if (sharedBooks.loading || !sharedBooks.portfolio) return;
+    setPortfolios((current) => current.length ? current : [sharedBooks.portfolio!]);
+    setActiveId((current) => current ?? sharedBooks.portfolio!.id);
+    setPortfoliosLoading(false);
+    if (activeId && activeId !== sharedBooks.portfolio.id) return;
+    setHoldings((current) => current.length ? current : sharedBooks.holdings.map((holding) => ({
+      ...holding,
+      ...emptyMetrics(sharedBooks.portfolio!.base_currency),
+    })));
+    setHoldingsLoading(false);
+    if (sharedBooks.holdings.length) fetchPricesForHoldings(sharedBooks.holdings, sharedBooks.portfolio.base_currency);
+  }, [activeId, fetchPricesForHoldings, sharedBooks.holdings, sharedBooks.loading, sharedBooks.portfolio]);
+
+  useEffect(() => {
     if (!activeId) return;
-    setHoldings([]);
+    if (sharedBooks.portfolio?.id !== activeId) setHoldings([]);
     setRecurringBuys([]);
     setResult(null);
-  }, [activeId]);
+  }, [activeId, sharedBooks.portfolio?.id]);
 
   const loadHoldings = useCallback(async () => {
     if (!activeId) return;
-    setHoldingsLoading(true);
+    const sharedForActive = sharedBooks.portfolio?.id === activeId;
+    if (sharedForActive && sharedBooks.holdings.length) {
+      const rows: HoldingRow[] = sharedBooks.holdings.map((holding) => ({ ...holding, ...emptyMetrics(activeBaseCurrency) }));
+      setHoldings(rows);
+      setHoldingsLoading(false);
+      fetchPricesForHoldings(sharedBooks.holdings, activeBaseCurrency);
+    } else {
+      setHoldingsLoading(true);
+    }
     try {
       const list = await api.portfolioHoldings(activeId);
       const rows: HoldingRow[] = list.map((h) => ({
@@ -619,7 +643,7 @@ export default function PortfolioPage() {
     } finally {
       setHoldingsLoading(false);
     }
-  }, [activeId, activeBaseCurrency, fetchPricesForHoldings]);
+  }, [activeId, activeBaseCurrency, fetchPricesForHoldings, sharedBooks.holdings, sharedBooks.portfolio?.id]);
 
   const loadRecurringBuys = useCallback(async () => {
     if (!activeId) return;
@@ -1342,9 +1366,9 @@ export default function PortfolioPage() {
             <div id="portfolio-allocation" className="scroll-mt-16 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.85fr)]">
               <div className="min-w-0 rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-3 shadow-[var(--shadow-card)]">
                 {holdingsLoading || portfoliosLoading ? (
-                  <div className="flex min-h-[270px] items-center justify-center gap-2 text-sm text-white/45">
-                    <Loader2 className="size-4 animate-spin" />
-                    Loading portfolio…
+                  <div className="min-h-[270px] space-y-4 p-6" aria-label="Loading portfolio">
+                    <DelayedSkeleton className="h-5 w-36 rounded-sm" label="Loading portfolio" />
+                    <DelayedSkeleton className="mx-auto mt-6 size-44 rounded-full" label="Loading portfolio" />
                   </div>
                 ) : allocationData.length > 0 ? (
                   <div className="relative mx-auto flex min-h-[270px] max-w-[540px] items-center justify-center">
@@ -1514,9 +1538,9 @@ export default function PortfolioPage() {
         )}
 
         {portfoliosLoading ? (
-          <section className="flex min-h-48 items-center justify-center gap-2 rounded-2xl border border-white/12 bg-[var(--surface-card-strong)] p-10 text-sm text-white/45 shadow-[var(--shadow-card)]">
-            <Loader2 className="size-4 animate-spin" />
-            Loading portfolios…
+          <section className="min-h-48 space-y-4 rounded-2xl border border-white/12 bg-[var(--surface-card-strong)] p-7 shadow-[var(--shadow-card)]" aria-label="Loading portfolios">
+            <DelayedSkeleton className="h-7 w-52 rounded-sm" label="Loading portfolios" />
+            <DelayedSkeleton className="h-20 w-full rounded-sm" label="Loading portfolios" />
           </section>
         ) : activePortfolio ? (
           <>
@@ -1750,9 +1774,9 @@ export default function PortfolioPage() {
 
               <div className="mt-4 space-y-3">
                 {recurringBuysLoading ? (
-                  <div className="flex min-h-28 items-center justify-center gap-2 rounded-2xl border border-white/[0.07] bg-black/14 text-sm text-white/42">
-                    <Loader2 className="size-4 animate-spin" />
-                    Loading recurring buys…
+                  <div className="min-h-28 space-y-3 rounded-2xl border border-white/[0.07] bg-black/14 p-4" aria-label="Loading recurring buys">
+                    <DelayedSkeleton className="h-5 w-40 rounded-sm" label="Loading recurring buys" />
+                    <DelayedSkeleton className="h-10 w-full rounded-sm" label="Loading recurring buys" />
                   </div>
                 ) : recurringBuys.length > 0 ? (
                   recurringBuys.map((buy) => {
@@ -2068,9 +2092,8 @@ export default function PortfolioPage() {
 
                 <div className="overflow-hidden rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] shadow-[var(--shadow-card)]">
                   {holdingsLoading ? (
-                    <div className="flex min-h-80 items-center justify-center gap-2 text-sm text-white/45">
-                      <Loader2 className="size-4 animate-spin" />
-                      Loading holdings…
+                    <div className="min-h-80 space-y-3 p-5" aria-label="Loading holdings">
+                      {Array.from({ length: 5 }, (_, index) => <DelayedSkeleton key={index} className="h-12 w-full rounded-sm" label="Loading holdings" />)}
                     </div>
                   ) : sortedHoldings.length > 0 ? (
                     <HorizontalScroll className="w-full">

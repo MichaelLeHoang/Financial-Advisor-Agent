@@ -57,6 +57,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { DelayedSkeleton, RefreshingIndicator } from "@/components/ui/DataLoading";
+import { readSessionSnapshot, SESSION_CACHE_MAX_AGE, writeSessionSnapshot } from "@/lib/session-data-cache";
 
 /* ------------------------------------------------------------------ */
 /* Types & helpers                                                     */
@@ -168,6 +171,7 @@ const MARKET_SECTIONS: { title: MarketInstrument["category"]; instruments: Marke
 ];
 
 const SUMMARY_CACHE_KEY = "financial-advisor.watchlist-summary";
+const WATCHLISTS_SNAPSHOT_KEY = "watchlists";
 const SUMMARY_TTL_MS = 6 * 60 * 60 * 1000;
 const WIKIPEDIA_PROFILE_CACHE_KEY = "financial-advisor.wikipedia-profile";
 const WIKIPEDIA_PROFILE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -1660,11 +1664,13 @@ function WatchlistSection({
 /* ------------------------------------------------------------------ */
 
 export default function WatchlistPage() {
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
   const [listsLoading, setListsLoading] = useState(true);
+  const [listsRefreshing, setListsRefreshing] = useState(false);
   const [newName, setNewName] = useState("");
   const [showNewForm, setShowNewForm] = useState(false);
   const [creatingList, setCreatingList] = useState(false);
@@ -1741,11 +1747,28 @@ export default function WatchlistPage() {
   );
 
   useEffect(() => {
+    if (authLoading) return;
+    const owner = user.is_guest ? "guest" : `user:${user.id}`;
+    const snapshot = readSessionSnapshot<Watchlist[]>({ owner, key: WATCHLISTS_SNAPSHOT_KEY, maxAgeMs: SESSION_CACHE_MAX_AGE.account });
+    if (snapshot) {
+      setWatchlists(snapshot.data);
+      setListsLoading(false);
+      setListsRefreshing(true);
+    } else {
+      setWatchlists([]);
+      setListsLoading(true);
+    }
     api.watchlists()
-      .then(setWatchlists)
+      .then((next) => {
+        setWatchlists(next);
+        writeSessionSnapshot({ owner, key: WATCHLISTS_SNAPSHOT_KEY, data: next });
+      })
       .catch(() => {})
-      .finally(() => setListsLoading(false));
-  }, []);
+      .finally(() => {
+        setListsLoading(false);
+        setListsRefreshing(false);
+      });
+  }, [authLoading, user.id, user.is_guest]);
 
   const createWatchlist = async () => {
     const name = newName.trim();
@@ -1754,7 +1777,11 @@ export default function WatchlistPage() {
     setCreateError(null);
     try {
       const w = await api.createWatchlist(name);
-      setWatchlists((prev) => [...prev, w]);
+      setWatchlists((prev) => {
+        const next = [...prev, w];
+        writeSessionSnapshot({ owner: user.is_guest ? "guest" : `user:${user.id}`, key: WATCHLISTS_SNAPSHOT_KEY, data: next });
+        return next;
+      });
       setNewName("");
       setShowNewForm(false);
     } catch (e: any) {
@@ -1768,7 +1795,11 @@ export default function WatchlistPage() {
   const deleteWatchlist = async (watchlistId: string) => {
     try {
       await api.deleteWatchlist(watchlistId);
-      setWatchlists((prev) => prev.filter((w) => w.id !== watchlistId));
+      setWatchlists((prev) => {
+        const next = prev.filter((w) => w.id !== watchlistId);
+        writeSessionSnapshot({ owner: user.is_guest ? "guest" : `user:${user.id}`, key: WATCHLISTS_SNAPSHOT_KEY, data: next });
+        return next;
+      });
     } catch {
       /* deletion failure leaves the list in place */
     }
@@ -1791,6 +1822,7 @@ export default function WatchlistPage() {
           <aside className="w-full shrink-0 lg:w-80 lg:overflow-y-auto lg:pr-1.5">
             <div className="flex items-center justify-between pb-3">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-white/45">Your lists</h2>
+              <RefreshingIndicator refreshing={listsRefreshing} label="Updating lists" />
               {!showNewForm && (
                 <Button
                   onClick={() => setShowNewForm(true)}
@@ -1845,7 +1877,7 @@ export default function WatchlistPage() {
             {listsLoading ? (
               <div className="space-y-3">
                 {Array.from({ length: 2 }).map((_, i) => (
-                  <div key={i} className="h-32 animate-pulse rounded-2xl bg-white/[0.03]" />
+                  <DelayedSkeleton key={i} className="h-32 rounded-2xl" label="Loading watchlists" />
                 ))}
               </div>
             ) : watchlists.length === 0 ? (
