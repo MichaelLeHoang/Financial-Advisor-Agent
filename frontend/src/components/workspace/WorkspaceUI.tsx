@@ -9,6 +9,7 @@ export function WorkspacePage({
   title,
   description,
   actions,
+  contextBar,
   children,
   dense = false,
 }: {
@@ -16,6 +17,7 @@ export function WorkspacePage({
   title: string;
   description: string;
   actions?: React.ReactNode;
+  contextBar?: React.ReactNode | false;
   children: React.ReactNode;
   dense?: boolean;
 }) {
@@ -30,7 +32,7 @@ export function WorkspacePage({
           </div>
           {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
         </div>
-        <ContextBar />
+        {contextBar === undefined ? <ContextBar /> : contextBar}
         <div className={dense ? "mt-4" : "mt-7"}>{children}</div>
       </div>
     </div>
@@ -63,11 +65,11 @@ export function PanelHeading({ title, detail, action }: { title: string; detail?
   );
 }
 
-export function Metric({ label, value, detail, tone = "neutral" }: { label: string; value: string; detail?: string; tone?: "neutral" | "positive" | "warning" }) {
+export function Metric({ label, value, detail, tone = "neutral" }: { label: string; value: string; detail?: string; tone?: "neutral" | "positive" | "negative" | "warning" }) {
   return (
     <div className="min-w-0 border-l-2 border-[var(--theme-border-strong)] pl-4">
       <p className="text-xs text-[var(--text-muted)]">{label}</p>
-      <p className={cn("mt-1 text-xl font-semibold tabular-nums", tone === "positive" && "text-emerald-400", tone === "warning" && "text-amber-300")}>{value}</p>
+      <p className={cn("mt-1 text-xl font-semibold tabular-nums", tone === "positive" && "text-emerald-400", tone === "negative" && "text-rose-400", tone === "warning" && "text-amber-300")}>{value}</p>
       {detail && <p className="mt-1 truncate text-xs text-[var(--text-subtle)]">{detail}</p>}
     </div>
   );
