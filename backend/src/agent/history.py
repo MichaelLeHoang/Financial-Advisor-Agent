@@ -262,6 +262,46 @@ def append_message(
     conn.close()
 
 
+def truncate_history(
+    session_id: str,
+    keep_count: int,
+    user_id: str = "00000000-0000-0000-0000-000000000001",
+) -> int:
+    """Remove messages after ``keep_count`` while preserving the owned session."""
+    if _is_guest_user(user_id) or keep_count < 0:
+        return 0
+    conn = _get_connection()
+    rows = conn.execute(
+        "SELECT id FROM messages WHERE user_id=? AND session=? ORDER BY id",
+        (user_id, session_id),
+    ).fetchall()
+    if not rows:
+        conn.close()
+        return 0
+
+    remove_ids = [row[0] for row in rows[keep_count:]]
+    if remove_ids:
+        placeholders = ",".join("?" for _ in remove_ids)
+        conn.execute(
+            f"DELETE FROM messages WHERE user_id=? AND session=? AND id IN ({placeholders})",
+            (user_id, session_id, *remove_ids),
+        )
+        now = datetime.now(UTC).isoformat()
+        if keep_count == 0:
+            conn.execute(
+                "UPDATE sessions SET title='New chat', updated_at=? WHERE user_id=? AND session=?",
+                (now, user_id, session_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE sessions SET updated_at=? WHERE user_id=? AND session=?",
+                (now, user_id, session_id),
+            )
+        conn.commit()
+    conn.close()
+    return len(remove_ids)
+
+
 def clear_history(session_id: str, user_id: str = "00000000-0000-0000-0000-000000000001") -> bool:
     """Delete all messages for a session and remove the session record."""
     if _is_guest_user(user_id):

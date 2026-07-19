@@ -6,6 +6,7 @@ Provides the FastAPI application and thin transport adapters for Quanfora backen
 ## Responsibilities
 - Register routers, middleware, authentication dependencies, and health/status endpoints.
 - Expose Sabi-routed agent chat, selected-capability metadata, structured overviews, queued jobs, bounded RAG queries, market quote/search, prediction, portfolio, watchlist, and service endpoints.
+- Expose owned chat-history truncation for edit-and-regenerate and retry workflows.
 - Delegate domain behavior, including stateless chat-response caching, to dedicated modules and normalize HTTP errors/timeouts.
 
 ## Key Files
@@ -21,4 +22,5 @@ Route handlers should validate and translate requests only. Business logic belon
 Use FastAPI `TestClient` with mocked dependencies for route contracts, authorization, provider timeouts, overview/workspace payloads, status rollups, and error responses.
 
 ## Latest Change
-- Made Sabi the default mode on the existing agent chat and queued-job contracts while preserving manual and legacy modes.
+- Registered the owner-scoped paper-trading account and deterministic order routes.
+- Added the authenticated message-truncation route used by in-place chat regeneration.

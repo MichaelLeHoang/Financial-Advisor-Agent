@@ -11,6 +11,7 @@ Implements the Quanfora conversational advisor, Sabi capability routing, determi
 - Resolve ticker-only follow-up language such as "the stock" or "buy more" from recent chat context before consensus analysis.
 - Reuse cached first-turn chat responses when repeated requests do not depend on conversation history.
 - Persist signed-in conversation history, including structured response metadata, and execute queued LLM jobs.
+- Truncate a selected conversation turn and all later messages so edited prompts and retries regenerate against matching persisted context.
 
 ## Key Files
 - `agent.py`: primary chat router and ReAct agent.
@@ -29,4 +30,4 @@ Reuse `data.market_data_service`, `llm.gateway`, `risk`, `quant`, and `saas` rat
 Cover routing, grounding, overview metadata, response structure, follow-up context, response caching, consensus, queue state, history ownership, and tool failure behavior with mocked providers.
 
 ## Latest Change
-- Added Sabi as the default chat planning mode, selecting existing capabilities without duplicating their domain logic.
+- Added owned conversation-history truncation for in-place prompt editing and response regeneration.

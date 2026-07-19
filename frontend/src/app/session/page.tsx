@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
-import type { ChangeEvent, ComponentType } from "react";
+import { useRef, useEffect, useId, useState } from "react";
+import type { ChangeEvent, ComponentType, ReactNode } from "react";
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Brain, Check, ChevronDown, ClipboardList, FileText, Image, Loader2, Paperclip, PieChart, Send, SlidersHorizontal, TableProperties, TrendingUp } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ArrowRight, Brain, Check, ChevronDown, Clipboard, ClipboardList, FileText, Image, Loader2, Paperclip, Pencil, PieChart, RotateCcw, Send, SlidersHorizontal, ThumbsDown, ThumbsUp, TableProperties, TrendingUp } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
 import type { AiDeskMode, ChatJobProgress, ChatJobStatusResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, Overview, ResearchDepth, ResearchReportType, SabiCapability } from "@/lib/api";
 import { notifyCompletion, requestCompletionNotification } from "@/lib/completion-notifications";
@@ -34,6 +34,49 @@ interface Message {
   consensusOpinions?: ConsensusOpinion[];
   overview?: Overview | null;
   selectedCapability?: SabiCapability;
+}
+
+type MessageFeedback = "up" | "down" | null;
+
+function MessageActionButton({
+  label,
+  children,
+  onClick,
+  disabled = false,
+  active = false,
+}: {
+  label: string;
+  children: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+}) {
+  const tooltipId = useId();
+
+  return (
+    <span className="group/message-action relative inline-flex">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onClick}
+        aria-label={label}
+        aria-describedby={tooltipId}
+        className={cn(
+          "grid size-8 place-items-center rounded-lg transition-colors duration-150 hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none",
+          active && "bg-white/[0.12] text-white"
+        )}
+      >
+        {children}
+      </button>
+      <span
+        id={tooltipId}
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 top-full z-40 mt-1.5 -translate-x-1/2 -translate-y-1 whitespace-nowrap rounded-lg border border-white/[0.08] bg-[#242529] px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-[0_8px_24px_rgba(0,0,0,0.36)] transition-[opacity,transform] duration-150 group-hover/message-action:translate-y-0 group-hover/message-action:opacity-100 group-focus-within/message-action:translate-y-0 group-focus-within/message-action:opacity-100 motion-reduce:transition-none"
+      >
+        {label}
+      </span>
+    </span>
+  );
 }
 
 const GREETING: Message = {
@@ -420,7 +463,9 @@ function bestResearchModeForPlan(plan: keyof typeof PLAN_RANK, requested: Resear
 export default function ChatPage() {
   const { user, loading: authLoading } = useAuth();
   const { version } = useModel();
+  const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
+  const pathname = usePathname();
   const params = useParams<{ sessionId?: string | string[] }>();
   const searchParams = useSearchParams();
   const routeSessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
@@ -429,6 +474,11 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>(() =>
     activeSessionId === "default" ? [GREETING] : []
   );
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Record<string, MessageFeedback>>({});
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState("");
+  const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
@@ -454,6 +504,7 @@ export default function ChatPage() {
   const progressDrainPromiseRef = useRef<Promise<void> | null>(null);
   const notifyWhenCompleteRef = useRef(false);
   const activeRequestControllerRef = useRef<AbortController | null>(null);
+  const pendingSessionIdRef = useRef<string | null>(null);
   const firstName = getFirstName(user?.display_name || user?.email || "");
   const [welcomeGreeting] = useState(() => (Math.random() > 0.5 ? "Hello" : "Hi"));
 
@@ -575,8 +626,16 @@ export default function ChatPage() {
   }, [input]);
 
   useEffect(() => {
-    if (authLoading || isStreamingRef.current) return;
+    if (authLoading) return;
     let cancelled = false;
+
+    // The first prompt creates the real session id before the request completes.
+    // Keep the optimistic messages instead of replacing them with a history load.
+    if (pendingSessionIdRef.current === activeSessionId) {
+      pendingSessionIdRef.current = null;
+      setIsHistoryLoading(false);
+      return;
+    }
 
     async function loadSession() {
       setIsHistoryLoading(true);
@@ -699,14 +758,14 @@ export default function ChatPage() {
     return true;
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (prompt?: string) => {
+    const text = (prompt ?? input).trim();
+    if (!text || isLoading) return;
     const requestController = new AbortController();
     activeRequestControllerRef.current?.abort();
     activeRequestControllerRef.current = requestController;
     const { signal } = requestController;
-    const text = input.trim();
-    setInput("");
+    if (!prompt) setInput("");
 
     // Guard the session-load effect before router.replace fires
     isStreamingRef.current = true;
@@ -716,7 +775,9 @@ export default function ChatPage() {
       targetSessionId = typeof crypto !== "undefined" && "randomUUID" in crypto 
         ? crypto.randomUUID() 
         : `session-${Date.now()}`;
-      router.replace(`/session/${encodeURIComponent(targetSessionId)}`);
+      pendingSessionIdRef.current = targetSessionId;
+      const chatBasePath = pathname.startsWith("/ai") ? "/ai" : "/session";
+      window.history.replaceState(null, "", `${chatBasePath}/${encodeURIComponent(targetSessionId)}`);
     }
 
     const getUniqueId = () => typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `msg-${Date.now()}-${Math.random()}`;
@@ -1034,6 +1095,55 @@ export default function ChatPage() {
   const hasConversation = messages.some((message) => message.id !== "welcome");
   const isStarterState = !hasConversation && !isHistoryLoading;
 
+  const copyResponse = async (message: Message) => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopiedMessageId(message.id);
+      window.setTimeout(() => setCopiedMessageId((current) => current === message.id ? null : current), 1500);
+    } catch {
+      showToast({ title: "Copy failed", message: "Your browser could not access the clipboard.", variant: "error" });
+    }
+  };
+
+  const editMessage = (message: Message) => {
+    setEditingMessageId(message.id);
+    setEditingDraft(message.content);
+  };
+
+  const regenerateTurn = async (userMessage: Message, prompt: string, responseMessageId?: string) => {
+    const nextPrompt = prompt.trim();
+    const messageIndex = messages.findIndex((item) => item.id === userMessage.id);
+    if (!nextPrompt || messageIndex < 0 || isLoading || regeneratingMessageId) return;
+
+    const keepMessages = messages.slice(0, messageIndex);
+    const keepCount = keepMessages.filter((item) => item.id !== "welcome").length;
+    setRegeneratingMessageId(responseMessageId ?? userMessage.id);
+
+    try {
+      if (!user.is_guest && activeSessionId !== "default") {
+        await api.truncateChatSessionMessages(activeSessionId, keepCount);
+      }
+      setMessages(keepMessages);
+      setEditingMessageId(null);
+      setEditingDraft("");
+      await handleSend(nextPrompt);
+    } catch (error) {
+      showToast({
+        title: "Unable to regenerate",
+        message: error instanceof Error ? error.message : "The conversation could not be updated.",
+        variant: "error",
+      });
+    } finally {
+      setRegeneratingMessageId(null);
+    }
+  };
+
+  const retryMessage = (message: Message) => {
+    const messageIndex = messages.findIndex((item) => item.id === message.id);
+    const prompt = messageIndex > 0 ? messages[messageIndex - 1] : null;
+    if (prompt?.role === "user") void regenerateTurn(prompt, prompt.content, message.id);
+  };
+
   const renderComposer = (placement: "center" | "dock") => {
     const composerExpanded = Boolean(input);
     const showStarterSuggestions = placement === "center" && isStarterState && isActive && !input && !uploadMenuOpen;
@@ -1070,10 +1180,9 @@ export default function ChatPage() {
               setIsActive(true);
               textareaRef.current?.focus();
             }}
-            className="relative mx-auto w-full overflow-visible border border-white/[0.06] bg-white/[0.045] text-white transition-colors cursor-text"
+            className="relative mx-auto w-full overflow-visible border border-transparent bg-white/[0.045] text-white cursor-text"
             animate={{
               borderRadius: composerExpanded ? 28 : 999,
-              borderColor: isActive || input ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)",
               backgroundColor: isActive || input ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.04)",
               boxShadow: isActive || input ? "0 14px 42px rgba(0,0,0,0.24)" : "var(--shadow-accent-composer)",
               minHeight: composerExpanded ? 64 : 52,
@@ -1131,7 +1240,7 @@ export default function ChatPage() {
                 />
                 <ModelSelector placement={placement === "dock" ? "top" : "bottom"} compact />
                 <Button
-                  onClick={handleSend}
+                  onClick={() => void handleSend()}
                   disabled={isLoading || !input.trim()}
                   size="icon"
                   className="on-accent theme-accent-surface h-10 w-10 shrink-0 rounded-full disabled:opacity-45"
@@ -1279,56 +1388,122 @@ export default function ChatPage() {
                     ) : (
                       <div
                         className={cn(
-                          "min-w-0 max-w-[92%] break-words rounded-2xl px-4 py-3 text-[15px] leading-relaxed sm:max-w-[75%] sm:px-5 sm:py-4",
-                          msg.role === "user"
-                            ? "on-accent theme-accent-surface whitespace-pre-wrap"
-                            : "glass text-white/90"
+                          "min-w-0 max-w-[92%] break-words text-[15px] leading-relaxed sm:max-w-[75%]",
+                          msg.role === "user" ? "whitespace-pre-wrap" : "text-white/90",
+                          editingMessageId === msg.id && "w-full"
                         )}
                       >
                         {msg.role === "assistant" ? (
                           <div className="space-y-2">
-                            {msg.selectedCapability && (
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-subtle)]">
-                                Sabi used {sabiCapabilityLabel(msg.selectedCapability)}
-                              </p>
-                            )}
-                            {msg.researchTicker ? (
-                              <div className="space-y-3">
-                                <ResearchMessageTabs content={msg.content} reports={msg.researchReports} overview={msg.overview} />
-                                <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
-                                  <p className="text-sm font-semibold text-white">
-                                    {msg.researchRunId ? "Quanfora 2.1 Agent Reports" : "Generate a full Quanfora 2.1 Research Report?"}
+                            <div className="glass rounded-2xl px-4 py-3 sm:px-5 sm:py-4">
+                              <div className="space-y-2">
+                                {msg.selectedCapability && (
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-subtle)]">
+                                    Sabi used {sabiCapabilityLabel(msg.selectedCapability)}
                                   </p>
-                                  <p className="mt-1 text-xs leading-5 text-white/55">
-                                    {msg.researchRunId
-                                      ? `Open the full workspace to review each analyst report, tool event, and the shared data snapshot for ${msg.researchTicker}.`
-                                      : `Run market, news, sentiment, fundamentals, trading, and risk-management agents for ${msg.researchTicker}.`}
-                                  </p>
-                                  <div className="mt-3 flex flex-wrap gap-2">
-                                    <Link
-                                      href={msg.researchRunId ? `/research/${msg.researchRunId}?from=ai_advisor` : `/research?ticker=${encodeURIComponent(msg.researchTicker)}&source=ai_advisor&report_type=investment`}
-                                      className="inline-flex h-9 items-center rounded-lg bg-indigo-primary px-3 text-xs font-semibold text-white hover:bg-indigo-primary/90"
-                                    >
-                                      {msg.researchRunId ? "View full agent reports" : "Generate Full Report"}
-                                    </Link>
-                                    {!msg.researchRunId && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setInput(`Give me a quick answer on ${msg.researchTicker}.`)}
-                                        className="inline-flex h-9 items-center rounded-lg border border-white/[0.10] px-3 text-xs font-semibold text-white/60 hover:text-white"
-                                      >
-                                        Quick Answer
-                                      </button>
-                                    )}
+                                )}
+                                {msg.researchTicker ? (
+                                  <div className="space-y-3">
+                                    <ResearchMessageTabs content={msg.content} reports={msg.researchReports} overview={msg.overview} />
+                                    <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
+                                      <p className="text-sm font-semibold text-white">
+                                        {msg.researchRunId ? "Quanfora 2.1 Agent Reports" : "Generate a full Quanfora 2.1 Research Report?"}
+                                      </p>
+                                      <p className="mt-1 text-xs leading-5 text-white/55">
+                                        {msg.researchRunId
+                                          ? `Open the full workspace to review each analyst report, tool event, and the shared data snapshot for ${msg.researchTicker}.`
+                                          : `Run market, news, sentiment, fundamentals, trading, and risk-management agents for ${msg.researchTicker}.`}
+                                      </p>
+                                      <div className="mt-3 flex flex-wrap gap-2">
+                                        <Link
+                                          href={msg.researchRunId ? `/research/${msg.researchRunId}?from=ai_advisor` : `/research?ticker=${encodeURIComponent(msg.researchTicker)}&source=ai_advisor&report_type=investment`}
+                                          className="inline-flex h-9 items-center rounded-lg bg-indigo-primary px-3 text-xs font-semibold text-white hover:bg-indigo-primary/90"
+                                        >
+                                          {msg.researchRunId ? "View full agent reports" : "Generate Full Report"}
+                                        </Link>
+                                        {!msg.researchRunId && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setInput(`Give me a quick answer on ${msg.researchTicker}.`)}
+                                            className="inline-flex h-9 items-center rounded-lg border border-white/[0.10] px-3 text-xs font-semibold text-white/60 hover:text-white"
+                                          >
+                                            Quick Answer
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
+                                ) : (
+                                  <AssistantMessageContent content={msg.content} consensusOpinions={msg.consensusOpinions} overview={msg.overview} />
+                                )}
                               </div>
-                            ) : (
-                              <AssistantMessageContent content={msg.content} consensusOpinions={msg.consensusOpinions} overview={msg.overview} />
+                            </div>
+                            {msg.content && !isLoading && (
+                              <div className="flex items-center gap-1 px-1 text-white/45" aria-label="Response actions">
+                                <MessageActionButton label={copiedMessageId === msg.id ? "Copied" : "Copy response"} onClick={() => copyResponse(msg)}>
+                                  <AnimatePresence mode="wait" initial={false}>
+                                    <motion.span key={copiedMessageId === msg.id ? "copied" : "copy"} initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.72, rotate: -12 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.72, rotate: 12 }} transition={{ duration: prefersReducedMotion ? 0 : 0.14 }}>
+                                      {copiedMessageId === msg.id ? <Check className="size-4 text-emerald-300" /> : <Clipboard className="size-4" />}
+                                    </motion.span>
+                                  </AnimatePresence>
+                                </MessageActionButton>
+                                <MessageActionButton label="Good response" active={feedback[msg.id] === "up"} onClick={() => setFeedback((current) => ({ ...current, [msg.id]: current[msg.id] === "up" ? null : "up" }))}>
+                                  <ThumbsUp className="size-4" />
+                                </MessageActionButton>
+                                <MessageActionButton label="Bad response" active={feedback[msg.id] === "down"} onClick={() => setFeedback((current) => ({ ...current, [msg.id]: current[msg.id] === "down" ? null : "down" }))}>
+                                  <ThumbsDown className="size-4" />
+                                </MessageActionButton>
+                                <MessageActionButton label="Try again" disabled={Boolean(regeneratingMessageId)} onClick={() => retryMessage(msg)}>
+                                  <RotateCcw className={cn("size-4", regeneratingMessageId === msg.id && "animate-spin motion-reduce:animate-none")} />
+                                </MessageActionButton>
+                              </div>
                             )}
                           </div>
                         ) : (
-                          msg.content
+                          <div className="space-y-1.5">
+                            <div className="on-accent theme-accent-surface rounded-2xl px-4 py-3 sm:px-5 sm:py-4">
+                              {editingMessageId === msg.id ? (
+                                <div className="space-y-4">
+                                  <textarea
+                                    autoFocus
+                                    value={editingDraft}
+                                    onChange={(event) => setEditingDraft(event.target.value)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Escape") {
+                                        setEditingMessageId(null);
+                                        setEditingDraft("");
+                                      }
+                                      if (event.key === "Enter" && !event.shiftKey) {
+                                        event.preventDefault();
+                                        void regenerateTurn(msg, editingDraft);
+                                      }
+                                    }}
+                                    aria-label="Edit message text"
+                                    rows={Math.min(8, Math.max(2, editingDraft.split("\n").length))}
+                                    className="block min-h-12 max-h-64 w-full resize-y overflow-y-auto border-0 bg-transparent p-0 text-[15px] leading-relaxed text-white outline-none placeholder:text-white/45 focus:ring-0"
+                                  />
+                                  <div className="flex justify-end gap-2">
+                                    <Button type="button" variant="ghost" size="sm" onClick={() => { setEditingMessageId(null); setEditingDraft(""); }} className="rounded-full text-white/75 hover:bg-white/10 hover:text-white">Cancel</Button>
+                                    <Button type="button" size="sm" disabled={!editingDraft.trim() || Boolean(regeneratingMessageId)} onClick={() => void regenerateTurn(msg, editingDraft)} className="rounded-full bg-white text-black hover:bg-white/90">Send</Button>
+                                  </div>
+                                </div>
+                              ) : msg.content}
+                            </div>
+                            {editingMessageId !== msg.id && !isLoading && (
+                              <div className="flex justify-end gap-1 text-white/45" aria-label="Message actions">
+                                <MessageActionButton label={copiedMessageId === msg.id ? "Copied" : "Copy message"} onClick={() => copyResponse(msg)}>
+                                  <AnimatePresence mode="wait" initial={false}>
+                                    <motion.span key={copiedMessageId === msg.id ? "copied" : "copy"} initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.72, rotate: -12 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.72, rotate: 12 }} transition={{ duration: prefersReducedMotion ? 0 : 0.14 }}>
+                                      {copiedMessageId === msg.id ? <Check className="size-4 text-emerald-300" /> : <Clipboard className="size-4" />}
+                                    </motion.span>
+                                  </AnimatePresence>
+                                </MessageActionButton>
+                                <MessageActionButton label="Edit message" onClick={() => editMessage(msg)}>
+                                  <Pencil className="size-4" />
+                                </MessageActionButton>
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
@@ -1340,7 +1515,7 @@ export default function ChatPage() {
         </AnimatePresence>
       </div>
       {!isStarterState && (
-        <div className="sticky bottom-0 z-20 shrink-0 border-t border-white/[0.04] bg-[#050608]/95 pt-2 shadow-[0_-24px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+        <div className="sticky bottom-0 z-20 shrink-0 border-t border-transparent bg-[#050608]/95 pt-2 shadow-[0_-24px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl">
           {renderComposer("dock")}
         </div>
       )}

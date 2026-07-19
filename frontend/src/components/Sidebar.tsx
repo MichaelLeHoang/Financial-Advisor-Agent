@@ -346,6 +346,8 @@ function DesktopSidebar({
 }) {
     const [recentsOpen, setRecentsOpen] = useState(false);
 
+    useEffect(() => setRecentsOpen(false), [activeSessionId, path]);
+
     return (
         <aside
             className={cn(
@@ -434,7 +436,24 @@ function MiniSidebar({
     onAlertsClick?: () => void;
 }) {
     const [moreOpen, setMoreOpen] = useState(false);
+    const recentsRef = useRef<HTMLDivElement>(null);
     const moreActive = moreNav.some((item) => path === item.href);
+
+    useEffect(() => {
+        if (!recentsOpen) return;
+        const handlePointerDown = (event: PointerEvent) => {
+            if (!recentsRef.current?.contains(event.target as Node)) onToggleRecents();
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") onToggleRecents();
+        };
+        document.addEventListener("pointerdown", handlePointerDown);
+        document.addEventListener("keydown", handleKeyDown);
+        return () => {
+            document.removeEventListener("pointerdown", handlePointerDown);
+            document.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [onToggleRecents, recentsOpen]);
 
     return (
         <div className="relative flex h-full flex-col items-center border-r border-[var(--theme-border)] bg-[var(--surface-sidebar)] py-4 shadow-[var(--shadow-sidebar)]">
@@ -549,7 +568,7 @@ function MiniSidebar({
 
             <div className="mt-6 h-px w-8 bg-white/[0.08]" />
 
-            <div className="relative mt-3">
+            <div ref={recentsRef} className="relative mt-3">
                 <button
                     type="button"
                     aria-label="Recents"

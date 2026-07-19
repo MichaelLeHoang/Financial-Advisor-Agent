@@ -224,6 +224,15 @@ def test_agent_session_endpoints_scope_to_current_user(tmp_path, monkeypatch):
     assert own_messages.status_code == 200
     assert own_messages.json()["messages"][0]["content"] == "User A private question"
 
+    truncated = client.patch(
+        "/api/v1/agent/sessions/session-a/messages",
+        headers=_auth_headers(user_a),
+        json={"keep_count": 1},
+    )
+    assert truncated.status_code == 200
+    assert truncated.json()["removed_count"] == 1
+    assert len(history.load_history("session-a", str(user_a))) == 1
+
     cross_messages = client.get("/api/v1/agent/sessions/session-b/messages", headers=_auth_headers(user_a))
     assert cross_messages.status_code == 404
 
@@ -233,6 +242,13 @@ def test_agent_session_endpoints_scope_to_current_user(tmp_path, monkeypatch):
         json={"title": "stolen"},
     )
     assert cross_rename.status_code == 404
+
+    cross_truncate = client.patch(
+        "/api/v1/agent/sessions/session-b/messages",
+        headers=_auth_headers(user_a),
+        json={"keep_count": 0},
+    )
+    assert cross_truncate.status_code == 404
 
     cross_delete = client.delete("/api/v1/agent/sessions/session-b", headers=_auth_headers(user_a))
     assert cross_delete.status_code == 404
@@ -249,6 +265,7 @@ def test_guest_cannot_load_or_mutate_saved_chat_sessions(tmp_path, monkeypatch):
     assert client.post("/api/v1/agent/sessions", json={"session_id": "any", "title": "New chat"}).status_code == 401
     assert client.get("/api/v1/agent/sessions").status_code == 401
     assert client.get("/api/v1/agent/sessions/any/messages").status_code == 401
+    assert client.patch("/api/v1/agent/sessions/any/messages", json={"keep_count": 0}).status_code == 401
     assert client.patch("/api/v1/agent/sessions/any", json={"title": "x"}).status_code == 401
     assert client.delete("/api/v1/agent/sessions/any").status_code == 401
 

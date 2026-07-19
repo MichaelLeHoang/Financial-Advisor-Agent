@@ -708,6 +708,106 @@ export interface MarketQuote {
   provider_status?: Array<Record<string, unknown>>;
 }
 
+export interface PaperAccount {
+  id: string;
+  user_id?: string | null;
+  guest_owner_id?: string | null;
+  name: string;
+  base_currency: string;
+  initial_cash: number;
+  cash: number;
+  cash_reserved: number;
+  status: "active" | "archived";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PaperOrder {
+  id: string;
+  account_id: string;
+  symbol: string;
+  side: "buy" | "sell";
+  quantity: number;
+  order_type: "market" | "limit" | "stop";
+  time_in_force: "day" | "gtc";
+  limit_price?: number | null;
+  stop_price?: number | null;
+  protective_stop?: number | null;
+  target_price?: number | null;
+  risk_budget?: number | null;
+  thesis?: string | null;
+  status: "open" | "filled" | "canceled" | "rejected";
+  reserved_cash: number;
+  average_fill_price?: number | null;
+  fees: number;
+  submitted_at: string;
+  filled_at?: string | null;
+  canceled_at?: string | null;
+}
+
+export type PaperOrderRequest = Omit<PaperOrder, "id" | "account_id" | "status" | "reserved_cash" | "average_fill_price" | "fees" | "submitted_at" | "filled_at" | "canceled_at">;
+
+export interface PaperFill {
+  id: string;
+  account_id: string;
+  order_id: string;
+  symbol: string;
+  side: "buy" | "sell";
+  quantity: number;
+  price: number;
+  fees: number;
+  executed_at: string;
+}
+
+export interface PaperPosition {
+  id: string;
+  account_id: string;
+  symbol: string;
+  quantity: number;
+  average_entry: number;
+  last_price: number;
+  realized_pnl: number;
+  market_value: number;
+  unrealized_pnl: number;
+  updated_at: string;
+}
+
+export interface PaperCashLedgerEntry {
+  id: string;
+  account_id: string;
+  order_id?: string | null;
+  fill_id?: string | null;
+  entry_type: "deposit" | "buy" | "sell";
+  amount: number;
+  balance_after: number;
+  description: string;
+  created_at: string;
+}
+
+export interface PaperAccountSummary {
+  account: PaperAccount;
+  cash_available: number;
+  cash_reserved: number;
+  buying_power: number;
+  market_value: number;
+  equity: number;
+  realized_pnl: number;
+  unrealized_pnl: number;
+  day_pnl: number;
+  open_risk: number;
+  open_orders: number;
+  data_status: "fresh" | "delayed" | "illustrative" | "unavailable";
+  as_of: string;
+}
+
+export interface PaperAccountSnapshot {
+  summary: PaperAccountSummary;
+  orders: PaperOrder[];
+  fills: PaperFill[];
+  positions: PaperPosition[];
+  ledger: PaperCashLedgerEntry[];
+}
+
 export interface MarketSymbolSearchResult {
   ticker: string;
   name: string;
@@ -1355,6 +1455,23 @@ export const api = {
   removeWatchlistAsset: (watchlistId: string, assetId: string) =>
     del<void>(`/api/v1/watchlists/${encodeURIComponent(watchlistId)}/assets/${encodeURIComponent(assetId)}`),
 
+  paperAccounts: () => get<PaperAccount[]>("/api/v1/paper/accounts"),
+
+  createPaperAccount: (payload: { name: string; base_currency?: string; initial_cash?: number }) =>
+    post<PaperAccount>("/api/v1/paper/accounts", payload),
+
+  paperAccountSnapshot: (accountId: string) =>
+    get<PaperAccountSnapshot>(`/api/v1/paper/accounts/${encodeURIComponent(accountId)}/snapshot`),
+
+  submitPaperOrder: (accountId: string, payload: PaperOrderRequest) =>
+    post<PaperOrder>(`/api/v1/paper/accounts/${encodeURIComponent(accountId)}/orders`, payload),
+
+  cancelPaperOrder: (orderId: string) =>
+    post<PaperOrder>(`/api/v1/paper/orders/${encodeURIComponent(orderId)}/cancel`, {}),
+
+  refreshPaperAccount: (accountId: string) =>
+    post<PaperAccountSnapshot>(`/api/v1/paper/accounts/${encodeURIComponent(accountId)}/refresh`, {}),
+
   billingSubscription: () => get<BillingSubscription>("/api/v1/billing/subscription"),
 
   createCheckoutSession: (plan: AuthUser["plan"]) =>
@@ -1503,6 +1620,9 @@ export const api = {
 
   appendChatSessionMessage: (sessionId: string, role: "user" | "assistant", content: string, metadata?: ChatMessage["metadata"]) =>
     post<{ status: string; session_id: string }>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`, { role, content, metadata }),
+
+  truncateChatSessionMessages: (sessionId: string, keepCount: number) =>
+    patch<{ status: string; session_id: string; removed_count: number }>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`, { keep_count: keepCount }),
 
   renameChatSession: (sessionId: string, title: string) =>
     patch<ChatSession>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}`, { title }),

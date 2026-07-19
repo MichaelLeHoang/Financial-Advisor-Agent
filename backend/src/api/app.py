@@ -42,6 +42,7 @@ from src.api.routes.intelligence import router as intelligence_router
 from src.api.equity_research import router as equity_research_router
 from src.investment_policy.routes import router as investment_policy_router
 from src.investment_workspace.routes import router as investment_workspace_router
+from src.paper_trading.routes import router as paper_trading_router
 from src.llm.routing_policy import LLMMode
 from src.core.redis_client import RedisUnavailable
 
@@ -79,6 +80,7 @@ app.include_router(intelligence_router)
 app.include_router(equity_research_router)
 app.include_router(investment_policy_router)
 app.include_router(investment_workspace_router)
+app.include_router(paper_trading_router)
 
 # Register Inngest with FastAPI
 inngest.fast_api.serve(
@@ -148,6 +150,9 @@ class AgentSessionMessageAppendRequest(BaseModel):
     role: str = Field(pattern="^(user|assistant)$")
     content: str = Field(min_length=1)
     metadata: dict | None = None
+
+class AgentSessionMessagesTruncateRequest(BaseModel):
+    keep_count: int = Field(ge=0)
 
 class AgentJobCreateResponse(BaseModel):
     job_id: str
@@ -1018,6 +1023,20 @@ async def append_agent_session_message(
     _ensure_chat_session_available(session_id, user)
     append_message(session_id, req.role, req.content, str(user.id), metadata=req.metadata)
     return {"status": "ok", "session_id": session_id}
+
+
+@app.patch("/api/v1/agent/sessions/{session_id}/messages")
+async def truncate_agent_session_messages(
+    session_id: str,
+    req: AgentSessionMessagesTruncateRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Remove a selected turn and all later messages before regeneration."""
+    from src.agent.history import truncate_history
+
+    _ensure_chat_session_owned(session_id, user)
+    removed_count = truncate_history(session_id, req.keep_count, str(user.id))
+    return {"status": "ok", "session_id": session_id, "removed_count": removed_count}
 
 
 @app.patch("/api/v1/agent/sessions/{session_id}")
