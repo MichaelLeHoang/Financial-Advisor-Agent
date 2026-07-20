@@ -1,8 +1,39 @@
-export type PaperOrder = { id: string; symbol: string; side: "buy" | "sell"; quantity: number; orderType: "market" | "limit" | "stop"; timeInForce: "day" | "gtc"; entry: number; stop: number; target: number; maximumLoss: number; thesis?: string; status: "reviewed" | "filled"; submittedAt: string };
-export type SubmitPaperOrderInput = Omit<PaperOrder, "id" | "status" | "submittedAt">;
-export interface PaperTradingService { listOrders(): Promise<PaperOrder[]>; submitOrder(input: SubmitPaperOrderInput): Promise<PaperOrder>; }
-export class SessionPaperTradingService implements PaperTradingService {
-  constructor(private readonly storageKey = "quanfora.paper-orders.guest") {}
-  async listOrders() { if (typeof window === "undefined") return []; try { return JSON.parse(window.sessionStorage.getItem(this.storageKey) ?? "[]") as PaperOrder[]; } catch { return []; } }
-  async submitOrder(input: SubmitPaperOrderInput) { const order: PaperOrder = { ...input, id: `paper-${Date.now()}`, status: "filled", submittedAt: new Date().toISOString() }; const orders = [...await this.listOrders(), order]; try { window.sessionStorage.setItem(this.storageKey, JSON.stringify(orders)); } catch {} return order; }
+import {
+  api,
+  type PaperAccount,
+  type PaperAccountSnapshot,
+  type PaperOrder,
+  type PaperOrderRequest,
+} from "@/lib/api";
+
+export type { PaperAccount, PaperAccountSnapshot, PaperOrder, PaperOrderRequest };
+
+export interface PaperTradingService {
+  listAccounts(): Promise<PaperAccount[]>;
+  snapshot(accountId: string): Promise<PaperAccountSnapshot>;
+  submitOrder(accountId: string, input: PaperOrderRequest): Promise<PaperOrder>;
+  cancelOrder(orderId: string): Promise<PaperOrder>;
+  refresh(accountId: string): Promise<PaperAccountSnapshot>;
+}
+
+export class ApiPaperTradingService implements PaperTradingService {
+  listAccounts() {
+    return api.paperAccounts();
+  }
+
+  snapshot(accountId: string) {
+    return api.paperAccountSnapshot(accountId);
+  }
+
+  submitOrder(accountId: string, input: PaperOrderRequest) {
+    return api.submitPaperOrder(accountId, input);
+  }
+
+  cancelOrder(orderId: string) {
+    return api.cancelPaperOrder(orderId);
+  }
+
+  refresh(accountId: string) {
+    return api.refreshPaperAccount(accountId);
+  }
 }

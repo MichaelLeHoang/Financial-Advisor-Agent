@@ -4,6 +4,16 @@ const E2E_USER_ID = "00000000-0000-0000-0000-000000000099";
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => window.localStorage.setItem("financial-advisor.coverSeen", "true"));
+  await page.route("**/api/v1/market/quote/**", async (route) => {
+    const ticker = new URL(route.request().url()).pathname.split("/").at(-1) ?? "AMD";
+    const prices: Record<string, number> = { AMD: 170, NVDA: 132, AAPL: 226, MSFT: 400 };
+    const price = prices[ticker] ?? 100;
+    const history = Array.from({ length: 96 }, (_, index) => {
+      const close = price - 1.2 + Math.sin(index / 7) * 1.1 + index * (1.2 / 95);
+      return { label: new Date(Date.UTC(2026, 6, 7, 9, 30) + index * 3_600_000).toISOString(), price: close, open: close - 0.3, high: close + 0.5, low: close - 0.6, volume: 350_000 + index * 4_000 };
+    });
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ticker, name: ticker, exchange: "NASDAQ", currency: "USD", price, change: ticker === "NVDA" ? -0.68 : 0.42, history }) });
+  });
 });
 
 async function waitForWorkspace(page: import("@playwright/test").Page) {
@@ -600,12 +610,42 @@ test("paper workspace links watchlist selection to chart, plan, signals, and per
 });
 
 test("paper watchlist removes symbols safely and uses themed trade-plan menus", async ({ page }) => {
+  let assets = ["AMD", "NVDA", "AAPL"].map((symbol, index) => ({ id: `asset-${index}`, watchlist_id: "trading-watchlist", symbol, asset_type: "equity", created_at: new Date().toISOString() }));
+  await page.route("**/api/v1/watchlists**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.method() === "GET" && path === "/api/v1/watchlists") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([{ id: "trading-watchlist", user_id: E2E_USER_ID, name: "Trading Watchlist", created_at: new Date().toISOString() }]) });
+      return;
+    }
+    if (request.method() === "GET" && path.endsWith("/assets")) {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(assets) });
+      return;
+    }
+    if (request.method() === "POST" && path.endsWith("/assets")) {
+      const payload = request.postDataJSON() as { symbol: string };
+      const asset = { id: `asset-${assets.length + 1}`, watchlist_id: "trading-watchlist", symbol: payload.symbol, asset_type: "equity", created_at: new Date().toISOString() };
+      assets = [...assets, asset];
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(asset) });
+      return;
+    }
+    if (request.method() === "DELETE") {
+      const assetId = path.split("/").at(-1);
+      assets = assets.filter((asset) => asset.id !== assetId);
+      await route.fulfill({ status: 204, body: "" });
+      return;
+    }
+    await route.fallback();
+  });
   await page.goto("/trade");
   await waitForWorkspace(page);
   await page.getByRole("option", { name: /NVDA/ }).click();
   await page.getByRole("button", { name: "Remove NVDA from watchlist" }).click();
   await expect(page.getByRole("option", { name: /NVDA/ })).toBeHidden();
   await expect(page.getByText("Linked to AMD")).toBeVisible();
+  await page.getByPlaceholder("Add ticker…").fill("MSFT");
+  await page.getByRole("button", { name: "Add ticker to watchlist" }).click();
+  await expect(page.getByRole("option", { name: /MSFT/ })).toBeVisible();
 
   await page.getByRole("button", { name: "Order type" }).click();
   const orderTypeMenu = page.getByTestId("order-type-options-menu");
@@ -765,11 +805,15 @@ test("paper workspace uses functional chart tools and a stacked mobile layout", 
   await expect(chartWidget.getByText(/Volume [\d,]+/)).toBeVisible();
   const indicators = page.getByRole("button", { name: "Indicators" });
   await expect(indicators).toHaveAttribute("aria-pressed", "true");
-  if (testInfo.project.name === "mobile") await indicators.focus();
-  else await indicators.hover();
-  await expect(page.getByRole("tooltip", { name: "Indicators" })).toBeVisible();
   await indicators.click();
+  await expect(page.getByRole("menuitem", { name: "SMA 20" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "EMA 20" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "VWAP" })).toBeVisible();
+  await page.getByRole("menuitem", { name: "SMA 20" }).click();
   await expect(indicators).toHaveAttribute("aria-pressed", "false");
+  const marketChart = chartWidget.getByTestId("interactive-market-chart");
+  await page.getByRole("button", { name: "Fit chart" }).click();
+  await expect(marketChart).toHaveAttribute("data-fit-applied", "1");
   await page.getByRole("button", { name: "Chart type" }).click();
   await expect(page.getByRole("button", { name: "Measure range" })).toBeVisible();
   if (testInfo.project.name === "mobile") {

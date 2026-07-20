@@ -39,15 +39,19 @@ export function WorkspacePage({
   );
 }
 
-export function ContextBar() {
+export function ContextBar({ paperAccount }: { paperAccount?: { name: string; cash: number; dataStatus: string; asOf: string } | null }) {
+  const isPaperContext = paperAccount !== undefined;
+  const dataLabel = paperAccount
+    ? `${paperAccount.dataStatus[0]?.toUpperCase()}${paperAccount.dataStatus.slice(1)} data · ${new Date(paperAccount.asOf).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+    : isPaperContext ? "Loading paper account…" : "Illustrative data · updated now";
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-[var(--theme-border)] py-3 text-xs text-[var(--text-muted)]">
       <span className="inline-flex items-center gap-2 font-semibold text-[var(--text-primary)]"><WalletCards className="size-4" /> All Portfolio</span>
-      <span>Main Brokerage</span>
+      <span>{paperAccount?.name ?? (isPaperContext ? "Paper account" : "Main Brokerage")}</span>
       <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-sky-400" /> Paper mode</span>
       <span className="inline-flex items-center gap-1.5"><Clock3 className="size-3.5" /> Market open</span>
-      <span>Cash $14,520</span>
-      <span className="ml-auto inline-flex items-center gap-1.5"><Database className="size-3.5" /> Illustrative data · updated now</span>
+      <span>Cash {paperAccount ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(paperAccount.cash) : isPaperContext ? "—" : "$14,520"}</span>
+      <span className="ml-auto inline-flex items-center gap-1.5"><Database className="size-3.5" /> {dataLabel}</span>
     </div>
   );
 }

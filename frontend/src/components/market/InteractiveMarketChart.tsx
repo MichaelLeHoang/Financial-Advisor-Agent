@@ -193,6 +193,7 @@ export default function InteractiveMarketChart<T extends InteractiveChartPoint>(
   const [hoverPoint, setHoverPoint] = useState<{ point: T; x: number; y: number } | null>(null);
   const [measurement, setMeasurement] = useState<MeasurementState | null>(null);
   const [isRangeTransitioning, setIsRangeTransitioning] = useState(false);
+  const [fitAppliedKey, setFitAppliedKey] = useState(0);
   const compareLinesSignature = JSON.stringify(compareLines);
   const overlayLinesSignature = JSON.stringify(overlayLines);
   const chartColors = useMemo(() => {
@@ -252,7 +253,15 @@ export default function InteractiveMarketChart<T extends InteractiveChartPoint>(
     return () => window.clearTimeout(timer);
   }, [rangeKey]);
 
-  useEffect(() => { if (fitKey > 0) fitChart(chartRef.current); }, [fitKey]);
+  useEffect(() => {
+    if (fitKey <= 0) return;
+    const frame = window.requestAnimationFrame(() => {
+      fitChart(chartRef.current);
+      didFitRef.current = true;
+      setFitAppliedKey(fitKey);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [fitKey]);
 
   const measurementFromLogical = (startLogical: number, endLogical: number): MeasurementState | null => {
     const chart = chartRef.current;
@@ -579,7 +588,7 @@ export default function InteractiveMarketChart<T extends InteractiveChartPoint>(
     : undefined;
 
   return (
-    <div className={cn("relative h-full w-full", className)}>
+    <div className={cn("relative h-full w-full", className)} data-testid="interactive-market-chart" data-fit-applied={fitAppliedKey}>
       <div ref={containerRef} className={cn("h-full w-full transition-opacity duration-200", isRangeTransitioning && "opacity-70")} />
       {measurement && <MeasurementOverlay measurement={measurement} axisFormatter={axisFormatter} />}
       {hoverPoint && tooltip && (

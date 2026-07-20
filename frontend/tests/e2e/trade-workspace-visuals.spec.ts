@@ -2,6 +2,16 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => window.localStorage.setItem("financial-advisor.coverSeen", "true"));
+  await page.route("**/api/v1/market/quote/**", async (route) => {
+    const ticker = new URL(route.request().url()).pathname.split("/").at(-1) ?? "AMD";
+    const prices: Record<string, number> = { AMD: 170, NVDA: 132, AAPL: 226 };
+    const price = prices[ticker] ?? 100;
+    const history = Array.from({ length: 96 }, (_, index) => {
+      const close = price - 1.2 + Math.sin(index / 7) * 1.1 + index * (1.2 / 95);
+      return { label: new Date(Date.UTC(2026, 6, 7, 9, 30) + index * 3_600_000).toISOString(), price: close, open: close - 0.3, high: close + 0.5, low: close - 0.6, volume: 350_000 + index * 4_000 };
+    });
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ticker, name: ticker, exchange: "NASDAQ", currency: "USD", price, change: 0.42, history }) });
+  });
 });
 
 async function waitForDesk(page: Page) {
