@@ -244,7 +244,7 @@ export default function LoginPage() {
               type="button"
               aria-expanded={otherOptionsOpen}
               onClick={() => setOtherOptionsOpen((open) => !open)}
-              className="flex h-14 w-full items-center justify-center gap-2 border border-white/[0.08] bg-white/[0.045] px-5 text-sm font-medium text-white/82 transition-colors hover:bg-white/[0.075] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.045] px-5 text-sm font-medium text-white/82 transition-colors hover:bg-white/[0.075] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
             >
               Show other options
               <ChevronDown className={cn("size-4 text-white/45 transition-transform duration-150 motion-reduce:transition-none", otherOptionsOpen && "rotate-180")} />
@@ -260,14 +260,14 @@ export default function LoginPage() {
                   className="overflow-hidden"
                 >
                   <div className="pt-5">
-                    <div className="mb-4 grid grid-cols-2 border border-white/[0.08] bg-white/[0.035] p-1" role="tablist" aria-label="Authentication mode">
+                    <div className="mb-4 grid grid-cols-2 rounded-full border border-white/[0.08] bg-white/[0.035] p-1" role="tablist" aria-label="Authentication mode">
                       {(["signin", "signup"] as const).map((mode) => {
                         const isActive = authMode === mode;
 
                         return (
                           <div key={mode} className="relative">
                             {isActive && (
-                              <HighlightPill layoutId="login-auth-mode-pill" className="absolute inset-0 bg-white" />
+                              <HighlightPill layoutId="login-auth-mode-pill" className="absolute inset-0 rounded-full bg-white" />
                             )}
                             <button
                               type="button"
@@ -299,7 +299,7 @@ export default function LoginPage() {
                           onChange={(event) => setEmail(event.target.value)}
                           placeholder="Email"
                           autoComplete="email"
-                          className="h-14 w-full border border-white/[0.10] bg-transparent pl-12 pr-4 text-base text-white outline-none transition-colors placeholder:text-white/30 hover:border-white/18 focus:border-white/30"
+                          className="h-14 w-full rounded-full border border-white/[0.10] bg-transparent pl-12 pr-4 text-base text-white outline-none transition-colors placeholder:text-white/30 hover:border-white/18 focus:border-white/30"
                         />
                       </label>
 
@@ -312,7 +312,7 @@ export default function LoginPage() {
                           onChange={(event) => setPassword(event.target.value)}
                           placeholder="Password"
                           autoComplete={authMode === "signin" ? "current-password" : "new-password"}
-                          className="h-14 w-full border border-white/[0.10] bg-transparent pl-12 pr-12 text-base text-white outline-none transition-colors placeholder:text-white/30 hover:border-white/18 focus:border-white/30"
+                          className="h-14 w-full rounded-full border border-white/[0.10] bg-transparent pl-12 pr-12 text-base text-white outline-none transition-colors placeholder:text-white/30 hover:border-white/18 focus:border-white/30"
                         />
                         <button
                           type="button"
@@ -378,7 +378,7 @@ export default function LoginPage() {
                       <button
                         type="submit"
                         disabled={submitting || (authMode === "signup" && !policyAccepted)}
-                        className="h-12 w-full border border-white bg-white text-sm font-semibold text-black transition-colors hover:bg-white/86 disabled:cursor-not-allowed disabled:opacity-45"
+                        className="h-12 w-full rounded-full border border-white bg-white text-sm font-semibold text-black transition-colors hover:bg-white/86 disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         {submitting ? "Working..." : authMode === "signin" ? "Sign in" : "Create account"}
                       </button>
@@ -424,7 +424,7 @@ function OAuthButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex h-14 w-full items-center justify-center gap-3 border border-white/[0.08] bg-transparent text-sm font-medium text-white/82 transition-colors hover:bg-white/[0.055] disabled:cursor-not-allowed disabled:opacity-45"
+      className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-white/[0.08] bg-transparent text-sm font-medium text-white/82 transition-colors hover:bg-white/[0.055] disabled:cursor-not-allowed disabled:opacity-45"
     >
       {loading ? <span className="size-4 animate-spin rounded-full border-2 border-white/25 border-t-white" /> : icon}
       {label}
