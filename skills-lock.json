@@ -37,6 +37,12 @@
       "skillPath": "skills/ponytail/SKILL.md",
       "computedHash": "9c2a14a09838e12a6bc248e054529fe494060c0d8b78a7ff8e1696a980a12eee"
     },
+    "scroll-world": {
+      "source": "oso95/scroll-world",
+      "sourceType": "github",
+      "skillPath": "skills/scroll-world/SKILL.md",
+      "computedHash": "3a6c7f6facad287583323ee2dbffd8a14f5ced7041aa002a5eaa09c1c4c0560c"
+    },
     "supabase-postgres-best-practices": {
       "source": "supabase/agent-skills",
       "sourceType": "github",
