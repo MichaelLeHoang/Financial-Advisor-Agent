@@ -14,6 +14,8 @@ test("desktop landing film scrubs one continuous video and navigates between sce
   const video = section.locator("video");
   await expect(video).toHaveCount(1);
   await expect(video).toHaveAttribute("src", /^blob:/);
+  await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.videoWidth)).toBe(1920);
+  expect(await video.evaluate((element) => getComputedStyle(element).objectFit)).toBe("contain");
   await expect(section.getByText("Quanfora decision architecture")).toHaveCount(0);
   const progressStyle = await section.getByTestId("scroll-world-progress").locator("span").evaluate((element) => {
     const style = getComputedStyle(element);

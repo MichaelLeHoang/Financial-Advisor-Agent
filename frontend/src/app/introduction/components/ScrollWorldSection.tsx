@@ -19,8 +19,8 @@ import { loginHref } from "@/lib/workspace-routing";
 import { trackLandingEvent } from "./landing-analytics";
 import styles from "./ScrollWorldSection.module.css";
 
-const VIDEO_SOURCE = "/scroll-world/quanfora/scroll-scene-scrub.mp4";
-const VIDEO_POSTER = "/scroll-world/quanfora/scroll-scene-poster.jpg";
+const VIDEO_SOURCE = "/scroll-world/quanfora/scroll-scene-scrub-1080p.mp4";
+const VIDEO_POSTER = "/scroll-world/quanfora/scroll-scene-poster-1080p.jpg";
 
 const SCROLL_WORLD_CONFIG: ScrollWorldConfig = {
   embedded: true,

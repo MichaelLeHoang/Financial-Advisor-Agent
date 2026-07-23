@@ -4,7 +4,9 @@
 
 - `scroll-scene-4k.mp4` is the supplied continuous source film and remains unchanged.
 - `scroll-scene-scrub.mp4` is the web playback derivative: silent H.264, fast-start enabled, and encoded with frequent keyframes for responsive scroll seeking.
+- `scroll-scene-scrub-1080p.mp4` is the active 1920×1080 playback derivative, enlarged from the supplied 1280×720 source with Lanczos scaling and restrained sharpening. It improves browser presentation but cannot recreate detail absent from the source.
 - `scroll-scene-poster.jpg` is the frame-safe poster shown while the film loads and in static fallbacks.
+- `scroll-scene-poster-1080p.jpg` is the active poster matched to the 1080p playback derivative.
 - The landing page scrubs the single desktop film across the six narrative beats below. Portrait/mobile and reduced-motion visitors receive the complete static journey because a native 9:16 film has not been supplied; the desktop film is not cropped into a mobile substitute.
 
 Use this brief to generate the media for the landing-page scroll journey. The implementation uses six sequential clips in a **continuous forward take**. Do not generate six unrelated scene videos: clips 2–6 must continue from the preceding clip's real final frame or Flow continuation.
