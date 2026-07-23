@@ -18,6 +18,26 @@ export type AiDeskMode = "sabi" | "single" | "consensus" | "research";
 export type AgentChatMode = AiDeskMode | "auto";
 export type SabiCapability = "quick" | "consensus" | "research" | "portfolio" | "risk" | "backtest" | "trade_proposal";
 
+export interface GroundingSource {
+  label: string;
+  source: string;
+  url?: string | null;
+  published_at?: string | null;
+}
+
+export interface GroundingMetadata {
+  required: boolean;
+  status: "grounded" | "unavailable" | "not_required";
+  retrieved_at: string;
+  as_of?: string | null;
+  entity?: string | null;
+  ticker?: string | null;
+  company_name?: string | null;
+  reasons: string[];
+  sources: GroundingSource[];
+  limitations: string[];
+}
+
 export interface ChatResponse {
   response: string;
   session_id: string;
@@ -32,6 +52,52 @@ export interface ChatResponse {
   };
   consensus?: ConsensusMetadata;
   overview?: Overview | null;
+  source_message_id?: string | null;
+  memory_status?: "ready" | "disabled" | "maintenance_queued" | "maintenance_unavailable";
+  memory_used?: MemoryContextUsage[];
+  grounding?: GroundingMetadata;
+}
+
+export type MemoryCategory =
+  | "investment_horizon"
+  | "risk_preference"
+  | "asset_restriction"
+  | "sector_preference"
+  | "research_preference"
+  | "communication_preference"
+  | "trading_rule";
+
+export type MemoryStatus = "candidate" | "confirmed" | "rejected" | "superseded";
+
+export interface UserMemory {
+  id: string;
+  category: MemoryCategory;
+  label: string;
+  value_json: Record<string, unknown>;
+  status: MemoryStatus;
+  source_session_id?: string | null;
+  source_message_id?: string | null;
+  confidence: number;
+  expires_at?: string | null;
+  supersedes_memory_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MemorySettings {
+  enabled: boolean;
+  updated_at?: string | null;
+}
+
+export interface MemoryContextUsage {
+  id: string;
+  category: MemoryCategory;
+  label: string;
+}
+
+export interface MemoryListResponse {
+  memories: UserMemory[];
+  settings: MemorySettings;
 }
 
 export type ChatJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
@@ -105,6 +171,7 @@ export interface EquityResearchRunCreate {
   quick_model?: string;
   deep_model?: string;
   source_surface?: ResearchSourceSurface;
+  use_memory?: boolean;
 }
 
 export interface EquityResearchRun {
@@ -304,11 +371,16 @@ export interface ChatMessage {
     selected_mode?: AiDeskMode;
     selected_capability?: SabiCapability;
     action_status?: "analysis_only" | "research_requested" | "proposal_only";
+    grounding?: GroundingMetadata;
+    source_message_id?: string | null;
+    memory_status?: ChatResponse["memory_status"];
+    memory_used?: MemoryContextUsage[];
   } | null;
   consensusOpinions?: ConsensusOpinion[];
   researchReports?: EquityResearchReport[];
   overview?: Overview | null;
   selectedCapability?: SabiCapability;
+  grounding?: GroundingMetadata;
 }
 
 export interface ChatSession {
@@ -1553,12 +1625,12 @@ export const api = {
     post<StrategyExportResult>("/api/v1/quant/export", payload),
 
   /** Chat with the LangGraph agent — mode controls Quanfora version */
-  chat: (message: string, sessionId = "default", remember = true, mode: AgentChatMode = "sabi", signal?: AbortSignal) =>
-    post<ChatResponse>("/api/v1/agent/chat", { message, session_id: sessionId, remember, mode }, signal),
+  chat: (message: string, sessionId = "default", remember = true, mode: AgentChatMode = "sabi", signal?: AbortSignal, useMemory = true) =>
+    post<ChatResponse>("/api/v1/agent/chat", { message, session_id: sessionId, remember, mode, use_memory: useMemory }, signal),
 
   /** Queue AI chat work and poll the job status/result */
-  chatJob: (message: string, sessionId = "default", remember = true, mode: AgentChatMode = "sabi", signal?: AbortSignal) =>
-    post<ChatJobCreateResponse>("/api/v1/agent/chat/jobs", { message, session_id: sessionId, remember, mode }, signal),
+  chatJob: (message: string, sessionId = "default", remember = true, mode: AgentChatMode = "sabi", signal?: AbortSignal, useMemory = true) =>
+    post<ChatJobCreateResponse>("/api/v1/agent/chat/jobs", { message, session_id: sessionId, remember, mode, use_memory: useMemory }, signal),
 
   chatJobStatus: (jobId: string, signal?: AbortSignal) =>
     get<ChatJobStatusResponse>(`/api/v1/agent/chat/jobs/${encodeURIComponent(jobId)}`, signal),
@@ -1618,8 +1690,8 @@ export const api = {
   chatSessionMessages: (sessionId = "default") =>
     get<ChatSessionMessages>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`),
 
-  appendChatSessionMessage: (sessionId: string, role: "user" | "assistant", content: string, metadata?: ChatMessage["metadata"]) =>
-    post<{ status: string; session_id: string }>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`, { role, content, metadata }),
+  appendChatSessionMessage: (sessionId: string, role: "user" | "assistant", content: string, metadata?: ChatMessage["metadata"], extractMemory = false) =>
+    post<{ status: string; session_id: string; source_message_id: string; memory_status?: ChatResponse["memory_status"] | null }>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`, { role, content, metadata, extract_memory: extractMemory }),
 
   truncateChatSessionMessages: (sessionId: string, keepCount: number) =>
     patch<{ status: string; session_id: string; removed_count: number }>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}/messages`, { keep_count: keepCount }),
@@ -1629,6 +1701,31 @@ export const api = {
 
   deleteChatSession: (sessionId: string) =>
     del<{ status: string; session_id: string }>(`/api/v1/agent/sessions/${encodeURIComponent(sessionId)}`),
+
+  /** User-controlled conversational memory */
+  memories: (status: MemoryStatus | "all" = "confirmed", sessionId?: string) =>
+    get<MemoryListResponse>(`/api/v1/agent/memories?status=${encodeURIComponent(status)}${sessionId ? `&session_id=${encodeURIComponent(sessionId)}` : ""}`),
+
+  createMemory: (payload: { category: MemoryCategory; label: string; value_json: Record<string, unknown> }) =>
+    post<UserMemory>("/api/v1/agent/memories", payload, undefined, true),
+
+  updateMemory: (memoryId: string, payload: { label?: string; value_json?: Record<string, unknown> }) =>
+    patch<UserMemory>(`/api/v1/agent/memories/${encodeURIComponent(memoryId)}`, payload),
+
+  confirmMemory: (memoryId: string) =>
+    post<UserMemory>(`/api/v1/agent/memories/${encodeURIComponent(memoryId)}/confirm`, {}, undefined, true),
+
+  rejectMemory: (memoryId: string) =>
+    post<UserMemory>(`/api/v1/agent/memories/${encodeURIComponent(memoryId)}/reject`, {}, undefined, true),
+
+  deleteMemory: (memoryId: string) =>
+    del<{ status: string; memory_id: string }>(`/api/v1/agent/memories/${encodeURIComponent(memoryId)}`),
+
+  clearMemories: () =>
+    del<{ status: string; deleted_count: number }>("/api/v1/agent/memories"),
+
+  updateMemorySettings: (enabled: boolean) =>
+    patch<MemorySettings>("/api/v1/agent/memories/settings", { enabled }),
 
   /** Reset conversation history */
   resetChat: (sessionId = "default") =>

@@ -7,12 +7,13 @@ import { useParams, usePathname, useRouter, useSearchParams } from "next/navigat
 import { ArrowRight, Brain, Check, ChevronDown, Clipboard, ClipboardList, FileText, Image, Loader2, Paperclip, Pencil, PieChart, RotateCcw, Send, SlidersHorizontal, ThumbsDown, ThumbsUp, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
-import type { AiDeskMode, ChatJobProgress, ChatJobStatusResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, Overview, ResearchDepth, ResearchReportType, SabiCapability } from "@/lib/api";
+import type { AiDeskMode, ChatJobProgress, ChatJobStatusResponse, ChatResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, GroundingMetadata, MemoryContextUsage, Overview, ResearchDepth, ResearchReportType, SabiCapability, UserMemory } from "@/lib/api";
 import { notifyCompletion, requestCompletionNotification } from "@/lib/completion-notifications";
 import { loadLocalChatMessages, saveLocalChatMessages } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
 import ModelSelector, { useModel, apiModeFromVersion } from "@/components/ModelSelector";
+import AgentMemoryDialog, { MemoryCandidateCard } from "@/components/AgentMemoryDialog";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,6 +35,10 @@ interface Message {
   consensusOpinions?: ConsensusOpinion[];
   overview?: Overview | null;
   selectedCapability?: SabiCapability;
+  grounding?: GroundingMetadata;
+  sourceMessageId?: string | null;
+  memoryUsed?: MemoryContextUsage[];
+  memoryCandidates?: UserMemory[];
 }
 
 type MessageFeedback = "up" | "down" | null;
@@ -89,11 +94,14 @@ function messageFromChatHistory(message: {
   id: number | string;
   role: "user" | "assistant";
   content: string;
-  metadata?: { consensus?: { opinions?: ConsensusOpinion[] }; researchReports?: EquityResearchReport[]; overview?: Overview | null; selected_capability?: SabiCapability } | null;
+  metadata?: { consensus?: { opinions?: ConsensusOpinion[] }; researchReports?: EquityResearchReport[]; overview?: Overview | null; selected_capability?: SabiCapability; grounding?: GroundingMetadata; source_message_id?: string | null; memory_used?: MemoryContextUsage[] } | null;
   consensusOpinions?: ConsensusOpinion[];
   researchReports?: EquityResearchReport[];
   overview?: Overview | null;
   selectedCapability?: SabiCapability;
+  grounding?: GroundingMetadata;
+  sourceMessageId?: string | null;
+  memoryUsed?: MemoryContextUsage[];
 }): Message {
   return {
     id: String(message.id),
@@ -103,7 +111,69 @@ function messageFromChatHistory(message: {
     researchReports: message.researchReports ?? message.metadata?.researchReports,
     overview: message.overview ?? message.metadata?.overview,
     selectedCapability: message.selectedCapability ?? message.metadata?.selected_capability,
+    grounding: message.grounding ?? message.metadata?.grounding,
+    sourceMessageId: message.sourceMessageId ?? message.metadata?.source_message_id,
+    memoryUsed: message.memoryUsed ?? message.metadata?.memory_used,
   };
+}
+
+function formatGroundingTime(value?: string | null) {
+  if (!value) return "time unavailable";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(parsed);
+}
+
+function GroundingDisclosure({ grounding }: { grounding: GroundingMetadata }) {
+  const isGrounded = grounding.status === "grounded";
+  const sourceCount = grounding.sources.length;
+
+  return (
+    <details className="group/grounding text-xs text-white/50">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-md py-1 outline-none transition-colors hover:text-white/75 focus-visible:ring-2 focus-visible:ring-indigo-primary/50 motion-reduce:transition-none [&::-webkit-details-marker]:hidden">
+        <span className={cn("size-1.5 rounded-full", isGrounded ? "bg-emerald-400" : "bg-amber-400")} aria-hidden="true" />
+        <span>
+          {isGrounded ? "Current evidence" : "Current evidence unavailable"}
+          {isGrounded && ` · as of ${formatGroundingTime(grounding.as_of ?? grounding.retrieved_at)}`}
+          {isGrounded && sourceCount > 0 && ` · ${sourceCount} source${sourceCount === 1 ? "" : "s"}`}
+        </span>
+        <ChevronDown className="size-3 transition-transform duration-150 group-open/grounding:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+      </summary>
+      <div className="mt-2 space-y-2 pl-3 text-[11px] leading-5 text-white/45">
+        {grounding.ticker && (
+          <p>
+            Verified identity: {grounding.company_name ?? grounding.entity ?? grounding.ticker} ({grounding.ticker})
+          </p>
+        )}
+        {grounding.sources.length > 0 && (
+          <ul className="space-y-1">
+            {grounding.sources.map((source, index) => (
+              <li key={`${source.source}-${source.url ?? source.label}-${index}`}>
+                {source.url ? (
+                  <a className="text-indigo-300 hover:text-indigo-200 hover:underline" href={source.url} target="_blank" rel="noreferrer">
+                    {source.source}: {source.label}
+                  </a>
+                ) : (
+                  <span>{source.source}: {source.label}</span>
+                )}
+                {source.published_at && ` · ${formatGroundingTime(source.published_at)}`}
+              </li>
+            ))}
+          </ul>
+        )}
+        {grounding.limitations.map((limitation) => (
+          <p key={limitation} className="text-amber-200/65">Limitation: {limitation}</p>
+        ))}
+      </div>
+    </details>
+  );
 }
 
 const SUGGESTIONS = [
@@ -483,6 +553,8 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
+  const [memoryDialogOpen, setMemoryDialogOpen] = useState(false);
+  const [memoryAnnouncement, setMemoryAnnouncement] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -566,6 +638,8 @@ export default function ChatPage() {
       setAgentRunStartedAt(null);
       setUseAgentSyntheticProgress(false);
       setActivePlanMode("single");
+      setMemoryDialogOpen(false);
+      setMemoryAnnouncement("");
       lastJobProgressSequenceRef.current = 0;
       progressEventQueueRef.current = [];
       progressDrainActiveRef.current = false;
@@ -653,10 +727,26 @@ export default function ChatPage() {
           return;
         }
 
-        const res = await api.chatSessionMessages(activeSessionId);
+        const [res, pendingMemories] = await Promise.all([
+          api.chatSessionMessages(activeSessionId),
+          api.memories("candidate", activeSessionId).catch(() => null),
+        ]);
         if (cancelled) return;
 
-        const loadedMessages = res.messages.map(messageFromChatHistory);
+        const candidatesBySource = new Map<string, UserMemory[]>();
+        for (const candidate of pendingMemories?.memories ?? []) {
+          if (!candidate.source_message_id) continue;
+          candidatesBySource.set(candidate.source_message_id, [
+            ...(candidatesBySource.get(candidate.source_message_id) ?? []),
+            candidate,
+          ]);
+        }
+        const loadedMessages = res.messages.map(messageFromChatHistory).map((message) => ({
+          ...message,
+          memoryCandidates: message.sourceMessageId
+            ? candidatesBySource.get(message.sourceMessageId)
+            : undefined,
+        }));
         setMessages(loadedMessages.length > 0 ? loadedMessages : [GREETING]);
       } catch (err: any) {
         if (cancelled) return;
@@ -758,9 +848,38 @@ export default function ChatPage() {
     return true;
   };
 
-  const handleSend = async (prompt?: string) => {
+  const pollMemoryCandidates = async (
+    sessionId: string,
+    sourceMessageId: string,
+    assistantMessageId: string,
+  ) => {
+    for (const waitMs of [900, 1800, 3200]) {
+      await delay(waitMs).catch(() => undefined);
+      try {
+        const response = await api.memories("candidate", sessionId);
+        const candidates = response.memories.filter(
+          (memory) => memory.source_message_id === sourceMessageId,
+        );
+        if (candidates.length === 0) continue;
+        setMessages((current) => current.map((message) =>
+          message.id === assistantMessageId
+            ? { ...message, memoryCandidates: candidates }
+            : message
+        ));
+        setMemoryAnnouncement(
+          `${candidates.length} memory suggestion${candidates.length === 1 ? " is" : "s are"} ready for review.`,
+        );
+        return;
+      } catch {
+        // Memory extraction is optional and must never interrupt the answer.
+      }
+    }
+  };
+
+  const handleSend = async (prompt?: string, options: { useMemory?: boolean } = {}) => {
     const text = (prompt ?? input).trim();
     if (!text || isLoading) return;
+    const useMemory = options.useMemory ?? true;
     const requestController = new AbortController();
     activeRequestControllerRef.current?.abort();
     activeRequestControllerRef.current = requestController;
@@ -821,6 +940,7 @@ export default function ChatPage() {
           report_type: reportType,
           research_depth: researchCommand?.depth ?? bestResearchModeForPlan(user.plan, researchDepth),
           source_surface: "ai_advisor",
+          use_memory: useMemory,
         }, signal);
         let cursor = 0;
         let latestDetail: EquityResearchRunDetail | null = null;
@@ -875,11 +995,23 @@ export default function ChatPage() {
           throw new Error("The research run completed but the final decision report was unavailable.");
         }
 
+        const finalAssistantId = getUniqueId();
+        let researchSourceMessageId: string | null = null;
+        let researchMemoryStatus: ChatResponse["memory_status"] | null = null;
         if (!user.is_guest) {
-          await api.appendChatSessionMessage(targetSessionId, "user", text);
+          const savedUserMessage = await api.appendChatSessionMessage(
+            targetSessionId,
+            "user",
+            text,
+            undefined,
+            useMemory,
+          );
+          researchSourceMessageId = savedUserMessage.source_message_id;
+          researchMemoryStatus = savedUserMessage.memory_status ?? null;
           await api.appendChatSessionMessage(targetSessionId, "assistant", finalMarkdown, {
             researchReports: latestDetail.reports,
             overview: latestDetail.overview,
+            source_message_id: researchSourceMessageId,
             ...(version === "sabi" ? {
               selected_mode: "sabi" as const,
               selected_capability: "research" as const,
@@ -889,7 +1021,7 @@ export default function ChatPage() {
         }
         setMessages((prev) =>
           prev.filter((m) => m.status !== "fetching").concat({
-            id: getUniqueId(),
+            id: finalAssistantId,
             role: "assistant",
             content: finalMarkdown,
             researchTicker: latestDetail.run.ticker,
@@ -897,8 +1029,12 @@ export default function ChatPage() {
             researchReports: latestDetail.reports,
             overview: latestDetail.overview,
             selectedCapability: version === "sabi" ? "research" : undefined,
+            sourceMessageId: researchSourceMessageId,
           })
         );
+        if (researchSourceMessageId && researchMemoryStatus === "maintenance_queued") {
+          void pollMemoryCandidates(targetSessionId, researchSourceMessageId, finalAssistantId);
+        }
         finishLongRunningToast(
           true,
           "Analysis complete",
@@ -968,7 +1104,7 @@ export default function ChatPage() {
       const remember = !user.is_guest;
       let res;
       try {
-        const queued = await api.chatJob(text, targetSessionId, remember, mode, signal);
+        const queued = await api.chatJob(text, targetSessionId, remember, mode, signal, useMemory);
 
         res = await api.waitForChatJob(queued.job_id, (job) => {
           const appliedProgress = enqueueJobProgress(job, fetchingLabel);
@@ -1006,7 +1142,7 @@ export default function ChatPage() {
               : m
           )
         );
-        res = await api.chat(text, targetSessionId, remember, mode, signal);
+        res = await api.chat(text, targetSessionId, remember, mode, signal, useMemory);
       }
       const consensusOpinions = res.consensus?.opinions;
       const overview = res.overview;
@@ -1023,6 +1159,9 @@ export default function ChatPage() {
           consensusOpinions,
           overview,
           selectedCapability,
+          grounding: res.grounding,
+          sourceMessageId: res.source_message_id,
+          memoryUsed: res.memory_used,
         }).concat(investmentTicker ? [{
           id: getUniqueId(),
           role: "assistant",
@@ -1030,6 +1169,9 @@ export default function ChatPage() {
           researchTicker: investmentTicker,
         }] : [])
       );
+      if (res.source_message_id && res.memory_status === "maintenance_queued") {
+        void pollMemoryCandidates(targetSessionId, res.source_message_id, assistantMsgId);
+      }
       if (shouldNotifyLongRun) {
         finishLongRunningToast(true, "Analysis complete", "Quanfora 2.0 consensus response is ready.");
       }
@@ -1110,7 +1252,12 @@ export default function ChatPage() {
     setEditingDraft(message.content);
   };
 
-  const regenerateTurn = async (userMessage: Message, prompt: string, responseMessageId?: string) => {
+  const regenerateTurn = async (
+    userMessage: Message,
+    prompt: string,
+    responseMessageId?: string,
+    useMemory = true,
+  ) => {
     const nextPrompt = prompt.trim();
     const messageIndex = messages.findIndex((item) => item.id === userMessage.id);
     if (!nextPrompt || messageIndex < 0 || isLoading || regeneratingMessageId) return;
@@ -1126,7 +1273,7 @@ export default function ChatPage() {
       setMessages(keepMessages);
       setEditingMessageId(null);
       setEditingDraft("");
-      await handleSend(nextPrompt);
+      await handleSend(nextPrompt, { useMemory });
     } catch (error) {
       showToast({
         title: "Unable to regenerate",
@@ -1142,6 +1289,14 @@ export default function ChatPage() {
     const messageIndex = messages.findIndex((item) => item.id === message.id);
     const prompt = messageIndex > 0 ? messages[messageIndex - 1] : null;
     if (prompt?.role === "user") void regenerateTurn(prompt, prompt.content, message.id);
+  };
+
+  const retryMessageWithoutMemory = (message: Message) => {
+    const messageIndex = messages.findIndex((item) => item.id === message.id);
+    const prompt = messageIndex > 0 ? messages[messageIndex - 1] : null;
+    if (prompt?.role === "user") {
+      void regenerateTurn(prompt, prompt.content, message.id, false);
+    }
   };
 
   const renderComposer = (placement: "center" | "dock") => {
@@ -1239,6 +1394,15 @@ export default function ChatPage() {
                   visible={version === "2.1"}
                 />
                 <ModelSelector placement={placement === "dock" ? "top" : "bottom"} compact />
+                {!user.is_guest && (
+                  <MessageActionButton
+                    label="Manage AI memory"
+                    onClick={() => setMemoryDialogOpen(true)}
+                    active={memoryDialogOpen}
+                  >
+                    <Brain className="size-4" />
+                  </MessageActionButton>
+                )}
                 <Button
                   onClick={() => void handleSend()}
                   disabled={isLoading || !input.trim()}
@@ -1304,6 +1468,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden">
+      <p className="sr-only" aria-live="polite">{memoryAnnouncement}</p>
       {/* Messages */}
       <div ref={scrollRef} className="relative flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-4 sm:px-8 sm:pb-4 sm:pt-6">
         {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
@@ -1402,6 +1567,17 @@ export default function ChatPage() {
                                     Sabi used {sabiCapabilityLabel(msg.selectedCapability)}
                                   </p>
                                 )}
+                                {Boolean(msg.memoryUsed?.length) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setMemoryDialogOpen(true)}
+                                    className="inline-flex items-center gap-1.5 rounded-md text-[11px] text-indigo-300 transition-colors duration-150 hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 motion-reduce:transition-none"
+                                  >
+                                    <Brain className="size-3.5" aria-hidden="true" />
+                                    Used {msg.memoryUsed?.length} saved preference{msg.memoryUsed?.length === 1 ? "" : "s"}
+                                  </button>
+                                )}
+                                {msg.grounding?.required && <GroundingDisclosure grounding={msg.grounding} />}
                                 {msg.researchTicker ? (
                                   <div className="space-y-3">
                                     <ResearchMessageTabs content={msg.content} reports={msg.researchReports} overview={msg.overview} />
@@ -1438,6 +1614,22 @@ export default function ChatPage() {
                                 )}
                               </div>
                             </div>
+                            {msg.memoryCandidates?.map((memory) => (
+                              <MemoryCandidateCard
+                                key={memory.id}
+                                memory={memory}
+                                onResolved={(memoryId) => {
+                                  setMessages((current) => current.map((message) =>
+                                    message.id === msg.id
+                                      ? {
+                                          ...message,
+                                          memoryCandidates: message.memoryCandidates?.filter((item) => item.id !== memoryId),
+                                        }
+                                      : message
+                                  ));
+                                }}
+                              />
+                            ))}
                             {msg.content && !isLoading && (
                               <div className="flex items-center gap-1 px-1 text-white/45" aria-label="Response actions">
                                 <MessageActionButton label={copiedMessageId === msg.id ? "Copied" : "Copy response"} onClick={() => copyResponse(msg)}>
@@ -1456,6 +1648,11 @@ export default function ChatPage() {
                                 <MessageActionButton label="Try again" disabled={Boolean(regeneratingMessageId)} onClick={() => retryMessage(msg)}>
                                   <RotateCcw className={cn("size-4", regeneratingMessageId === msg.id && "animate-spin motion-reduce:animate-none")} />
                                 </MessageActionButton>
+                                {Boolean(msg.memoryUsed?.length) && (
+                                  <MessageActionButton label="Try again without saved memory" disabled={Boolean(regeneratingMessageId)} onClick={() => retryMessageWithoutMemory(msg)}>
+                                    <Brain className="size-4" />
+                                  </MessageActionButton>
+                                )}
                               </div>
                             )}
                           </div>
@@ -1518,6 +1715,12 @@ export default function ChatPage() {
         <div className="sticky bottom-0 z-20 shrink-0 border-t border-transparent bg-[#050608]/95 pt-2 shadow-[0_-24px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl">
           {renderComposer("dock")}
         </div>
+      )}
+      {!user.is_guest && (
+        <AgentMemoryDialog
+          open={memoryDialogOpen}
+          onOpenChange={setMemoryDialogOpen}
+        />
       )}
     </div>
   );
