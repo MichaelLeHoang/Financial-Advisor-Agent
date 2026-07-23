@@ -57,6 +57,7 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const currentTheme = forceTheme ?? theme;
   const navExpanded = staticFull || isScrolled || mobileOpen;
+  const platformActive = pathname.startsWith("/platform");
 
   useEffect(() => {
     if (forceTheme) {
@@ -210,12 +211,12 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
             <NavigationMenuList className="gap-2">
               <LayoutGroup id="landing-nav-highlight">
                 <NavigationMenuItem>
-                  <NavigationMenuTrigger className="text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[state=open]:bg-transparent data-[state=open]:text-[var(--intro-nav-primary)]">
+                  <NavigationMenuTrigger className={`hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[state=open]:bg-transparent data-[state=open]:text-[var(--intro-nav-primary)] ${platformActive ? "text-[var(--intro-nav-primary)]" : "text-[var(--intro-nav-muted)]"}`}>
                     Product
                   </NavigationMenuTrigger>
                   <NavigationMenuContent>
                     <ul className="grid w-[280px] gap-1 p-2">
-                      <ProductLink href="/#features" title="Platform overview" detail="One portfolio, risk system, and AI layer" />
+                      <ProductLink href="/platform" title="Platform overview" detail="One portfolio, risk system, and AI layer" current={platformActive} />
                       <ProductLink href={isSignedIn ? "/invest" : loginHref("/invest")} title="Investment OS" detail="Theses, allocation, policy, and review" />
                       <ProductLink href={isSignedIn ? "/trade" : loginHref("/trade")} title="Trading OS" detail="Plans, sizing, paper execution, and journal" />
                     </ul>
@@ -413,7 +414,7 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
           <nav className="grid gap-1" aria-label="Mobile navigation">
             <div className={`mb-2 border-b pb-2 ${currentTheme === "White" ? "border-black/[0.08]" : "border-white/[0.08]"}`}>
               <div className={`px-3 pb-1 text-[11px] font-semibold uppercase ${currentTheme === "White" ? "text-[#98a2b3]" : "text-white/40"}`}>Product</div>
-              <MobileProductLink href="/#features" label="Platform overview" onClick={() => setMobileOpen(false)} />
+              <MobileProductLink href="/platform" label="Platform overview" onClick={() => setMobileOpen(false)} current={platformActive} />
               <MobileProductLink href={isSignedIn ? "/invest" : loginHref("/invest")} label="Investment OS" onClick={() => setMobileOpen(false)} />
               <MobileProductLink href={isSignedIn ? "/trade" : loginHref("/trade")} label="Trading OS" onClick={() => setMobileOpen(false)} />
             </div>
@@ -536,11 +537,11 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
   );
 }
 
-function ProductLink({ href, title, detail }: { href: string; title: string; detail: string }) {
+function ProductLink({ href, title, detail, current = false }: { href: string; title: string; detail: string; current?: boolean }) {
   return (
     <li>
       <NavigationMenuLink asChild>
-        <Link href={href} className="intro-resource-link block rounded-xl p-3 transition-colors">
+        <Link href={href} aria-current={current ? "page" : undefined} className={`intro-resource-link block rounded-xl p-3 transition-colors ${current ? "bg-white/[0.055]" : ""}`}>
           <span className="intro-resource-title block text-sm font-medium text-white/90">{title}</span>
           <span className="intro-resource-subtitle mt-1 block text-xs leading-5 text-white/40">{detail}</span>
         </Link>
@@ -549,8 +550,8 @@ function ProductLink({ href, title, detail }: { href: string; title: string; det
   );
 }
 
-function MobileProductLink({ href, label, onClick }: { href: string; label: string; onClick: () => void }) {
-  return <Link href={href} onClick={onClick} className="block rounded-lg px-3 py-2 text-sm font-medium text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)]">{label}</Link>;
+function MobileProductLink({ href, label, onClick, current = false }: { href: string; label: string; onClick: () => void; current?: boolean }) {
+  return <Link href={href} onClick={onClick} aria-current={current ? "page" : undefined} className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] ${current ? "bg-[var(--intro-nav-hover)] text-[var(--intro-nav-primary)]" : "text-[var(--intro-nav-muted)]"}`}>{label}</Link>;
 }
 
 function LandingNavItem({

@@ -7,16 +7,16 @@ import {
   motion,
   useDragControls,
   useMotionValue,
-  useReducedMotion,
   useScroll,
   useTransform,
 } from "motion/react";
+import { useHydratedReducedMotion } from "@/hooks/useHydratedReducedMotion";
 
 const INITIAL_TERMINAL_X = 320;
 const INITIAL_TERMINAL_Y = 170;
 
 export function ProductPreview() {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useHydratedReducedMotion();
   const sectionRef = useRef<HTMLElement>(null);
   const containerRevealRef = useRef<HTMLDivElement>(null);
   const dragBoundsRef = useRef<HTMLDivElement>(null);

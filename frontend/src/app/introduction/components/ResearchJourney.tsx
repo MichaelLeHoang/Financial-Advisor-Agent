@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CheckCircle2, FileText, Search, Shield, TrendingUp } from "lucide-react";
-import { AnimatePresence, motion, useInView, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useInView } from "motion/react";
 
 import { trackLandingEvent } from "./landing-analytics";
+import { useHydratedReducedMotion } from "@/hooks/useHydratedReducedMotion";
 
 const JOURNEY_STEPS = [
   {
@@ -52,7 +53,7 @@ const JOURNEY_STEPS = [
 type JourneyStep = (typeof JOURNEY_STEPS)[number];
 
 export function ResearchJourney() {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useHydratedReducedMotion();
   const [activeIndex, setActiveIndex] = useState(0);
   const [timeline, setTimeline] = useState({ top: 0, height: 0 });
   const stepsContainerRef = useRef<HTMLDivElement>(null);
