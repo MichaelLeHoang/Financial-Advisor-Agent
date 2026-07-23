@@ -59,7 +59,15 @@ _MAJOR_EXCHANGES = {
     "tsx venture",
 }
 
-_PUBLIC_QUOTE_TYPES = {"equity", "stock", "etf", "fund", "mutualfund", "index"}
+_PUBLIC_QUOTE_TYPES = {
+    "commonstock",
+    "equity",
+    "stock",
+    "etf",
+    "fund",
+    "mutualfund",
+    "index",
+}
 _LOW_CONFIDENCE_THRESHOLD = 0.55
 
 
@@ -325,6 +333,12 @@ def _normalize_name(value: str) -> str:
 
 
 def _latest_trade_time(snapshot: NormalizedMarketSnapshot) -> str | None:
+    quote_timestamp = getattr(snapshot, "quote_timestamp", None)
+    if quote_timestamp:
+        try:
+            return _format_datetime(datetime.fromisoformat(quote_timestamp.replace("Z", "+00:00")))
+        except (TypeError, ValueError):
+            pass
     frame = getattr(snapshot, "history_frame", None)
     try:
         if frame is not None and not frame.empty:

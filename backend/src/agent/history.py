@@ -50,7 +50,10 @@ def _is_guest_user(user_id: str) -> bool:
 
 def _get_connection() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(DB_PATH), timeout=5)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -246,20 +249,21 @@ def append_message(
     content: str,
     user_id: str = "00000000-0000-0000-0000-000000000001",
     metadata: dict | None = None,
-) -> None:
+) -> int | None:
     """Append a single message to the session history."""
     if _is_guest_user(user_id):
-        return
+        return None
     conn = _get_connection()
     title = _default_title(content) if role == "user" else None
     _touch_session(conn, user_id, session_id, title)
     metadata_json = json.dumps(metadata) if metadata else None
-    conn.execute(
+    cursor = conn.execute(
         "INSERT INTO messages (user_id, session, role, content, metadata, created_at) VALUES (?,?,?,?,?,?)",
         (user_id, session_id, role, content, metadata_json, datetime.now(UTC).isoformat()),
     )
     conn.commit()
     conn.close()
+    return int(cursor.lastrowid)
 
 
 def truncate_history(

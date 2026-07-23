@@ -40,6 +40,7 @@ from src.quant.routes import router as quant_router
 from src.api.news_routes import router as news_router
 from src.api.routes.intelligence import router as intelligence_router
 from src.api.equity_research import router as equity_research_router
+from src.api.memory import router as memory_router
 from src.investment_policy.routes import router as investment_policy_router
 from src.investment_workspace.routes import router as investment_workspace_router
 from src.paper_trading.routes import router as paper_trading_router
@@ -78,6 +79,7 @@ app.include_router(quant_router)
 app.include_router(news_router)
 app.include_router(intelligence_router)
 app.include_router(equity_research_router)
+app.include_router(memory_router)
 app.include_router(investment_policy_router)
 app.include_router(investment_workspace_router)
 app.include_router(paper_trading_router)
@@ -138,6 +140,7 @@ class AgentChatRequest(BaseModel):
     session_id: str = "default"
     preferred_mode: LLMMode | None = None
     mode: Literal["sabi", "single", "consensus", "research", "auto"] = "sabi"
+    use_memory: bool = True
 
 class AgentSessionRenameRequest(BaseModel):
     title: str
@@ -150,6 +153,7 @@ class AgentSessionMessageAppendRequest(BaseModel):
     role: str = Field(pattern="^(user|assistant)$")
     content: str = Field(min_length=1)
     metadata: dict | None = None
+    extract_memory: bool = False
 
 class AgentSessionMessagesTruncateRequest(BaseModel):
     keep_count: int = Field(ge=0)
@@ -775,6 +779,7 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
     """
     from src.agent.history import load_history, append_message
     from src.agent.response_cache import cached_chat_response
+    from src.services.user_memory import UserMemoryService, enqueue_memory_maintenance
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
     _ensure_chat_session_available(req.session_id, user)
@@ -783,7 +788,15 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
 
         # Guests can chat, but their conversation state must stay client-local.
         history = [] if user.is_guest else load_history(req.session_id, str(user.id))
-        agent._history = [{"role": item["role"], "content": item["content"]} for item in history]
+        memory_service = UserMemoryService()
+        memory_context = memory_service.build_context(
+            str(user.id),
+            req.session_id,
+            history,
+            use_memory=req.use_memory and not user.is_guest,
+        )
+        agent._history = memory_context.recent_messages
+        agent.set_personal_context(memory_context.prompt)
 
         def compute_result() -> dict:
             response = agent.chat(req.message, remember=False, mode=req.mode)
@@ -791,6 +804,8 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
             result = {"response": response, "session_id": req.session_id, "mode": req.mode}
             if metadata:
                 result.update(metadata)
+            result["memory_status"] = memory_context.status
+            result["memory_used"] = memory_context.usage
             return result
 
         result = cached_chat_response(
@@ -799,19 +814,36 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
             mode=req.mode,
             preferred_mode=req.preferred_mode,
             message=req.message,
-            history=history,
+            history=(
+                history
+                if history
+                else ([{"role": "system", "content": "personal context"}] if memory_context.has_personal_context else [])
+            ),
             is_guest=user.is_guest,
             compute=compute_result,
         )
 
         # Persist both turns
-        metadata = {
-            key: value
-            for key, value in result.items()
-            if key not in {"response", "session_id", "mode"}
-        } or None
         if req.remember and not user.is_guest:
-            append_message(req.session_id, "user", req.message, str(user.id))
+            source_message_id = append_message(
+                req.session_id, "user", req.message, str(user.id)
+            )
+            result["source_message_id"] = str(source_message_id)
+            if memory_context.enabled:
+                result["memory_status"] = enqueue_memory_maintenance(
+                    {
+                        "user_id": str(user.id),
+                        "plan": user.plan.value if hasattr(user.plan, "value") else str(user.plan),
+                        "session_id": req.session_id,
+                        "source_message_id": str(source_message_id),
+                        "message": req.message,
+                    }
+                )
+            metadata = {
+                key: value
+                for key, value in result.items()
+                if key not in {"response", "session_id", "mode"}
+            } or None
             append_message(
                 req.session_id,
                 "assistant",
@@ -870,6 +902,7 @@ async def create_agent_chat_job(req: AgentChatRequest, user: AuthenticatedUser =
         "is_guest": user.is_guest,
         "mode": req.mode,
         "preferred_mode": req.preferred_mode,
+        "use_memory": req.use_memory,
     }
 
     try:
@@ -913,30 +946,59 @@ async def agent_consensus(req: AgentChatRequest, user: AuthenticatedUser = Depen
     {"message": "Should I invest in NVDA right now?"}
     """
     from src.agent.orchestrator import QuanforaOrchestrator
-    from src.agent.history import append_message
+    from src.agent.history import append_message, load_history
+    from src.services.user_memory import UserMemoryService, enqueue_memory_maintenance
 
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
     _ensure_chat_session_available(req.session_id, user)
     try:
+        memory_service = UserMemoryService()
+        history = [] if user.is_guest else load_history(req.session_id, str(user.id))
+        memory_context = memory_service.build_context(
+            str(user.id), req.session_id, history, use_memory=req.use_memory
+        )
+        analysis_message = req.message
+        if memory_context.prompt:
+            analysis_message = (
+                f"{req.message}\n\nAuthenticated user context "
+                f"(personalization only; not live data):\n{memory_context.prompt}"
+            )
         orchestrator = QuanforaOrchestrator(
             user_id=str(user.id),
             plan=user.plan,
             preferred_mode=req.preferred_mode,
             gateway=get_agent(user=user).gateway,
         )
-        result = orchestrator.analyze(req.message)
-        synthesis = orchestrator._synthesize_response(req.message, result)
+        result = orchestrator.analyze(analysis_message)
+        synthesis = orchestrator._synthesize_response(analysis_message, result)
 
         # Persist
+        source_message_id = None
+        memory_status = memory_context.status
         if req.remember and not user.is_guest:
-            append_message(req.session_id, "user", req.message, str(user.id))
+            source_message_id = append_message(
+                req.session_id, "user", req.message, str(user.id)
+            )
+            if memory_context.enabled:
+                memory_status = enqueue_memory_maintenance(
+                    {
+                        "user_id": str(user.id),
+                        "plan": user.plan.value if hasattr(user.plan, "value") else str(user.plan),
+                        "session_id": req.session_id,
+                        "source_message_id": str(source_message_id),
+                        "message": req.message,
+                    }
+                )
             append_message(req.session_id, "assistant", synthesis, str(user.id))
 
         return {
             "response": synthesis,
             "session_id": req.session_id,
             "mode": "consensus",
+            "source_message_id": str(source_message_id) if source_message_id else None,
+            "memory_status": memory_status,
+            "memory_used": memory_context.usage,
             "consensus": {
                 "verdict": result.verdict.value,
                 "confidence": result.confidence,
@@ -1019,10 +1081,33 @@ async def append_agent_session_message(
 ):
     """Append a generated message to a saved conversation session owned by the current user."""
     from src.agent.history import append_message
+    from src.services.user_memory import UserMemoryService, enqueue_memory_maintenance
 
     _ensure_chat_session_available(session_id, user)
-    append_message(session_id, req.role, req.content, str(user.id), metadata=req.metadata)
-    return {"status": "ok", "session_id": session_id}
+    message_id = append_message(
+        session_id, req.role, req.content, str(user.id), metadata=req.metadata
+    )
+    memory_status = None
+    if req.role == "user" and req.extract_memory:
+        service = UserMemoryService()
+        if service.get_settings(str(user.id)).enabled:
+            memory_status = enqueue_memory_maintenance(
+                {
+                    "user_id": str(user.id),
+                    "plan": user.plan.value
+                    if hasattr(user.plan, "value")
+                    else str(user.plan),
+                    "session_id": session_id,
+                    "source_message_id": str(message_id),
+                    "message": req.content,
+                }
+            )
+    return {
+        "status": "ok",
+        "session_id": session_id,
+        "source_message_id": str(message_id),
+        "memory_status": memory_status,
+    }
 
 
 @app.patch("/api/v1/agent/sessions/{session_id}/messages")
@@ -1081,6 +1166,7 @@ async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Qu
     """
     from src.auth.supabase import get_guest_user
     from src.agent.history import load_history, append_message, rename_session
+    from src.services.user_memory import UserMemoryService, enqueue_memory_maintenance
     
     await websocket.accept()
     
@@ -1097,20 +1183,33 @@ async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Qu
         while True: 
             data = await websocket.receive_json()
             message = data.get("message", "")
+            use_memory = bool(data.get("use_memory", True))
 
             agent = get_agent(user=user)
             
             # Load DB history and prepare for LangGraph
             db_history = [] if user.is_guest else load_history(session_id, str(user.id))
             is_new_session = len(db_history) == 0
+            memory_service = UserMemoryService()
+            memory_context = memory_service.build_context(
+                str(user.id),
+                session_id,
+                db_history,
+                use_memory=use_memory and not user.is_guest,
+            )
+            agent._history = memory_context.recent_messages
+            agent.set_personal_context(memory_context.prompt)
             
             # Format history for LangChain
-            messages = [{"role": m["role"], "content": m["content"]} for m in db_history]
+            messages = agent._context_messages() + memory_context.recent_messages
             messages.append({"role": "user", "content": message})
             
             # Save user message
+            source_message_id = None
             if not user.is_guest:
-                append_message(session_id, "user", message, str(user.id))
+                source_message_id = append_message(
+                    session_id, "user", message, str(user.id)
+                )
 
             assistant_full_content = ""
 
@@ -1162,8 +1261,29 @@ async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Qu
                         })
 
             # Save the final assistant response to DB
+            memory_status = memory_context.status
             if not user.is_guest:
-                append_message(session_id, "assistant", assistant_full_content, str(user.id))
+                if memory_context.enabled:
+                    memory_status = enqueue_memory_maintenance(
+                        {
+                            "user_id": str(user.id),
+                            "plan": user.plan.value if hasattr(user.plan, "value") else str(user.plan),
+                            "session_id": session_id,
+                            "source_message_id": str(source_message_id),
+                            "message": message,
+                        }
+                    )
+                append_message(
+                    session_id,
+                    "assistant",
+                    assistant_full_content,
+                    str(user.id),
+                    metadata={
+                        "source_message_id": str(source_message_id),
+                        "memory_status": memory_status,
+                        "memory_used": memory_context.usage,
+                    },
+                )
 
             # Generate smart AI title if it's the very first message
             if is_new_session and not user.is_guest:
@@ -1181,7 +1301,14 @@ async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Qu
                     print(f"Failed to generate title: {e}")
 
             # Signal end of stream
-            await websocket.send_json({"type": "done"})
+            await websocket.send_json(
+                {
+                    "type": "done",
+                    "source_message_id": str(source_message_id) if source_message_id else None,
+                    "memory_status": memory_status,
+                    "memory_used": memory_context.usage,
+                }
+            )
 
     except WebSocketDisconnect:
         pass

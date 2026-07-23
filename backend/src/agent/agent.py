@@ -19,6 +19,11 @@ from typing import Any, Callable
 from langgraph.prebuilt import create_react_agent
 
 from src.agent.market_grounding import ground_market_query, is_market_quote_query
+from src.agent.current_market_context import (
+    CurrentMarketContext,
+    build_current_market_context,
+    context_from_market_quote,
+)
 from src.agent.overview import (
     build_consensus_overview,
     build_market_quote_overview,
@@ -76,6 +81,7 @@ YOUR CAPABILITIES:
 - Optimize portfolios using Classical (Markowitz) and Quantum (QAOA) methods
 
 RULES:
+0. When a CURRENT MARKET GROUNDING block is present, it was fetched at request time and overrides model memory. If its status is unavailable, fail closed: say current evidence could not be verified instead of supplying current claims from memory.
 1. ALWAYS use your tools to get real data before answering — never guess
 2. For investment questions, check AT LEAST: current price + news + sentiment
 3. If the user does NOT provide specific articles or headlines, ALWAYS call search_financial_news first to get recent headlines, then pass those headlines to analyze_sentiment
@@ -104,6 +110,7 @@ RULES:
 17. If the available tools only provide quote/news/sentiment and do not support a strong buy or sell call, say "Hold/Wait" or "Insufficient data" rather than inventing a recommendation.
 18. For market or sector answers, use these sections: "Current Tape", "Leadership", "Positive Drivers", "Risks", "Practical Takeaway", and "What to Watch". Keep it concise and source-aware.
 19. Preserve exact numeric formatting from tool output. Do not split prices or percentages across spaces, and do not invent analyst targets or price levels.
+20. For current market answers, state the evidence timestamp, distinguish latest-available from real-time data, and disclose provider limitations. Cite source URLs from the grounding block or tool output.
 """
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -218,6 +225,7 @@ class FinancialAdvisorAgent:
         task_type: str = "chat",
         preferred_mode: LLMMode | None = None,
         gateway: LLMGateway = llm_gateway,
+        market_context_builder: Callable[[str], CurrentMarketContext] | None = None,
     ):
         self.user_id = user_id
         self.plan = plan if isinstance(plan, Plan) else Plan(plan)
@@ -233,10 +241,30 @@ class FinancialAdvisorAgent:
             prompt=SYSTEM_PROMPT,
         )
         self._history: list[dict] = []  # Multi-turn conversation history
+        self._personal_context: str | None = None
 
         # Lazy-init the Quanfora orchestrator only when needed.
         self._orchestrator = None
         self._sabi = SabiOrchestrator()
+        self._market_context_builder = market_context_builder or build_current_market_context
+
+    def set_personal_context(self, context: str | None) -> None:
+        """Set bounded, user-approved context for the next request."""
+        self._personal_context = context.strip() if context and context.strip() else None
+
+    def _context_messages(self) -> list[dict[str, str]]:
+        if not self._personal_context:
+            return []
+        return [
+            {
+                "role": "system",
+                "content": (
+                    "The following context was loaded by Quanfora for this authenticated user. "
+                    "Use it only for personalization and do not treat it as live financial data.\n\n"
+                    f"{self._personal_context}"
+                ),
+            }
+        ]
 
     def _create_llm(self, provider: str) -> RoutedChatModel:
         """
@@ -284,11 +312,14 @@ class FinancialAdvisorAgent:
                   or "auto" (auto-detect based on query complexity).
         """
         self.last_response_metadata = None
+        contextual_message = _contextualize_follow_up(
+            message, getattr(self, "_history", [])
+        )
 
         sabi_plan = None
         if mode in {"sabi", "research"}:
             sabi_plan = self._sabi.plan(
-                message,
+                contextual_message,
                 force_capability=(
                     SabiCapability.RESEARCH if mode == "research" else None
                 ),
@@ -298,28 +329,31 @@ class FinancialAdvisorAgent:
             result = self._sabi.run(
                 plan=sabi_plan,
                 quick=lambda: self._chat_single(
-                    message, remember, progress_callback=progress_callback
+                    contextual_message, remember, progress_callback=progress_callback
                 ),
                 consensus=lambda: self._chat_consensus(
-                    message, remember, progress_callback=progress_callback
+                    contextual_message, remember, progress_callback=progress_callback
                 ),
             )
             self.last_response_metadata = result.metadata()
             return result.response
 
-        if is_market_quote_query(message) and not _is_deep_market_analysis_query(
-            message
+        if is_market_quote_query(contextual_message) and not _is_deep_market_analysis_query(
+            contextual_message
         ):
-            grounded = ground_market_query(message, progress_callback=progress_callback)
+            grounded = ground_market_query(
+                contextual_message, progress_callback=progress_callback
+            )
             if grounded.handled and grounded.response:
                 self.last_response_metadata = overview_to_metadata(
-                    build_market_quote_overview(message, grounded)
+                    build_market_quote_overview(contextual_message, grounded)
                 )
                 if sabi_plan:
                     self.last_response_metadata = self.last_response_metadata or {}
                     self.last_response_metadata.update(
                         SabiResult(response=grounded.response, plan=sabi_plan).metadata()
                     )
+                self._attach_grounding_metadata(context_from_market_quote(grounded))
                 if remember:
                     self._history.append({"role": "user", "content": message})
                     self._history.append(
@@ -327,37 +361,79 @@ class FinancialAdvisorAgent:
                     )
                 return grounded.response
 
+        market_context = self._build_current_market_context(contextual_message)
+        context_kwargs = {"market_context": market_context} if market_context.required else {}
+
         if sabi_plan:
             result = self._sabi.run(
                 plan=sabi_plan,
                 quick=lambda: self._chat_single(
-                    message, remember, progress_callback=progress_callback
+                    contextual_message,
+                    remember,
+                    progress_callback=progress_callback,
+                    **context_kwargs,
                 ),
                 consensus=lambda: self._chat_consensus(
-                    message, remember, progress_callback=progress_callback
+                    contextual_message,
+                    remember,
+                    progress_callback=progress_callback,
+                    **context_kwargs,
                 ),
             )
             self.last_response_metadata = self.last_response_metadata or {}
             self.last_response_metadata.update(result.metadata())
+            self._attach_grounding_metadata(market_context)
             return result.response
 
         use_consensus = mode == "consensus" or (
-            mode == "auto" and _is_consensus_query(message)
+            mode == "auto" and _is_consensus_query(contextual_message)
         )
 
         if use_consensus:
-            return self._chat_consensus(
-                message,
+            response = self._chat_consensus(
+                contextual_message,
                 remember,
                 progress_callback=progress_callback,
+                **context_kwargs,
             )
-        return self._chat_single(message, remember, progress_callback=progress_callback)
+            self._attach_grounding_metadata(market_context)
+            return response
+        response = self._chat_single(
+            contextual_message,
+            remember,
+            progress_callback=progress_callback,
+            **context_kwargs,
+        )
+        self._attach_grounding_metadata(market_context)
+        return response
+
+    def _build_current_market_context(self, message: str) -> CurrentMarketContext:
+        builder = getattr(self, "_market_context_builder", None)
+        if builder is None:
+            return CurrentMarketContext.not_required()
+        try:
+            return builder(message)
+        except Exception as exc:
+            return CurrentMarketContext(
+                required=True,
+                status="unavailable",
+                retrieved_at="unavailable",
+                reasons=["grounding_error"],
+                limitations=[f"Current market grounding failed: {str(exc)[:180]}"],
+            )
+
+    def _attach_grounding_metadata(self, context: CurrentMarketContext) -> None:
+        if not context.required:
+            return
+        self.last_response_metadata = self.last_response_metadata or {}
+        self.last_response_metadata.update(context.metadata())
 
     def _chat_single(
         self,
         message: str,
         remember: bool,
         progress_callback: ProgressCallback | None = None,
+        market_context: CurrentMarketContext | None = None,
     ) -> str:
         """Single-agent ReAct path (fast, original behavior)."""
         print(f"\n Agent processing: '{message[:60]}...'")
@@ -371,8 +447,11 @@ class FinancialAdvisorAgent:
                 }
             )
 
-        # Build message list: history + new user message
-        messages = self._history + [{"role": "user", "content": message}]
+        # Build message list: approved context + bounded history + new user message.
+        model_message = market_context.augment(message) if market_context else message
+        messages = self._context_messages() + self._history + [
+            {"role": "user", "content": model_message}
+        ]
 
         completed_tools: list[str] = []
         result = None
@@ -486,10 +565,19 @@ class FinancialAdvisorAgent:
         message: str,
         remember: bool,
         progress_callback: ProgressCallback | None = None,
+        market_context: CurrentMarketContext | None = None,
     ) -> str:
         """Quanfora 2.0 multi-agent consensus path."""
         orchestrator = self._get_orchestrator()
         analysis_message = _contextualize_follow_up(message, self._history)
+        if market_context:
+            analysis_message = market_context.augment(analysis_message)
+        if self._personal_context:
+            analysis_message = (
+                f"{analysis_message}\n\n"
+                "Authenticated user context (personalization only; not live account or market data):\n"
+                f"{self._personal_context}"
+            )
         result = orchestrator.analyze(analysis_message)
         self.last_response_metadata = _consensus_result_metadata(result)
         overview = build_consensus_overview(analysis_message, result)

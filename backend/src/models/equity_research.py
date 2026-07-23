@@ -101,6 +101,7 @@ class EquityResearchRunCreate(BaseModel):
     quick_model: str = "default-fast"
     deep_model: str = "default-research"
     source_surface: SourceSurface = SourceSurface.RESEARCH
+    use_memory: bool = True
 
     @field_validator("ticker")
     @classmethod
@@ -246,6 +247,8 @@ class EquityResearchRun(BaseModel):
     final_summary: str | None = None
     main_upside: str | None = None
     main_risk: str | None = None
+    personal_context: str | None = Field(default=None, exclude=True)
+    context_memory_ids: list[str] = Field(default_factory=list, exclude=True)
 
 
 class EquityResearchRunDetail(BaseModel):

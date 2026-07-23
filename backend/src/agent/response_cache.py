@@ -5,9 +5,10 @@ from typing import Any
 
 from src.config import settings
 from src.core.cache import cached_value
+from src.agent.current_market_context import requires_fresh_evidence
 from src.saas.models import Plan
 
-CHAT_RESPONSE_CACHE_VERSION = 4
+CHAT_RESPONSE_CACHE_VERSION = 5
 
 
 def normalized_chat_message(message: str) -> str:
@@ -37,12 +38,14 @@ def should_cache_chat_response(
     *,
     history: list[Any],
     is_guest: bool,
+    message: str = "",
     ttl_seconds: int | None = None,
 ) -> bool:
     effective_ttl = (
         settings.llm_cache_ttl_seconds if ttl_seconds is None else ttl_seconds
     )
-    return effective_ttl > 0 and not history and not is_guest
+    requires_fresh, _ = requires_fresh_evidence(message)
+    return effective_ttl > 0 and not history and not is_guest and not requires_fresh
 
 
 def cached_chat_response(
@@ -56,7 +59,7 @@ def cached_chat_response(
     is_guest: bool,
     compute: Callable[[], dict[str, Any]],
 ) -> dict[str, Any]:
-    if not should_cache_chat_response(history=history, is_guest=is_guest):
+    if not should_cache_chat_response(history=history, is_guest=is_guest, message=message):
         return compute()
 
     return cached_value(

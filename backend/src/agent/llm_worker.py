@@ -13,7 +13,7 @@ from src.agent.history import (
 from src.agent.llm_queue import LLMJobQueue, QueuedJob
 from src.agent.overview import build_single_response_overview, overview_to_metadata
 from src.agent.response_cache import cached_chat_response
-from src.config import settings
+from src.services.user_memory import UserMemoryService, enqueue_memory_maintenance
 from src.core.redis_client import RedisUnavailable
 from src.saas.models import Plan
 
@@ -56,6 +56,7 @@ def execute_llm_job(
         or user_id == "00000000-0000-0000-0000-000000000001"
     )
     preferred_mode = payload.get("preferred_mode")
+    use_memory = bool(payload.get("use_memory", True))
     if not is_guest and session_claimed_by_another_user(session_id, user_id):
         raise PermissionError("Chat session not found")
 
@@ -70,9 +71,15 @@ def execute_llm_job(
         ),
     )
     history = [] if is_guest else load_history(session_id, user_id)
-    agent._history = [
-        {"role": item["role"], "content": item["content"]} for item in history
-    ]
+    memory_service = UserMemoryService()
+    memory_context = memory_service.build_context(
+        user_id,
+        session_id,
+        history,
+        use_memory=use_memory and not is_guest,
+    )
+    agent._history = memory_context.recent_messages
+    agent.set_personal_context(memory_context.prompt)
 
     def compute_result() -> dict[str, Any]:
         response = agent.chat(
@@ -86,6 +93,8 @@ def execute_llm_job(
         result = {"response": response, "session_id": session_id, "mode": mode}
         if metadata:
             result.update(metadata)
+        result["memory_status"] = memory_context.status
+        result["memory_used"] = memory_context.usage
         return result
 
     result = cached_chat_response(
@@ -94,17 +103,32 @@ def execute_llm_job(
         mode=mode,
         preferred_mode=preferred_mode,
         message=message,
-        history=history,
+        history=(
+            history
+            if history
+            else ([{"role": "system", "content": "personal context"}] if memory_context.has_personal_context else [])
+        ),
         is_guest=is_guest,
         compute=compute_result,
     )
-    metadata = {
-        key: value
-        for key, value in result.items()
-        if key not in {"response", "session_id", "mode"}
-    } or None
     if remember and not is_guest:
-        append_message(session_id, "user", message, user_id)
+        source_message_id = append_message(session_id, "user", message, user_id)
+        result["source_message_id"] = str(source_message_id)
+        if memory_context.enabled:
+            result["memory_status"] = enqueue_memory_maintenance(
+                {
+                    "user_id": user_id,
+                    "plan": plan.value,
+                    "session_id": session_id,
+                    "source_message_id": str(source_message_id),
+                    "message": message,
+                }
+            )
+        metadata = {
+            key: value
+            for key, value in result.items()
+            if key not in {"response", "session_id", "mode"}
+        } or None
         append_message(
             session_id,
             "assistant",
@@ -114,6 +138,14 @@ def execute_llm_job(
         )
 
     return result
+
+
+def execute_memory_job(job: QueuedJob) -> dict[str, Any]:
+    """Run low-priority memory work after the user-facing answer is complete."""
+    from src.llm.gateway import llm_gateway
+    from src.services.user_memory import execute_memory_maintenance
+
+    return execute_memory_maintenance(job.payload, llm_gateway)
 
 
 class LLMWorker:
@@ -141,6 +173,23 @@ class LLMWorker:
             slot_acquired = True
 
             self.queue.update(job.job_id, status="running", started_at=time.time())
+            if job.kind == "memory":
+                try:
+                    result = execute_memory_job(job)
+                    self.queue.update(job.job_id, status="succeeded", result=result)
+                    return True
+                except Exception as exc:
+                    self.queue.update(
+                        job.job_id,
+                        status="failed",
+                        error={
+                            "type": type(exc).__name__,
+                            "message": str(exc),
+                            "trace": traceback.format_exc()[-2000:],
+                        },
+                    )
+                    return False
+
             self.queue.update_progress(
                 job.job_id,
                 mode=job.kind,

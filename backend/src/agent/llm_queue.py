@@ -11,7 +11,7 @@ from src.core.redis_client import RedisUnavailable, get_redis_client, normalize_
 
 
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
-JobKind = Literal["single", "consensus"]
+JobKind = Literal["single", "consensus", "memory"]
 
 
 @dataclass(frozen=True)
@@ -98,7 +98,15 @@ class LLMJobQueue:
 
     def dequeue(self, timeout_seconds: int | None = None) -> QueuedJob | None:
         timeout = settings.llm_worker_poll_timeout_seconds if timeout_seconds is None else timeout_seconds
-        result = self._call(self.client.brpop, [self._queue_key("consensus"), self._queue_key("single")], timeout=timeout)
+        result = self._call(
+            self.client.brpop,
+            [
+                self._queue_key("consensus"),
+                self._queue_key("single"),
+                self._queue_key("memory"),
+            ],
+            timeout=timeout,
+        )
         if result is None:
             return None
         _, job_id = result

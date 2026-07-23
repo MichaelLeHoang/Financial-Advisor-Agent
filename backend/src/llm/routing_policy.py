@@ -12,6 +12,8 @@ TASK_MODE_DEFAULTS: dict[str, LLMMode] = {
     "portfolio": "balanced",
     "deep_research": "deep_research",
     "coding_export": "coding_export",
+    "memory_extraction": "fast",
+    "conversation_summary": "fast",
 }
 
 PLAN_MODE_LIMITS: dict[Plan, set[LLMMode]] = {

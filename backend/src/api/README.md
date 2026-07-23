@@ -7,12 +7,14 @@ Provides the FastAPI application and thin transport adapters for Quanfora backen
 - Register routers, middleware, authentication dependencies, and health/status endpoints.
 - Expose Sabi-routed agent chat, selected-capability metadata, structured overviews, queued jobs, bounded RAG queries, market quote/search, prediction, portfolio, watchlist, and service endpoints.
 - Expose owned chat-history truncation for edit-and-regenerate and retry workflows.
+- Expose authenticated, owner-scoped memory review, confirmation, editing, settings, and deletion routes.
 - Delegate domain behavior, including stateless chat-response caching, to dedicated modules and normalize HTTP errors/timeouts.
 
 ## Key Files
 - `app.py`: application composition and core API surface.
 - `equity_research.py`: Quanfora 2.1 run, event, share, workspace, and report routes.
 - `news_routes.py`: categorized financial-news endpoints.
+- `memory.py`: user-controlled conversational-memory CRUD and approval routes.
 - `routes/intelligence.py`: Market Intelligence briefing, picks, and report endpoint.
 
 ## Boundaries
@@ -23,4 +25,4 @@ Use FastAPI `TestClient` with mocked dependencies for route contracts, authoriza
 
 ## Latest Change
 - Registered the owner-scoped paper-trading account and deterministic order routes.
-- Added the authenticated message-truncation route used by in-place chat regeneration.
+- Added authenticated memory management and per-request memory controls while preserving the existing agent chat endpoint.

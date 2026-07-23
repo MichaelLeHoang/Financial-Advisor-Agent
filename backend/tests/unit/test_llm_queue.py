@@ -177,6 +177,36 @@ def test_llm_worker_records_callback_progress(monkeypatch):
     assert updated["progress"]["completed_tools"][-1] == "consensus_synthesis"
 
 
+def test_llm_worker_processes_background_memory_job_without_chat_progress(monkeypatch):
+    from src.agent import llm_worker as worker_module
+    from src.agent.llm_queue import LLMJobQueue
+
+    queue = LLMJobQueue(client=FakeRedis())
+    record = queue.enqueue(
+        {
+            "user_id": "u1",
+            "plan": "free",
+            "session_id": "s1",
+            "source_message_id": "7",
+            "message": "I prefer concise answers.",
+        },
+        "memory",
+    )
+    monkeypatch.setattr(
+        worker_module,
+        "execute_memory_job",
+        lambda job: {"candidates_created": 1, "summary_updated": False},
+    )
+
+    processed = worker_module.LLMWorker(queue=queue).process_once()
+    updated = queue.get(record["job_id"])
+
+    assert processed is True
+    assert updated["status"] == "succeeded"
+    assert updated["result"]["candidates_created"] == 1
+    assert "progress" not in updated
+
+
 def test_llm_worker_requeues_when_concurrency_slots_unavailable(monkeypatch):
     from src.agent.llm_worker import LLMWorker
     from src.agent.llm_queue import LLMJobQueue

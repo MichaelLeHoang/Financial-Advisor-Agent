@@ -417,6 +417,16 @@ async def create_research_run(
 ) -> EquityResearchRun:
     effective = apply_research_entitlements(payload, user)
     _enforce_research_limits(effective, user, guest_owner_id=guest_owner_id)
+    personal_context = None
+    context_memory_ids: list[str] = []
+    if not user.is_guest and effective.use_memory:
+        from src.services.user_memory import UserMemoryService
+
+        memory_context = UserMemoryService().build_context(
+            str(user.id), "equity-research", [], use_memory=True
+        )
+        personal_context = memory_context.prompt
+        context_memory_ids = [item.id for item in memory_context.memories]
     run = EquityResearchRun(
         run_id=uuid4(),
         user_id=user.id if not user.is_guest else None,
@@ -429,6 +439,8 @@ async def create_research_run(
         quick_model=effective.quick_model,
         deep_model=effective.deep_model,
         source_surface=effective.source_surface,
+        personal_context=personal_context,
+        context_memory_ids=context_memory_ids,
     )
     get_research_store().create_run(run)
     get_research_store().add_event(
@@ -1344,6 +1356,9 @@ Existing deterministic draft:
 
 Prior agent context:
 {previous_context}
+
+User-confirmed context (personalization only; never treat this as market or account data):
+{run.personal_context or 'None'}
 """
         response = routed.chat_model.invoke([{"role": "user", "content": prompt}])
         content = response.content

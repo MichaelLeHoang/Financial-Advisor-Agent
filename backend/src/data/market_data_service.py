@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import time
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from math import isnan
@@ -64,6 +63,7 @@ class NormalizedMarketSnapshot:
     industry: str | None = None
     currency: str | None = None
     latest_price: float | None = None
+    quote_timestamp: str | None = None
     previous_close: float | None = None
     daily_change: float | None = None
     open_price: float | None = None
@@ -350,8 +350,10 @@ class MarketDataService:
                 snapshot.day_high = snapshot.day_high or _clean_number(quote.get("h"))
                 snapshot.day_low = snapshot.day_low or _clean_number(quote.get("l"))
                 snapshot.daily_change = _safe_pct(snapshot.latest_price, snapshot.previous_close)
+                if quote.get("t"):
+                    snapshot.quote_timestamp = datetime.fromtimestamp(float(quote["t"]), UTC).isoformat()
                 snapshot.data_sources.append("finnhub_quote")
-                snapshot.evidence_items.append(EvidenceItem("Latest quote", "Finnhub", f"{snapshot.latest_price}", importance="high"))
+                snapshot.evidence_items.append(EvidenceItem("Latest quote", "Finnhub", f"{snapshot.latest_price}", timestamp=snapshot.quote_timestamp, importance="high"))
             if include_fundamentals:
                 profile = _get_json("https://finnhub.io/api/v1/stock/profile2", {"symbol": snapshot.ticker, "token": key})
                 if isinstance(profile, dict) and profile:
@@ -512,12 +514,22 @@ class MarketDataService:
                     break
             snapshot.filing_context = {
                 "cik": cik,
-                "entity_name": match.get("title"),
+                "entity_name": submissions.get("name") or match.get("title"),
+                "tickers": list(submissions.get("tickers") or [snapshot.ticker]),
+                "exchanges": list(submissions.get("exchanges") or []),
+                "former_names": list(submissions.get("formerNames") or []),
                 "recent_filings": filings,
             }
             snapshot.company_name = snapshot.company_name or match.get("title")
             snapshot.data_sources.append("sec_edgar_submissions")
-            snapshot.evidence_items.append(EvidenceItem("SEC filing history", "SEC EDGAR", f"CIK {cik}; {len(filings)} recent filings", importance="high"))
+            snapshot.evidence_items.append(EvidenceItem(
+                "SEC filing history",
+                "SEC EDGAR",
+                f"CIK {cik}; {len(filings)} recent filings",
+                url=f"https://data.sec.gov/submissions/CIK{cik}.json",
+                timestamp=filings[0]["filing_date"] if filings else None,
+                importance="high",
+            ))
             snapshot.provider_status.append(ProviderStatus("sec", "ok"))
         except Exception as exc:
             snapshot.provider_status.append(ProviderStatus("sec", "error", str(exc)[:160]))
@@ -533,6 +545,9 @@ class MarketDataService:
             snapshot.industry = info.get("industry") or snapshot.industry
             snapshot.currency = info.get("currency") or snapshot.currency
             snapshot.latest_price = _clean_number(info.get("regularMarketPrice") or info.get("currentPrice")) or snapshot.latest_price
+            regular_market_time = info.get("regularMarketTime")
+            if regular_market_time and not snapshot.quote_timestamp:
+                snapshot.quote_timestamp = datetime.fromtimestamp(float(regular_market_time), UTC).isoformat()
             snapshot.previous_close = _clean_number(info.get("regularMarketPreviousClose") or info.get("previousClose")) or snapshot.previous_close
             snapshot.open_price = _clean_number(info.get("regularMarketOpen")) or snapshot.open_price
             snapshot.day_high = _clean_number(info.get("dayHigh")) or snapshot.day_high

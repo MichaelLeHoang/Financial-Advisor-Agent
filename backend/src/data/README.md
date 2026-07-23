@@ -5,7 +5,8 @@ Provides market-data normalization, historical price fetching, and Qdrant persis
 
 ## Responsibilities
 - Fetch current and historical market data.
-- Merge and normalize yfinance, Finnhub, Alpha Vantage, and SEC evidence.
+- Merge and normalize timestamped yfinance, Finnhub, Alpha Vantage, and SEC evidence.
+- Preserve SEC current tickers, exchanges, and former company names for identity-sensitive research.
 - Search and deduplicate symbols while preserving exchange and instrument metadata.
 - Manage Qdrant collections, inserts, and filtered similarity searches.
 
@@ -21,4 +22,4 @@ Consumers should use the normalized service instead of calling providers directl
 Mock provider payloads and cover normalization, duplicate symbols, malformed responses, timeouts, missing data, source quality, and deterministic indicators.
 
 ## Latest Change
-- Merged symbol-search provider results, removed instrument types from the exchange field, and deduplicated repeated ticker candidates.
+- Added quote timestamps, linked SEC evidence, and current/former issuer identity metadata for runtime-grounded chat responses.

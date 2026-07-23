@@ -7,7 +7,7 @@ from src.saas.models import Plan
 def test_chat_response_cache_version_bumped_for_response_structure_change():
     from src.agent.response_cache import CHAT_RESPONSE_CACHE_VERSION
 
-    assert CHAT_RESPONSE_CACHE_VERSION == 4
+    assert CHAT_RESPONSE_CACHE_VERSION == 5
 
 
 def test_cached_chat_response_reuses_normalized_first_turn_prompt(monkeypatch):
@@ -34,7 +34,7 @@ def test_cached_chat_response_reuses_normalized_first_turn_prompt(monkeypatch):
         plan=Plan.FREE,
         mode="single",
         preferred_mode=None,
-        message="Should   I buy NVDA?",
+        message="Explain   percentage compounding",
         history=[],
         is_guest=False,
         compute=compute,
@@ -44,7 +44,7 @@ def test_cached_chat_response_reuses_normalized_first_turn_prompt(monkeypatch):
         plan=Plan.FREE,
         mode="single",
         preferred_mode=None,
-        message="should i buy nvda?",
+        message="explain percentage compounding",
         history=[],
         is_guest=False,
         compute=compute,
@@ -52,6 +52,37 @@ def test_cached_chat_response_reuses_normalized_first_turn_prompt(monkeypatch):
 
     assert first == second
     assert calls == 1
+
+
+def test_cached_chat_response_bypasses_time_sensitive_market_prompts(monkeypatch):
+    from src.agent import response_cache
+
+    def fail_if_cached(*args, **kwargs):
+        raise AssertionError("time-sensitive market responses must not be cached")
+
+    calls = 0
+
+    def compute():
+        nonlocal calls
+        calls += 1
+        return {"response": "fresh", "session_id": "s1", "mode": "single"}
+
+    monkeypatch.setattr(response_cache, "cached_value", fail_if_cached)
+
+    for prompt in ("Should I buy NVDA?", "What happened to Sandisk recently?"):
+        result = response_cache.cached_chat_response(
+            user_id="user-1",
+            plan=Plan.FREE,
+            mode="single",
+            preferred_mode=None,
+            message=prompt,
+            history=[],
+            is_guest=False,
+            compute=compute,
+        )
+        assert result["response"] == "fresh"
+
+    assert calls == 2
 
 
 def test_cached_chat_response_skips_guest_and_history(monkeypatch):
@@ -112,6 +143,9 @@ def test_llm_worker_caches_full_result_with_metadata(monkeypatch):
             self._history = []
             self.last_response_metadata = {"overview": {"title": "NVDA"}}
 
+        def set_personal_context(self, context):
+            self.personal_context = context
+
         def chat(self, message, remember=False, mode="single", progress_callback=None):
             nonlocal agent_calls
             agent_calls += 1
@@ -139,19 +173,19 @@ def test_llm_worker_caches_full_result_with_metadata(monkeypatch):
         "user_id": "user-1",
         "plan": "free",
         "session_id": "s1",
-        "message": "Should I buy NVDA?",
+        "message": "Explain percentage compounding",
         "remember": True,
         "mode": "single",
         "preferred_mode": None,
     }
     first = llm_worker.execute_llm_job(QueuedJob("job-1", "single", payload))
     second = llm_worker.execute_llm_job(
-        QueuedJob("job-2", "single", {**payload, "message": "should   i buy nvda?"})
+        QueuedJob("job-2", "single", {**payload, "message": "explain   percentage compounding"})
     )
 
     assert first == second
     assert first["overview"] == {"title": "NVDA"}
     assert agent_calls == 1
     assert len(appended) == 4
-    assert appended[1][1]["metadata"] == {"overview": {"title": "NVDA"}}
-    assert appended[3][1]["metadata"] == {"overview": {"title": "NVDA"}}
+    assert appended[1][1]["metadata"]["overview"] == {"title": "NVDA"}
+    assert appended[3][1]["metadata"]["overview"] == {"title": "NVDA"}
