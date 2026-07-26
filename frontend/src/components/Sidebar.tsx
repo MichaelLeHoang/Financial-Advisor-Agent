@@ -44,6 +44,7 @@ import type { Plan } from "@/components/auth/AuthProvider";
 import ChatSearchDialog from "@/components/ChatSearchDialog";
 import ProfileMenu from "@/components/ProfileMenu";
 import { showToast } from "@/components/ui/toast";
+import { LoadingRegion, SkeletonBlock } from "@/components/ui/DataLoading";
 import { PRIMARY_NAVIGATION } from "@/config/workspace-navigation";
 import { keyboardShortcutsEnabled } from "@/lib/keyboard-shortcuts";
 
@@ -922,18 +923,24 @@ function getVisibleMoreNav(plan: Plan): NavItem[] {
 
 function ChatHistorySkeleton({ compact = false, count = 5 }: { compact?: boolean; count?: number }) {
     return (
-        <div className="space-y-1 px-1" aria-label="Loading chat history">
-            {Array.from({ length: count }, (_, index) => (
-                <div
-                    key={index}
-                    className={cn(
-                        "animate-pulse rounded-xl bg-white/[0.045]",
-                        compact ? "h-9" : "h-10"
-                    )}
-                    style={{ width: `${92 - (index % 3) * 10}%` }}
-                />
-            ))}
-        </div>
+        <LoadingRegion
+            loading
+            label="Loading chat history"
+            className="px-1"
+            skeleton={(
+                <div className="space-y-1">
+                    {Array.from({ length: count }, (_, index) => (
+                        <SkeletonBlock
+                            key={index}
+                            className={cn("rounded-xl", compact ? "h-9" : "h-10")}
+                            style={{ width: `${92 - (index % 3) * 10}%` }}
+                        />
+                    ))}
+                </div>
+            )}
+        >
+            {null}
+        </LoadingRegion>
     );
 }
 

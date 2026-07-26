@@ -9,6 +9,7 @@ import type { ResearchDepth, ResearchReportType, ResearchSourceSurface } from "@
 import { useAuth } from "@/components/auth/AuthProvider";
 import { ResearchDepthSelector, ResearchReportTypeSelector, canUseTradingReports, normalizeResearchTicker } from "@/components/equity-research/ResearchComponents";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
+import { LoadingRegion, SkeletonBlock, SkeletonText } from "@/components/ui/DataLoading";
 
 function sourceFromQuery(value: string | null): ResearchSourceSurface {
   if (value === "intro-demo") return "introduction";
@@ -137,7 +138,7 @@ function ResearchLandingContent() {
               disabled={loading || !ticker}
               className="h-12 rounded-full bg-indigo-primary px-5 text-sm font-bold text-white transition-colors hover:bg-indigo-primary/90 disabled:opacity-45"
             >
-              {loading ? "Starting..." : "Generate Report"}
+              {loading ? "Starting…" : "Generate Report"}
             </button>
           </div>
           {error && <p className="mt-3 text-sm text-red-negative">{error}</p>}
@@ -198,8 +199,39 @@ function ResearchLandingContent() {
 
 export default function ResearchLandingPage() {
   return (
-    <Suspense fallback={<main className="min-h-screen bg-[#06080d] p-8 text-white/50">Loading research desk...</main>}>
+    <Suspense fallback={<ResearchLandingSkeleton />}>
       <ResearchLandingContent />
     </Suspense>
+  );
+}
+
+function ResearchLandingSkeleton() {
+  return (
+    <main className="min-h-screen bg-[#06080d] px-4 py-6 text-white sm:px-8">
+      <LoadingRegion
+        loading
+        delay={0}
+        label="Loading research desk"
+        className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-5xl flex-col items-center justify-center py-12"
+        skeleton={(
+          <div className="flex w-full flex-col items-center text-center">
+            <SkeletonBlock className="h-7 w-56 rounded-full" />
+            <SkeletonBlock className="mt-5 h-12 w-[38rem] max-w-[90vw] rounded-sm" />
+            <SkeletonBlock className="mt-3 h-4 w-[30rem] max-w-[80vw] rounded-sm" />
+            <SkeletonBlock className="mt-8 h-16 w-full max-w-3xl rounded-full" />
+            <div className="mt-6 grid w-full max-w-2xl gap-4 sm:grid-cols-2">
+              {Array.from({ length: 2 }, (_, index) => (
+                <div key={index} className="rounded-2xl bg-white/[0.03] p-4 text-left">
+                  <SkeletonBlock className="h-3 w-24 rounded-sm" />
+                  <SkeletonText className="mt-4" lines={3} widths={["100%", "84%", "62%"]} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      >
+        {null}
+      </LoadingRegion>
+    </main>
   );
 }

@@ -52,7 +52,7 @@ import {
   ChartTooltip,
 } from "@/components/ui/chart";
 import { showToast } from "@/components/ui/toast";
-import { DelayedSkeleton } from "@/components/ui/DataLoading";
+import { LoadingRegion, SkeletonBlock, SkeletonText } from "@/components/ui/DataLoading";
 
 const PALETTE = [
   "#6366f1",
@@ -1366,10 +1366,7 @@ export default function PortfolioPage() {
             <div id="portfolio-allocation" className="scroll-mt-16 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.85fr)]">
               <div className="min-w-0 rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-3 shadow-[var(--shadow-card)]">
                 {holdingsLoading || portfoliosLoading ? (
-                  <div className="min-h-[270px] space-y-4 p-6" aria-label="Loading portfolio">
-                    <DelayedSkeleton className="h-5 w-36 rounded-sm" label="Loading portfolio" />
-                    <DelayedSkeleton className="mx-auto mt-6 size-44 rounded-full" label="Loading portfolio" />
-                  </div>
+                  <LoadingRegion loading label="Loading portfolio allocation" className="min-h-[270px] p-6" skeleton={<div><SkeletonBlock className="h-5 w-36 rounded-sm" /><SkeletonBlock className="mx-auto mt-6 size-44 rounded-full" /></div>}>{null}</LoadingRegion>
                 ) : allocationData.length > 0 ? (
                   <div className="relative mx-auto flex min-h-[270px] max-w-[540px] items-center justify-center">
                     <ChartContainer config={chartConfig} className="h-[250px] w-[250px]">
@@ -1538,10 +1535,7 @@ export default function PortfolioPage() {
         )}
 
         {portfoliosLoading ? (
-          <section className="min-h-48 space-y-4 rounded-2xl border border-white/12 bg-[var(--surface-card-strong)] p-7 shadow-[var(--shadow-card)]" aria-label="Loading portfolios">
-            <DelayedSkeleton className="h-7 w-52 rounded-sm" label="Loading portfolios" />
-            <DelayedSkeleton className="h-20 w-full rounded-sm" label="Loading portfolios" />
-          </section>
+          <LoadingRegion loading label="Loading portfolios" className="min-h-48 rounded-2xl border border-white/12 bg-[var(--surface-card-strong)] p-7 shadow-[var(--shadow-card)]" skeleton={<div><SkeletonBlock className="h-7 w-52 rounded-sm" /><SkeletonText className="mt-5" lines={3} widths={["100%", "86%", "58%"]} /></div>}>{null}</LoadingRegion>
         ) : activePortfolio ? (
           <>
             {showAddPanel && (
@@ -1774,10 +1768,7 @@ export default function PortfolioPage() {
 
               <div className="mt-4 space-y-3">
                 {recurringBuysLoading ? (
-                  <div className="min-h-28 space-y-3 rounded-2xl border border-white/[0.07] bg-black/14 p-4" aria-label="Loading recurring buys">
-                    <DelayedSkeleton className="h-5 w-40 rounded-sm" label="Loading recurring buys" />
-                    <DelayedSkeleton className="h-10 w-full rounded-sm" label="Loading recurring buys" />
-                  </div>
+                  <LoadingRegion loading label="Loading recurring buys" className="min-h-28 rounded-2xl border border-white/[0.07] bg-black/14 p-4" skeleton={<div><SkeletonBlock className="h-5 w-40 rounded-sm" /><SkeletonBlock className="mt-3 h-10 w-full rounded-lg" /></div>}>{null}</LoadingRegion>
                 ) : recurringBuys.length > 0 ? (
                   recurringBuys.map((buy) => {
                     const expanded = expandedRecurringBuyId === buy.id;
@@ -2092,9 +2083,7 @@ export default function PortfolioPage() {
 
                 <div className="overflow-hidden rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] shadow-[var(--shadow-card)]">
                   {holdingsLoading ? (
-                    <div className="min-h-80 space-y-3 p-5" aria-label="Loading holdings">
-                      {Array.from({ length: 5 }, (_, index) => <DelayedSkeleton key={index} className="h-12 w-full rounded-sm" label="Loading holdings" />)}
-                    </div>
+                    <LoadingRegion loading label="Loading holdings" className="min-h-80 p-5" skeleton={<div className="space-y-3">{Array.from({ length: 5 }, (_, index) => <SkeletonBlock key={index} className="h-12 w-full rounded-lg" />)}</div>}>{null}</LoadingRegion>
                   ) : sortedHoldings.length > 0 ? (
                     <HorizontalScroll className="w-full">
                       <table className="w-full min-w-[860px] table-fixed text-xs sm:text-sm">

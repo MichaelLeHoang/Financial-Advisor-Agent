@@ -58,7 +58,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { DelayedSkeleton, RefreshingIndicator } from "@/components/ui/DataLoading";
+import { LoadingRegion, RefreshingIndicator, SkeletonBlock, SkeletonText } from "@/components/ui/DataLoading";
 import { readSessionSnapshot, SESSION_CACHE_MAX_AGE, writeSessionSnapshot } from "@/lib/session-data-cache";
 
 /* ------------------------------------------------------------------ */
@@ -494,8 +494,8 @@ function MarketCard({ row, onOpen }: { row: QuoteRow; onOpen: (instrument: Marke
         <div className="min-w-0">
           {row.loading ? (
             <>
-              <div className="h-5 w-24 animate-pulse rounded bg-white/[0.07]" />
-              <div className="mt-2 h-4 w-16 animate-pulse rounded-full bg-white/[0.05]" />
+              <SkeletonBlock className="h-5 w-24 rounded-sm" />
+              <SkeletonBlock className="mt-2 h-4 w-16 rounded-full" />
             </>
           ) : q ? (
             <>
@@ -770,11 +770,7 @@ function WikipediaProfile({
     <section className="space-y-3">
       <h3 className="text-base font-semibold text-white">Profile</h3>
       {loading ? (
-        <div className="space-y-2">
-          <div className="h-4 w-full animate-pulse rounded bg-white/[0.06]" />
-          <div className="h-4 w-5/6 animate-pulse rounded bg-white/[0.05]" />
-          <div className="h-4 w-2/3 animate-pulse rounded bg-white/[0.04]" />
-        </div>
+        <LoadingRegion loading label="Loading company profile" skeleton={<SkeletonText lines={3} widths={["100%", "83%", "66%"]} />}>{null}</LoadingRegion>
       ) : profile ? (
         <>
           <p className="text-sm leading-relaxed text-white/52">{profile.extract}</p>
@@ -1060,7 +1056,7 @@ function QuoteDetailPanel({
         </div>
 
         {loading ? (
-          <div className="h-20 w-72 animate-pulse rounded-2xl bg-white/[0.06]" />
+          <LoadingRegion loading label={`Loading ${instrument.symbol} quote`} skeleton={<div><SkeletonBlock className="h-10 w-56 rounded-sm" /><SkeletonBlock className="mt-3 h-4 w-72 max-w-full rounded-sm" /></div>}>{null}</LoadingRegion>
         ) : quote ? (
           <div>
             <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
@@ -1253,7 +1249,7 @@ function QuoteDetailPanel({
             />
           ) : (
             <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-white/[0.08] text-sm text-white/32">
-              {loading ? "Loading chart..." : "No chart history available"}
+              {loading ? <LoadingRegion loading label="Loading chart history" className="size-full" skeleton={<div className="flex size-full flex-col justify-between p-4"><SkeletonBlock className="h-3 w-20 rounded-sm" /><SkeletonBlock className="h-px w-full rounded-none" /><SkeletonBlock className="h-px w-full rounded-none" /><SkeletonBlock className="h-14 w-full rounded-lg" /></div>}>{null}</LoadingRegion> : "No chart history available"}
             </div>
           )}
         </div>
@@ -1587,17 +1583,7 @@ function WatchlistSection({
 
           {/* Symbol rows */}
           {loading ? (
-            <div className="space-y-2 px-3 pb-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-2.5">
-                  <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-white/[0.06]" />
-                  <div className="flex-1 space-y-1.5">
-                    <div className="h-3 w-12 animate-pulse rounded bg-white/[0.07]" />
-                    <div className="h-2.5 w-20 animate-pulse rounded bg-white/[0.05]" />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <LoadingRegion loading label="Loading watchlist symbols" className="px-3 pb-3" skeleton={<div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="flex items-center gap-2.5"><SkeletonBlock className="size-8 shrink-0 rounded-full" /><SkeletonText className="flex-1" lines={2} widths={["22%", "38%"]} /></div>)}</div>}>{null}</LoadingRegion>
           ) : assets.length === 0 ? (
             <p className="px-3 pb-4 pt-1 text-xs text-white/30">No symbols yet. Add your first above.</p>
           ) : (
@@ -1617,14 +1603,14 @@ function WatchlistSection({
                         {q ? (
                           <p className="truncate text-xs text-white/35">{q.name}</p>
                         ) : a.loading ? (
-                          <p className="mt-1 h-2.5 w-16 animate-pulse rounded bg-white/[0.07]" />
+                          <SkeletonBlock className="mt-1 h-2.5 w-16 rounded-sm" />
                         ) : (
                           <p className="text-xs text-white/25">Unavailable</p>
                         )}
                       </div>
                       <div className="shrink-0 text-right">
                         {a.loading ? (
-                          <span className="inline-block h-4 w-12 animate-pulse rounded bg-white/[0.07]" />
+                          <SkeletonBlock className="ml-auto h-4 w-12 rounded-sm" />
                         ) : q ? (
                           <>
                             <p className="text-sm font-semibold tabular-nums text-white">${fmt(q.price)}</p>
@@ -1875,11 +1861,7 @@ export default function WatchlistPage() {
             )}
 
             {listsLoading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 2 }).map((_, i) => (
-                  <DelayedSkeleton key={i} className="h-32 rounded-2xl" label="Loading watchlists" />
-                ))}
-              </div>
+              <LoadingRegion loading label="Loading watchlists" skeleton={<div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <div key={i} className="h-32 rounded-2xl bg-white/[0.025] p-4"><SkeletonBlock className="h-4 w-32 rounded-sm" /><SkeletonText className="mt-5" lines={3} widths={["100%", "86%", "60%"]} /></div>)}</div>}>{null}</LoadingRegion>
             ) : watchlists.length === 0 ? (
               <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-white/[0.08] py-12 text-center">
                 <Star className="h-8 w-8 text-white/10" />

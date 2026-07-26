@@ -8,7 +8,7 @@ import { usePortfolioBooks } from "@/components/portfolio/PortfolioBooksProvider
 import { useInvestmentPolicy } from "@/components/investment-policy/InvestmentPolicyProvider";
 import type { Holding, InvestmentPolicyAlert, MarketQuote, PositionBook } from "@/lib/api";
 import { fetchQuotes } from "@/lib/quote-cache";
-import { DelayedSkeleton, RefreshingIndicator } from "@/components/ui/DataLoading";
+import { LoadingRegion, RefreshingIndicator, SkeletonBlock } from "@/components/ui/DataLoading";
 
 export default function HomePage() {
   const { portfolio, holdings, summary, events, loading: booksLoading, refreshing: booksRefreshing, error: booksError, refreshedAt, refresh } = usePortfolioBooks();
@@ -79,11 +79,12 @@ export default function HomePage() {
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
         <Panel>
           <PanelHeading title="Requires attention" detail="Saved portfolio and policy checks" action={<ShieldAlert className="size-4 text-amber-300" />} />
-          <div className="divide-y divide-[var(--theme-border)]">
-            {alerts.slice(0, 4).map((alert) => <Attention key={alert.key} href={alert.href} title={alert.title} detail={alert.detail} tone={alert.tone} />)}
-            {!booksLoading && !alerts.length && <div className="py-8 text-center"><p className="text-sm font-semibold">No recorded issues need attention</p><p className="mt-1 text-xs text-[var(--text-muted)]">New classification and policy alerts will appear here.</p></div>}
-            {booksLoading && <div className="space-y-3 py-5"><DelayedSkeleton className="h-12 w-full rounded-sm" label="Loading portfolio checks" /><DelayedSkeleton className="h-12 w-full rounded-sm" label="Loading portfolio checks" /></div>}
-          </div>
+          <LoadingRegion loading={booksLoading} label="Loading portfolio checks" skeleton={<div className="space-y-3 py-5"><SkeletonBlock className="h-12 w-full rounded-lg" /><SkeletonBlock className="h-12 w-5/6 rounded-lg" /></div>}>
+            <div className="divide-y divide-[var(--theme-border)]">
+              {alerts.slice(0, 4).map((alert) => <Attention key={alert.key} href={alert.href} title={alert.title} detail={alert.detail} tone={alert.tone} />)}
+              {!alerts.length && <div className="py-8 text-center"><p className="text-sm font-semibold">No recorded issues need attention</p><p className="mt-1 text-xs text-[var(--text-muted)]">New classification and policy alerts will appear here.</p></div>}
+            </div>
+          </LoadingRegion>
         </Panel>
         <Panel>
           <PanelHeading title="Portfolio brief" detail={new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric" }).format(new Date())} />

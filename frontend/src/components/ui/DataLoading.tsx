@@ -1,32 +1,130 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  remainingSkeletonTime,
+  SKELETON_APPEARANCE_DELAY_MS,
+  SKELETON_MINIMUM_VISIBLE_MS,
+} from "@/lib/loading-state";
 
-export function DelayedSkeleton({
-  className,
-  delay = 120,
-  label = "Loading",
-}: {
-  className?: string;
-  delay?: number;
-  label?: string;
-}) {
-  const [visible, setVisible] = useState(delay <= 0);
+type SkeletonPhase = "idle" | "pending" | "visible";
+
+function useSkeletonPhase(
+  loading: boolean,
+  delay: number,
+  minimumDuration: number,
+) {
+  const [phase, setPhase] = useState<SkeletonPhase>(() => {
+    if (!loading) return "idle";
+    return delay <= 0 ? "visible" : "pending";
+  });
+  const visibleAt = useRef<number | null>(delay <= 0 && loading ? Date.now() : null);
 
   useEffect(() => {
-    if (delay <= 0) return;
-    const timer = window.setTimeout(() => setVisible(true), delay);
-    return () => window.clearTimeout(timer);
-  }, [delay]);
+    let timer: number | undefined;
 
+    if (loading) {
+      if (visibleAt.current !== null) {
+        setPhase("visible");
+        return;
+      }
+
+      if (delay <= 0) {
+        visibleAt.current = Date.now();
+        setPhase("visible");
+        return;
+      }
+
+      setPhase("pending");
+      timer = window.setTimeout(() => {
+        visibleAt.current = Date.now();
+        setPhase("visible");
+      }, delay);
+    } else if (visibleAt.current === null) {
+      setPhase("idle");
+    } else {
+      const remaining = remainingSkeletonTime(visibleAt.current, Date.now(), minimumDuration);
+      if (remaining === 0) {
+        visibleAt.current = null;
+        setPhase("idle");
+      } else {
+        timer = window.setTimeout(() => {
+          visibleAt.current = null;
+          setPhase("idle");
+        }, remaining);
+      }
+    }
+
+    return () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [delay, loading, minimumDuration]);
+
+  return phase;
+}
+
+export function SkeletonBlock({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div {...props} aria-hidden="true" className={cn("data-skeleton", className)} />;
+}
+
+export function SkeletonText({
+  lines = 3,
+  widths = ["100%", "88%", "64%"],
+  className,
+}: {
+  lines?: number;
+  widths?: string[];
+  className?: string;
+}) {
+  return (
+    <div aria-hidden="true" className={cn("space-y-2.5", className)}>
+      {Array.from({ length: lines }, (_, index) => (
+        <SkeletonBlock
+          key={index}
+          className="h-3 rounded-sm"
+          style={{ width: widths[index % widths.length] }}
+        />
+      ))}
+    </div>
+  );
+}
+
+export function LoadingRegion({
+  loading,
+  label,
+  skeleton,
+  children,
+  className,
+  delay = SKELETON_APPEARANCE_DELAY_MS,
+  minimumDuration = SKELETON_MINIMUM_VISIBLE_MS,
+}: {
+  loading: boolean;
+  label: string;
+  skeleton: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+  delay?: number;
+  minimumDuration?: number;
+}) {
+  const phase = useSkeletonPhase(loading, delay, minimumDuration);
+
+  if (phase === "idle") {
+    return <div className={cn("data-loading-content", className)}>{children}</div>;
+  }
+
+  const statusLabel = /[.…]$/.test(label) ? label : `${label}…`;
   return (
     <div
       role="status"
-      aria-label={label}
-      className={cn("transition-opacity duration-100", visible ? "data-skeleton opacity-100" : "opacity-0", className)}
-    />
+      aria-live="polite"
+      aria-busy="true"
+      className={cn("data-loading-region", phase === "visible" ? "opacity-100" : "opacity-0", className)}
+    >
+      <span className="sr-only">{statusLabel}</span>
+      {skeleton}
+    </div>
   );
 }
 
@@ -67,30 +165,41 @@ export function RefreshingIndicator({ refreshing, label = "Updating data" }: { r
 
 export function WorkspaceLoadingShell({ label = "Restoring your workspace" }: { label?: string }) {
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-5 py-8 sm:px-8" role="status" aria-live="polite" aria-label={label}>
-      <span className="sr-only">{label}</span>
-      <div className="space-y-3">
-        <DelayedSkeleton className="h-4 w-36 rounded-sm" label={label} />
-        <DelayedSkeleton className="h-10 w-72 max-w-[70vw] rounded-sm" label={label} />
-        <DelayedSkeleton className="h-4 w-[34rem] max-w-[88vw] rounded-sm" label={label} />
-      </div>
-      <div className="mt-8 grid grid-cols-1 gap-px overflow-hidden border border-[var(--theme-border)] bg-[var(--theme-border)] lg:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="bg-[var(--surface-primary)] p-5">
-            <DelayedSkeleton className="h-3 w-24 rounded-sm" label={label} />
-            <DelayedSkeleton className="mt-4 h-8 w-32 rounded-sm" label={label} />
-            <DelayedSkeleton className="mt-3 h-3 w-40 max-w-full rounded-sm" label={label} />
+    <LoadingRegion
+      loading
+      label={label}
+      delay={0}
+      className="mx-auto w-full max-w-[1600px] px-5 py-8 sm:px-8"
+      skeleton={(
+        <>
+          <div className="space-y-3">
+            <SkeletonBlock className="h-3 w-28 rounded-sm" />
+            <SkeletonBlock className="h-9 w-72 max-w-[70vw] rounded-sm" />
+            <SkeletonBlock className="h-3 w-[32rem] max-w-[88vw] rounded-sm" />
           </div>
-        ))}
-      </div>
-      <div className="mt-6 grid grid-cols-1 gap-px overflow-hidden border border-[var(--theme-border)] bg-[var(--theme-border)] xl:grid-cols-2">
-        {Array.from({ length: 2 }, (_, index) => (
-          <div key={index} className="min-h-56 bg-[var(--surface-primary)] p-6">
-            <DelayedSkeleton className="h-5 w-36 rounded-sm" label={label} />
-            <DelayedSkeleton className="mt-7 h-24 w-full rounded-sm" label={label} />
+          <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }, (_, index) => (
+              <div key={index} className="rounded-xl bg-[var(--surface-primary)] p-5">
+                <SkeletonBlock className="h-3 w-20 rounded-sm" />
+                <SkeletonBlock className="mt-4 h-7 w-28 rounded-sm" />
+                <SkeletonBlock className="mt-3 h-3 w-36 max-w-full rounded-sm" />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-    </div>
+          <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-[1.35fr_1fr]">
+            <div className="min-h-64 rounded-xl bg-[var(--surface-primary)] p-6">
+              <SkeletonBlock className="h-4 w-32 rounded-sm" />
+              <SkeletonBlock className="mt-7 h-40 w-full rounded-lg" />
+            </div>
+            <div className="min-h-64 rounded-xl bg-[var(--surface-primary)] p-6">
+              <SkeletonBlock className="h-4 w-28 rounded-sm" />
+              <SkeletonText className="mt-7" lines={5} widths={["100%", "82%", "94%", "74%", "58%"]} />
+            </div>
+          </div>
+        </>
+      )}
+    >
+      {null}
+    </LoadingRegion>
   );
 }

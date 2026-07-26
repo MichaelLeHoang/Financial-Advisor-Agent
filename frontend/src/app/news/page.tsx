@@ -34,6 +34,7 @@ import type { MarketIntelligenceResponse, NewsArticle, NewsBriefCard, NewsRespon
 import { useAuth } from "@/components/auth/AuthProvider";
 import { IntroductionFooter, IntroductionNav } from "@/app/introduction/components";
 import InteractiveMarketChart from "@/components/market/InteractiveMarketChart";
+import { LoadingRegion, SkeletonBlock, SkeletonText } from "@/components/ui/DataLoading";
 import { cn } from "@/lib/utils";
 import type { MarketQuote, MarketQuotePoint } from "@/lib/api";
 
@@ -453,32 +454,53 @@ function NewsPageContent() {
             </div>
           )}
 
-          {loading && !workspace && !rawNews && (
-            <div className="news-card flex min-h-96 flex-col items-center justify-center gap-4 rounded-xl border">
-              <Loader2 className="size-8 animate-spin text-indigo-300" />
-              <p className="text-sm text-white/45">Building the intelligence brief...</p>
-            </div>
-          )}
+          <LoadingRegion
+            loading={loading && !workspace && !rawNews}
+            label="Building the intelligence brief"
+            skeleton={(
+              <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+                <div className="news-card min-h-96 rounded-xl border p-5 sm:p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <SkeletonBlock className="h-4 w-40 rounded-sm" />
+                    <SkeletonBlock className="h-7 w-20 rounded-full" />
+                  </div>
+                  <SkeletonBlock className="mt-6 h-7 w-4/5 rounded-sm" />
+                  <SkeletonText className="mt-5" lines={5} widths={["100%", "94%", "88%", "96%", "62%"]} />
+                  <div className="mt-7 grid grid-cols-3 gap-3">
+                    {Array.from({ length: 3 }, (_, index) => <SkeletonBlock key={index} className="h-16 rounded-lg" />)}
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  {Array.from({ length: 3 }, (_, index) => (
+                    <div key={index} className="news-card rounded-xl border p-5">
+                      <SkeletonBlock className="h-3 w-24 rounded-sm" />
+                      <SkeletonText className="mt-4" lines={3} widths={["100%", "84%", "56%"]} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          >
+            <>
+              {!loading && activeTab === "news" && rawNews && rawNews.articles.length === 0 && (
+                <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border text-center">
+                  <Newspaper className="size-10 text-white/20" />
+                  <p className="max-w-md text-sm text-white/42">
+                    No source articles were returned. Refresh again or choose a different market mix.
+                  </p>
+                </div>
+              )}
 
-          {!loading && activeTab === "news" && rawNews && rawNews.articles.length === 0 && (
-            <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border text-center">
-              <Newspaper className="size-10 text-white/20" />
-              <p className="max-w-md text-sm text-white/42">
-                No source articles were returned. Refresh again or choose a different market mix.
-              </p>
-            </div>
-          )}
+              {!loading && activeTab !== "news" && workspace && workspace.briefing.length === 0 && (
+                <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border text-center">
+                  <Newspaper className="size-10 text-white/20" />
+                  <p className="max-w-md text-sm text-white/42">
+                    No intelligence cards were generated from this source set. Refresh again or choose a different market mix.
+                  </p>
+                </div>
+              )}
 
-          {!loading && activeTab !== "news" && workspace && workspace.briefing.length === 0 && (
-            <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border text-center">
-              <Newspaper className="size-10 text-white/20" />
-              <p className="max-w-md text-sm text-white/42">
-                No intelligence cards were generated from this source set. Refresh again or choose a different market mix.
-              </p>
-            </div>
-          )}
-
-          <div key={activeTab}>
+              <div key={activeTab}>
               {activeTab === "news" && rawNews && rawNews.articles.length > 0 && (
                 <NewsTab articles={rawNews.articles} />
               )}
@@ -501,7 +523,9 @@ function NewsPageContent() {
                   {activeTab === "reports" && <ReportsTab reports={workspace.reports} />}
                 </>
               )}
-          </div>
+              </div>
+            </>
+          </LoadingRegion>
         </section>
       )}
 
@@ -1172,7 +1196,7 @@ function ReportMarketChart({ report }: { report: ResearchReport }) {
         {loading ? (
           <div className="flex h-full items-center justify-center gap-2 text-sm text-[#77707c]">
             <Loader2 className="size-4 animate-spin" />
-            Loading chart data...
+            Loading chart data…
           </div>
         ) : error ? (
           <div className="flex h-full items-center justify-center text-sm text-[#77707c]">{error}</div>

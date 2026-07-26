@@ -16,7 +16,7 @@ import ModelSelector, { useModel, apiModeFromVersion } from "@/components/ModelS
 import AgentMemoryDialog, { MemoryCandidateCard } from "@/components/AgentMemoryDialog";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { LoadingRegion, SkeletonBlock, SkeletonText } from "@/components/ui/DataLoading";
 import { Textarea } from "@/components/ui/textarea";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { OverviewCard } from "@/components/ui/overview-card";
@@ -1472,15 +1472,27 @@ export default function ChatPage() {
       {/* Messages */}
       <div ref={scrollRef} className="relative flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-4 sm:px-8 sm:pb-4 sm:pt-6">
         {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
-        {isHistoryLoading && (
-          <Card className="mx-auto max-w-fit rounded-xl border-indigo-primary/30 bg-indigo-primary/10 px-4 py-2 text-sm text-indigo-primary shadow-none">
-            <CardContent className="flex items-center gap-3 p-0">
-              <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-              <span>Loading chat history...</span>
-            </CardContent>
-          </Card>
-        )}
-
+        <LoadingRegion
+          loading={isHistoryLoading}
+          label="Loading chat history"
+          skeleton={(
+            <div className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-5xl flex-col gap-5 py-4">
+              <div className="ml-auto w-[min(72%,28rem)] rounded-2xl bg-indigo-primary/10 px-4 py-4">
+                <SkeletonText lines={2} widths={["92%", "56%"]} />
+              </div>
+              <div className="w-[min(86%,42rem)] rounded-2xl bg-[var(--surface-card)] px-5 py-5">
+                <SkeletonBlock className="mb-4 h-2.5 w-24 rounded-sm" />
+                <SkeletonText lines={5} widths={["96%", "88%", "100%", "74%", "52%"]} />
+                <div className="mt-5 flex gap-2">
+                  {Array.from({ length: 4 }, (_, index) => <SkeletonBlock key={index} className="size-8 rounded-lg" />)}
+                </div>
+              </div>
+              <div className="ml-auto w-[min(58%,22rem)] rounded-2xl bg-indigo-primary/10 px-4 py-4">
+                <SkeletonText lines={1} widths={["78%"]} />
+              </div>
+            </div>
+          )}
+        >
         <AnimatePresence mode="wait">
           {isStarterState ? (
             <motion.div
@@ -1710,6 +1722,7 @@ export default function ChatPage() {
             </motion.div>
           )}
         </AnimatePresence>
+        </LoadingRegion>
       </div>
       {!isStarterState && (
         <div className="sticky bottom-0 z-20 shrink-0 border-t border-transparent bg-[#050608]/95 pt-2 shadow-[0_-24px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl">

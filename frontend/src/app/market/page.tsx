@@ -66,6 +66,7 @@ import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { showToast } from "@/components/ui/toast";
+import { LoadingRegion, SkeletonBlock } from "@/components/ui/DataLoading";
 import { ResearchDepthSelector, ResearchReportTypeSelector, canUseTradingReports } from "@/components/equity-research/ResearchComponents";
 
 interface StockInfo extends MarketSymbol {
@@ -932,9 +933,11 @@ function MarketCard({
                                     {up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
                                     {formatChange(stock.change)}
                                 </Badge>
+                            ) : stock.loading ? (
+                                <SkeletonBlock className="h-6 w-16 rounded-lg" />
                             ) : (
                                 <Badge variant="outline" className="h-6 rounded-lg border-white/[0.08] bg-white/[0.04] text-white/38">
-                                    {stock.loading ? "Loading" : "No quote"}
+                                    No quote
                                 </Badge>
                             )}
                             <button
@@ -957,25 +960,42 @@ function MarketCard({
                         </div>
                     </div>
 
-                    <div className="mb-6 flex items-end justify-between gap-3">
-                        <div>
-                            <div className="text-3xl font-bold">{hasQuote ? formatCurrency(stock.price) : "—"}</div>
-                            <div className="mt-1 text-xs text-white/35">
-                                {stock.loading ? "Loading live quote..." : hasQuote ? `${stock.exchange} · ${stock.sector}` : "Live quote unavailable"}
-                            </div>
-                        </div>
-                        <Maximize2 className="size-4 text-white/30 transition-colors group-hover:text-white/70" />
-                    </div>
-
-                    <div className="h-24 min-h-24 w-full min-w-0">
-                        {mounted && hasQuote && stock.data.length > 0 ? (
-                            <MiniChart stock={stock} />
-                        ) : (
-                            <div className="flex h-full w-full items-center justify-center rounded-xl bg-white/[0.035] text-xs text-white/30">
-                                {stock.loading ? "Loading chart..." : "No live chart"}
+                    <LoadingRegion
+                        loading={Boolean(stock.loading)}
+                        label={`Loading ${stock.ticker} market data`}
+                        skeleton={(
+                            <div>
+                                <div className="mb-6 flex items-end justify-between gap-3">
+                                    <div>
+                                        <SkeletonBlock className="h-8 w-28 rounded-sm" />
+                                        <SkeletonBlock className="mt-2 h-2.5 w-32 rounded-sm" />
+                                    </div>
+                                    <SkeletonBlock className="size-4 rounded-sm" />
+                                </div>
+                                <SkeletonBlock className="h-24 w-full rounded-xl" />
                             </div>
                         )}
-                    </div>
+                    >
+                        <div className="mb-6 flex items-end justify-between gap-3">
+                            <div>
+                                <div className="text-3xl font-bold">{hasQuote ? formatCurrency(stock.price) : "—"}</div>
+                                <div className="mt-1 text-xs text-white/35">
+                                    {hasQuote ? `${stock.exchange} · ${stock.sector}` : "Live quote unavailable"}
+                                </div>
+                            </div>
+                            <Maximize2 className="size-4 text-white/30 transition-colors group-hover:text-white/70" />
+                        </div>
+
+                        <div className="h-24 min-h-24 w-full min-w-0">
+                            {mounted && hasQuote && stock.data.length > 0 ? (
+                                <MiniChart stock={stock} />
+                            ) : (
+                                <div className="flex h-full w-full items-center justify-center rounded-xl bg-white/[0.035] text-xs text-white/30">
+                                    No live chart
+                                </div>
+                            )}
+                        </div>
+                    </LoadingRegion>
                     <button
                         type="button"
                         onClick={(event) => {
@@ -1367,7 +1387,7 @@ function MarketChartDialog({
                                             <span className="text-white/42">({activeAbsoluteChange >= 0 ? "+" : "-"}{formatCurrency(Math.abs(activeAbsoluteChange))})</span>
                                         </div>
                                     ) : (
-                                        <div className="mt-1 text-sm text-white/42">Loading live quote...</div>
+                                        <div className="mt-1 text-sm text-white/42">Loading live quote…</div>
                                     )}
                                 </div>
                             </div>

@@ -5,6 +5,7 @@ import { Brain, Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import type { MemoryCategory, UserMemory } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { LoadingRegion, SkeletonBlock, SkeletonText } from "@/components/ui/DataLoading";
 import {
   Dialog,
   DialogContent,
@@ -209,7 +210,23 @@ export default function AgentMemoryDialog({
             <section className="space-y-2">
               <div className="flex items-center justify-between"><h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-subtle)]">Saved memories</h3><Button size="sm" variant="outline" className="h-8 rounded-lg text-xs" onClick={() => setAdding((current) => !current)}><Plus className="size-3.5" /> Add</Button></div>
               {adding && <div className="grid gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-3 sm:grid-cols-[180px_1fr_auto]"><select aria-label="Memory category" value={category} onChange={(event) => setCategory(event.target.value as MemoryCategory)} className="h-9 rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-2 text-sm">{CATEGORY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><input aria-label="Memory description" value={label} onChange={(event) => setLabel(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void add(); }} placeholder="What should Sabi remember?" className="h-9 rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-3 text-sm" /><Button size="sm" className="h-9 rounded-lg" disabled={!label.trim()} onClick={() => void add()}>Save</Button></div>}
-              {loading ? <p className="py-6 text-center text-sm text-[var(--text-muted)]" role="status">Loading memories…</p> : confirmed.length === 0 ? <p className="rounded-xl border border-dashed border-[var(--theme-border)] p-5 text-sm text-[var(--text-muted)]">No saved memories yet. Sabi will suggest useful preferences after conversations.</p> : confirmed.map((memory) => <div key={memory.id} className="flex items-start gap-3 border-b border-[var(--theme-border)] py-3 last:border-0"><div className="min-w-0 flex-1">{editingId === memory.id ? <input autoFocus aria-label="Edit memory" value={editingLabel} onChange={(event) => setEditingLabel(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void saveEdit(memory); if (event.key === "Escape") setEditingId(null); }} className="h-9 w-full rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-3 text-sm" /> : <><p className="text-sm text-[var(--text-primary)]">{memory.label}</p><p className="mt-1 text-[11px] capitalize text-[var(--text-subtle)]">{memory.category.replaceAll("_", " ")}</p></>}</div><Button size="icon" variant="ghost" aria-label={editingId === memory.id ? "Save memory" : "Edit memory"} className="size-8" onClick={() => { if (editingId === memory.id) void saveEdit(memory); else { setEditingId(memory.id); setEditingLabel(memory.label); } }}>{editingId === memory.id ? <Check className="size-4" /> : <Pencil className="size-4" />}</Button><Button size="icon" variant="ghost" aria-label="Delete memory" className="size-8 text-[var(--color-red-negative)]" onClick={() => void remove(memory.id)}><Trash2 className="size-4" /></Button></div>)}
+              <LoadingRegion
+                loading={loading}
+                label="Loading memories"
+                skeleton={(
+                  <div className="space-y-1">
+                    {Array.from({ length: 3 }, (_, index) => (
+                      <div key={index} className="flex items-center gap-3 border-b border-[var(--theme-border)] py-3 last:border-0">
+                        <SkeletonText className="min-w-0 flex-1" lines={2} widths={[index === 1 ? "72%" : "86%", "30%"]} />
+                        <SkeletonBlock className="size-8 rounded-lg" />
+                        <SkeletonBlock className="size-8 rounded-lg" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              >
+                {confirmed.length === 0 ? <p className="rounded-xl border border-dashed border-[var(--theme-border)] p-5 text-sm text-[var(--text-muted)]">No saved memories yet. Sabi will suggest useful preferences after conversations.</p> : confirmed.map((memory) => <div key={memory.id} className="flex items-start gap-3 border-b border-[var(--theme-border)] py-3 last:border-0"><div className="min-w-0 flex-1">{editingId === memory.id ? <input autoFocus aria-label="Edit memory" value={editingLabel} onChange={(event) => setEditingLabel(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void saveEdit(memory); if (event.key === "Escape") setEditingId(null); }} className="h-9 w-full rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-3 text-sm" /> : <><p className="text-sm text-[var(--text-primary)]">{memory.label}</p><p className="mt-1 text-[11px] capitalize text-[var(--text-subtle)]">{memory.category.replaceAll("_", " ")}</p></>}</div><Button size="icon" variant="ghost" aria-label={editingId === memory.id ? "Save memory" : "Edit memory"} className="size-8" onClick={() => { if (editingId === memory.id) void saveEdit(memory); else { setEditingId(memory.id); setEditingLabel(memory.label); } }}>{editingId === memory.id ? <Check className="size-4" /> : <Pencil className="size-4" />}</Button><Button size="icon" variant="ghost" aria-label="Delete memory" className="size-8 text-[var(--color-red-negative)]" onClick={() => void remove(memory.id)}><Trash2 className="size-4" /></Button></div>)}
+              </LoadingRegion>
             </section>
 
             {memories.length > 0 && <Button variant="outline" className="border-[var(--color-red-negative)]/30 text-[var(--color-red-negative)]" onClick={() => setClearOpen(true)}>Forget everything</Button>}
