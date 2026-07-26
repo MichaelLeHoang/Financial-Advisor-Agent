@@ -15,6 +15,13 @@
   }
 }
 
+@media (max-width: 639px) {
+  .landing-product-preview-reveal {
+    clip-path: inset(0 0 0 0 round 1.45rem) !important;
+    transform: none !important;
+  }
+}
+
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-geist), ui-sans-serif, system-ui, sans-serif;

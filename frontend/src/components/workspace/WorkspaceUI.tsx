@@ -22,7 +22,7 @@ export function WorkspacePage({
   dense?: boolean;
 }) {
   return (
-    <div className={cn("min-h-full bg-[var(--background)] text-[var(--text-primary)]", dense ? "px-4 py-5 lg:px-7" : "px-4 py-6 lg:px-10 lg:py-9")}>
+    <div className={cn("min-h-full bg-[var(--background)] px-4 pt-20 text-[var(--text-primary)] md:pt-6", dense ? "pb-5 lg:px-7 lg:pt-5" : "pb-6 lg:px-10 lg:py-9")}>
       <div className="mx-auto max-w-[1500px]">
         <div className="flex flex-col gap-5 border-b border-[var(--theme-border)] pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>

@@ -149,7 +149,7 @@ function sampleMarkdown(content: string) {
 
 export default function IntroductionPage() {
   return (
-    <div className="relative min-h-screen">
+    <main className="relative min-h-screen">
       <IntroductionNav />
       <HeroSection />
       <ProductPreview />
@@ -160,7 +160,7 @@ export default function IntroductionPage() {
       <TestimonialsMinimal />
       <FeaturesSection />
       <IntroductionFooter />
-    </div>
+    </main>
   );
 }
 
