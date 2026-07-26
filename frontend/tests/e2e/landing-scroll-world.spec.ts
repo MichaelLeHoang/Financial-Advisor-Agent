@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-test("desktop landing film scrubs one continuous video and navigates between scenes", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "Desktop scroll-scrub behavior");
+test("desktop landing scenes autoplay beside their narrative copy", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Desktop scene playback behavior");
   await page.goto("/");
 
   const section = page.getByTestId("scroll-world-section");
@@ -11,10 +11,21 @@ test("desktop landing film scrubs one continuous video and navigates between sce
   await expect(page.getByRole("heading", { name: "Start with the signal, not the noise." })).toBeVisible();
   const stickyPosition = await section.locator("div").first().evaluate((element) => getComputedStyle(element).position);
   expect(stickyPosition).toBe("sticky");
+
+  const stage = section.getByTestId("scroll-world-stage");
+  const copy = section.locator("article").filter({ hasText: "Start with the signal" });
+  const stageBox = await stage.boundingBox();
+  const copyBox = await copy.boundingBox();
+  expect(stageBox).not.toBeNull();
+  expect(copyBox).not.toBeNull();
+  expect(stageBox!.x + stageBox!.width).toBeLessThan(copyBox!.x);
+
   const video = section.locator("video");
   await expect(video).toHaveCount(1);
   await expect(video).toHaveAttribute("src", /^blob:/);
-  await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.videoWidth)).toBe(1920);
+  await expect(video).toHaveAttribute("data-scene-id", "signal");
+  await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.videoWidth)).toBeGreaterThanOrEqual(1280);
+  expect(await video.evaluate((element: HTMLVideoElement) => element.videoWidth / element.videoHeight)).toBeCloseTo(16 / 9, 2);
   expect(await video.evaluate((element) => getComputedStyle(element).objectFit)).toBe("contain");
   await expect(section.getByText("Quanfora decision architecture")).toHaveCount(0);
   const progressStyle = await section.getByTestId("scroll-world-progress").locator("span").evaluate((element) => {
@@ -26,11 +37,23 @@ test("desktop landing film scrubs one continuous video and navigates between sce
   const eyebrowDecoration = await section.getByText("01 · Market intake").evaluate((element) => getComputedStyle(element, "::before").content);
   expect(eyebrowDecoration).toBe("none");
 
-  const openingTime = await video.evaluate((element: HTMLVideoElement) => element.currentTime);
+  await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.currentTime)).toBeGreaterThan(0.1);
+  await expect(section.getByRole("button", { name: /^Go to / })).toHaveCount(4);
+  await page.getByRole("button", { name: /Go to Agents:/ }).click();
+  await expect(page.getByRole("heading", { name: "Let specialists disagree." })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Go to Agents:/ })).toHaveAttribute("aria-current", "step");
+  await expect(section.locator("video")).toHaveAttribute("data-scene-id", "consensus");
+  await expect.poll(() => section.locator("video").evaluate((element: HTMLVideoElement) => element.currentTime)).toBeGreaterThan(0.1);
+
   await page.getByRole("button", { name: /Go to Risk:/ }).click();
   await expect(page.getByRole("heading", { name: "Put risk before action." })).toBeVisible();
   await expect(page.getByRole("button", { name: /Go to Risk:/ })).toHaveAttribute("aria-current", "step");
-  await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.currentTime)).toBeGreaterThan(openingTime + 2);
+  await expect(section.locator("video")).toHaveAttribute("data-scene-id", "risk");
+  await expect(section.getByRole("button", { name: /Go to Evidence:/ })).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Go to Signal:/ }).click();
+  await expect(section.locator("video")).toHaveAttribute("data-scene-id", "signal");
+  expect(await section.locator("video").evaluate((element: HTMLVideoElement) => element.currentTime)).toBeLessThan(0.75);
 
   await page.getByRole("button", { name: /Go to Decision:/ }).click();
   await expect(section.getByRole("heading", { name: "Act with a record, not a hunch." })).toBeVisible();

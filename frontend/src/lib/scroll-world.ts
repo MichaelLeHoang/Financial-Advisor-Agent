@@ -13,18 +13,15 @@ export interface ScrollWorldScene {
   tags: string[];
   scroll: number;
   linger: number;
-  videoStart?: number;
-  videoEnd?: number;
-  still?: string;
+  still: string;
   stillMobile?: string;
-  clip?: string;
+  clip: string;
   clipMobile?: string;
   cta?: ScrollWorldCta;
 }
 
 export interface ScrollWorldConfig {
   scenes: ScrollWorldScene[];
-  crossfade: number;
   embedded: true;
   showTopbar: false;
 }
@@ -85,21 +82,6 @@ export function resolveScrollWorldState(
     sceneProgress: scene ? lingerEase(linearProgress, scene.linger) : linearProgress,
     journeyProgress: progress,
   };
-}
-
-export function resolveScrollWorldVideoProgress(
-  journeyProgress: number,
-  scenes: Pick<ScrollWorldScene, "scroll" | "linger" | "videoStart" | "videoEnd">[],
-) {
-  const state = resolveScrollWorldState(journeyProgress, scenes);
-  const scene = scenes[state.sceneIndex];
-  if (!scene) return state.journeyProgress;
-
-  const segments = buildScrollWorldSegments(scenes);
-  const segment = segments[state.sceneIndex];
-  const start = clamp(scene.videoStart ?? segment?.start ?? 0);
-  const end = clamp(scene.videoEnd ?? segment?.end ?? 1);
-  return clamp(start + (end - start) * state.sceneProgress);
 }
 
 export function getScrollWorldSceneTarget(

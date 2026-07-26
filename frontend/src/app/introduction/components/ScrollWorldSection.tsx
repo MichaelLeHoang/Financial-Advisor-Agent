@@ -11,7 +11,6 @@ import {
   clamp,
   getScrollWorldSceneTarget,
   resolveScrollWorldState,
-  resolveScrollWorldVideoProgress,
   type ScrollWorldConfig,
 } from "@/lib/scroll-world";
 import { loginHref } from "@/lib/workspace-routing";
@@ -19,13 +18,13 @@ import { loginHref } from "@/lib/workspace-routing";
 import { trackLandingEvent } from "./landing-analytics";
 import styles from "./ScrollWorldSection.module.css";
 
-const VIDEO_SOURCE = "/scroll-world/quanfora/scroll-scene-scrub-1080p.mp4";
-const VIDEO_POSTER = "/scroll-world/quanfora/scroll-scene-poster-1080p.jpg";
+const SCENE_MEDIA_ROOT = "/scroll-world/quanfora/scenes";
+const SCENE_MEDIA_VERSION = "20260725-four-clips";
+const sceneMedia = (filename: string) => `${SCENE_MEDIA_ROOT}/${filename}?v=${SCENE_MEDIA_VERSION}`;
 
 const SCROLL_WORLD_CONFIG: ScrollWorldConfig = {
   embedded: true,
   showTopbar: false,
-  crossfade: 0.08,
   scenes: [
     {
       id: "signal",
@@ -37,73 +36,47 @@ const SCROLL_WORLD_CONFIG: ScrollWorldConfig = {
       tags: ["Market data", "News", "Sentiment"],
       scroll: 0.9,
       linger: 0.18,
-      videoStart: 0,
-      videoEnd: 0.15,
-    },
-    {
-      id: "evidence",
-      label: "Evidence",
-      accent: "#8e8cd8",
-      eyebrow: "02 · Grounded context",
-      title: "Keep the evidence attached.",
-      body: "Sources, assumptions, and caveats stay visible as the thesis takes shape.",
-      tags: ["Filings", "Citations", "Memory"],
-      scroll: 0.8,
-      linger: 0.16,
-      videoStart: 0.15,
-      videoEnd: 0.31,
+      clip: sceneMedia("scene-01-signal.mp4"),
+      still: sceneMedia("scene-01-signal.jpg"),
     },
     {
       id: "consensus",
       label: "Agents",
       accent: "#a878b5",
-      eyebrow: "03 · Multi-agent research",
+      eyebrow: "02 · Multi-agent research",
       title: "Let specialists disagree.",
       body: "Quant, risk, market, and data perspectives remain distinct before a conclusion is formed.",
       tags: ["Consensus", "Quant", "Research"],
-      scroll: 0.88,
+      scroll: 0.9,
       linger: 0.2,
-      videoStart: 0.31,
-      videoEnd: 0.48,
+      clip: sceneMedia("scene-02-agents.mp4"),
+      still: sceneMedia("scene-02-agents.jpg"),
     },
     {
       id: "risk",
       label: "Risk",
       accent: "#d9a441",
-      eyebrow: "04 · Risk gate",
+      eyebrow: "03 · Risk gate",
       title: "Put risk before action.",
       body: "Exposure, valuation, drawdown, and sizing checks challenge the idea before capital does.",
       tags: ["Exposure", "VaR", "Guardrails"],
-      scroll: 0.84,
-      linger: 0.16,
-      videoStart: 0.48,
-      videoEnd: 0.64,
-    },
-    {
-      id: "portfolio",
-      label: "Portfolio",
-      accent: "#78a98b",
-      eyebrow: "05 · Portfolio construction",
-      title: "See the decision in context.",
-      body: "Compare classical and quantum allocation paths against the portfolio you already own.",
-      tags: ["Allocation", "Backtests", "Quantum"],
-      scroll: 0.9,
+      scroll: 0.88,
       linger: 0.18,
-      videoStart: 0.64,
-      videoEnd: 0.82,
+      clip: sceneMedia("scene-03-risk.mp4"),
+      still: sceneMedia("scene-03-risk.jpg"),
     },
     {
       id: "decision",
       label: "Decision",
       accent: "#7776c9",
-      eyebrow: "06 · Documented decision",
+      eyebrow: "04 · Documented decision",
       title: "Act with a record, not a hunch.",
       body: "Turn the final thesis, risk limits, and next steps into a decision you can revisit.",
       tags: ["Thesis", "Journal", "Paper trading"],
       scroll: 1.08,
       linger: 0.26,
-      videoStart: 0.82,
-      videoEnd: 1,
+      clip: sceneMedia("scene-04-decision.mp4"),
+      still: sceneMedia("scene-04-decision.jpg"),
       cta: { primary: "Launch App", secondary: "View sample research" },
     },
   ],
@@ -118,14 +91,15 @@ export function ScrollWorldSection() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const targetVideoProgressRef = useRef(0);
   const activeIndexRef = useRef(0);
+  const clipUrlsRef = useRef(new Map<string, string>());
   const viewedScenesRef = useRef(new Set<string>());
   const hasTrackedSectionRef = useRef(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [compactJourney, setCompactJourney] = useState(false);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [videoReady, setVideoReady] = useState(false);
+  const [sectionVisible, setSectionVisible] = useState(false);
+  const [loadedMedia, setLoadedMedia] = useState<{ sceneId: string; url: string } | null>(null);
+  const [readySceneId, setReadySceneId] = useState<string | null>(null);
 
   const scrollUnits = SCENES.reduce((total, scene) => total + scene.scroll, 0);
   const sectionStyle = { height: `${Math.round((scrollUnits + 1) * 100)}svh` };
@@ -139,13 +113,6 @@ export function ScrollWorldSection() {
       scene_index: index,
       scene_label: scene.label,
     });
-  }, []);
-
-  const syncVideo = useCallback(() => {
-    const video = videoRef.current;
-    if (!video || !Number.isFinite(video.duration) || video.duration <= 0 || video.seeking) return;
-    const target = Math.min(video.duration - 1 / 24, targetVideoProgressRef.current * video.duration);
-    if (Math.abs(video.currentTime - target) > 0.025) video.currentTime = Math.max(0, target);
   }, []);
 
   useEffect(() => {
@@ -162,12 +129,13 @@ export function ScrollWorldSection() {
 
     const observer = new IntersectionObserver(
       ([entry]) => {
+        setSectionVisible(entry.isIntersecting);
         if (!entry.isIntersecting || hasTrackedSectionRef.current) return;
         hasTrackedSectionRef.current = true;
         trackLandingEvent("landing_scroll_world_view", { location: "decision_world" });
         trackScene(activeIndexRef.current);
       },
-      { threshold: 0.12 },
+      { threshold: 0.01 },
     );
     observer.observe(section);
     return () => observer.disconnect();
@@ -175,29 +143,70 @@ export function ScrollWorldSection() {
 
   useEffect(() => {
     if (reduceMotion || compactJourney) return;
+    const scene = SCENES[activeIndex];
+    const cachedUrl = clipUrlsRef.current.get(scene.clip);
     const controller = new AbortController();
-    let objectUrl: string | null = null;
+    let cancelled = false;
 
-    setVideoReady(false);
-    fetch(VIDEO_SOURCE, { signal: controller.signal })
+    setReadySceneId(null);
+    setLoadedMedia(null);
+
+    if (cachedUrl) {
+      setLoadedMedia({ sceneId: scene.id, url: cachedUrl });
+      return () => controller.abort();
+    }
+
+    fetch(scene.clip, { signal: controller.signal })
       .then((response) => {
-        if (!response.ok) throw new Error(`Unable to load scroll-world film: ${VIDEO_SOURCE}`);
+        if (!response.ok) throw new Error(`Unable to load scroll-world scene: ${scene.clip}`);
         return response.blob();
       })
       .then((blob) => {
-        objectUrl = URL.createObjectURL(blob);
-        setVideoUrl(objectUrl);
+        if (cancelled) return;
+        const objectUrl = URL.createObjectURL(blob);
+        clipUrlsRef.current.set(scene.clip, objectUrl);
+        setLoadedMedia({ sceneId: scene.id, url: objectUrl });
       })
       .catch((error: unknown) => {
-        if (!(error instanceof DOMException && error.name === "AbortError")) setVideoUrl(null);
+        if (!(error instanceof DOMException && error.name === "AbortError") && !cancelled) {
+          setLoadedMedia(null);
+        }
       });
 
     return () => {
+      cancelled = true;
       controller.abort();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-      setVideoUrl(null);
     };
-  }, [compactJourney, reduceMotion]);
+  }, [activeIndex, compactJourney, reduceMotion]);
+
+  useEffect(() => {
+    if (reduceMotion || compactJourney) return;
+    const nextScene = SCENES[activeIndex + 1];
+    if (!nextScene || clipUrlsRef.current.has(nextScene.clip)) return;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      fetch(nextScene.clip, { signal: controller.signal })
+        .then((response) => {
+          if (!response.ok) throw new Error(`Unable to prefetch scroll-world scene: ${nextScene.clip}`);
+          return response.blob();
+        })
+        .then((blob) => {
+          if (controller.signal.aborted || clipUrlsRef.current.has(nextScene.clip)) return;
+          clipUrlsRef.current.set(nextScene.clip, URL.createObjectURL(blob));
+        })
+        .catch(() => undefined);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [activeIndex, compactJourney, reduceMotion]);
+
+  useEffect(() => () => {
+    for (const objectUrl of clipUrlsRef.current.values()) URL.revokeObjectURL(objectUrl);
+    clipUrlsRef.current.clear();
+  }, []);
 
   useEffect(() => {
     if (reduceMotion || compactJourney) return;
@@ -211,12 +220,9 @@ export function ScrollWorldSection() {
       const scrollable = Math.max(section.offsetHeight - window.innerHeight, 1);
       const progress = clamp(-rect.top / scrollable);
       const state = resolveScrollWorldState(progress, SCENES);
-      const videoProgress = resolveScrollWorldVideoProgress(progress, SCENES);
 
       viewport.style.setProperty("--journey-progress", state.journeyProgress.toFixed(4));
-      viewport.dataset.videoProgress = videoProgress.toFixed(4);
-      targetVideoProgressRef.current = videoProgress;
-      syncVideo();
+      viewport.dataset.sceneProgress = state.sceneProgress.toFixed(4);
 
       if (state.sceneIndex !== activeIndexRef.current) {
         activeIndexRef.current = state.sceneIndex;
@@ -241,19 +247,7 @@ export function ScrollWorldSection() {
       window.removeEventListener("resize", requestRead);
       if (animationFrameRef.current !== null) window.cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [compactJourney, reduceMotion, syncVideo, trackScene]);
-
-  useEffect(() => {
-    if (reduceMotion || compactJourney) return;
-    const primeVideo = () => {
-      const video = videoRef.current;
-      if (!video) return;
-      const promise = video.play();
-      if (promise) promise.then(() => video.pause()).catch(() => undefined);
-    };
-    window.addEventListener("pointerdown", primeVideo, { once: true, passive: true });
-    return () => window.removeEventListener("pointerdown", primeVideo);
-  }, [compactJourney, reduceMotion]);
+  }, [compactJourney, reduceMotion, trackScene]);
 
   const jumpToScene = useCallback((index: number) => {
     const section = sectionRef.current;
@@ -281,6 +275,7 @@ export function ScrollWorldSection() {
   }
 
   const activeScene = SCENES[activeIndex];
+  const videoReady = readySceneId === activeScene.id;
 
   return (
     <section
@@ -290,86 +285,100 @@ export function ScrollWorldSection() {
       aria-label="From market signal to documented decision"
       data-testid="scroll-world-section"
     >
-      <div ref={viewportRef} className={styles.viewport} data-video-progress="0.0000">
+      <div
+        ref={viewportRef}
+        className={styles.viewport}
+        data-scene-id={activeScene.id}
+        data-scene-progress="0.0000"
+      >
         <div className={styles.progressTrack} aria-hidden="true" data-testid="scroll-world-progress"><span /></div>
 
-        <div className={styles.stage} aria-hidden="true">
-          <img
-            src={VIDEO_POSTER}
-            alt=""
-            className={`${styles.poster} ${videoReady ? styles.posterHidden : ""}`}
-            decoding="async"
-          />
-          {videoUrl ? (
-            <video
-              ref={videoRef}
-              src={videoUrl}
-              className={`${styles.video} ${videoReady ? styles.videoReady : ""}`}
-              muted
-              playsInline
-              preload="auto"
-              tabIndex={-1}
-              onLoadedMetadata={syncVideo}
-              onLoadedData={() => setVideoReady(true)}
-              onSeeked={() => {
-                setVideoReady(true);
-                window.requestAnimationFrame(syncVideo);
-              }}
-            />
-          ) : null}
-          <div className={styles.stageShade} />
-        </div>
-
-        <div className={styles.copyLayer}>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.article
-              key={activeScene.id}
-              className={styles.copy}
-              style={{ "--scene-accent": activeScene.accent } as CSSProperties}
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <span className={styles.eyebrow}>{activeScene.eyebrow}</span>
-              <h2>{activeScene.title}</h2>
-              <p>{activeScene.body}</p>
-              <ul aria-label={`${activeScene.label} capabilities`}>
-                {activeScene.tags.map((tag) => <li key={tag}>{tag}</li>)}
-              </ul>
-              {activeScene.cta ? (
-                <div className={styles.actions}>
-                  <button type="button" onClick={handleLaunchApp} data-analytics-id="landing-scroll-world-launch-app">
-                    {activeScene.cta.primary}<ArrowRight aria-hidden="true" />
-                  </button>
-                  <a
-                    href="#samples"
-                    onClick={() => trackLandingEvent("landing_sample_research_click", { location: "scroll_world_finale" })}
-                    data-analytics-id="landing-scroll-world-view-samples"
-                  >
-                    {activeScene.cta.secondary}
-                  </a>
-                </div>
+        <div className={styles.sceneShell}>
+          <div className={styles.mediaColumn}>
+            <div className={styles.stage} aria-hidden="true" data-testid="scroll-world-stage">
+              <img
+                key={activeScene.still}
+                src={activeScene.still}
+                alt=""
+                className={`${styles.poster} ${videoReady ? styles.posterHidden : ""}`}
+                decoding="async"
+              />
+              {loadedMedia?.sceneId === activeScene.id ? (
+                <video
+                  key={activeScene.id}
+                  ref={videoRef}
+                  src={loadedMedia.url}
+                  className={`${styles.video} ${videoReady ? styles.videoReady : ""}`}
+                  data-scene-id={activeScene.id}
+                  muted
+                  playsInline
+                  preload="auto"
+                  tabIndex={-1}
+                  onLoadedData={(event) => {
+                    event.currentTarget.currentTime = 0;
+                    event.currentTarget.play().catch(() => setReadySceneId(null));
+                  }}
+                  onPlaying={() => setReadySceneId(activeScene.id)}
+                />
               ) : null}
-            </motion.article>
-          </AnimatePresence>
-        </div>
+            </div>
+          </div>
 
-        <nav className={styles.route} aria-label="Research decision journey">
-          {SCENES.map((scene, index) => (
-            <button
-              key={scene.id}
-              type="button"
-              onClick={() => jumpToScene(index)}
-              className={index === activeIndex ? styles.routeActive : undefined}
-              aria-current={index === activeIndex ? "step" : undefined}
-              aria-label={`Go to ${scene.label}: ${scene.title}`}
-              style={{ "--scene-accent": scene.accent } as CSSProperties}
-            >
-              <span>{scene.label}</span><i />
-            </button>
-          ))}
-        </nav>
+          <div className={styles.copyColumn}>
+            <div className={styles.copyLayer}>
+              <AnimatePresence mode="wait">
+                {sectionVisible ? (
+                  <motion.article
+                    key={activeScene.id}
+                    className={styles.copy}
+                    style={{ "--scene-accent": activeScene.accent } as CSSProperties}
+                    initial={{ opacity: 0, y: 28 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12, transition: { duration: 0.14, ease: "easeOut" } }}
+                    transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <span className={styles.eyebrow}>{activeScene.eyebrow}</span>
+                    <h2>{activeScene.title}</h2>
+                    <p>{activeScene.body}</p>
+                    <ul aria-label={`${activeScene.label} capabilities`}>
+                      {activeScene.tags.map((tag) => <li key={tag}>{tag}</li>)}
+                    </ul>
+                    {activeScene.cta ? (
+                      <div className={styles.actions}>
+                        <button type="button" onClick={handleLaunchApp} data-analytics-id="landing-scroll-world-launch-app">
+                          {activeScene.cta.primary}<ArrowRight aria-hidden="true" />
+                        </button>
+                        <a
+                          href="#samples"
+                          onClick={() => trackLandingEvent("landing_sample_research_click", { location: "scroll_world_finale" })}
+                          data-analytics-id="landing-scroll-world-view-samples"
+                        >
+                          {activeScene.cta.secondary}
+                        </a>
+                      </div>
+                    ) : null}
+                  </motion.article>
+                ) : null}
+              </AnimatePresence>
+            </div>
+
+            <nav className={styles.route} aria-label="Research decision journey">
+              {SCENES.map((scene, index) => (
+                <button
+                  key={scene.id}
+                  type="button"
+                  onClick={() => jumpToScene(index)}
+                  className={index === activeIndex ? styles.routeActive : undefined}
+                  aria-current={index === activeIndex ? "step" : undefined}
+                  aria-label={`Go to ${scene.label}: ${scene.title}`}
+                  style={{ "--scene-accent": scene.accent } as CSSProperties}
+                >
+                  <span>{scene.label}</span><i />
+                </button>
+              ))}
+            </nav>
+          </div>
+        </div>
 
         <div className={`${styles.scrollHint} ${activeIndex > 0 ? styles.scrollHintHidden : ""}`} aria-hidden="true">
           <ArrowDown /><span>Scroll to move through the world</span>
@@ -402,7 +411,7 @@ function StaticJourney({
         <span>{compact ? "Desktop film shown as a frame-safe preview on phones." : "Motion is reduced to a frame-safe overview."}</span>
       </div>
       <figure className={styles.staticPoster}>
-        <img src={VIDEO_POSTER} alt="An isometric miniature world representing Quanfora's research workflow" />
+        <img src={SCENES[0].still} alt="An isometric miniature world representing Quanfora's research workflow" />
       </figure>
       <div className={styles.staticGrid}>
         {SCENES.map((scene) => (

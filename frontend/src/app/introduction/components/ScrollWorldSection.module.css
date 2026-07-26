@@ -15,6 +15,18 @@
   isolation: isolate;
 }
 
+.sceneShell {
+  position: absolute;
+  top: clamp(3.75rem, 8svh, 6.5rem);
+  bottom: clamp(3.5rem, 7svh, 5.5rem);
+  left: 50%;
+  display: grid;
+  width: min(calc(100% - clamp(3rem, 9vw, 11rem)), 96rem);
+  transform: translateX(-50%);
+  grid-template-columns: minmax(0, 1.16fr) minmax(20rem, 0.84fr);
+  gap: clamp(2.5rem, 5vw, 6.5rem);
+}
+
 .progressTrack {
   position: absolute;
   z-index: 40;
@@ -36,11 +48,32 @@
 }
 
 .stage {
-  position: absolute;
-  z-index: 1;
-  inset: 0;
+  position: relative;
+  width: 100%;
   overflow: hidden;
-  background: #080a0c;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: clamp(1.1rem, 2vw, 1.75rem);
+  aspect-ratio: 16 / 9;
+  background: #07080b;
+  box-shadow: 0 2.2rem 6rem rgba(0, 0, 0, 0.38);
+  isolation: isolate;
+}
+
+.mediaColumn,
+.copyColumn {
+  min-width: 0;
+}
+
+.mediaColumn {
+  display: flex;
+  align-items: center;
+}
+
+.copyColumn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding-right: clamp(2.8rem, 4vw, 4.25rem);
 }
 
 .poster,
@@ -69,20 +102,10 @@
 
 .videoReady { opacity: 1; }
 
-.stageShade {
-  position: absolute;
-  z-index: 3;
-  inset: 0;
-  background:
-    linear-gradient(90deg, rgba(5, 6, 8, 0.98) 0%, rgba(5, 6, 8, 0.88) 19%, rgba(5, 6, 8, 0.42) 40%, transparent 63%),
-    linear-gradient(180deg, rgba(5, 6, 8, 0.35), transparent 22%, transparent 72%, rgba(5, 6, 8, 0.56));
-  pointer-events: none;
-}
-
 .copyLayer {
-  position: absolute;
+  position: relative;
   z-index: 10;
-  inset: 0;
+  width: 100%;
   display: flex;
   align-items: center;
   pointer-events: none;
@@ -90,9 +113,10 @@
 
 .copy {
   position: relative;
-  left: clamp(2rem, 6vw, 6.5rem);
-  width: min(38vw, 34rem);
+  width: 100%;
+  max-width: 34rem;
   pointer-events: auto;
+  will-change: opacity, transform;
 }
 
 .eyebrow {
@@ -105,10 +129,10 @@
 }
 
 .copy h2 {
-  max-width: 10ch;
+  max-width: 11ch;
   margin-top: 1rem;
   font-family: var(--font-hanken-grotesk), sans-serif;
-  font-size: clamp(3rem, 5.4vw, 5.7rem);
+  font-size: clamp(2.8rem, 4.4vw, 5.2rem);
   font-weight: 450;
   line-height: 0.92;
   letter-spacing: -0.058em;
@@ -204,7 +228,7 @@
   position: absolute;
   z-index: 20;
   top: 50%;
-  right: clamp(1.2rem, 2.3vw, 2.5rem);
+  right: 0;
   display: grid;
   transform: translateY(-50%);
   gap: 0.82rem;
@@ -363,11 +387,21 @@
 .staticGrid article > ul li { border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 999px; padding: 0.3rem 0.55rem; color: rgba(255, 255, 255, 0.3); font-size: 0.61rem; }
 
 @media (max-width: 1080px) {
-  .copy { width: min(42vw, 30rem); }
-  .copy h2 { font-size: clamp(2.8rem, 5vw, 4.6rem); }
+  .sceneShell {
+    width: min(calc(100% - 3rem), 72rem);
+    grid-template-columns: minmax(0, 1.08fr) minmax(19rem, 0.92fr);
+    gap: clamp(1.75rem, 3.5vw, 3.25rem);
+  }
+
+  .copy h2 { font-size: clamp(2.65rem, 4.8vw, 4.3rem); }
 }
 
 @media (max-height: 700px) and (min-width: 861px) {
+  .sceneShell {
+    top: 3.25rem;
+    bottom: 2.75rem;
+  }
+
   .copy h2 {
     margin-top: 0.7rem;
     font-size: clamp(2.45rem, min(4.8vw, 8.5svh), 4.25rem);

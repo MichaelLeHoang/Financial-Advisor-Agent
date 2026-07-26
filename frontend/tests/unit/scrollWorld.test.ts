@@ -6,7 +6,6 @@ import {
   getScrollWorldSceneTarget,
   lingerEase,
   resolveScrollWorldState,
-  resolveScrollWorldVideoProgress,
 } from "../../src/lib/scroll-world.ts";
 
 const scenes = [
@@ -42,17 +41,4 @@ test("returns the normalized center used by route controls", () => {
   const segments = buildScrollWorldSegments(scenes);
   assert.equal(getScrollWorldSceneTarget(1, scenes), segments[1].start + segments[1].weight / 2);
   assert.equal(getScrollWorldSceneTarget(99, scenes), segments[2].start + segments[2].weight / 2);
-});
-
-test("maps narrative scenes onto one continuous video timeline", () => {
-  const timedScenes = [
-    { scroll: 1, linger: 0, videoStart: 0, videoEnd: 0.2 },
-    { scroll: 1, linger: 0, videoStart: 0.2, videoEnd: 0.7 },
-    { scroll: 1, linger: 0, videoStart: 0.7, videoEnd: 1 },
-  ];
-
-  assert.equal(resolveScrollWorldVideoProgress(0, timedScenes), 0);
-  assert.equal(resolveScrollWorldVideoProgress(1 / 3, timedScenes), 0.2);
-  assert.equal(resolveScrollWorldVideoProgress(2 / 3, timedScenes), 0.7);
-  assert.equal(resolveScrollWorldVideoProgress(1, timedScenes), 1);
 });
