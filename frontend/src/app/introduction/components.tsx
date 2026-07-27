@@ -3,7 +3,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutGroup, motion } from "motion/react";
+import { motion } from "motion/react";
 import { BookOpen, BookOpenText, LogOut, Menu, Moon, Newspaper, Search, Sun, User, X } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { HighlightPill } from "@/components/ui/highlight-pill";
+import { Highlight, HighlightItem } from "@/components/ui/highlight";
 import { getAvatarColor, getAvatarInitials } from "@/lib/avatar";
 import SearchModal from "@/components/SearchModal";
 import { loginHref } from "@/lib/workspace-routing";
@@ -55,9 +55,11 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
   const [theme, setTheme] = useState<"Deep Space" | "White">(forceTheme ?? "Deep Space");
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [hoveredNavItem, setHoveredNavItem] = useState<string | null>(null);
   const currentTheme = forceTheme ?? theme;
   const navExpanded = staticFull || isScrolled || mobileOpen;
   const platformActive = pathname.startsWith("/platform");
+  const activeNavItem = platformActive ? "product" : activeSection;
 
   useEffect(() => {
     if (forceTheme) {
@@ -207,13 +209,26 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
         </motion.div>
 
         <nav className="hidden items-center lg:flex" aria-label="Primary navigation">
-          <NavigationMenu viewport={false}>
-            <NavigationMenuList className="gap-2">
-              <LayoutGroup id="landing-nav-highlight">
+          <Highlight
+            controlledItems
+            mode="parent"
+            value={hoveredNavItem ?? activeNavItem}
+            onValueChange={setHoveredNavItem}
+            hover
+            click={false}
+            exitDelay={0.08}
+            className="rounded-full bg-[var(--intro-nav-hover)] ring-1 ring-white/[0.035]"
+            containerClassName="isolate"
+            transition={{ type: "spring", stiffness: 350, damping: 35 }}
+          >
+            <NavigationMenu viewport={false} className="relative z-[1]">
+              <NavigationMenuList className="gap-2">
                 <NavigationMenuItem>
-                  <NavigationMenuTrigger className={`hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[state=open]:bg-transparent data-[state=open]:text-[var(--intro-nav-primary)] ${platformActive ? "text-[var(--intro-nav-primary)]" : "text-[var(--intro-nav-muted)]"}`}>
-                    Product
-                  </NavigationMenuTrigger>
+                  <HighlightItem asChild value="product" activeClassName="text-[var(--intro-nav-primary)]">
+                    <NavigationMenuTrigger className={`hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[state=open]:bg-transparent data-[state=open]:text-[var(--intro-nav-primary)] ${platformActive ? "text-[var(--intro-nav-primary)]" : "text-[var(--intro-nav-muted)]"}`}>
+                      Product
+                    </NavigationMenuTrigger>
+                  </HighlightItem>
                   <NavigationMenuContent>
                     <ul className="grid w-[280px] gap-1 p-2">
                       <ProductLink href="/platform" title="Platform overview" detail="One portfolio, risk system, and AI layer" current={platformActive} />
@@ -228,9 +243,11 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
                   </NavigationMenuItem>
                 ))}
                 <NavigationMenuItem>
-                  <NavigationMenuTrigger className="text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[state=open]:bg-transparent data-[state=open]:text-[var(--intro-nav-primary)]">
-                    Resources
-                  </NavigationMenuTrigger>
+                  <HighlightItem asChild value="resources" activeClassName="text-[var(--intro-nav-primary)]">
+                    <NavigationMenuTrigger className="text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[state=open]:bg-transparent data-[state=open]:text-[var(--intro-nav-primary)]">
+                      Resources
+                    </NavigationMenuTrigger>
+                  </HighlightItem>
                   <NavigationMenuContent>
                     <ul className="grid w-[220px] gap-1 p-2">
                       {isSignedIn && (
@@ -284,17 +301,19 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
                 ))}
                 {isSignedIn && (
                   <NavigationMenuItem>
-                    <NavigationMenuLink
-                      asChild
-                      className={`${navigationMenuTriggerStyle()} text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[active=true]:bg-transparent`}
-                    >
-                      <Link href="/contact-sales">Contact</Link>
-                    </NavigationMenuLink>
+                    <HighlightItem asChild value="contact" activeClassName="text-[var(--intro-nav-primary)]">
+                      <NavigationMenuLink
+                        asChild
+                        className={`${navigationMenuTriggerStyle()} text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[active=true]:bg-transparent`}
+                      >
+                        <Link href="/contact-sales">Contact</Link>
+                      </NavigationMenuLink>
+                    </HighlightItem>
                   </NavigationMenuItem>
                 )}
-              </LayoutGroup>
-            </NavigationMenuList>
-          </NavigationMenu>
+              </NavigationMenuList>
+            </NavigationMenu>
+          </Highlight>
         </nav>
 
         <div className="flex items-center gap-2">
@@ -567,17 +586,14 @@ function LandingNavItem({
     || (item.href === "/help" && activeSection === "help");
 
   return (
-    <div className="relative">
-      {isActive ? (
-        <HighlightPill layoutId="landing-nav-pill" className="absolute inset-0 rounded-full bg-white/[0.08]" />
-      ) : null}
+    <HighlightItem asChild value={item.label.toLowerCase()} activeClassName="text-[var(--intro-nav-primary)]">
       <NavigationMenuLink
         asChild
         className={`${navigationMenuTriggerStyle()} relative z-10 rounded-full bg-transparent text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[active=true]:bg-transparent`}
       >
-        <Link href={item.href}>{item.label}</Link>
+        <Link href={item.href} aria-current={isActive ? "page" : undefined}>{item.label}</Link>
       </NavigationMenuLink>
-    </div>
+    </HighlightItem>
   );
 }
 

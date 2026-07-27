@@ -1,5 +1,59 @@
 import { expect, test } from "@playwright/test";
 
+test("desktop landing navigation shares one highlight across hover and keyboard focus", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Desktop navigation highlight");
+  await page.goto("/");
+
+  const navigation = page.getByRole("navigation", { name: "Primary navigation" });
+  const highlightRoot = navigation.locator('[data-slot="highlight-root"]');
+  const highlight = highlightRoot.locator('[data-slot="highlight"]');
+  const samples = navigation.getByRole("link", { name: "Samples" });
+  const resources = navigation.getByRole("button", { name: "Resources", exact: true });
+  const help = navigation.getByRole("link", { name: "Help" });
+
+  await samples.hover();
+  await expect(highlightRoot).toHaveAttribute("data-highlight-value", "samples");
+  await expect(highlight).toBeVisible();
+  await expect.poll(async () => {
+    const [itemBox, highlightBox] = await Promise.all([samples.boundingBox(), highlight.boundingBox()]);
+    return itemBox && highlightBox ? Math.abs(itemBox.x - highlightBox.x) : Number.POSITIVE_INFINITY;
+  }).toBeLessThan(2);
+
+  await resources.hover();
+  await expect(highlightRoot).toHaveAttribute("data-highlight-value", "resources");
+
+  await help.focus();
+  await expect(highlightRoot).toHaveAttribute("data-highlight-value", "help");
+  await expect(help).toBeFocused();
+});
+
+test("reduced motion keeps the landing navigation highlight immediate and usable", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Desktop reduced-motion navigation highlight");
+  const highlightHydrationErrors: string[] = [];
+  page.on("console", (message) => {
+    const text = message.text();
+    if (message.type() === "error" && text.includes("hydrated") && text.includes("data-highlight")) {
+      highlightHydrationErrors.push(text);
+    }
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+
+  const navigation = page.getByRole("navigation", { name: "Primary navigation" });
+  const highlightRoot = navigation.locator('[data-slot="highlight-root"]');
+  const highlight = highlightRoot.locator('[data-slot="highlight"]');
+  const resources = navigation.getByRole("button", { name: "Resources", exact: true });
+
+  await resources.hover();
+  await expect(highlightRoot).toHaveAttribute("data-highlight-value", "resources");
+  await expect(highlight).toBeVisible();
+  const [itemBox, highlightBox] = await Promise.all([resources.boundingBox(), highlight.boundingBox()]);
+  expect(itemBox).not.toBeNull();
+  expect(highlightBox).not.toBeNull();
+  expect(Math.abs(itemBox!.x - highlightBox!.x)).toBeLessThan(2);
+  expect(highlightHydrationErrors).toEqual([]);
+});
+
 test("desktop product navigation opens the platform overview", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Desktop product menu");
   await page.goto("/");
