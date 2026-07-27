@@ -5,8 +5,6 @@ export type LandingEventName =
   | "landing_sample_research_click"
   | "landing_pricing_click"
   | "landing_scattered_workspace_view"
-  | "landing_scroll_world_view"
-  | "landing_scroll_world_scene_view"
   | "landing_journey_step_view"
   | "platform_overview_view"
   | "platform_multi_agent_phase_view"
