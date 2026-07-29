@@ -7,6 +7,7 @@ import {
   CircleDotDashed,
 } from "lucide-react";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
+import { ThinkingOrb, type OrbState } from "thinking-orbs";
 
 // ─── Type definitions ───────────────────────────────────────────────
 interface Subtask {
@@ -299,6 +300,15 @@ function StatusIcon({ status, size = "sm" }: { status: string; size?: "sm" | "md
 type PlanMode = "single" | "consensus" | "research";
 type PlanRunState = "queued" | "running";
 
+function thinkingStateFor(mode: PlanMode, runState: PlanRunState, activeTool: string | null): OrbState {
+  if (runState === "queued") return "listening";
+  if (activeTool && /(?:snapshot|market|news|social|fundamentals|search|fetch)/i.test(activeTool)) return "searching";
+  if (activeTool && /(?:synthesis|final|pm)/i.test(activeTool)) return "composing";
+  if (mode === "consensus") return "solving";
+  if (mode === "research") return "shaping";
+  return "working";
+}
+
 interface PlanProps {
   mode?: PlanMode;
   isActive?: boolean;
@@ -360,6 +370,7 @@ export default function Plan({ mode = "single", isActive = true, activeTool = nu
   const visualProgress = totalSubtasks > 0
     ? ((completedSubtasks + (inProgressSubtasks > 0 ? 0.45 : 0)) / totalSubtasks) * 100
     : 0;
+  const thinkingState = thinkingStateFor(mode, runState, activeTool);
 
   return (
     <div className="w-full overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.03]">
@@ -367,9 +378,13 @@ export default function Plan({ mode = "single", isActive = true, activeTool = nu
       <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
         <div className="flex items-center gap-2.5">
           {isActive ? (
-            <div className="relative flex h-2 w-2 items-center justify-center">
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500" />
-            </div>
+            <ThinkingOrb
+              state={thinkingState}
+              size={20}
+              theme="auto"
+              aria-label={runState === "queued" ? "Waiting to begin analysis" : "Analyzing request"}
+              data-testid="ai-thinking-orb"
+            />
           ) : (
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
           )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useId, useState } from "react";
+import { useRef, useEffect, useId, useMemo, useState } from "react";
 import type { ChangeEvent, ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -23,6 +23,7 @@ import { OverviewCard } from "@/components/ui/overview-card";
 import Plan from "@/components/ui/agent-plan";
 import Markdown from "@/components/ui/markdown";
 import { showToast } from "@/components/ui/toast";
+import { PromptNavigator, promptAnchorId } from "@/components/chat/PromptNavigator";
 
 interface Message {
   id: string;
@@ -1236,6 +1237,12 @@ export default function ChatPage() {
 
   const hasConversation = messages.some((message) => message.id !== "welcome");
   const isStarterState = !hasConversation && !isHistoryLoading;
+  const promptNavigationItems = useMemo(
+    () => messages
+      .filter((message) => message.role === "user")
+      .map((message) => ({ id: message.id, content: message.content })),
+    [messages]
+  );
 
   const copyResponse = async (message: Message) => {
     try {
@@ -1470,7 +1477,7 @@ export default function ChatPage() {
     <div className="flex flex-col h-full relative overflow-hidden">
       <p className="sr-only" aria-live="polite">{memoryAnnouncement}</p>
       {/* Messages */}
-      <div ref={scrollRef} className="relative flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-4 sm:px-8 sm:pb-4 sm:pt-6">
+      <div ref={scrollRef} data-testid="chat-scroll-container" className="relative flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-4 sm:px-8 sm:pb-4 sm:pt-6">
         {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
         <LoadingRegion
           loading={isHistoryLoading}
@@ -1546,6 +1553,8 @@ export default function ChatPage() {
                 {messages.filter((msg) => msg.id !== "welcome").map((msg) => (
                   <motion.div
                     key={msg.id}
+                    id={msg.role === "user" ? promptAnchorId(msg.id) : undefined}
+                    data-chat-prompt={msg.role === "user" ? msg.id : undefined}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     className={cn("flex w-full min-w-0", msg.role === "user" ? "justify-end" : "justify-start")}
@@ -1724,6 +1733,7 @@ export default function ChatPage() {
         </AnimatePresence>
         </LoadingRegion>
       </div>
+      <PromptNavigator prompts={promptNavigationItems} scrollContainerRef={scrollRef} />
       {!isStarterState && (
         <div className="sticky bottom-0 z-20 shrink-0 border-t border-transparent bg-[#050608]/95 pt-2 shadow-[0_-24px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl">
           {renderComposer("dock")}
