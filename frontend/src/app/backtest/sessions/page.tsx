@@ -14,6 +14,7 @@ import { Field, PLAN_RANK, formatPercent, formatStrategyType } from "@/component
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_FORM = {
@@ -179,10 +180,10 @@ export default function BacktestSessionsPage() {
                   />
                 </Field>
                 <Field label="Start date">
-                  <Input type="date" value={form.start_date} onChange={(event) => setForm((current) => ({ ...current, start_date: event.target.value }))} className="h-11 rounded-xl" />
+                  <DatePicker aria-label="Start date" value={form.start_date} onValueChange={(value) => setForm((current) => ({ ...current, start_date: value }))} />
                 </Field>
                 <Field label="End date">
-                  <Input type="date" value={form.end_date} onChange={(event) => setForm((current) => ({ ...current, end_date: event.target.value }))} className="h-11 rounded-xl" />
+                  <DatePicker aria-label="End date" value={form.end_date} onValueChange={(value) => setForm((current) => ({ ...current, end_date: value }))} min={form.start_date} />
                 </Field>
                 <Field label="Initial balance">
                   <Input type="number" min={100} value={form.initial_balance} onChange={(event) => setForm((current) => ({ ...current, initial_balance: Number(event.target.value) }))} className="h-11 rounded-xl" />

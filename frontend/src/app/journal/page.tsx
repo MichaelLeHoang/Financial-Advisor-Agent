@@ -140,7 +140,7 @@ export default function JournalPage() {
         {error && <div role="alert" className="rounded-lg border border-red-negative/25 bg-red-negative/10 px-4 py-3 text-sm text-red-negative">{error}</div>}
 
         <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <Card className="rounded-lg border border-[var(--theme-border)] bg-[var(--surface-card)] py-0 text-[var(--text-primary)]">
+          <Card className="border border-[var(--theme-border)] bg-[var(--surface-card)] py-0 text-[var(--text-primary)]">
             <CardContent className="space-y-5 p-5">
               <div className="flex items-center gap-2 text-sm font-semibold">
                 <Plus className="h-4 w-4 text-indigo-primary" />
@@ -206,14 +206,14 @@ export default function JournalPage() {
               <Metric label="Win rate" value={formatPercent(analytics?.win_rate ?? 0)} />
             </div>
 
-            <Card className="rounded-lg border border-[var(--theme-border)] bg-[var(--surface-card)] py-0 text-[var(--text-primary)]">
+            <Card className="border border-[var(--theme-border)] bg-[var(--surface-card)] py-0 text-[var(--text-primary)]">
               <CardContent className="grid gap-5 p-5 md:grid-cols-2">
                 <AnalyticsGroup title="By symbol" items={topSymbols} />
                 <AnalyticsGroup title="By tag" items={topTags} />
               </CardContent>
             </Card>
 
-            <Card className="rounded-lg border border-[var(--theme-border)] bg-[var(--surface-card)] py-0 text-[var(--text-primary)]">
+            <Card className="border border-[var(--theme-border)] bg-[var(--surface-card)] py-0 text-[var(--text-primary)]">
               <CardContent className="space-y-3 p-5">
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <TrendingUp className="h-4 w-4 text-indigo-primary" />
@@ -268,7 +268,7 @@ function NumberField({ label, value, onChange }: { label: string; value: number;
 
 function Metric({ label, value, tone }: { label: string; value: string; tone?: "positive" | "negative" }) {
   return (
-    <Card className="rounded-lg border border-[var(--theme-border)] bg-[var(--surface-card)] py-0 text-[var(--text-primary)]">
+    <Card className="border border-[var(--theme-border)] bg-[var(--surface-card)] py-0 text-[var(--text-primary)]">
       <CardContent className="p-4">
         <div className="text-xs text-[var(--text-muted)]">{label}</div>
         <div className={cn("mt-2 text-xl font-semibold tabular-nums", tone === "positive" && "text-green-positive", tone === "negative" && "text-red-negative")}>{value}</div>

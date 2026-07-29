@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import type { InvestmentHoldingRecord } from "@/components/investment-workspace/InvestmentWorkspaceProvider";
 import type { InvestmentPolicyAlert, InvestmentThesis, InvestmentThesisPayload } from "@/lib/api";
 import WorkspaceSelectMenu from "@/components/ui/workspace-select-menu";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface PositionReviewDrawerProps {
   open: boolean;
@@ -100,7 +101,7 @@ export default function PositionReviewDrawer({
                   <EvidenceField label="Risk evidence" value={risks} onChange={setRisks} />
                 </div>
                 <div className="mt-4"><EvidenceField label="Invalidation conditions" value={conditions} onChange={setConditions} /></div>
-                <label className="mt-4 block text-xs font-semibold text-[var(--text-muted)]"><span className="inline-flex items-center gap-1.5"><CalendarClock className="size-3.5" /> Next review</span><input type="date" value={nextReview} onChange={(event) => setNextReview(event.target.value)} className="mt-2 h-10 w-full border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-3 text-sm font-normal text-[var(--text-primary)] [color-scheme:dark]" /></label>
+                <div className="mt-4 text-xs font-semibold text-[var(--text-muted)]"><span className="inline-flex items-center gap-1.5"><CalendarClock className="size-3.5" /> Next review</span><DatePicker aria-label="Next review date" value={nextReview} onValueChange={setNextReview} allowClear className="mt-2 h-10 font-normal" /></div>
                 <div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={saving || !statement.trim()} onClick={() => void save()} className="h-10 rounded-full bg-emerald-400 px-4 text-sm font-semibold text-black disabled:opacity-45">{saving ? "Saving…" : "Save thesis"}</button><Link href={`/invest/research?symbol=${encodeURIComponent(holding.symbol)}`} className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--theme-border-strong)] px-4 text-sm font-semibold"><BookOpen className="size-4" /> Open research</Link></div>
               </section>
 

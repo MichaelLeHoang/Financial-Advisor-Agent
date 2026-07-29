@@ -23,6 +23,7 @@ import { Field, Metric, PLAN_RANK, formatCurrency, formatPercent, formatStrategy
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 
 const STRATEGIES: StrategyOption[] = [
@@ -250,10 +251,10 @@ export default function BacktestPage() {
                   <Input type="number" value={initialCapital} min={100} onChange={(event) => setInitialCapital(Number(event.target.value))} className="h-11 rounded-xl" />
                 </Field>
                 <Field label="Start date">
-                  <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-11 rounded-xl" />
+                  <DatePicker aria-label="Start date" value={startDate} onValueChange={setStartDate} />
                 </Field>
                 <Field label="End date">
-                  <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-11 rounded-xl" />
+                  <DatePicker aria-label="End date" value={endDate} onValueChange={setEndDate} min={startDate} />
                 </Field>
               </div>
 

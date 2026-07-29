@@ -10,6 +10,7 @@ import UpgradePrompt from "@/components/common/UpgradePrompt";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 
 const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, trader: 2, quant: 3, execution_addon: 4 };
@@ -97,8 +98,8 @@ export default function StrategyComparePage() {
                 <Button type="button" size="icon" onClick={() => addSymbol()} className="theme-solid-action h-9 w-9 rounded-lg"><Plus className="h-4 w-4" /></Button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-control)] px-3 text-sm text-[var(--text-primary)] outline-none" />
-                <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-control)] px-3 text-sm text-[var(--text-primary)] outline-none" />
+                <DatePicker aria-label="Start date" value={startDate} onValueChange={setStartDate} />
+                <DatePicker aria-label="End date" value={endDate} onValueChange={setEndDate} min={startDate} />
               </div>
             </div>
             <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card-hover)] p-4 text-sm leading-6 text-[var(--text-secondary)]">

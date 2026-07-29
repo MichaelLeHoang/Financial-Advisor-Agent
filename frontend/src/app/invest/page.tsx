@@ -152,7 +152,7 @@ export default function InvestPage() {
           </div>
 
           <aside className="space-y-4 xl:sticky xl:top-16 xl:self-start">
-            <section className="rounded-lg border border-[var(--theme-border)] bg-[var(--surface-card)] p-4">
+            <section className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-4">
               <div className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">Portfolio review</h2><p className="mt-1 text-xs text-[var(--text-muted)]">{reviewItems.length} positions need attention</p></div><Scale className="size-5 text-amber-300" /></div>
               <div className="mt-4 divide-y divide-[var(--theme-border)]">
                 {reviewItems.length ? reviewItems.slice(0, 3).map((item) => <button key={item.record.holding.id} type="button" onClick={() => openReview(item.record)} className="flex w-full items-start justify-between gap-3 py-4 text-left hover:bg-[var(--surface-card-hover)]"><div className="min-w-0"><p className="font-semibold">{item.record.holding.symbol}</p><p className={cn("mt-1 text-xs leading-5", item.tone === "danger" ? "text-rose-300" : "text-amber-200")}>{item.reasons.join(" · ")}</p></div><ChevronRight className="mt-1 size-4 shrink-0 text-[var(--text-muted)]" /></button>) : <div className="py-8 text-center"><ShieldCheck className="mx-auto size-6 text-emerald-400" /><p className="mt-3 text-sm font-semibold">No recorded review issues</p><p className="mt-1 text-xs text-[var(--text-muted)]">Policy and thesis checks are current.</p></div>}
@@ -169,7 +169,7 @@ export default function InvestPage() {
             {portfolios.map((portfolio) => {
               const values = holdingsWithValue.filter(({ record }) => record.portfolio.id === portfolio.id);
               const value = values.reduce((sum, item) => sum + item.value, 0);
-              return <button key={portfolio.id} type="button" onClick={() => setPreference("portfolioScope", portfolio.id)} className="rounded-lg border border-[var(--theme-border)] bg-[var(--surface-card)] p-5 text-left hover:bg-[var(--surface-card-hover)]"><div className="flex items-center justify-between gap-3"><p className="font-semibold">{portfolio.name}</p><ArrowRight className="size-4 text-[var(--text-muted)]" /></div><p className="mt-5 text-2xl font-semibold tabular-nums">{preferences.privacyMode ? "••••••" : formatMoney(value, preferences.displayCurrency)}</p><p className="mt-1 text-xs text-[var(--text-muted)]">{values.length} Investment positions · base {portfolio.base_currency}</p></button>;
+              return <button key={portfolio.id} type="button" onClick={() => setPreference("portfolioScope", portfolio.id)} className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-5 text-left hover:bg-[var(--surface-card-hover)]"><div className="flex items-center justify-between gap-3"><p className="font-semibold">{portfolio.name}</p><ArrowRight className="size-4 text-[var(--text-muted)]" /></div><p className="mt-5 text-2xl font-semibold tabular-nums">{preferences.privacyMode ? "••••••" : formatMoney(value, preferences.displayCurrency)}</p><p className="mt-1 text-xs text-[var(--text-muted)]">{values.length} Investment positions · base {portfolio.base_currency}</p></button>;
             })}
             {!portfolios.length && <div className="rounded-lg border border-dashed border-[var(--theme-border)] p-6 text-sm text-[var(--text-muted)]">No saved portfolios yet. Connect or create one in Portfolio Accounts.</div>}
           </div>
@@ -199,7 +199,7 @@ function HoldingsRail({ holdings, watchlistAssets, quotes, theses, mode, sort, c
   const sortLabel = sort === "return" ? "1D" : sort === "value" ? "Value" : sort === "weight" ? "Weight" : "Thesis";
 
   return (
-    <section className="rounded-lg border border-[var(--theme-border)] bg-[var(--surface-card)] p-4">
+    <section className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-4">
       <div className="flex flex-wrap items-center gap-2">
         <div role="tablist" aria-label="Investment list" className="grid h-10 min-w-[12.5rem] flex-1 grid-cols-2 rounded-full bg-[var(--surface-control)] p-1">
           {(["holdings", "watchlist"] as const).map((item) => <button key={item} type="button" role="tab" aria-selected={mode === item} onClick={() => onMode(item)} className={cn("min-w-0 rounded-full px-3 text-sm font-semibold capitalize", mode === item ? "bg-white/[0.10] text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-white/[0.05]")}>{item}</button>)}
@@ -234,7 +234,7 @@ function SymbolMark({ symbol }: { symbol: string }) {
   return <span aria-hidden="true" className={cn("inline-flex size-9 shrink-0 items-center justify-center rounded-full text-[10px] font-bold", colors[index])}>{symbol.slice(0, 4)}</span>;
 }
 
-function MetricCard({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) { return <div className="rounded-lg border border-[var(--theme-border)] bg-[var(--surface-card)] p-5"><div className="flex items-center justify-between gap-3"><h2 className="text-base font-semibold">{title}</h2><span className="text-[var(--text-muted)]">{icon}</span></div><dl className="mt-5 space-y-3">{children}</dl></div>; }
+function MetricCard({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) { return <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-5"><div className="flex items-center justify-between gap-3"><h2 className="text-base font-semibold">{title}</h2><span className="text-[var(--text-muted)]">{icon}</span></div><dl className="mt-5 space-y-3">{children}</dl></div>; }
 function Insight({ label, value }: { label: string; value: string }) { return <div className="flex items-center justify-between gap-4 border-b border-[var(--theme-border)] pb-3 last:border-b-0 last:pb-0"><dt className="text-sm text-[var(--text-muted)]">{label}</dt><dd className="text-right text-sm font-semibold tabular-nums">{value}</dd></div>; }
 
 function buildPerformanceSeries(holdings: InvestmentHoldingRecord[], quotes: Map<string, MarketQuote>, rates: Map<string, number>, benchmarkSymbol: string, mode: "value" | "returns"): PerformancePoint[] {

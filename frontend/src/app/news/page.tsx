@@ -459,7 +459,7 @@ function NewsPageContent() {
             label="Building the intelligence brief"
             skeleton={(
               <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
-                <div className="news-card min-h-96 rounded-xl border p-5 sm:p-6">
+                <div className="news-card min-h-96 rounded-2xl border p-5 sm:p-6">
                   <div className="flex items-center justify-between gap-3">
                     <SkeletonBlock className="h-4 w-40 rounded-sm" />
                     <SkeletonBlock className="h-7 w-20 rounded-full" />
@@ -472,7 +472,7 @@ function NewsPageContent() {
                 </div>
                 <div className="space-y-4">
                   {Array.from({ length: 3 }, (_, index) => (
-                    <div key={index} className="news-card rounded-xl border p-5">
+                    <div key={index} className="news-card rounded-2xl border p-5">
                       <SkeletonBlock className="h-3 w-24 rounded-sm" />
                       <SkeletonText className="mt-4" lines={3} widths={["100%", "84%", "56%"]} />
                     </div>
@@ -483,7 +483,7 @@ function NewsPageContent() {
           >
             <>
               {!loading && activeTab === "news" && rawNews && rawNews.articles.length === 0 && (
-                <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border text-center">
+                <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-2xl border text-center">
                   <Newspaper className="size-10 text-white/20" />
                   <p className="max-w-md text-sm text-white/42">
                     No source articles were returned. Refresh again or choose a different market mix.
@@ -492,7 +492,7 @@ function NewsPageContent() {
               )}
 
               {!loading && activeTab !== "news" && workspace && workspace.briefing.length === 0 && (
-                <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border text-center">
+                <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-2xl border text-center">
                   <Newspaper className="size-10 text-white/20" />
                   <p className="max-w-md text-sm text-white/42">
                     No intelligence cards were generated from this source set. Refresh again or choose a different market mix.
@@ -660,7 +660,7 @@ function FeaturedNewsArticle({ article }: { article: NewsArticle }) {
       href={article.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="news-card group mb-6 block overflow-hidden rounded-xl border transition-colors"
+      className="news-card group mb-6 block overflow-hidden rounded-2xl border transition-colors"
     >
       <div className="grid min-h-[280px] md:grid-cols-[0.9fr_1.1fr]">
         <div className="news-media relative min-h-56 overflow-hidden">
@@ -705,7 +705,7 @@ function NewsArticleCard({ article }: { article: NewsArticle }) {
       href={article.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="news-card group flex min-h-[360px] flex-col overflow-hidden rounded-xl border transition-colors"
+      className="news-card group flex min-h-[360px] flex-col overflow-hidden rounded-2xl border transition-colors"
     >
       <div className="news-media relative h-40 overflow-hidden">
         {article.thumbnail ? (
@@ -779,7 +779,7 @@ function BriefingTab({ cards }: { cards: NewsBriefCard[] }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {cards.map((card) => (
-        <article key={card.id} className="news-card rounded-xl border p-5">
+        <article key={card.id} className="news-card rounded-2xl border p-5">
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <SentimentBadge sentiment={card.sentiment} />
             <ScorePill label="Impact" value={card.impact_score} />
@@ -846,7 +846,7 @@ function PicksTab({
         const evidence = compactEvidence(pick);
 
         return (
-          <article key={pick.id} className="news-card flex min-h-[430px] flex-col rounded-xl border p-4">
+          <article key={pick.id} className="news-card flex min-h-[430px] flex-col rounded-2xl border p-4">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -1003,7 +1003,7 @@ function ReportsTab({ reports }: { reports: ResearchReport[] }) {
                 setSelectedReport(report);
               }
             }}
-            className="news-card cursor-pointer rounded-xl border p-5 transition-colors lg:p-6"
+            className="news-card cursor-pointer rounded-2xl border p-5 transition-colors lg:p-6"
           >
             <div className="flex flex-col gap-4 border-b border-white/[0.08] pb-5 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -1755,7 +1755,7 @@ function SourceList({ sources }: { sources: { title: string; url: string | null;
 
 function EmptyPanel({ icon, message }: { icon: ReactNode; message: string }) {
   return (
-    <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border text-center text-white/38">
+    <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-2xl border text-center text-white/38">
       {icon}
       <p className="max-w-md text-sm">{message}</p>
     </div>

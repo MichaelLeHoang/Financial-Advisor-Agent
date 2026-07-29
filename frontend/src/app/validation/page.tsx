@@ -10,6 +10,7 @@ import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 
 const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, trader: 2, quant: 3, execution_addon: 4 };
 
@@ -76,8 +77,8 @@ export default function ValidationPage() {
         <Card className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] py-0 text-[var(--text-primary)] shadow-[var(--shadow-card)]">
           <CardContent className="grid gap-4 p-5 md:grid-cols-[1fr_180px_180px_180px]">
             <Input value={symbols} onChange={(event) => setSymbols(event.target.value)} className="h-11 rounded-xl" />
-            <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-11 rounded-xl" />
-            <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-11 rounded-xl" />
+            <DatePicker aria-label="Start date" value={startDate} onValueChange={setStartDate} />
+            <DatePicker aria-label="End date" value={endDate} onValueChange={setEndDate} min={startDate} />
             <Button onClick={run} disabled={loading} className="theme-accent-surface on-accent h-11 rounded-xl">{loading ? "Running..." : "Validate"}</Button>
           </CardContent>
         </Card>

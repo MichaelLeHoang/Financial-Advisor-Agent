@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { AlertTriangle, Clock3, Database, WalletCards } from "lucide-react";
+import { APP_RADIUS } from "@/lib/ui-design";
 import { cn } from "@/lib/utils";
 
 export function WorkspacePage({
@@ -57,7 +58,7 @@ export function ContextBar({ paperAccount }: { paperAccount?: { name: string; ca
 }
 
 export function Panel({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <section className={cn("rounded-lg border border-[var(--theme-border)] bg-[var(--surface-card)] p-5", className)}>{children}</section>;
+  return <section className={cn(APP_RADIUS.surface, "border border-[var(--theme-border)] bg-[var(--surface-card)] p-5", className)}>{children}</section>;
 }
 
 export function PanelHeading({ title, detail, action }: { title: string; detail?: string; action?: React.ReactNode }) {
