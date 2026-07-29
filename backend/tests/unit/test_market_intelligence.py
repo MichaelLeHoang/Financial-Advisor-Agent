@@ -64,6 +64,51 @@ def test_market_intelligence_builds_briefing_picks_and_reports():
     assert response.reports[0].disclaimer
 
 
+def test_market_intelligence_normalizes_provider_html_for_briefing_cards():
+    news = NewsResponse(
+        articles=[
+            NewsArticle(
+                id="provider-html",
+                title="Wall Street &amp; investors await earnings",
+                summary=(
+                    "<body><p>STORY: Wall Street's main indexes closed mixed while investors waited for earnings.</p>"
+                    "<style>.story { display: none; }</style><script>window.providerTracker = true;</script>"
+                    "<p>Microsoft and Amazon remained in focus.&nbsp;Spending expectations stayed elevated.</p>"
+                    "<p>:: Archive</p><p>"
+                    + "Additional market context. " * 40
+                    + "</p></body>"
+                ),
+                publisher="Example Wire",
+                published_at=datetime.now(timezone.utc).isoformat(),
+                url="https://example.com/provider-html",
+                tickers=["MSFT", "AMZN"],
+                category="technology",
+            )
+        ],
+        categories_fetched=["technology"],
+        total=1,
+    )
+
+    response = build_market_intelligence_from_news(news)
+    card = response.briefing[0]
+
+    assert card.headline == "Wall Street & investors await earnings"
+    assert "Wall Street's main indexes closed mixed" in card.summary
+    assert "Microsoft and Amazon remained in focus." in card.summary
+    assert len(card.summary) <= 420
+    leaked_markers = (
+        "<body>",
+        "<p>",
+        "&nbsp;",
+        "STORY:",
+        ":: Archive",
+        "providerTracker",
+        "display: none",
+    )
+    assert all(marker not in card.summary for marker in leaked_markers)
+    assert card.sources[0].title == "Wall Street & investors await earnings"
+
+
 def test_market_intelligence_route_uses_service(monkeypatch):
     from src.api import app as api_app
     from src.api.routes import intelligence
@@ -75,7 +120,9 @@ def test_market_intelligence_route_uses_service(monkeypatch):
 
     monkeypatch.setattr(intelligence, "build_market_intelligence", fake_build)
 
-    response = TestClient(api_app.app).get("/api/v1/market-intelligence?categories=market&limit=5")
+    response = TestClient(api_app.app).get(
+        "/api/v1/market-intelligence?categories=market&limit=5"
+    )
 
     assert response.status_code == 200
     data = response.json()

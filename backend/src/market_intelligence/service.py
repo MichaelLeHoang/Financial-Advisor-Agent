@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections import defaultdict
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 
 from src.api.news_routes import CATEGORY_MAP, NewsArticle, NewsResponse, get_news
 from src.market_intelligence.models import (
@@ -22,6 +24,62 @@ from src.market_intelligence.scoring import (
     risk_level,
 )
 
+_BLOCK_TAGS = frozenset(
+    {"article", "blockquote", "br", "div", "h1", "h2", "h3", "h4", "li", "p", "section"}
+)
+_IGNORED_TAGS = frozenset({"noscript", "script", "style", "svg"})
+
+
+class _NewsTextParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.ignored_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        del attrs
+        if tag in _IGNORED_TAGS:
+            self.ignored_depth += 1
+        elif self.ignored_depth == 0 and tag in _BLOCK_TAGS and self.parts:
+            self.parts.append(" ")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in _IGNORED_TAGS and self.ignored_depth > 0:
+            self.ignored_depth -= 1
+        elif self.ignored_depth == 0 and tag in _BLOCK_TAGS and self.parts:
+            self.parts.append(" ")
+
+    def handle_data(self, data: str) -> None:
+        if self.ignored_depth == 0:
+            self.parts.append(data)
+
+
+def _plain_news_text(value: str) -> str:
+    parser = _NewsTextParser()
+    parser.feed(value)
+    parser.close()
+    text = " ".join("".join(parser.parts).split())
+    text = re.sub(r"^STORY:\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*::\s*Archive\s*", " ", text, flags=re.IGNORECASE)
+    return " ".join(text.split())
+
+
+def _compact_summary(value: str, max_chars: int = 420) -> str:
+    if len(value) <= max_chars:
+        return value
+
+    sentence_end = max(
+        value.rfind(". ", max_chars // 3, max_chars),
+        value.rfind("? ", max_chars // 3, max_chars),
+        value.rfind("! ", max_chars // 3, max_chars),
+    )
+    if sentence_end >= 0:
+        return value[: sentence_end + 1].strip()
+
+    word_end = value.rfind(" ", 0, max_chars - 1)
+    cutoff = word_end if word_end > 0 else max_chars - 1
+    return f"{value[:cutoff].rstrip()}…"
+
 
 def _stable_id(prefix: str, *parts: str) -> str:
     raw = ":".join(parts)
@@ -30,7 +88,9 @@ def _stable_id(prefix: str, *parts: str) -> str:
 
 
 def _category_label(category: str) -> str:
-    return CATEGORY_MAP.get(category, {}).get("label", category.replace("_", " ").title())
+    return CATEGORY_MAP.get(category, {}).get(
+        "label", category.replace("_", " ").title()
+    )
 
 
 def _clean_tickers(tickers: list[str]) -> list[str]:
@@ -45,7 +105,7 @@ def _clean_tickers(tickers: list[str]) -> list[str]:
 
 def _source_from_article(article: NewsArticle) -> InsightSource:
     return InsightSource(
-        title=article.title,
+        title=_plain_news_text(article.title),
         url=article.url or None,
         publisher=article.publisher or None,
         published_at=parse_datetime(article.published_at),
@@ -53,7 +113,9 @@ def _source_from_article(article: NewsArticle) -> InsightSource:
 
 
 def _average_breakdown(cards: list[NewsBriefCard]) -> ImpactScoreBreakdown | None:
-    breakdowns = [card.score_breakdown for card in cards if card.score_breakdown is not None]
+    breakdowns = [
+        card.score_breakdown for card in cards if card.score_breakdown is not None
+    ]
     if not breakdowns:
         return None
     count = len(breakdowns)
@@ -62,26 +124,33 @@ def _average_breakdown(cards: list[NewsBriefCard]) -> ImpactScoreBreakdown | Non
         relevance=round(sum(item.relevance for item in breakdowns) / count, 1),
         sentiment=round(sum(item.sentiment for item in breakdowns) / count, 1),
         price_volume=round(sum(item.price_volume for item in breakdowns) / count, 1),
-        source_quality=round(sum(item.source_quality for item in breakdowns) / count, 1),
+        source_quality=round(
+            sum(item.source_quality for item in breakdowns) / count, 1
+        ),
         risk_penalty=round(sum(item.risk_penalty for item in breakdowns) / count, 1),
         final_score=round(sum(item.final_score for item in breakdowns) / count, 1),
     )
 
 
 def _summarize_evidence(card: NewsBriefCard) -> str:
-    summary = card.summary.strip() or card.why_it_matters.strip() or card.headline.strip()
+    summary = (
+        card.summary.strip() or card.why_it_matters.strip() or card.headline.strip()
+    )
     first_sentence = summary.split(". ")[0].strip()
     if not first_sentence.endswith("."):
         first_sentence = f"{first_sentence}."
     return first_sentence
 
 
-def _editorial_summary(article: NewsArticle, sentiment: str, categories: list[str]) -> str:
-    if article.summary.strip():
-        return article.summary.strip()
+def _editorial_summary(
+    article: NewsArticle, sentiment: str, categories: list[str]
+) -> str:
+    summary = _plain_news_text(article.summary)
+    if summary:
+        return _compact_summary(summary)
     category_text = ", ".join(categories) if categories else "market"
     return (
-        f"{article.title.strip()} The item is being tracked as a {sentiment} catalyst for the "
+        f"{_plain_news_text(article.title)} The item is being tracked as a {sentiment} catalyst for the "
         f"{category_text} tape until stronger source evidence confirms or rejects the setup."
     )
 
@@ -102,7 +171,9 @@ def _why_it_matters(article: NewsArticle, tickers: list[str], sentiment: str) ->
 def build_briefing_cards(news: NewsResponse) -> list[NewsBriefCard]:
     cards: list[NewsBriefCard] = []
     for article in news.articles:
-        text = f"{article.title} {article.summary}"
+        headline = _plain_news_text(article.title)
+        article_summary = _plain_news_text(article.summary)
+        text = f"{headline} {article_summary}"
         sentiment, sentiment_strength = keyword_sentiment(text)
         flags = risk_flags(text)
         published_at = parse_datetime(article.published_at)
@@ -122,7 +193,7 @@ def build_briefing_cards(news: NewsResponse) -> list[NewsBriefCard]:
         cards.append(
             NewsBriefCard(
                 id=_stable_id("brief", article.id, article.title),
-                headline=article.title,
+                headline=headline,
                 summary=summary,
                 tickers=tickers,
                 categories=categories,
@@ -130,19 +201,26 @@ def build_briefing_cards(news: NewsResponse) -> list[NewsBriefCard]:
                 impact_score=breakdown.final_score,
                 confidence=confidence_score(
                     source_count=1,
-                    has_summary=bool(article.summary.strip()),
+                    has_summary=bool(article_summary),
                     has_ticker=bool(tickers),
                     risk_count=len(flags),
                 ),
                 why_it_matters=_why_it_matters(article, tickers, sentiment),
-                risk_flags=flags or ["Single-source read; verify against price action and follow-up reporting."],
+                risk_flags=flags
+                or [
+                    "Single-source read; verify against price action and follow-up reporting."
+                ],
                 sources=[_source_from_article(article)],
                 published_at=published_at,
                 score_breakdown=breakdown,
             )
         )
 
-    return sorted(cards, key=lambda card: (card.impact_score, _timestamp(card.published_at)), reverse=True)
+    return sorted(
+        cards,
+        key=lambda card: (card.impact_score, _timestamp(card.published_at)),
+        reverse=True,
+    )
 
 
 def _timestamp(value: datetime | None) -> float:
@@ -172,10 +250,18 @@ def build_today_picks(briefing: list[NewsBriefCard]) -> list[TodayPickCard]:
                     continue
                 if flag not in risks:
                     risks.append(flag)
-        sentiment_counts = {value: sum(1 for card in cards if card.sentiment == value) for value in ("bullish", "neutral", "bearish")}
+        sentiment_counts = {
+            value: sum(1 for card in cards if card.sentiment == value)
+            for value in ("bullish", "neutral", "bearish")
+        }
         dominant_sentiment = max(sentiment_counts, key=sentiment_counts.get)
         label = _pick_label(dominant_sentiment, avg_score, risks)
-        evidence = [_summarize_evidence(card) for card in sorted(cards, key=lambda card: card.impact_score, reverse=True)[:3]]
+        evidence = [
+            _summarize_evidence(card)
+            for card in sorted(cards, key=lambda card: card.impact_score, reverse=True)[
+                :3
+            ]
+        ]
         thesis = _pick_thesis(ticker, dominant_sentiment, label, cards)
         sources = []
         for card in cards:
@@ -194,13 +280,16 @@ def build_today_picks(briefing: list[NewsBriefCard]) -> list[TodayPickCard]:
                 risk_level=risk_level(risks, dominant_sentiment, avg_score),
                 score_breakdown=_average_breakdown(cards),
                 key_evidence=evidence,
-                risk_flags=risks[:5] or ["Needs confirmation from additional sources and market response."],
+                risk_flags=risks[:5]
+                or ["Needs confirmation from additional sources and market response."],
                 related_news_count=len(cards),
                 sources=sources[:6],
             )
         )
 
-    return sorted(picks, key=lambda pick: (pick.opportunity_score, pick.confidence), reverse=True)[:8]
+    return sorted(
+        picks, key=lambda pick: (pick.opportunity_score, pick.confidence), reverse=True
+    )[:8]
 
 
 def _pick_label(sentiment: str, score: float, risks: list[str]) -> str:
@@ -215,15 +304,23 @@ def _pick_label(sentiment: str, score: float, risks: list[str]) -> str:
     return "Watchlist candidate"
 
 
-def _pick_thesis(ticker: str, sentiment: str, label: str, cards: list[NewsBriefCard]) -> str:
-    theme = cards[0].categories[0] if cards and cards[0].categories else "selected market theme"
+def _pick_thesis(
+    ticker: str, sentiment: str, label: str, cards: list[NewsBriefCard]
+) -> str:
+    theme = (
+        cards[0].categories[0]
+        if cards and cards[0].categories
+        else "selected market theme"
+    )
     return (
         f"{ticker} is flagged as a {label.lower()} because recent {theme} coverage has a {sentiment} evidence balance "
         f"across {len(cards)} related source item(s). This is a research queue item, not a trade instruction."
     )
 
 
-def build_reports(briefing: list[NewsBriefCard], picks: list[TodayPickCard]) -> list[ResearchReport]:
+def build_reports(
+    briefing: list[NewsBriefCard], picks: list[TodayPickCard]
+) -> list[ResearchReport]:
     reports: list[ResearchReport] = []
     for pick in picks[:5]:
         related = [card for card in briefing if pick.ticker in card.tickers]
@@ -268,7 +365,11 @@ def build_reports(briefing: list[NewsBriefCard], picks: list[TodayPickCard]) -> 
                     "confidence": pick.confidence,
                     "risk_level": pick.risk_level,
                     "related_news_count": pick.related_news_count,
-                    "score_breakdown": pick.score_breakdown.model_dump() if pick.score_breakdown else None,
+                    "score_breakdown": (
+                        pick.score_breakdown.model_dump()
+                        if pick.score_breakdown
+                        else None
+                    ),
                 },
                 sources=sources,
                 what_to_watch_next=[
@@ -281,7 +382,9 @@ def build_reports(briefing: list[NewsBriefCard], picks: list[TodayPickCard]) -> 
     return reports
 
 
-def build_market_intelligence_from_news(news: NewsResponse) -> MarketIntelligenceResponse:
+def build_market_intelligence_from_news(
+    news: NewsResponse,
+) -> MarketIntelligenceResponse:
     briefing = build_briefing_cards(news)
     picks = build_today_picks(briefing)
     reports = build_reports(briefing, picks)
@@ -297,6 +400,10 @@ def build_market_intelligence_from_news(news: NewsResponse) -> MarketIntelligenc
     )
 
 
-async def build_market_intelligence(categories: list[str], limit: int = 30) -> MarketIntelligenceResponse:
-    raw_news = await get_news(categories=",".join(categories), limit=min(max(limit, 1), 50))
+async def build_market_intelligence(
+    categories: list[str], limit: int = 30
+) -> MarketIntelligenceResponse:
+    raw_news = await get_news(
+        categories=",".join(categories), limit=min(max(limit, 1), 50)
+    )
     return build_market_intelligence_from_news(raw_news)

@@ -21,4 +21,4 @@ This module reuses the current news feed and existing RAG/ingestion architecture
 Use deterministic sample news payloads. Cover briefing transformation, risk flags, pick ranking, report packaging, and empty-source behavior without live provider calls.
 
 ## Latest Change
-- Added score-driver breakdowns and summarized evidence to Today’s Picks and report payloads so the frontend can explain why a ticker deserves review without exposing raw source lists or contradictory source-risk flags.
+- Normalized provider HTML, character entities, and archive markers before building briefing cards, and capped oversized article bodies so raw feed markup cannot leak into the News workspace.
