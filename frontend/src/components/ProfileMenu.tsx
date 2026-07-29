@@ -17,6 +17,7 @@ import {
     Monitor,
     Moon,
     Palette,
+    PanelsTopLeft,
     Plus,
     Settings,
     Sparkles,
@@ -40,7 +41,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { getAvatarColor, getAvatarInitials } from "@/lib/avatar";
-import { persistThemePreference, readThemePreference, type AppThemePreference } from "@/lib/app-theme";
+import {
+    APP_APPEARANCE_OPTIONS,
+    persistAppearancePreference,
+    persistThemePreference,
+    readAppearancePreference,
+    readThemePreference,
+    type AppAppearancePreference,
+    type AppThemePreference,
+} from "@/lib/app-theme";
 
 const PROFILE_THEME_OPTIONS: Array<{ name: AppThemePreference; label: string; icon: ComponentType<{ className?: string }> }> = [
     { name: "White", label: "Light", icon: Sun },
@@ -71,6 +80,7 @@ export default function ProfileMenu({
     const [authFormError, setAuthFormError] = useState<string | null>(null);
     const [authSubmitting, setAuthSubmitting] = useState(false);
     const [themePreference, setThemePreference] = useState<AppThemePreference>("Deep Space");
+    const [appearancePreference, setAppearancePreference] = useState<AppAppearancePreference>("Solid");
     const triggerRef = useRef<HTMLButtonElement>(null);
 
     const currentUserName = loading ? "Loading account..." : user?.display_name || user?.email?.split("@")[0] || "Researcher";
@@ -129,10 +139,18 @@ export default function ProfileMenu({
         persistThemePreference(theme);
     };
 
+    const chooseAppearance = (appearance: AppAppearancePreference) => {
+        setAppearancePreference(appearance);
+        persistAppearancePreference(appearance);
+    };
+
     return (
         <DropdownMenu
             onOpenChange={(open) => {
-                if (open) setThemePreference(readThemePreference());
+                if (open) {
+                    setThemePreference(readThemePreference());
+                    setAppearancePreference(readAppearancePreference());
+                }
                 if (!open) {
                     setAccountSwitcherOpen(false);
                     setSignInOpen(false);
@@ -143,7 +161,7 @@ export default function ProfileMenu({
                 ref={triggerRef}
                 aria-label="Open profile menu"
                 className={compact
-                    ? "flex h-10 w-10 items-center justify-center rounded-xl bg-transparent p-0 text-left transition-colors hover:bg-[var(--surface-card-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                    ? "flex h-10 w-10 items-center justify-center rounded-full bg-transparent p-0 text-left transition-colors hover:bg-[var(--surface-card-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     : "flex w-full items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.035] py-2 pl-1 pr-2.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-white/[0.065] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                 }
             >
@@ -242,6 +260,20 @@ export default function ProfileMenu({
                                         <span className="flex-1">{theme.label}</span>
                                         <span className={cn("flex size-5 items-center justify-center rounded-full border-2 border-[var(--theme-border-strong)]", selected && "border-[var(--text-primary)] bg-[var(--text-primary)] text-[var(--surface-popover-strong)]")}>
                                             {selected && <Check className="size-3" strokeWidth={3} />}
+                                        </span>
+                                    </DropdownMenuItem>
+                                );
+                            })}
+                            <DropdownMenuSeparator className="my-1.5" />
+                            <div className="px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-subtle)]" role="presentation">Surface style</div>
+                            {APP_APPEARANCE_OPTIONS.map((appearance) => {
+                                const selected = appearancePreference === appearance.name;
+                                return (
+                                    <DropdownMenuItem key={appearance.name} closeOnClick={false} onClick={() => chooseAppearance(appearance.name)} className="h-10 gap-2.5 px-2">
+                                        <PanelsTopLeft aria-hidden="true" className="size-4 shrink-0 text-[var(--text-muted)]" />
+                                        <span className="flex-1">{appearance.label}</span>
+                                        <span className={cn("flex size-5 items-center justify-center rounded-full border-2 border-[var(--theme-border-strong)]", selected && "border-[var(--text-primary)] bg-[var(--text-primary)] text-[var(--surface-popover-strong)]")}>
+                                            {selected && <Check aria-hidden="true" className="size-3" strokeWidth={3} />}
                                         </span>
                                     </DropdownMenuItem>
                                 );

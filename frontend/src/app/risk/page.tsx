@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
+import { usePathname } from "next/navigation";
 import { Activity, AlertTriangle, PieChart, ShieldCheck } from "lucide-react";
 import { api, isUpgradeRequiredError } from "@/lib/api";
 import type { Portfolio, RiskSnapshotResult } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { usePortfolioBookView } from "@/components/portfolio/PortfolioBookViewProvider";
+import PortfolioBookSwitch from "@/components/portfolio/PortfolioBookSwitch";
 import { LockedFeature } from "@/components/LockedFeature";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
@@ -17,6 +19,7 @@ import { cn } from "@/lib/utils";
 const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, trader: 2, quant: 3, execution_addon: 4 };
 
 export default function RiskPage() {
+  const pathname = usePathname();
   const { user } = useAuth();
   const { book } = usePortfolioBookView();
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
@@ -88,7 +91,8 @@ export default function RiskPage() {
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-4xl font-bold text-[var(--text-primary)]">Portfolio Risk</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-muted)]">
+            {pathname.startsWith("/portfolio/") && <PortfolioBookSwitch className="mt-4" />}
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--text-muted)]">
               Concentration, volatility, drawdown, and correlation research for the {book === "investment" ? "Investment" : "Trade"} book.
             </p>
           </div>

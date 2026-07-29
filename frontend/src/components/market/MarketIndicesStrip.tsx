@@ -86,7 +86,7 @@ export default function MarketIndicesStrip() {
       skeleton={(
         <HorizontalScroll className="-mx-1 flex gap-3 px-1 pb-1">
           {indices.map((index, itemIndex) => (
-            <div key={index.ticker} className="flex min-w-[180px] flex-1 items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] px-4 py-3">
+            <div key={index.ticker} className="market-chart-surface flex min-w-[180px] flex-1 items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] px-4 py-3">
               <div className="min-w-0 flex-1">
                 <SkeletonBlock className="h-2.5 w-20 rounded-sm" />
                 <SkeletonBlock className="mt-2 h-5 w-24 rounded-sm" />
@@ -107,7 +107,7 @@ export default function MarketIndicesStrip() {
         return (
           <div
             key={index.ticker}
-            className="flex min-w-[180px] flex-1 items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] px-4 py-3"
+            className="market-chart-surface flex min-w-[180px] flex-1 items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] px-4 py-3"
           >
             <div className="min-w-0">
               <p className="truncate text-xs font-medium text-white/45">{index.label}</p>

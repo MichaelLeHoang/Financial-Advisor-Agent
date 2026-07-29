@@ -907,13 +907,15 @@ function MarketCard({
     return (
         <div className="group">
             <Card
+                data-market-chart-card
+                data-interactive="true"
                 role="button"
                 tabIndex={0}
                 onClick={onOpen}
                 onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") onOpen();
                 }}
-                className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[var(--shadow-accent-card)] transition-colors duration-150 group-hover:border-white/[0.12] group-hover:bg-white/[0.07] focus:outline-none focus-visible:border-white/[0.12] focus-visible:ring-0"
+                className="market-chart-surface rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[var(--shadow-accent-card)] transition-colors duration-150 group-hover:border-white/[0.12] group-hover:bg-white/[0.07] focus:outline-none focus-visible:border-white/[0.12] focus-visible:ring-0"
             >
                 <CardContent className="p-6">
                     <div className="mb-4 flex items-start justify-between gap-4">
@@ -1501,7 +1503,7 @@ function MarketChartDialog({
                                 </div>
                             )}
                             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-                                <Card className="rounded-2xl border-white/[0.06] bg-white/[0.025] py-0">
+                                <Card data-market-detail-chart className="market-chart-surface rounded-2xl border-white/[0.06] bg-white/[0.025] py-0">
                                     <CardContent className="flex flex-col gap-3 p-4">
                                         <div className="flex items-center justify-between gap-4 px-1">
                                             <div>

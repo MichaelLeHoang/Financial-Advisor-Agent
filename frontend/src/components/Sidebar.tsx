@@ -66,6 +66,8 @@ const MORE_NAV: NavItem[] = [
     { href: "/export", icon: Code2, label: "Export", minPlan: "quant" },
 ];
 
+const WORKSPACE_SUBNAV_PREFIXES = ["/invest", "/portfolio", "/trade", "/journal", "/discover"];
+
 function isNavItemActive(path: string, href: string) {
     if (href === "/discover/markets") return path.startsWith("/discover/");
     return path === href || path.startsWith(`${href}/`);
@@ -101,6 +103,7 @@ export default function Sidebar({
     const routeSessionId = isSessionPath && path !== "/ai" ? decodeURIComponent(path.split("/")[2] || "") : null;
     const activeSessionId = isSessionPath ? routeSessionId || searchParams.get("session") || "default" : null;
     const shouldLoadSessions = isSessionPath || isOpen || mobileOpen || searchOpen;
+    const hasWorkspaceSubnav = WORKSPACE_SUBNAV_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
     const displaySessions = useMemo(() => sessions, [sessions]);
     const creatingSessionRef = useRef(false);
 
@@ -249,6 +252,7 @@ export default function Sidebar({
             <DesktopSidebar
                 path={path}
                 isOpen={isOpen}
+                hasWorkspaceSubnav={hasWorkspaceSubnav}
                 onToggle={onToggle}
                 nav={visibleNav}
                 moreNav={visibleMoreNav}
@@ -313,6 +317,7 @@ export default function Sidebar({
 function DesktopSidebar({
     path,
     isOpen,
+    hasWorkspaceSubnav,
     onToggle,
     nav,
     moreNav,
@@ -330,6 +335,7 @@ function DesktopSidebar({
 }: {
     path: string;
     isOpen: boolean;
+    hasWorkspaceSubnav: boolean;
     onToggle: () => void;
     nav: NavItem[];
     moreNav: NavItem[];
@@ -351,13 +357,18 @@ function DesktopSidebar({
 
     return (
         <aside
+            data-desktop-sidebar
+            data-sidebar-shape={isOpen ? "panel" : "pill"}
             className={cn(
-                "fixed inset-y-0 left-0 z-50 hidden overflow-visible md:block",
-                isOpen ? "w-72" : "w-16"
+                "fixed left-4 z-50 hidden overflow-visible md:block",
+                isOpen
+                    ? hasWorkspaceSubnav ? "bottom-4 top-16 w-72" : "inset-y-4 w-72"
+                    : "top-1/2 h-[min(48rem,calc(100dvh-2rem))] w-14 -translate-y-1/2"
             )}
         >
             {isOpen ? (
                 <SidebarSurface
+                    floating
                     path={path}
                     onToggle={onToggle}
                     nav={nav}
@@ -457,14 +468,14 @@ function MiniSidebar({
     }, [onToggleRecents, recentsOpen]);
 
     return (
-        <div className="relative flex h-full flex-col items-center border-r border-[var(--theme-border)] bg-[var(--surface-sidebar)] py-4 shadow-[var(--shadow-sidebar)]">
+        <div className="workspace-side-rail relative flex h-full flex-col items-center rounded-full border border-[var(--theme-border)] bg-[var(--surface-header)] py-4 shadow-[var(--shadow-sidebar)] backdrop-blur-xl">
             <button
                 type="button"
                 aria-label="Open sidebar"
                 onClick={onToggleSidebar}
-                className="group relative mb-3 flex h-10 w-10 cursor-e-resize items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                className="group relative mb-3 flex h-10 w-10 cursor-e-resize items-center justify-center rounded-full text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
-                    <span className="absolute flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] opacity-100 shadow-[var(--shadow-brand-mark)] transition-opacity group-hover:opacity-0">
+                <span data-sidebar-logo-mark className="absolute flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.04] opacity-100 transition-opacity group-hover:opacity-0">
                     <img src="/logo.svg" alt="" className="h-6 w-6 object-contain" />
                 </span>
                 <span className="absolute flex h-10 w-10 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
@@ -476,8 +487,8 @@ function MiniSidebar({
             <button
                 type="button"
                 onClick={onNewAnalysis}
-	                aria-label="New chat"
-                className="group relative mb-4 flex h-11 w-10 items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                aria-label="New chat"
+                className="group relative mb-4 flex h-10 w-10 items-center justify-center rounded-full text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
                 <PenLine className="h-5 w-5" />
                 <MiniTooltip label="New chat" />
@@ -487,7 +498,7 @@ function MiniSidebar({
                 type="button"
                 onClick={onSearchClick}
                 aria-label="Search chats"
-                className="group relative mb-4 flex h-10 w-10 items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                className="group relative mb-4 flex h-10 w-10 items-center justify-center rounded-full text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
                 <Search className="h-5 w-5" />
                 <MiniTooltip label="Search chats" shortcut="⌘K" />
@@ -506,7 +517,7 @@ function MiniSidebar({
                             aria-label={label}
                             aria-current={active ? "page" : undefined}
                             className={cn(
-                                "group relative flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                                "group relative flex h-10 w-10 items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                                 active ? "bg-white/[0.09] text-indigo-primary" : "text-white/42 hover:bg-white/[0.07] hover:text-white"
                             )}
                         >
@@ -526,7 +537,7 @@ function MiniSidebar({
                         aria-expanded={moreOpen}
                         onClick={() => setMoreOpen((open) => !open)}
                         className={cn(
-                            "group flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                            "group flex h-10 w-10 items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                             moreOpen || moreActive ? "bg-white/[0.09] text-indigo-primary" : "text-white/42 hover:bg-white/[0.07] hover:text-white"
                         )}
                     >
@@ -577,7 +588,7 @@ function MiniSidebar({
                     aria-expanded={recentsOpen}
                     onClick={onToggleRecents}
                     className={cn(
-                        "group flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                        "group flex h-10 w-10 items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                         recentsOpen ? "bg-white/[0.09] text-white" : "text-white/52 hover:bg-white/[0.07] hover:text-white"
                     )}
                 >
@@ -629,7 +640,7 @@ function MiniSidebar({
                         aria-label="Notifications"
                         data-notification-trigger
                         onClick={onAlertsClick}
-                        className="group relative flex h-10 w-10 items-center justify-center rounded-xl bg-transparent text-white/72 transition-colors duration-150 hover:bg-[var(--surface-card-hover)] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 motion-reduce:transition-none"
+                        className="group relative flex h-10 w-10 items-center justify-center rounded-full bg-transparent text-white/72 transition-colors duration-150 hover:bg-[var(--surface-card-hover)] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 motion-reduce:transition-none"
                     >
                         <Bell className="size-5" />
                         <span aria-hidden="true" className="absolute right-2 top-2 size-2 rounded-full bg-blue-400 ring-2 ring-[var(--surface-popover-strong)]" />
@@ -670,6 +681,7 @@ function SidebarSurface({
     onSettingsClick,
     onProfileClick,
     onAlertsClick,
+    floating = false,
 }: {
     path: string;
     nav: NavItem[];
@@ -686,20 +698,27 @@ function SidebarSurface({
     onSettingsClick?: () => void;
     onProfileClick?: () => void;
     onAlertsClick?: () => void;
+    floating?: boolean;
 }) {
     const [showProCard, setShowProCard] = useState(true);
     const [moreOpen, setMoreOpen] = useState(false);
     const moreActive = moreNav.some((item) => path === item.href);
 
     return (
-        <div className="relative flex h-full flex-col overflow-hidden border-r border-[var(--theme-border)] bg-[var(--surface-sidebar)] px-3 py-4 shadow-[var(--shadow-sidebar)]">
+        <div className={cn(
+            "relative flex h-full flex-col overflow-hidden bg-[var(--surface-header)] px-3 py-4 shadow-[var(--shadow-sidebar)] backdrop-blur-xl",
+            floating
+                ? "workspace-side-rail rounded-[2rem] border border-[var(--theme-border)]"
+                : "border-r border-[var(--theme-border)]",
+        )}>
 
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
                 <div className="mb-3 flex h-10 items-center justify-between">
                     <Link
                         href="/home"
                         aria-label="Quanfora home"
-                        className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] shadow-[var(--shadow-brand-mark-strong)] outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                        data-sidebar-logo-mark
+                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04] outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
                         <img src="/logo.svg" alt="" className="h-6 w-6 object-contain" />
                     </Link>

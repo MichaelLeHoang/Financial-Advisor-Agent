@@ -102,12 +102,114 @@ test("workspace subnavigation exposes focused Portfolio and Discover routes", as
   await expect(page.getByRole("heading", { name: "Investment Activity" })).toBeVisible();
 });
 
+test("desktop workspace tabs are centered and reveal their divider after scroll", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Centered workspace tabs are desktop navigation chrome.");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/discover/markets");
+  await waitForWorkspace(page);
+
+  const topNav = page.locator("[data-workspace-top-nav]");
+  const navigation = page.getByRole("navigation", { name: "Discover navigation" });
+  const activeTab = navigation.getByRole("link", { name: "Markets" });
+  await expect(navigation.getByText("DISCOVER", { exact: true })).toHaveCount(0);
+  await expect(topNav).toHaveAttribute("data-scrolled", "false");
+  await expect(topNav).toHaveCSS("border-bottom-color", "rgba(0, 0, 0, 0)");
+
+  await expect.poll(async () => navigation.evaluate((element) => {
+    const links = Array.from(element.querySelectorAll("a"));
+    const first = links[0]?.getBoundingClientRect();
+    const last = links.at(-1)?.getBoundingClientRect();
+    const bounds = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    if (!first || !last) return Number.POSITIVE_INFINITY;
+    const contentCenter = bounds.left
+      + Number.parseFloat(style.paddingLeft)
+      + (bounds.width - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight)) / 2;
+    return Math.abs((first.left + last.right) / 2 - contentCenter);
+  })).toBeLessThan(2);
+
+  const indicator = activeTab.locator("[data-active-tab-indicator]");
+  const indicatorLine = indicator.locator("[data-active-tab-line]");
+  await expect(indicator).toHaveCSS("bottom", "6px");
+  await expect(indicatorLine).toHaveCSS("width", "40px");
+  await expect(indicatorLine).toHaveCSS("height", "1px");
+  await expect(indicatorLine).toHaveCSS("animation-duration", "0.18s");
+  await expect.poll(() => indicatorLine.evaluate((element) => new DOMMatrix(getComputedStyle(element).transform).a)).toBeCloseTo(1);
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(indicatorLine).toHaveCSS("animation-name", "none");
+
+  await topNav.evaluate((element) => {
+    let scrollParent = element.parentElement;
+    while (scrollParent && scrollParent !== document.body) {
+      const overflowY = getComputedStyle(scrollParent).overflowY;
+      if (overflowY === "auto" || overflowY === "scroll") break;
+      scrollParent = scrollParent.parentElement;
+    }
+    if (scrollParent) {
+      scrollParent.scrollTop = 80;
+      scrollParent.dispatchEvent(new Event("scroll"));
+    }
+  });
+  await expect(topNav).toHaveAttribute("data-scrolled", "true");
+  await expect(topNav).not.toHaveCSS("border-bottom-color", "rgba(0, 0, 0, 0)");
+});
+
+test("glass workspace navigation shares one material across the top and side rails", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("financial-advisor.settings", JSON.stringify({ appearance: "Glass" })));
+  await page.goto("/discover/markets");
+  await waitForWorkspace(page);
+
+  const navbar = page.locator("[data-workspace-top-nav]");
+  const sideRail = page.locator(".workspace-side-rail").first();
+  await expect(sideRail).toBeVisible();
+
+  const navbarMaterial = await navbar.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      backgroundColor: style.backgroundColor,
+      backgroundImage: style.backgroundImage,
+      backdropFilter: style.backdropFilter,
+    };
+  });
+  await expect.poll(() => sideRail.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      backgroundColor: style.backgroundColor,
+      backgroundImage: style.backgroundImage,
+      backdropFilter: style.backdropFilter,
+    };
+  })).toEqual(navbarMaterial);
+});
+
 test("desktop sidebar defaults collapsed and labels compact navigation on hover", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Compact desktop sidebar is hidden below the desktop breakpoint.");
   await page.goto("/invest");
   await waitForWorkspace(page);
 
   await expect(page.getByRole("button", { name: "Open sidebar" })).toBeVisible();
+  const desktopSidebar = page.locator("[data-desktop-sidebar]");
+  const workspaceTopNav = page.locator("[data-workspace-top-nav]");
+  const sidebarLogo = desktopSidebar.locator("[data-sidebar-logo-mark]");
+  await expect(desktopSidebar).toHaveAttribute("data-sidebar-shape", "pill");
+  await expect(sidebarLogo).toHaveCSS("border-top-width", "0px");
+  await expect(sidebarLogo).toHaveCSS("box-shadow", "none");
+  await expect.poll(() => desktopSidebar.evaluate((element) => {
+    const rail = element.firstElementChild as HTMLElement;
+    return Number.parseFloat(getComputedStyle(rail).borderRadius) >= rail.getBoundingClientRect().width / 2;
+  })).toBe(true);
+  await expect.poll(async () => {
+    const box = await desktopSidebar.boundingBox();
+    return box ? { left: box.x, top: box.y, width: box.width, height: box.height } : null;
+  }).toEqual({ left: 16, top: 66, width: 56, height: 768 });
+  await expect.poll(async () => {
+    const box = await workspaceTopNav.boundingBox();
+    return box ? {
+      centered: Math.abs(box.x + box.width / 2 - 720) < 2,
+      floating: box.x > 32 && box.width < 1376,
+      pill: box.height > 0 && Number.parseFloat(await workspaceTopNav.evaluate((element) => getComputedStyle(element).borderRadius)) >= box.height / 2,
+    } : null;
+  }).toEqual({ centered: true, floating: true, pill: true });
   const investLink = page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Invest" });
   await investLink.hover();
   await expect(investLink.getByRole("tooltip")).toHaveText("Invest");
@@ -115,6 +217,7 @@ test("desktop sidebar defaults collapsed and labels compact navigation on hover"
 
   await page.getByRole("button", { name: "Open sidebar" }).click();
   await expect(page.getByRole("button", { name: "Close sidebar" })).toBeVisible();
+  await expect(desktopSidebar).toHaveAttribute("data-sidebar-shape", "panel");
   const primaryAction = page.locator(".theme-accent-surface").filter({ hasText: "New chat" });
   await expect.poll(() => primaryAction.evaluate((element) => {
     const style = getComputedStyle(element);
@@ -291,6 +394,43 @@ test("compact profile menu exposes system appearance, language, and real shortcu
   await expect(page.locator("body")).toHaveAttribute("data-theme", "White");
   await page.emulateMedia({ colorScheme: "dark" });
   await expect(page.locator("body")).toHaveAttribute("data-theme", "Deep Space");
+
+  const glassAppearance = appearanceMenu.getByRole("menuitem", { name: "Glass", exact: true });
+  await glassAppearance.click();
+  await expect(page.locator("body")).toHaveAttribute("data-appearance", "Glass");
+  await expect.poll(() => page.evaluate(() => JSON.parse(window.localStorage.getItem("financial-advisor.settings") || "{}").appearance)).toBe("Glass");
+  await expect(page.locator("#main-content")).toHaveCSS("background-image", "none");
+  await expect.poll(() => appearanceMenu.evaluate((element) => getComputedStyle(element).backdropFilter)).toContain("blur");
+  const glassRail = page.locator(".workspace-side-rail");
+  await expect.poll(() => glassRail.evaluate((element) => ({
+    backgroundColor: getComputedStyle(element).backgroundColor,
+    backgroundImage: getComputedStyle(element).backgroundImage,
+    backdropFilter: getComputedStyle(element).backdropFilter,
+  }))).toEqual({
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    backgroundImage: "none",
+    backdropFilter: "saturate(1.35) blur(24px)",
+  });
+});
+
+test("shared date picker supports keyboard selection without timezone drift", async ({ page }) => {
+  await page.goto("/backtest");
+  await waitForWorkspace(page);
+
+  const startDate = page.getByRole("button", { name: "Start date" });
+  await expect(startDate).toContainText("Jan 1, 2024");
+  await startDate.press("Enter");
+
+  const calendar = page.locator('[data-slot="date-picker-popup"]');
+  await expect(calendar).toBeVisible();
+  const januaryFirst = calendar.getByRole("gridcell", { name: "Jan 1, 2024" });
+  await expect(januaryFirst).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(calendar.getByRole("gridcell", { name: "Jan 2, 2024" })).toBeFocused();
+  await page.keyboard.press("Enter");
+
+  await expect(calendar).toBeHidden();
+  await expect(startDate).toContainText("Jan 2, 2024");
 });
 
 test("red theme keeps account controls transparent and primary actions flat red", async ({ page }, testInfo) => {
@@ -321,6 +461,7 @@ test("central Portfolio keeps the selected position book across tabs and reloads
   await waitForWorkspace(page);
 
   const bookSwitch = page.getByRole("group", { name: "Portfolio book" });
+  await expect(page.locator("[data-portfolio-page-heading] > [data-portfolio-book-switch]")).toBeVisible();
   const investment = bookSwitch.getByRole("button", { name: /Investment Portfolio/ });
   const trading = bookSwitch.getByRole("button", { name: /Trade Portfolio/ });
   await expect(investment).toHaveAttribute("aria-pressed", "true");

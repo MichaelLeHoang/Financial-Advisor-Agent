@@ -5,12 +5,13 @@ import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { APP_APPEARANCE_OPTIONS, type AppAppearancePreference } from "@/lib/app-theme";
 
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
-    settings: { model: string; theme: string; risk: string; quantum: string };
-    setSettings: (s: { model: string; theme: string; risk: string; quantum: string }) => void;
+    settings: { model: string; theme: string; appearance: AppAppearancePreference; risk: string; quantum: string };
+    setSettings: (s: { model: string; theme: string; appearance: AppAppearancePreference; risk: string; quantum: string }) => void;
 }
 
 const THEMES = [
@@ -64,6 +65,11 @@ const THEMES = [
     },
 ];
 
+const APPEARANCE_DESCRIPTIONS: Record<AppAppearancePreference, string> = {
+    Solid: "Crisp opaque surfaces",
+    Glass: "Translucent, softly blurred panels",
+};
+
 export default function SettingsModal({ isOpen, onClose, settings, setSettings }: SettingsModalProps) {
     useEffect(() => {
         if (!isOpen) return;
@@ -111,7 +117,7 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                         <div className="min-h-0 flex-1 space-y-7 overflow-y-auto pr-1 sm:space-y-8 sm:pr-2">
                     {/* Theme */}
                     <div className="space-y-4">
-                        <label className="text-sm font-bold text-white/40 uppercase tracking-widest">Visual Theme</label>
+                        <h2 className="text-sm font-bold text-white/40 uppercase tracking-widest">Visual Theme</h2>
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
                             {THEMES.map((t) => (
                                 <Button
@@ -119,6 +125,7 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                                     type="button"
                                     variant="outline"
                                     data-selected={settings.theme === t.name}
+                                    aria-pressed={settings.theme === t.name}
                                     onClick={() => setSettings({ ...settings, theme: t.name })}
                                     style={{
                                         "--theme-option-surface": t.surface,
@@ -142,6 +149,42 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                                     <span className="text-xs font-bold">{t.label}</span>
                                 </Button>
                             ))}
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <h2 className="text-sm font-bold text-white/40 uppercase tracking-widest">Surface Style</h2>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            {APP_APPEARANCE_OPTIONS.map((appearance) => {
+                                const selected = settings.appearance === appearance.name;
+                                return (
+                                    <Button
+                                        key={appearance.name}
+                                        type="button"
+                                        variant="outline"
+                                        data-selected={selected}
+                                        aria-pressed={selected}
+                                        onClick={() => setSettings({ ...settings, appearance: appearance.name })}
+                                        className={cn(
+                                            "theme-section-button h-auto justify-start rounded-2xl border px-4 py-3 text-left",
+                                            selected
+                                                ? "border-indigo-primary/55 bg-indigo-primary/14 text-[var(--text-primary)] shadow-[var(--shadow-control)]"
+                                                : "border-[var(--theme-border)] bg-[var(--surface-card)] text-[var(--text-secondary)] hover:border-[var(--theme-border-strong)] hover:bg-[var(--surface-card-hover)]",
+                                        )}
+                                    >
+                                        <span aria-hidden="true" className={cn(
+                                            "mr-3 block size-10 shrink-0 rounded-xl border",
+                                            appearance.name === "Glass"
+                                                ? "border-white/25 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] backdrop-blur-md"
+                                                : "border-[var(--theme-border-strong)] bg-[var(--surface-panel)]",
+                                        )} />
+                                        <span>
+                                            <span className="block text-sm font-bold">{appearance.label}</span>
+                                            <span className="mt-0.5 block text-xs font-normal text-[var(--text-muted)]">{APPEARANCE_DESCRIPTIONS[appearance.name]}</span>
+                                        </span>
+                                    </Button>
+                                );
+                            })}
                         </div>
                     </div>
 

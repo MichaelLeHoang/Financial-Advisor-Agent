@@ -15,6 +15,188 @@
   }
 }
 
+/* Optional glass surface treatment. Theme controls color; appearance controls material. */
+body[data-appearance="Glass"] {
+  --background: rgba(7, 8, 14, 0.68);
+  --theme-bg: rgba(7, 8, 14, 0.58);
+  --surface-control: rgba(255, 255, 255, 0.105);
+  --surface-control-hover: rgba(255, 255, 255, 0.15);
+  --surface-card: rgba(255, 255, 255, 0.11);
+  --surface-card-hover: rgba(255, 255, 255, 0.155);
+  --surface-card-strong: rgba(255, 255, 255, 0.18);
+  --surface-panel: rgba(255, 255, 255, 0.09);
+  --surface-popover: rgba(40, 43, 54, 0.74);
+  --surface-popover-strong: rgba(30, 33, 43, 0.92);
+  --surface-dialog: rgba(36, 39, 50, 0.76);
+  --surface-settings: rgba(255, 255, 255, 0.13);
+  --surface-tooltip: rgba(40, 43, 54, 0.84);
+  --surface-sidebar: rgba(255, 255, 255, 0.1);
+  --surface-header: rgba(255, 255, 255, 0.085);
+  --surface-mobile-trigger: rgba(255, 255, 255, 0.12);
+  --theme-border: rgba(255, 255, 255, 0.17);
+  --theme-border-strong: rgba(255, 255, 255, 0.28);
+  --border-card: rgba(255, 255, 255, 0.2);
+  --shadow-control: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 9px 24px rgba(0, 0, 0, 0.2);
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 18px 45px rgba(0, 0, 0, 0.23);
+  --shadow-popover: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 24px 70px rgba(0, 0, 0, 0.38);
+  --shadow-dialog: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 30px 90px rgba(0, 0, 0, 0.44);
+  --shadow-settings: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 24px 70px rgba(0, 0, 0, 0.34);
+  --shadow-tooltip: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 16px 46px rgba(0, 0, 0, 0.34);
+  --shadow-sidebar: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 20px 56px rgba(0, 0, 0, 0.32);
+  --glass-blur: 24px;
+}
+
+body[data-theme="White"][data-appearance="Glass"] {
+  --background: rgba(238, 242, 249, 0.62);
+  --theme-bg: rgba(238, 242, 249, 0.52);
+  --surface-control: rgba(255, 255, 255, 0.7);
+  --surface-control-hover: rgba(255, 255, 255, 0.86);
+  --surface-card: rgba(255, 255, 255, 0.68);
+  --surface-card-hover: rgba(255, 255, 255, 0.84);
+  --surface-card-strong: rgba(255, 255, 255, 0.88);
+  --surface-panel: rgba(255, 255, 255, 0.62);
+  --surface-popover: rgba(249, 250, 255, 0.86);
+  --surface-popover-strong: rgba(255, 255, 255, 0.9);
+  --surface-dialog: rgba(249, 250, 255, 0.76);
+  --surface-settings: rgba(255, 255, 255, 0.58);
+  --surface-tooltip: rgba(255, 255, 255, 0.84);
+  --surface-sidebar: rgba(255, 255, 255, 0.68);
+  --surface-header: rgba(255, 255, 255, 0.64);
+  --surface-mobile-trigger: rgba(255, 255, 255, 0.78);
+  --theme-border: rgba(255, 255, 255, 0.76);
+  --theme-border-strong: rgba(255, 255, 255, 0.86);
+  --border-card: rgba(255, 255, 255, 0.72);
+  --shadow-control: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 8px 22px rgba(38, 48, 72, 0.08);
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 18px 45px rgba(38, 48, 72, 0.11);
+  --shadow-popover: inset 0 1px 0 rgba(255, 255, 255, 0.94), 0 24px 62px rgba(38, 48, 72, 0.16);
+}
+
+body[data-theme="Crimson"][data-appearance="Glass"] {
+  --background: rgba(18, 8, 13, 0.66);
+  --theme-bg: rgba(18, 8, 13, 0.56);
+  --surface-control: rgba(38, 14, 21, 0.64);
+  --surface-control-hover: rgba(255, 230, 232, 0.11);
+  --surface-card: rgba(255, 230, 232, 0.105);
+  --surface-card-hover: rgba(255, 230, 232, 0.15);
+  --surface-card-strong: rgba(255, 230, 232, 0.18);
+  --surface-panel: rgba(255, 230, 232, 0.085);
+  --surface-popover: rgba(37, 13, 20, 0.78);
+  --surface-popover-strong: rgba(19, 7, 11, 0.9);
+  --surface-sidebar: rgba(255, 230, 232, 0.095);
+  --surface-header: rgba(255, 230, 232, 0.08);
+  --theme-border: rgba(255, 230, 232, 0.18);
+  --theme-border-strong: rgba(255, 230, 232, 0.28);
+  --border-card: rgba(255, 230, 232, 0.21);
+}
+
+body[data-appearance="Glass"] .workspace-appearance-canvas {
+  background-color: #07080d;
+  background-image: none;
+}
+
+body[data-theme="White"][data-appearance="Glass"] .workspace-appearance-canvas {
+  background-color: #e9eef6;
+  background-image: none;
+}
+
+body[data-theme="Crimson"][data-appearance="Glass"] .workspace-appearance-canvas {
+  background-color: #12080b;
+  background-image: none;
+}
+
+body[data-appearance="Glass"] :is(
+  [data-slot="card"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="dropdown-menu-submenu-content"],
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"],
+  [data-slot="date-picker-popup"],
+  [class*="bg-[var(--surface-card)]"],
+  [class*="bg-[var(--surface-panel)]"],
+  .workspace-side-rail,
+  .workspace-top-nav,
+  .glass
+) {
+  -webkit-backdrop-filter: saturate(135%) blur(var(--glass-blur));
+  backdrop-filter: saturate(135%) blur(var(--glass-blur));
+}
+
+body[data-appearance="Glass"] .market-chart-surface {
+  background-color: var(--surface-header) !important;
+  background-image: none !important;
+  border-color: var(--theme-border) !important;
+  box-shadow: var(--shadow-card);
+  -webkit-backdrop-filter: saturate(135%) blur(var(--glass-blur));
+  backdrop-filter: saturate(135%) blur(var(--glass-blur));
+}
+
+body[data-appearance="Glass"] .market-chart-surface[data-interactive="true"]:is(:hover, :focus-visible) {
+  background-color: var(--surface-card) !important;
+  border-color: var(--theme-border-strong) !important;
+}
+
+body[data-theme="White"][data-appearance="Glass"] .glass {
+  background-color: rgba(255, 255, 255, 0.68) !important;
+  -webkit-backdrop-filter: saturate(135%) blur(var(--glass-blur)) !important;
+  backdrop-filter: saturate(135%) blur(var(--glass-blur)) !important;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  body[data-appearance="Glass"] {
+    --surface-card: var(--surface-card-strong);
+    --surface-panel: var(--surface-card-strong);
+    --surface-popover: var(--surface-popover-strong);
+  }
+
+  body[data-appearance="Glass"] :is(
+    [data-slot="card"],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-submenu-content"],
+    [data-slot="dialog-content"],
+    [data-slot="alert-dialog-content"],
+    [data-slot="date-picker-popup"],
+    [class*="bg-[var(--surface-card)]"],
+    [class*="bg-[var(--surface-panel)]"],
+    .market-chart-surface,
+    .workspace-side-rail,
+    .workspace-top-nav,
+    .glass
+  ) {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .workspace-top-nav-shell {
+    width: calc(100% + var(--workspace-sidebar-offset));
+    margin-left: calc(var(--workspace-sidebar-offset) * -1);
+  }
+}
+
+@keyframes workspace-tab-line-expand {
+  from {
+    transform: translateY(-50%) scaleX(0);
+  }
+  to {
+    transform: translateY(-50%) scaleX(1);
+  }
+}
+
+.workspace-tab-line {
+  opacity: 0.8;
+  transform-origin: center;
+  animation: workspace-tab-line-expand 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-tab-line {
+    animation: none;
+    opacity: 0.8;
+    transform: translateY(-50%) scaleX(1);
+  }
+}
+
 @media (max-width: 639px) {
   .landing-product-preview-reveal {
     clip-path: inset(0 0 0 0 round 1.45rem) !important;

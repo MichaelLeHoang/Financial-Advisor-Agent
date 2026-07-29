@@ -31,11 +31,13 @@ import { fetchCurrencyRate } from "@/lib/currency";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { usePortfolioBooks } from "@/components/portfolio/PortfolioBooksProvider";
 import { usePortfolioBookView, type PortfolioBookView } from "@/components/portfolio/PortfolioBookViewProvider";
+import PortfolioBookSwitch from "@/components/portfolio/PortfolioBookSwitch";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
 import { ThinSlider } from "@/components/ui/thin-slider";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1246,11 +1248,12 @@ export default function PortfolioPage() {
           </div>
         )}
 
-        <div>
+        <div data-portfolio-page-heading>
           <h1 className="text-3xl font-bold tracking-[-0.03em] text-white">
             {fixedBook ? `${bookLabel} Portfolio` : "Portfolio"}
           </h1>
-          <p className="mt-1 text-sm text-white/45">
+          {!fixedBook && <PortfolioBookSwitch className="mt-4" />}
+          <p className={cn(fixedBook ? "mt-1" : "mt-3", "text-sm text-white/45")}>
             {bookLabel} book · {bookHoldings.length} classified holding{bookHoldings.length === 1 ? "" : "s"}
           </p>
           {unclassifiedHoldingCount > 0 && (
@@ -1931,20 +1934,11 @@ export default function PortfolioPage() {
                       <p className="text-sm text-white/78">You&apos;re aiming to reach this by</p>
                       {editingGoalDate ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <input
-                            type="date"
-                            value={goalDateDraft}
-                            onChange={(event) => setGoalDateDraft(event.target.value)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") commitGoalDate();
-                              if (event.key === "Escape") {
-                                setGoalDateDraft(goalTargetDate);
-                                setEditingGoalDate(false);
-                              }
-                            }}
-                            className="h-9 rounded-xl border border-white/[0.12] bg-black/20 px-3 text-sm text-white outline-none [color-scheme:dark] focus:border-indigo-primary/60"
+                          <DatePicker
                             aria-label="Portfolio goal target date"
-                            autoFocus
+                            value={goalDateDraft}
+                            onValueChange={setGoalDateDraft}
+                            className="h-9 min-w-48 bg-black/20 text-white"
                           />
                           <button type="button" onClick={commitGoalDate} className="text-sm text-indigo-primary hover:text-white">
                             Save

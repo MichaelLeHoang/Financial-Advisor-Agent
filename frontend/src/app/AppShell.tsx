@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { MotionConfig } from "motion/react";
@@ -16,7 +16,12 @@ import { PortfolioBooksProvider } from "@/components/portfolio/PortfolioBooksPro
 import { PortfolioBookViewProvider } from "@/components/portfolio/PortfolioBookViewProvider";
 import { InvestmentPolicyProvider } from "@/components/investment-policy/InvestmentPolicyProvider";
 import { normalizeAppPath, onboardingHref } from "@/lib/workspace-routing";
-import { resolveAppTheme, SETTINGS_STORAGE_KEY } from "@/lib/app-theme";
+import {
+  resolveAppAppearance,
+  resolveAppTheme,
+  SETTINGS_STORAGE_KEY,
+  type AppAppearancePreference,
+} from "@/lib/app-theme";
 import { isEditableShortcutTarget, keyboardShortcutsEnabled } from "@/lib/keyboard-shortcuts";
 import { WorkspaceLoadingShell } from "@/components/ui/DataLoading";
 
@@ -63,9 +68,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [systemPrefersDark, setSystemPrefersDark] = useState(true);
-  const [settings, setSettings] = useState({
+  const [settings, setSettings] = useState<{
+    model: string;
+    theme: string;
+    appearance: AppAppearancePreference;
+    risk: string;
+    quantum: string;
+  }>({
     model: "Gemini 3 Flash",
     theme: "Deep Space",
+    appearance: "Solid",
     risk: "moderate",
     quantum: "IonQ Forte (11 Qubits)",
   });
@@ -76,10 +88,28 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
     try {
       const parsed = JSON.parse(stored);
-      setSettings((current) => ({ ...current, ...parsed }));
+      setSettings((current) => ({
+        ...current,
+        ...parsed,
+        appearance: resolveAppAppearance(parsed.appearance),
+      }));
     } catch {
       window.localStorage.removeItem(SETTINGS_STORAGE_KEY);
     }
+  }, []);
+
+  useEffect(() => {
+    const handleAppearanceChange = (event: Event) => {
+      const nextAppearance = resolveAppAppearance((event as CustomEvent<unknown>).detail);
+      setSettings((current) => {
+        const next = { ...current, appearance: nextAppearance };
+        window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
+        return next;
+      });
+    };
+
+    window.addEventListener("financial-advisor:appearance-change", handleAppearanceChange);
+    return () => window.removeEventListener("financial-advisor:appearance-change", handleAppearanceChange);
   }, []);
 
   useEffect(() => {
@@ -144,7 +174,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", resolvedTheme !== "White");
     document.body.dataset.theme = resolvedTheme;
-  }, [resolvedTheme]);
+    document.body.dataset.appearance = settings.appearance;
+  }, [resolvedTheme, settings.appearance]);
 
   if (isStandalonePage) {
     return (
@@ -257,6 +288,7 @@ function MainWorkspace({
     && !user.is_guest
     && preferences?.status === "pending"
     && !isPublicAppPath;
+  const sidebarOffset = isSidebarOpen ? "19rem" : "5rem";
 
   useEffect(() => {
     if (!shouldOnboard) return;
@@ -274,7 +306,13 @@ function MainWorkspace({
         onAlertsClick={onAlertsClick}
       />
 
-      <main id="main-content" tabIndex={-1} className={`flex-1 flex flex-col relative z-10 overflow-hidden ${isSidebarOpen ? "md:ml-72" : "md:ml-16"}`}>
+      <main
+        id="main-content"
+        tabIndex={-1}
+        data-sidebar-expanded={isSidebarOpen}
+        style={{ "--workspace-sidebar-offset": sidebarOffset } as CSSProperties}
+        className={`workspace-appearance-canvas relative z-10 flex flex-1 flex-col overflow-hidden ${isSidebarOpen ? "md:ml-[19rem]" : "md:ml-20"}`}
+      >
         <div className="flex-1 overflow-y-auto">
           {(loading || onboardingLoading || shouldOnboard) && !isPublicAppPath ? (
             <WorkspaceLoadingShell label={shouldOnboard ? "Opening workspace setup" : "Restoring your workspace"} />
