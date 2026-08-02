@@ -10,6 +10,7 @@ Current sprint: **4, LLM Gateway And Model Routing**.
 |---|---|---|
 | Manual setup | [Manual service setup guide](manual-service-setup.md) | Step-by-step dashboard setup for Supabase, Stripe, LLM keys, Qdrant, notifications, and deployment. |
 | Billing setup | [Stripe billing testing and production guide](stripe-billing-testing-and-production.md) | Detailed local sandbox, login, webhook, checkout, Customer Portal, and production cutover checklist. |
+| Research roadmap | [Financial Model Lab roadmap](financial-model-lab-roadmap.md) | Build a reproducible crypto forecasting lab, evaluation workplace, model registry, and production-promotion path. |
 | 0 | [Service configuration and repo cleanup](sprint-00-service-configuration.md) | Prepare config, status checks, setup docs, and safe secret handling. |
 | 1 | [Supabase SaaS foundation](sprint-01-supabase-foundation.md) | Add multi-user data foundation while keeping guest access on Free. |
 | 2 | [Feature gates and usage limits](sprint-02-feature-gates.md) | Create plan entitlements, usage caps, and upgrade responses. |
