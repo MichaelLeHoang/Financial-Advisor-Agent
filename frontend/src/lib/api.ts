@@ -38,6 +38,88 @@ export interface GroundingMetadata {
   limitations: string[];
 }
 
+export type AgentActivityCategory = "market" | "news" | "technical" | "risk" | "portfolio" | "consensus" | "research" | "synthesis" | "system";
+export type AgentActivityStatus = "pending" | "active" | "complete" | "error" | "warning";
+
+export interface AgentActivityError {
+  code: string;
+  message: string;
+  retryable: boolean;
+}
+
+export interface AgentActivitySource {
+  source_id: string;
+  step_id?: string | null;
+  title: string;
+  provider: string;
+  url?: string | null;
+  published_at?: string | null;
+  preview?: string | null;
+}
+
+export interface AgentActivityStep {
+  step_id: string;
+  category: AgentActivityCategory;
+  label: string;
+  description?: string | null;
+  status: AgentActivityStatus;
+  duration_ms?: number | null;
+}
+
+export interface AgentToolActivity {
+  tool_call_id: string;
+  step_id?: string | null;
+  tool_name: string;
+  label: string;
+  status: AgentActivityStatus;
+  tool_input?: Record<string, unknown> | null;
+  output_summary?: string | null;
+  error?: AgentActivityError | null;
+  duration_ms?: number | null;
+}
+
+export interface AgentActivityTrace {
+  run_id: string;
+  mode: string;
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  steps: AgentActivityStep[];
+  tools: AgentToolActivity[];
+  sources: AgentActivitySource[];
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
+export interface AgentPlannedStep {
+  step_id: string;
+  category: AgentActivityCategory;
+  label: string;
+  description?: string | null;
+  order: number;
+}
+
+export interface AgentActivityEvent {
+  run_id: string;
+  sequence: number;
+  occurred_at: string;
+  type: "analysis.planned" | "analysis.queued" | "analysis.started" | "analysis.completed" | "analysis.failed" | "step.started" | "step.completed" | "step.failed" | "tool.started" | "tool.completed" | "tool.failed" | "tool.approval_requested" | "tool.approval_resolved" | "source.found";
+  mode?: string | null;
+  category?: AgentActivityCategory | null;
+  step_id?: string | null;
+  tool_call_id?: string | null;
+  tool_name?: string | null;
+  label?: string | null;
+  description?: string | null;
+  status?: AgentActivityStatus | null;
+  queue_position?: number | null;
+  planned_steps?: AgentPlannedStep[];
+  tool_input?: Record<string, unknown> | null;
+  output_summary?: string | null;
+  duration_ms?: number | null;
+  error?: AgentActivityError | null;
+  source?: AgentActivitySource | null;
+  approval_outcome?: "approved" | "denied" | null;
+}
+
 export interface ChatResponse {
   response: string;
   session_id: string;
@@ -56,6 +138,7 @@ export interface ChatResponse {
   memory_status?: "ready" | "disabled" | "maintenance_queued" | "maintenance_unavailable";
   memory_used?: MemoryContextUsage[];
   grounding?: GroundingMetadata;
+  activity_trace?: AgentActivityTrace;
 }
 
 export type MemoryCategory =
@@ -121,6 +204,7 @@ export interface ChatJobProgress {
 export interface ChatJobStatusResponse extends ChatJobCreateResponse {
   progress?: ChatJobProgress | null;
   progress_events?: ChatJobProgress[];
+  activity_events?: AgentActivityEvent[];
   result?: ChatResponse | null;
   error?: { type?: string; message?: string } | null;
   created_at?: number | null;
@@ -160,7 +244,7 @@ export type ResearchRecommendation = "buy" | "hold" | "sell" | "insufficient_dat
 export type InvestmentDecision = "strong_buy" | "buy" | "hold" | "watchlist" | "reduce" | "sell" | "avoid";
 export type TradingBias = "bullish" | "neutral" | "bearish";
 export type ResearchSourceSurface = "introduction" | "research" | "market" | "ai_advisor" | "shared";
-export type ResearchEventType = "reasoning" | "tool" | "report" | "status" | "final" | "error";
+export type ResearchEventType = "reasoning" | "tool" | "report" | "status" | "final" | "error" | "source";
 
 export interface EquityResearchRunCreate {
   ticker: string;
@@ -261,6 +345,9 @@ export interface EquityResearchEvent {
   content: string;
   tool_name?: string | null;
   tool_args?: Record<string, unknown> | null;
+  source_url?: string | null;
+  source_provider?: string | null;
+  source_published_at?: string | null;
   token_input?: number | null;
   token_output?: number | null;
 }
@@ -375,12 +462,14 @@ export interface ChatMessage {
     source_message_id?: string | null;
     memory_status?: ChatResponse["memory_status"];
     memory_used?: MemoryContextUsage[];
+    activity_trace?: AgentActivityTrace;
   } | null;
   consensusOpinions?: ConsensusOpinion[];
   researchReports?: EquityResearchReport[];
   overview?: Overview | null;
   selectedCapability?: SabiCapability;
   grounding?: GroundingMetadata;
+  activity?: AgentActivityTrace;
 }
 
 export interface ChatSession {
@@ -1369,6 +1458,50 @@ async function request(input: RequestInfo | URL, init?: RequestInit): Promise<Re
   }
 }
 
+async function streamSse<T>(
+  path: string,
+  onEvent: (event: T, sequence: number, eventName: string) => void,
+  signal?: AbortSignal,
+): Promise<number> {
+  const response = await request(`${BASE}${path}`, {
+    headers: requestHeaders(false),
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok || !response.body) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new ApiError(response.status, error.detail ?? error);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let lastSequence = 0;
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done }).replaceAll("\r\n", "\n");
+    const frames = buffer.split("\n\n");
+    buffer = frames.pop() ?? "";
+    for (const frame of frames) {
+      if (!frame || frame.startsWith(":")) continue;
+      let eventName = "message";
+      let sequence = lastSequence;
+      const data: string[] = [];
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("id:")) sequence = Number(line.slice(3).trim()) || sequence;
+        else if (line.startsWith("event:")) eventName = line.slice(6).trim();
+        else if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+      }
+      if (!data.length) continue;
+      const parsed = JSON.parse(data.join("\n")) as T;
+      lastSequence = Math.max(lastSequence, sequence);
+      onEvent(parsed, sequence, eventName);
+    }
+    if (done) break;
+  }
+  return lastSequence;
+}
+
 function errorMessage(detail: unknown): string {
   if (typeof detail === "string") return detail;
   if (typeof detail === "object" && detail !== null) {
@@ -1632,8 +1765,11 @@ export const api = {
   chatJob: (message: string, sessionId = "default", remember = true, mode: AgentChatMode = "sabi", signal?: AbortSignal, useMemory = true) =>
     post<ChatJobCreateResponse>("/api/v1/agent/chat/jobs", { message, session_id: sessionId, remember, mode, use_memory: useMemory }, signal),
 
-  chatJobStatus: (jobId: string, signal?: AbortSignal) =>
-    get<ChatJobStatusResponse>(`/api/v1/agent/chat/jobs/${encodeURIComponent(jobId)}`, signal),
+  chatJobStatus: (jobId: string, signal?: AbortSignal, after = 0) =>
+    get<ChatJobStatusResponse>(`/api/v1/agent/chat/jobs/${encodeURIComponent(jobId)}?after=${after}`, signal),
+
+  streamChatJobEvents: (jobId: string, after: number, onEvent: (event: AgentActivityEvent, sequence: number) => void, signal?: AbortSignal) =>
+    streamSse<AgentActivityEvent>(`/api/v1/agent/chat/jobs/${encodeURIComponent(jobId)}/events?after=${after}`, (event, sequence) => onEvent(event, sequence), signal),
 
   waitForChatJob: async (jobId: string, onUpdate?: (job: ChatJobStatusResponse) => void, intervalMs = 1500, signal?: AbortSignal, timeoutMs = 10 * 60 * 1000) => {
     const deadline = Date.now() + timeoutMs;
@@ -1671,6 +1807,9 @@ export const api = {
 
   equityResearchEvents: (runId: string, after = 0, signal?: AbortSignal) =>
     get<EquityResearchEventsList>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/events/list?after=${after}`, signal),
+
+  streamEquityResearchEvents: (runId: string, after: number, onEvent: (event: EquityResearchEvent, sequence: number) => void, signal?: AbortSignal) =>
+    streamSse<EquityResearchEvent>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/events?after=${after}`, (event, sequence) => onEvent(event, sequence), signal),
 
   shareEquityResearchRun: (runId: string, shared = true) =>
     patch<EquityResearchRun>(`/api/v1/equity-research/runs/${encodeURIComponent(runId)}/share`, { shared }),

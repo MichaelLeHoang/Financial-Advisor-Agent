@@ -106,7 +106,7 @@ test("AI desk shows a thinking orb while an analysis is queued", async ({ page }
       body: JSON.stringify({ job_id: "orb-job", session_id: "orb-session", status: "queued" }),
     });
   });
-  await page.route("**/api/v1/agent/chat/jobs/orb-job", async (route) => {
+  await page.route("**/api/v1/agent/chat/jobs/orb-job?after=*", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -116,7 +116,44 @@ test("AI desk shows a thinking orb while an analysis is queued", async ({ page }
         status: "queued",
         queue_position: 2,
         progress_events: [],
+        activity_events: [],
       }),
+    });
+  });
+  await page.route("**/api/v1/agent/chat/jobs/orb-job/events?after=*", async (route) => {
+    const after = new URL(route.request().url()).searchParams.get("after");
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      body: after === "0" ? [
+        "id: 1",
+        "event: analysis.planned",
+        `data: ${JSON.stringify({
+          run_id: "orb-job",
+          sequence: 1,
+          occurred_at: new Date(0).toISOString(),
+          type: "analysis.planned",
+          mode: "single",
+          planned_steps: [
+            { step_id: "single_scope", category: "system", label: "Understanding the request", order: 0 },
+          ],
+        })}`,
+        "",
+        "id: 2",
+        "event: analysis.queued",
+        `data: ${JSON.stringify({
+          run_id: "orb-job",
+          sequence: 2,
+          occurred_at: new Date(0).toISOString(),
+          type: "analysis.queued",
+          mode: "single",
+          label: "Queued for analysis",
+          status: "pending",
+          queue_position: 2,
+        })}`,
+        "",
+        "",
+      ].join("\n") : "",
     });
   });
 
@@ -126,7 +163,79 @@ test("AI desk shows a thinking orb while an analysis is queued", async ({ page }
 
   const orb = page.getByTestId("ai-thinking-orb");
   await expect(orb).toBeVisible();
-  await expect(orb).toHaveAttribute("aria-label", "Waiting to begin analysis");
+  await expect(page.getByText("Understanding the request", { exact: true })).toHaveCount(0);
+  await expect(orb).toHaveAttribute("aria-label", "Analysis in progress");
   await expect(orb).toHaveCSS("width", "20px");
   await expect(orb).toHaveCSS("height", "20px");
+});
+
+test("AI desk uses a compact completed activity row and borderless assistant response", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("financial-advisor.coverSeen", "true"));
+  await page.route("**/api/v1/agent/memories**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ memories: [], settings: { enabled: true } }),
+    });
+  });
+  await page.route("**/api/v1/agent/sessions/activity-layout/messages", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        session_id: "activity-layout",
+        messages: [
+          { id: "user-activity", role: "user", content: "How about TSLA?" },
+          {
+            id: "assistant-activity",
+            role: "assistant",
+            content: "TSLA has mixed near-term signals, with elevated volatility and limited model conviction.",
+            metadata: {
+              activity_trace: {
+                run_id: "activity-run",
+                mode: "single",
+                status: "completed",
+                started_at: "2026-08-02T12:00:00.000Z",
+                finished_at: "2026-08-02T12:00:35.000Z",
+                steps: [
+                  {
+                    step_id: "risk",
+                    category: "risk",
+                    label: "Evaluated downside risk",
+                    description: "Calculated drawdown, VaR, and volatility exposure.",
+                    status: "complete",
+                    duration_ms: 8_000,
+                  },
+                  {
+                    step_id: "portfolio",
+                    category: "portfolio",
+                    label: "Comparing portfolio impact",
+                    status: "pending",
+                  },
+                ],
+                tools: [],
+                sources: [],
+              },
+            },
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto("/session/activity-layout");
+
+  const response = page.getByTestId("assistant-response");
+  await expect(response).toBeVisible();
+  await expect(response).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(page.getByText("Worked for 35s", { exact: true })).toBeVisible();
+  await expect(page.getByText("Comparing portfolio impact", { exact: true })).toHaveCount(0);
+
+  await page.getByTestId("agent-activity-summary").click();
+  const drawer = page.getByTestId("agent-activity-drawer");
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByText("Activity", { exact: false }).first()).toBeVisible();
+  await expect(drawer.getByText("Evaluated downside risk", { exact: true })).toBeVisible();
+  await expect(drawer.getByText("Comparing portfolio impact", { exact: true })).toHaveCount(0);
+  await expect(drawer.getByText("Memory", { exact: true })).toHaveCount(0);
 });

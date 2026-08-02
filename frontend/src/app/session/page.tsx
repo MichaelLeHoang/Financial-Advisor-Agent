@@ -7,7 +7,7 @@ import { useParams, usePathname, useRouter, useSearchParams } from "next/navigat
 import { ArrowRight, Brain, Check, ChevronDown, Clipboard, ClipboardList, FileText, Image, Loader2, Paperclip, Pencil, PieChart, RotateCcw, Send, SlidersHorizontal, ThumbsDown, ThumbsUp, TableProperties, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
-import type { AiDeskMode, ChatJobProgress, ChatJobStatusResponse, ChatResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, GroundingMetadata, MemoryContextUsage, Overview, ResearchDepth, ResearchReportType, SabiCapability, UserMemory } from "@/lib/api";
+import type { AgentActivitySource, AgentActivityTrace, AiDeskMode, ChatJobProgress, ChatJobStatusResponse, ChatResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, GroundingMetadata, MemoryContextUsage, Overview, ResearchDepth, ResearchReportType, SabiCapability, UserMemory } from "@/lib/api";
 import { notifyCompletion, requestCompletionNotification } from "@/lib/completion-notifications";
 import { loadLocalChatMessages, saveLocalChatMessages } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
@@ -20,10 +20,11 @@ import { LoadingRegion, SkeletonBlock, SkeletonText } from "@/components/ui/Data
 import { Textarea } from "@/components/ui/textarea";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { OverviewCard } from "@/components/ui/overview-card";
-import Plan from "@/components/ui/agent-plan";
 import Markdown from "@/components/ui/markdown";
 import { showToast } from "@/components/ui/toast";
 import { PromptNavigator, promptAnchorId } from "@/components/chat/PromptNavigator";
+import { AgentActivityDrawer, AgentActivitySummary, AgentSources } from "@/components/chat/AgentActivityTrace";
+import { activityFromTrace, emptyActivity, mergeSources, reduceActivity, researchActivityEvents, type LiveAgentActivity } from "@/lib/agent-activity";
 
 interface Message {
   id: string;
@@ -40,6 +41,7 @@ interface Message {
   sourceMessageId?: string | null;
   memoryUsed?: MemoryContextUsage[];
   memoryCandidates?: UserMemory[];
+  activity?: LiveAgentActivity;
 }
 
 type MessageFeedback = "up" | "down" | null;
@@ -95,7 +97,7 @@ function messageFromChatHistory(message: {
   id: number | string;
   role: "user" | "assistant";
   content: string;
-  metadata?: { consensus?: { opinions?: ConsensusOpinion[] }; researchReports?: EquityResearchReport[]; overview?: Overview | null; selected_capability?: SabiCapability; grounding?: GroundingMetadata; source_message_id?: string | null; memory_used?: MemoryContextUsage[] } | null;
+  metadata?: { consensus?: { opinions?: ConsensusOpinion[] }; researchReports?: EquityResearchReport[]; overview?: Overview | null; selected_capability?: SabiCapability; grounding?: GroundingMetadata; source_message_id?: string | null; memory_used?: MemoryContextUsage[]; activity_trace?: AgentActivityTrace } | null;
   consensusOpinions?: ConsensusOpinion[];
   researchReports?: EquityResearchReport[];
   overview?: Overview | null;
@@ -103,6 +105,7 @@ function messageFromChatHistory(message: {
   grounding?: GroundingMetadata;
   sourceMessageId?: string | null;
   memoryUsed?: MemoryContextUsage[];
+  activity?: AgentActivityTrace;
 }): Message {
   return {
     id: String(message.id),
@@ -115,66 +118,32 @@ function messageFromChatHistory(message: {
     grounding: message.grounding ?? message.metadata?.grounding,
     sourceMessageId: message.sourceMessageId ?? message.metadata?.source_message_id,
     memoryUsed: message.memoryUsed ?? message.metadata?.memory_used,
+    activity: activityFromTrace(message.activity ?? message.metadata?.activity_trace),
   };
 }
 
-function formatGroundingTime(value?: string | null) {
-  if (!value) return "time unavailable";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(parsed);
-}
-
-function GroundingDisclosure({ grounding }: { grounding: GroundingMetadata }) {
-  const isGrounded = grounding.status === "grounded";
-  const sourceCount = grounding.sources.length;
-
-  return (
-    <details className="group/grounding text-xs text-white/50">
-      <summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-md py-1 outline-none transition-colors hover:text-white/75 focus-visible:ring-2 focus-visible:ring-indigo-primary/50 motion-reduce:transition-none [&::-webkit-details-marker]:hidden">
-        <span className={cn("size-1.5 rounded-full", isGrounded ? "bg-emerald-400" : "bg-amber-400")} aria-hidden="true" />
-        <span>
-          {isGrounded ? "Current evidence" : "Current evidence unavailable"}
-          {isGrounded && ` · as of ${formatGroundingTime(grounding.as_of ?? grounding.retrieved_at)}`}
-          {isGrounded && sourceCount > 0 && ` · ${sourceCount} source${sourceCount === 1 ? "" : "s"}`}
-        </span>
-        <ChevronDown className="size-3 transition-transform duration-150 group-open/grounding:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
-      </summary>
-      <div className="mt-2 space-y-2 pl-3 text-[11px] leading-5 text-white/45">
-        {grounding.ticker && (
-          <p>
-            Verified identity: {grounding.company_name ?? grounding.entity ?? grounding.ticker} ({grounding.ticker})
-          </p>
-        )}
-        {grounding.sources.length > 0 && (
-          <ul className="space-y-1">
-            {grounding.sources.map((source, index) => (
-              <li key={`${source.source}-${source.url ?? source.label}-${index}`}>
-                {source.url ? (
-                  <a className="text-indigo-300 hover:text-indigo-200 hover:underline" href={source.url} target="_blank" rel="noreferrer">
-                    {source.source}: {source.label}
-                  </a>
-                ) : (
-                  <span>{source.source}: {source.label}</span>
-                )}
-                {source.published_at && ` · ${formatGroundingTime(source.published_at)}`}
-              </li>
-            ))}
-          </ul>
-        )}
-        {grounding.limitations.map((limitation) => (
-          <p key={limitation} className="text-amber-200/65">Limitation: {limitation}</p>
-        ))}
-      </div>
-    </details>
-  );
+function messageActivitySources(message: Message): AgentActivitySource[] {
+  const grounding = message.grounding?.sources.map((source, index) => ({
+    source_id: source.url || `grounding-${index}-${source.source}`,
+    title: source.label,
+    provider: source.source,
+    url: source.url,
+    published_at: source.published_at,
+  })) ?? [];
+  const overview = message.overview?.sources.map((source, index) => ({
+    source_id: source.url || `overview-${index}-${source.source}`,
+    title: source.label,
+    provider: source.source,
+    url: source.url,
+  })) ?? [];
+  const research = message.researchReports?.flatMap((report) => report.evidence).map((source, index) => ({
+    source_id: source.url || `research-${index}-${source.source}`,
+    title: source.label,
+    provider: source.source,
+    url: source.url,
+    preview: source.detail,
+  })) ?? [];
+  return mergeSources(message.activity?.sources, grounding, overview, research);
 }
 
 const SUGGESTIONS = [
@@ -477,10 +446,6 @@ const PLACEHOLDERS = [
   "What are the risks of holding SMCI right now?",
 ];
 
-function firstChatProgressTool(mode: Exclude<AiDeskMode, "research">) {
-  return mode === "consensus" ? "quant_researcher" : "single_scope";
-}
-
 function sabiCapabilityLabel(capability: SabiCapability) {
   return capability === "trade_proposal"
     ? "Trade Proposal"
@@ -555,6 +520,7 @@ export default function ChatPage() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
   const [memoryDialogOpen, setMemoryDialogOpen] = useState(false);
+  const [activityDrawerRunId, setActivityDrawerRunId] = useState<string | null>(null);
   const [memoryAnnouncement, setMemoryAnnouncement] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -564,12 +530,11 @@ export default function ChatPage() {
   const [showPlaceholder, setShowPlaceholder] = useState(true);
   const [isActive, setIsActive] = useState(false);
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
-  const [activeTool, setActiveTool] = useState<string | null>(null);
-  const [completedTools, setCompletedTools] = useState<string[]>([]);
   const [agentRunState, setAgentRunState] = useState<"queued" | "running">("running");
-  const [agentRunStartedAt, setAgentRunStartedAt] = useState<number | null>(null);
-  const [useAgentSyntheticProgress, setUseAgentSyntheticProgress] = useState(false);
   const [activePlanMode, setActivePlanMode] = useState<"single" | "consensus" | "research">("single");
+  const [liveActivity, setLiveActivity] = useState<LiveAgentActivity | null>(null);
+  const liveActivityRef = useRef<LiveAgentActivity | null>(null);
+  const lastActivitySequenceRef = useRef(0);
   const [researchDepth, setResearchDepth] = useState<ResearchDepth>("shallow");
   const lastJobProgressSequenceRef = useRef(0);
   const progressEventQueueRef = useRef<ChatJobProgress[]>([]);
@@ -633,13 +598,10 @@ export default function ChatPage() {
       setIsLoading(false);
       setIsHistoryLoading(false);
       setUpgradeMessage(null);
-      setActiveTool(null);
-      setCompletedTools([]);
       setAgentRunState("running");
-      setAgentRunStartedAt(null);
-      setUseAgentSyntheticProgress(false);
       setActivePlanMode("single");
       setMemoryDialogOpen(false);
+      setActivityDrawerRunId(null);
       setMemoryAnnouncement("");
       lastJobProgressSequenceRef.current = 0;
       progressEventQueueRef.current = [];
@@ -802,13 +764,33 @@ export default function ChatPage() {
 
   const isStreamingRef = useRef(false);
 
+  const resetLiveActivity = (runId: string, mode: string, status: "queued" | "running" = "queued") => {
+    const next = {
+      ...emptyActivity(runId, mode),
+      status,
+      started_at: status === "running" ? new Date().toISOString() : undefined,
+    } as LiveAgentActivity;
+    lastActivitySequenceRef.current = 0;
+    liveActivityRef.current = next;
+    setLiveActivity(next);
+  };
+
+  const applyActivityEvent = (
+    event: import("@/lib/api").AgentActivityEvent,
+    deduplicateBySequence = true,
+  ) => {
+    if (deduplicateBySequence && event.sequence && event.sequence <= lastActivitySequenceRef.current) return;
+    if (deduplicateBySequence) {
+      lastActivitySequenceRef.current = Math.max(lastActivitySequenceRef.current, event.sequence || 0);
+    }
+    const next = reduceActivity(liveActivityRef.current, event);
+    liveActivityRef.current = next;
+    setLiveActivity(next);
+  };
+
   const applyProgressEvent = (progress: ChatJobProgress, job: ChatJobStatusResponse, fallbackLabel: string) => {
     setActivePlanMode(progress.mode);
     setAgentRunState(job.status === "queued" ? "queued" : "running");
-    setAgentRunStartedAt((current) => current ?? (job.started_at ? job.started_at * 1000 : Date.now()));
-    setActiveTool(progress.active_tool ?? null);
-    setCompletedTools(progress.completed_tools ?? []);
-
     const content = progress.message || progress.active_label || fallbackLabel;
     setMessages((prev) =>
       prev.map((m) =>
@@ -928,11 +910,7 @@ export default function ChatPage() {
       setIsLoading(true);
       setUpgradeMessage(null);
       setAgentRunState("running");
-      setAgentRunStartedAt(Date.now());
-      setUseAgentSyntheticProgress(false);
       setActivePlanMode("research");
-      setActiveTool("equity_snapshot");
-      setCompletedTools([]);
       showLongRunningToast("Quanfora 2.1 research may take a little while.");
       try {
         const reportType = researchCommand?.reportType ?? detectResearchReportType(text);
@@ -943,48 +921,50 @@ export default function ChatPage() {
           source_surface: "ai_advisor",
           use_memory: useMemory,
         }, signal);
+        resetLiveActivity(run.run_id, "research", "running");
         let cursor = 0;
         let latestDetail: EquityResearchRunDetail | null = null;
-        const completed = new Set<string>();
+        let streamAttempts = 0;
+        while (streamAttempts < 3) {
+          try {
+            const streamedCursor = await api.streamEquityResearchEvents(
+              run.run_id,
+              cursor,
+              (event, sequence) => {
+                cursor = Math.max(cursor, sequence);
+                for (const activityEvent of researchActivityEvents(event, sequence)) {
+                  applyActivityEvent(activityEvent, false);
+                }
+                if (event.agent_name && event.event_type === "reasoning") {
+                  setMessages((prev) => prev.map((message) => message.status === "fetching" ? { ...message, content: `${event.agent_name} is working...` } : message));
+                }
+              },
+              signal,
+            );
+            cursor = Math.max(cursor, streamedCursor);
+          } catch (error) {
+            if (signal.aborted) throw error;
+          }
+          latestDetail = await api.equityResearchRun(run.run_id, signal);
+          if (["completed", "failed", "cancelled"].includes(latestDetail.run.status)) break;
+          streamAttempts += 1;
+          await delay(400 * 2 ** streamAttempts, signal);
+        }
 
-        while (true) {
+        while (latestDetail && !["completed", "failed", "cancelled"].includes(latestDetail.run.status)) {
           const [detail, eventList] = await Promise.all([
             api.equityResearchRun(run.run_id, signal),
             api.equityResearchEvents(run.run_id, cursor, signal),
           ]);
           latestDetail = detail;
-          cursor = eventList.cursor;
-
-          const newestReasoning = [...eventList.events].reverse().find((event) => event.event_type === "reasoning" && event.agent_name);
           for (const event of eventList.events) {
-            const toolKey = toolKeyFromResearchEvent(event);
-            if (!toolKey) continue;
-
-            if (isResearchStepStarting(event)) {
-              setActiveTool(toolKey);
-            }
-            if (isResearchStepComplete(event)) {
-              completed.add(toolKey);
-              setCompletedTools(Array.from(completed));
-              setActiveTool(null);
+            cursor += 1;
+            for (const activityEvent of researchActivityEvents(event, cursor)) {
+              applyActivityEvent(activityEvent, false);
             }
           }
-
-          if (newestReasoning?.agent_name) {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.status === "fetching"
-                  ? { ...m, content: `${newestReasoning.agent_name} is working...` }
-                  : m
-              )
-            );
-          }
-
-          if (["completed", "failed", "cancelled"].includes(detail.run.status)) {
-            break;
-          }
-
-          await delay(600, signal);
+          cursor = Math.max(cursor, eventList.cursor);
+          if (!["completed", "failed", "cancelled"].includes(detail.run.status)) await delay(750, signal);
         }
 
         if (!latestDetail || latestDetail.run.status !== "completed") {
@@ -1013,6 +993,7 @@ export default function ChatPage() {
             researchReports: latestDetail.reports,
             overview: latestDetail.overview,
             source_message_id: researchSourceMessageId,
+            activity_trace: liveActivityRef.current ?? undefined,
             ...(version === "sabi" ? {
               selected_mode: "sabi" as const,
               selected_capability: "research" as const,
@@ -1031,6 +1012,7 @@ export default function ChatPage() {
             overview: latestDetail.overview,
             selectedCapability: version === "sabi" ? "research" : undefined,
             sourceMessageId: researchSourceMessageId,
+            activity: liveActivityRef.current ?? undefined,
           })
         );
         if (researchSourceMessageId && researchMemoryStatus === "maintenance_queued") {
@@ -1061,11 +1043,7 @@ export default function ChatPage() {
           activeRequestControllerRef.current = null;
           setIsLoading(false);
           isStreamingRef.current = false;
-          setActiveTool(null);
-          setCompletedTools([]);
           setAgentRunState("running");
-          setAgentRunStartedAt(null);
-          setUseAgentSyntheticProgress(false);
         }
       }
       return;
@@ -1083,11 +1061,7 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, userMsg, fetchingMsg]);
     setIsLoading(true);
     setUpgradeMessage(null);
-    setActiveTool(firstChatProgressTool(mode));
-    setCompletedTools([]);
     setAgentRunState("queued");
-    setAgentRunStartedAt(null);
-    setUseAgentSyntheticProgress(false);
     setActivePlanMode(mode === "consensus" ? "consensus" : "single");
     lastJobProgressSequenceRef.current = 0;
     progressEventQueueRef.current = [];
@@ -1103,39 +1077,72 @@ export default function ChatPage() {
 
     try {
       const remember = !user.is_guest;
-      let res;
+      let res: ChatResponse;
       try {
         const queued = await api.chatJob(text, targetSessionId, remember, mode, signal, useMemory);
+        resetLiveActivity(queued.job_id, mode, "queued");
+        let cursor = 0;
+        let job: ChatJobStatusResponse | null = null;
+        let streamAttempts = 0;
 
-        res = await api.waitForChatJob(queued.job_id, (job) => {
-          const appliedProgress = enqueueJobProgress(job, fetchingLabel);
-          if (job.status === "queued") {
+        const applyJobStatus = (status: ChatJobStatusResponse) => {
+          for (const event of status.activity_events ?? []) applyActivityEvent(event);
+          const appliedProgress = enqueueJobProgress(status, fetchingLabel);
+          if (status.status === "queued") {
             setAgentRunState((current) => current === "running" ? "running" : "queued");
-            const positionText = job.queue_position ? ` Position ${job.queue_position}.` : "";
+            const positionText = status.queue_position ? ` Position ${status.queue_position}.` : "";
             setMessages((prev) =>
               prev.map((m) =>
                 m.status === "fetching"
                   ? { ...m, content: `Queued for analysis.${positionText}` }
                   : m
-              )
+                )
             );
-          } else if (job.status === "running" && !appliedProgress) {
+          } else if (status.status === "running" && !appliedProgress) {
             setAgentRunState("running");
-            setAgentRunStartedAt((current) => current ?? Date.now());
             setMessages((prev) =>
               prev.map((m) =>
                 m.status === "fetching"
                   ? { ...m, content: fetchingLabel }
                   : m
-              )
+                )
             );
           }
-        }, 750, signal);
+        };
+
+        while (streamAttempts < 3) {
+          try {
+            const streamedCursor = await api.streamChatJobEvents(
+              queued.job_id,
+              cursor,
+              (event, sequence) => {
+                cursor = Math.max(cursor, sequence);
+                applyActivityEvent(event);
+              },
+              signal,
+            );
+            cursor = Math.max(cursor, streamedCursor);
+          } catch (error) {
+            if (signal.aborted) throw error;
+          }
+          job = await api.chatJobStatus(queued.job_id, signal, cursor);
+          applyJobStatus(job);
+          if (["succeeded", "failed", "cancelled"].includes(job.status)) break;
+          streamAttempts += 1;
+          await delay(400 * 2 ** streamAttempts, signal);
+        }
+
+        if (!job || !["succeeded", "failed", "cancelled"].includes(job.status)) {
+          res = await api.waitForChatJob(queued.job_id, applyJobStatus, 750, signal);
+        } else if (job.status === "succeeded") {
+          res = job.result ?? { response: "", session_id: targetSessionId };
+        } else {
+          throw new Error(job.error?.message ?? `Chat job ${job.status}`);
+        }
       } catch (queueError) {
         if (!isRedisUnavailableError(queueError)) throw queueError;
         setAgentRunState("running");
-        setAgentRunStartedAt(Date.now());
-        setUseAgentSyntheticProgress(true);
+        resetLiveActivity(`direct-${assistantMsgId}`, mode, "running");
         setMessages((prev) =>
           prev.map((m) =>
             m.status === "fetching"
@@ -1144,10 +1151,17 @@ export default function ChatPage() {
           )
         );
         res = await api.chat(text, targetSessionId, remember, mode, signal, useMemory);
+        const directActivity = activityFromTrace(res.activity_trace);
+        if (directActivity) {
+          liveActivityRef.current = directActivity;
+          setLiveActivity(directActivity);
+        }
       }
       const consensusOpinions = res.consensus?.opinions;
       const overview = res.overview;
       const selectedCapability = version === "sabi" ? res.selected_capability : undefined;
+      const completedActivity = activityFromTrace(res.activity_trace)
+        ?? activityFromTrace(liveActivityRef.current ? { ...liveActivityRef.current, status: "completed" as const } : undefined);
 
       // Never hold a completed answer open solely to finish decorative progress steps.
       progressEventQueueRef.current = [];
@@ -1163,6 +1177,7 @@ export default function ChatPage() {
           grounding: res.grounding,
           sourceMessageId: res.source_message_id,
           memoryUsed: res.memory_used,
+          activity: completedActivity,
         }).concat(investmentTicker ? [{
           id: getUniqueId(),
           role: "assistant",
@@ -1201,11 +1216,7 @@ export default function ChatPage() {
         activeRequestControllerRef.current = null;
         setIsLoading(false);
         isStreamingRef.current = false;
-        setActiveTool(null);
-        setCompletedTools([]);
         setAgentRunState("running");
-        setAgentRunStartedAt(null);
-        setUseAgentSyntheticProgress(false);
       }
     }
   };
@@ -1237,6 +1248,11 @@ export default function ChatPage() {
 
   const hasConversation = messages.some((message) => message.id !== "welcome");
   const isStarterState = !hasConversation && !isHistoryLoading;
+  const selectedDrawerActivity = useMemo(() => {
+    if (!activityDrawerRunId) return null;
+    if (liveActivity && (liveActivity.run_id === activityDrawerRunId || activityDrawerRunId === "preparing")) return liveActivity;
+    return messages.find((message) => message.activity?.run_id === activityDrawerRunId)?.activity ?? null;
+  }, [activityDrawerRunId, liveActivity, messages]);
   const promptNavigationItems = useMemo(
     () => messages
       .filter((message) => message.role === "user")
@@ -1561,15 +1577,12 @@ export default function ChatPage() {
                   >
                     {msg.status === "fetching" ? (
                       <div className="w-full max-w-[92%] sm:max-w-[75%]">
-                        <Plan
-                          mode={activePlanMode}
-                          isActive={true}
-                          activeTool={activeTool}
-                          completedTools={completedTools}
-                          runState={activePlanMode === "research" ? "running" : agentRunState}
-                          runStartedAt={activePlanMode === "research" ? null : agentRunStartedAt}
-                          useSyntheticFallback={useAgentSyntheticProgress}
-                        />
+                        {liveActivity ? <AgentActivitySummary activity={liveActivity} onOpen={() => setActivityDrawerRunId(liveActivity.run_id)} /> : (
+                          <AgentActivitySummary
+                            activity={{ ...emptyActivity("preparing", activePlanMode), status: agentRunState }}
+                            onOpen={() => setActivityDrawerRunId("preparing")}
+                          />
+                        )}
                       </div>
                     ) : (
                       <div
@@ -1581,8 +1594,8 @@ export default function ChatPage() {
                       >
                         {msg.role === "assistant" ? (
                           <div className="space-y-2">
-                            <div className="glass rounded-2xl px-4 py-3 sm:px-5 sm:py-4">
-                              <div className="space-y-2">
+                            {msg.activity && <AgentActivitySummary activity={msg.activity} onOpen={() => setActivityDrawerRunId(msg.activity?.run_id ?? null)} />}
+                            <div className="space-y-2 py-1 text-[var(--text-primary)]" data-testid="assistant-response">
                                 {msg.selectedCapability && (
                                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-subtle)]">
                                     Sabi used {sabiCapabilityLabel(msg.selectedCapability)}
@@ -1598,7 +1611,7 @@ export default function ChatPage() {
                                     Used {msg.memoryUsed?.length} saved preference{msg.memoryUsed?.length === 1 ? "" : "s"}
                                   </button>
                                 )}
-                                {msg.grounding?.required && <GroundingDisclosure grounding={msg.grounding} />}
+                                <AgentSources sources={messageActivitySources(msg)} />
                                 {msg.researchTicker ? (
                                   <div className="space-y-3">
                                     <ResearchMessageTabs content={msg.content} reports={msg.researchReports} overview={msg.overview} />
@@ -1633,7 +1646,6 @@ export default function ChatPage() {
                                 ) : (
                                   <AssistantMessageContent content={msg.content} consensusOpinions={msg.consensusOpinions} overview={msg.overview} />
                                 )}
-                              </div>
                             </div>
                             {msg.memoryCandidates?.map((memory) => (
                               <MemoryCandidateCard
@@ -1739,6 +1751,13 @@ export default function ChatPage() {
           {renderComposer("dock")}
         </div>
       )}
+      <AgentActivityDrawer
+        activity={selectedDrawerActivity}
+        open={Boolean(activityDrawerRunId && selectedDrawerActivity)}
+        onOpenChange={(open) => {
+          if (!open) setActivityDrawerRunId(null);
+        }}
+      />
       {!user.is_guest && (
         <AgentMemoryDialog
           open={memoryDialogOpen}
