@@ -25,6 +25,14 @@ from src.saas.models import Plan
 
 ProgressCallback = Callable[[dict[str, Any]], None]
 
+_SPECIALIST_ACTIVITY_DETAILS = {
+    "quant_researcher": "Reviewing current market, company, and fundamental evidence.",
+    "quant_analyst": "Calculating trend, momentum, support, and resistance signals.",
+    "data_scientist": "Comparing prediction models and validation metrics.",
+    "risk_analyst": "Calculating volatility, drawdown, VaR, and downside flags.",
+    "portfolio_analytics": "Checking diversification, concentration, and portfolio fit.",
+}
+
 
 def _build_consensus_synthesis_prompt(
     query: str, result: ConsensusResult, opinions_text: str
@@ -153,6 +161,10 @@ class QuanforaOrchestrator:
         # Run specialists sequentially with a delay between each to stay
         # within Gemini free-tier rate limits (~15 RPM).
         for i, specialist in enumerate(specialists):
+            if i > 0:
+                time.sleep(
+                    5
+                )  # Wait before the phase starts so duration reflects real work.
             if progress_callback:
                 progress_callback(
                     {
@@ -160,10 +172,12 @@ class QuanforaOrchestrator:
                         "completed_tools": list(completed_tools),
                         "active_label": specialist.display_name,
                         "message": f"{specialist.display_name} is working...",
+                        "activity_detail": _SPECIALIST_ACTIVITY_DETAILS.get(
+                            specialist.name,
+                            f"{specialist.display_name} is reviewing the available evidence.",
+                        ),
                     }
                 )
-            if i > 0:
-                time.sleep(5)  # 5s delay between specialists to avoid rate limit
             try:
                 opinion = self._run_specialist(specialist, query)
                 opinions.append(opinion)
@@ -175,6 +189,12 @@ class QuanforaOrchestrator:
                             "completed_tools": list(completed_tools),
                             "active_label": specialist.display_name,
                             "message": f"{specialist.display_name} completed analysis.",
+                            "activity_detail": (
+                                f"Returned a {opinion.verdict.value} view at "
+                                f"{opinion.confidence:.0%} confidence"
+                                f" and flagged {len(opinion.risk_flags)} risk"
+                                f"{'s' if len(opinion.risk_flags) != 1 else ''}."
+                            ),
                         }
                     )
                 print(
@@ -199,6 +219,8 @@ class QuanforaOrchestrator:
                             "completed_tools": list(completed_tools),
                             "active_label": specialist.display_name,
                             "message": f"{specialist.display_name} completed with fallback analysis.",
+                            "activity_detail": "Used a neutral fallback because this specialist could not complete.",
+                            "tool_warning": str(exc),
                         }
                     )
 
@@ -238,6 +260,7 @@ class QuanforaOrchestrator:
                     "completed_tools": completed_tools,
                     "active_label": "Consensus Synthesis",
                     "message": "Building weighted consensus verdict...",
+                    "activity_detail": "Weighting specialist conclusions, confidence, disagreement, and risk flags.",
                 }
             )
         final_response = self._synthesize_response(message, result)
@@ -248,6 +271,11 @@ class QuanforaOrchestrator:
                     "completed_tools": [*completed_tools, "consensus_synthesis"],
                     "active_label": "Consensus Synthesis",
                     "message": "Consensus response completed.",
+                    "activity_detail": (
+                        f"Prepared a {result.verdict.value} consensus view at "
+                        f"{result.confidence:.0%} confidence with "
+                        f"{result.agreement_ratio:.0%} specialist agreement."
+                    ),
                 }
             )
 

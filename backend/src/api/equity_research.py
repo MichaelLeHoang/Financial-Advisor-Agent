@@ -119,6 +119,7 @@ async def list_events(
 @router.get("/runs/{run_id}/events")
 async def stream_events(
     run_id: UUID,
+    after: int = 0,
     user: AuthenticatedUser = Depends(get_current_or_guest_user),
     x_guest_session_id: str | None = Header(default=None, alias=GUEST_SESSION_HEADER),
 ):
@@ -126,16 +127,20 @@ async def stream_events(
     _get_detail_or_404(run_id, user, guest_owner_id)
 
     async def event_stream():
-        cursor = 0
+        cursor = max(after, 0)
         while True:
             detail = _get_detail_or_404(run_id, user, guest_owner_id)
             result = get_research_store().list_events(run_id, after=cursor)
             if result is None:
                 yield 'event: error\ndata: {"detail":"Research run not found"}\n\n'
                 return
-            cursor, events = result
-            for event in events:
-                yield f"event: {event.event_type.value}\ndata: {event.model_dump_json()}\n\n"
+            next_cursor, events = result
+            first_sequence = next_cursor - len(events) + 1
+            for offset, event in enumerate(events):
+                sequence = first_sequence + offset
+                yield f"id: {sequence}\nevent: {event.event_type.value}\ndata: {event.model_dump_json()}\n\n"
+                cursor = sequence
+            cursor = max(cursor, next_cursor)
             if (
                 detail.run.status
                 in {

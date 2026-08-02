@@ -18,6 +18,7 @@ from src.agent.equity_research.orchestrator import (
     _final_decision,
     _pm_report,
     _sanitize_llm_report_markdown,
+    _snapshot_source_events,
 )
 from src.models.equity_research import (
     AgentStatus,
@@ -163,7 +164,9 @@ def test_build_data_snapshot_resolves_alias_via_market_candidates(monkeypatch):
         calls.append(ticker)
         return blank_snapshot if ticker == "SPACEX" else resolved_snapshot
 
-    monkeypatch.setattr(snapshot_module.market_data_service, "fetch_snapshot", fake_fetch_snapshot)
+    monkeypatch.setattr(
+        snapshot_module.market_data_service, "fetch_snapshot", fake_fetch_snapshot
+    )
     monkeypatch.setattr(
         snapshot_module,
         "resolve_market_entity",
@@ -176,6 +179,37 @@ def test_build_data_snapshot_resolves_alias_via_market_candidates(monkeypatch):
     assert result.ticker == "SPCX"
     assert result.company_name == "SpaceX"
     assert result.latest_price == 185.0
+
+
+def test_snapshot_source_events_deduplicate_news_and_include_providers():
+    run_id = uuid4()
+    snapshot = EquityResearchSnapshot(
+        run_id=run_id,
+        ticker="NVDA",
+        analysis_date=date.today(),
+        news_items=[
+            {
+                "title": "NVIDIA reports results",
+                "publisher": "Example IR",
+                "url": "https://example.com/results",
+                "published_at": "2026-08-01",
+            },
+            {
+                "title": "Duplicate headline",
+                "publisher": "Example IR",
+                "url": "https://example.com/results",
+            },
+        ],
+        data_sources=["market_data", "market_data"],
+    )
+
+    events = _snapshot_source_events(snapshot)
+
+    assert len(events) == 2
+    assert all(event.event_type.value == "source" for event in events)
+    assert events[0].source_url == "https://example.com/results"
+    assert events[0].source_provider == "Example IR"
+    assert events[1].source_provider == "market_data"
 
 
 def test_pm_report_uses_trading_structure():

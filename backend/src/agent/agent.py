@@ -41,6 +41,41 @@ from src.llm.gateway import LLMGateway, RoutedChatModel, llm_gateway
 from src.llm.routing_policy import LLMMode
 from src.saas.models import Plan
 
+_TOOL_ACTIVITY_DETAILS: dict[str, tuple[str, str]] = {
+    "get_stock_info": (
+        "Retrieving the latest quote and company metrics.",
+        "Retrieved the latest quote and company metrics.",
+    ),
+    "research_market": (
+        "Reviewing the broader market, sector leadership, and risk appetite.",
+        "Reviewed the broader market, sector leadership, and risk appetite.",
+    ),
+    "search_financial_news": (
+        "Searching recent market coverage and company catalysts.",
+        "Retrieved recent market coverage and company catalysts.",
+    ),
+    "analyze_sentiment": (
+        "Measuring the balance of positive, neutral, and negative headlines.",
+        "Measured the balance of positive, neutral, and negative headlines.",
+    ),
+    "predict_stock_price": (
+        "Comparing prediction models and their validation quality.",
+        "Compared prediction models and their validation quality.",
+    ),
+    "optimize_portfolio_tool": (
+        "Checking diversification, concentration, and allocation trade-offs.",
+        "Checked diversification, concentration, and allocation trade-offs.",
+    ),
+}
+
+
+def _tool_activity_detail(name: str, *, completed: bool = False) -> str:
+    details = _TOOL_ACTIVITY_DETAILS.get(name)
+    if details:
+        return details[1 if completed else 0]
+    display_name = name.replace("_", " ").strip().capitalize()
+    return f"{display_name} {'completed.' if completed else 'is running.'}"
+
 
 def _consensus_result_metadata(result: Any) -> dict:
     metadata = {
@@ -246,11 +281,15 @@ class FinancialAdvisorAgent:
         # Lazy-init the Quanfora orchestrator only when needed.
         self._orchestrator = None
         self._sabi = SabiOrchestrator()
-        self._market_context_builder = market_context_builder or build_current_market_context
+        self._market_context_builder = (
+            market_context_builder or build_current_market_context
+        )
 
     def set_personal_context(self, context: str | None) -> None:
         """Set bounded, user-approved context for the next request."""
-        self._personal_context = context.strip() if context and context.strip() else None
+        self._personal_context = (
+            context.strip() if context and context.strip() else None
+        )
 
     def _context_messages(self) -> list[dict[str, str]]:
         if not self._personal_context:
@@ -338,9 +377,9 @@ class FinancialAdvisorAgent:
             self.last_response_metadata = result.metadata()
             return result.response
 
-        if is_market_quote_query(contextual_message) and not _is_deep_market_analysis_query(
+        if is_market_quote_query(
             contextual_message
-        ):
+        ) and not _is_deep_market_analysis_query(contextual_message):
             grounded = ground_market_query(
                 contextual_message, progress_callback=progress_callback
             )
@@ -351,7 +390,9 @@ class FinancialAdvisorAgent:
                 if sabi_plan:
                     self.last_response_metadata = self.last_response_metadata or {}
                     self.last_response_metadata.update(
-                        SabiResult(response=grounded.response, plan=sabi_plan).metadata()
+                        SabiResult(
+                            response=grounded.response, plan=sabi_plan
+                        ).metadata()
                     )
                 self._attach_grounding_metadata(context_from_market_quote(grounded))
                 if remember:
@@ -362,7 +403,19 @@ class FinancialAdvisorAgent:
                 return grounded.response
 
         market_context = self._build_current_market_context(contextual_message)
-        context_kwargs = {"market_context": market_context} if market_context.required else {}
+        if progress_callback and market_context.sources:
+            progress_callback(
+                {
+                    "active_tool": None,
+                    "completed_tools": [],
+                    "active_label": "Current Evidence",
+                    "message": "Current market evidence collected.",
+                    "sources": [source.to_dict() for source in market_context.sources],
+                }
+            )
+        context_kwargs = (
+            {"market_context": market_context} if market_context.required else {}
+        )
 
         if sabi_plan:
             result = self._sabi.run(
@@ -444,14 +497,17 @@ class FinancialAdvisorAgent:
                     "completed_tools": [],
                     "active_label": "Identify Market Scope",
                     "message": "Identifying market scope...",
+                    "activity_detail": "Identifying the assets, timeframe, and decision the response needs to address.",
                 }
             )
 
         # Build message list: approved context + bounded history + new user message.
         model_message = market_context.augment(message) if market_context else message
-        messages = self._context_messages() + self._history + [
-            {"role": "user", "content": model_message}
-        ]
+        messages = (
+            self._context_messages()
+            + self._history
+            + [{"role": "user", "content": model_message}]
+        )
 
         completed_tools: list[str] = []
         result = None
@@ -475,6 +531,11 @@ class FinancialAdvisorAgent:
                                 "completed_tools": list(completed_tools),
                                 "active_label": str(name).replace("_", " ").title(),
                                 "message": f"{str(name).replace('_', ' ').title()} is running...",
+                                "activity_detail": _tool_activity_detail(str(name)),
+                                "completed_summaries": {
+                                    "single_scope": "Identified the relevant assets and analysis scope."
+                                },
+                                "tool_input": event.get("data", {}).get("input"),
                             }
                         )
 
@@ -487,6 +548,22 @@ class FinancialAdvisorAgent:
                                 "completed_tools": list(completed_tools),
                                 "active_label": str(name).replace("_", " ").title(),
                                 "message": f"{str(name).replace('_', ' ').title()} completed.",
+                                "activity_detail": _tool_activity_detail(
+                                    str(name), completed=True
+                                ),
+                                "tool_output": event.get("data", {}).get("output"),
+                            }
+                        )
+
+                    elif kind == "on_tool_error" and name:
+                        progress_callback(
+                            {
+                                "active_tool": name,
+                                "completed_tools": list(completed_tools),
+                                "active_label": str(name).replace("_", " ").title(),
+                                "message": f"{str(name).replace('_', ' ').title()} failed.",
+                                "tool_error": event.get("data", {}).get("error")
+                                or "Tool execution failed.",
                             }
                         )
 
@@ -499,6 +576,7 @@ class FinancialAdvisorAgent:
                                 "completed_tools": list(completed_tools),
                                 "active_label": "Synthesize Findings",
                                 "message": "Synthesizing findings...",
+                                "activity_detail": "Combining market evidence, model outputs, risks, and caveats into the final view.",
                             }
                         )
 
@@ -518,6 +596,7 @@ class FinancialAdvisorAgent:
                     "completed_tools": list(completed_tools),
                     "active_label": "Agent Execution",
                     "message": "Agent response completed.",
+                    "activity_detail": "Prepared the response from the completed analysis.",
                 }
             )
         else:
@@ -578,7 +657,9 @@ class FinancialAdvisorAgent:
                 "Authenticated user context (personalization only; not live account or market data):\n"
                 f"{self._personal_context}"
             )
-        result = orchestrator.analyze(analysis_message)
+        result = orchestrator.analyze(
+            analysis_message, progress_callback=progress_callback
+        )
         self.last_response_metadata = _consensus_result_metadata(result)
         overview = build_consensus_overview(analysis_message, result)
         self.last_response_metadata.update(overview_to_metadata(overview) or {})

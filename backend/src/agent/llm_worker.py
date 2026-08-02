@@ -5,6 +5,7 @@ import traceback
 from typing import Any, Callable
 
 from src.agent.agent import FinancialAdvisorAgent
+from src.agent.activity import ActivityEventCollector, sanitize_error
 from src.agent.history import (
     append_message,
     load_history,
@@ -18,27 +19,6 @@ from src.core.redis_client import RedisUnavailable
 from src.saas.models import Plan
 
 ProgressCallback = Callable[[dict[str, Any]], None]
-
-SINGLE_COMPLETED_TOOLS = [
-    "single_scope",
-    "get_stock_info",
-    "research_market",
-    "search_financial_news",
-    "analyze_sentiment",
-    "predict_stock_price",
-    "optimize_portfolio_tool",
-    "single_synthesis",
-    "single_final",
-]
-
-CONSENSUS_COMPLETED_TOOLS = [
-    "quant_researcher",
-    "quant_analyst",
-    "data_scientist",
-    "risk_analyst",
-    "portfolio_analytics",
-    "consensus_synthesis",
-]
 
 
 def execute_llm_job(
@@ -80,10 +60,20 @@ def execute_llm_job(
     )
     agent._history = memory_context.recent_messages
     agent.set_personal_context(memory_context.prompt)
+    activity = ActivityEventCollector(
+        job.job_id,
+        job.kind,
+        planned_steps=payload.get("activity_plan"),
+    )
+
+    def record_progress(update: dict[str, Any]) -> None:
+        activity.consume(update)
+        if progress_callback:
+            progress_callback(update)
 
     def compute_result() -> dict[str, Any]:
         response = agent.chat(
-            message, remember=False, mode=mode, progress_callback=progress_callback
+            message, remember=False, mode=mode, progress_callback=record_progress
         )
         metadata = agent.last_response_metadata or None
         if metadata is None and job.kind == "single":
@@ -106,11 +96,16 @@ def execute_llm_job(
         history=(
             history
             if history
-            else ([{"role": "system", "content": "personal context"}] if memory_context.has_personal_context else [])
+            else (
+                [{"role": "system", "content": "personal context"}]
+                if memory_context.has_personal_context
+                else []
+            )
         ),
         is_guest=is_guest,
         compute=compute_result,
     )
+    result["activity_trace"] = activity.trace().model_dump(mode="json")
     if remember and not is_guest:
         source_message_id = append_message(session_id, "user", message, user_id)
         result["source_message_id"] = str(source_message_id)
@@ -190,23 +185,20 @@ class LLMWorker:
                     )
                     return False
 
-            self.queue.update_progress(
+            self.queue.append_activity(
                 job.job_id,
-                mode=job.kind,
-                active_tool=(
-                    "single_scope" if job.kind == "single" else "quant_researcher"
-                ),
-                completed_tools=[],
-                active_label=(
-                    "Identify Market Scope"
-                    if job.kind == "single"
-                    else "Quant Researcher"
-                ),
-                message=(
-                    "Identifying market scope..."
-                    if job.kind == "single"
-                    else "Quant Researcher is working..."
-                ),
+                {
+                    "type": "analysis.started",
+                    "mode": job.kind,
+                    "label": "Analysis started",
+                    "status": "active",
+                },
+            )
+
+            activity = ActivityEventCollector(
+                job.job_id,
+                job.kind,
+                planned_steps=job.payload.get("activity_plan"),
             )
 
             def record_progress(update: dict[str, Any]) -> None:
@@ -218,20 +210,57 @@ class LLMWorker:
                     active_label=update.get("active_label"),
                     message=update.get("message"),
                 )
+                for event in activity.consume(update):
+                    self.queue.append_activity(
+                        job.job_id,
+                        event.model_dump(mode="json", exclude={"sequence", "run_id"}),
+                    )
 
             try:
+                record_progress(
+                    {
+                        "active_tool": (
+                            "single_scope"
+                            if job.kind == "single"
+                            else "quant_researcher"
+                        ),
+                        "completed_tools": [],
+                        "active_label": (
+                            "Identify Market Scope"
+                            if job.kind == "single"
+                            else "Quant Researcher"
+                        ),
+                        "message": (
+                            "Identifying market scope..."
+                            if job.kind == "single"
+                            else "Quant Researcher is working..."
+                        ),
+                        "activity_detail": (
+                            "Identifying the assets, timeframe, and decision the response needs to address."
+                            if job.kind == "single"
+                            else "Reviewing current market, company, and fundamental evidence."
+                        ),
+                    }
+                )
                 result = execute_llm_job(job, progress_callback=record_progress)
+                latest = self.queue.get(job.job_id) or {}
+                latest_progress = latest.get("progress") or {}
                 self.queue.update_progress(
                     job.job_id,
                     mode=job.kind,
                     active_tool=None,
-                    completed_tools=(
-                        SINGLE_COMPLETED_TOOLS
-                        if job.kind == "single"
-                        else CONSENSUS_COMPLETED_TOOLS
-                    ),
+                    completed_tools=list(latest_progress.get("completed_tools") or []),
                     active_label="Completed",
                     message="Agent response completed.",
+                )
+                self.queue.append_activity(
+                    job.job_id,
+                    {
+                        "type": "analysis.completed",
+                        "mode": job.kind,
+                        "label": "Analysis completed",
+                        "status": "complete",
+                    },
                 )
                 self.queue.update(job.job_id, status="succeeded", result=result)
                 return True
@@ -243,6 +272,16 @@ class LLMWorker:
                     completed_tools=[],
                     active_label="Failed",
                     message=str(exc),
+                )
+                self.queue.append_activity(
+                    job.job_id,
+                    {
+                        "type": "analysis.failed",
+                        "mode": job.kind,
+                        "label": "Analysis failed",
+                        "status": "error",
+                        "error": sanitize_error(exc).model_dump(),
+                    },
                 )
                 self.queue.update(
                     job.job_id,

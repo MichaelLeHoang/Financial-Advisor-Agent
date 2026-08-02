@@ -12,6 +12,7 @@ Implements the Quanfora conversational advisor, Sabi capability routing, determi
 - Resolve ticker-only follow-up language such as "the stock" or "buy more" from recent chat context before consensus analysis.
 - Reuse cached first-turn chat responses only when repeated requests do not depend on conversation history or current market evidence.
 - Persist signed-in conversation history, including structured response metadata, and execute queued chat and low-priority memory jobs.
+- Emit safe, structured activity events for actual agent steps, tool calls, errors, and evidence without exposing internal chain-of-thought.
 - Inject bounded recent turns, rolling conversation summaries, and explicitly confirmed user preferences into every supported AI mode.
 - Truncate a selected conversation turn and all later messages so edited prompts and retries regenerate against matching persisted context.
 
@@ -25,13 +26,14 @@ Implements the Quanfora conversational advisor, Sabi capability routing, determi
 - `response_cache.py`: cache-key normalization and cacheability policy for stateless chat responses.
 - `orchestrator.py` / `consensus.py`: Quanfora 2.0 specialist aggregation.
 - `llm_queue.py` / `llm_worker.py`: asynchronous job lifecycle and queued response metadata.
+- `activity.py`: activity planning, tool/source sanitization, progress-event translation, and compact trace persistence.
 - `history.py`: owner-scoped SQLite conversation history shared with the memory store.
 
 ## Boundaries
 Reuse `data.market_data_service`, `llm.gateway`, `risk`, `quant`, and `saas` rather than duplicating provider or entitlement logic. Shared response shapes belong in `models/`.
 
 ## Testing
-Cover routing, grounding, overview metadata, response structure, bounded personal context, response caching, consensus, queue state, history ownership, background maintenance, and tool failure behavior with mocked providers.
+Cover routing, grounding, overview metadata, response structure, bounded personal context, response caching, consensus, queue state, activity ordering/redaction, history ownership, background maintenance, and tool failure behavior with mocked providers.
 
 ## Latest Change
-- Added user-controlled conversational memory across direct, queued, consensus, WebSocket, and equity-research paths, and now resolve ticker-relative follow-ups before Sabi planning and market grounding.
+- Added truthful, resumable agent activity traces for queued and direct chat, including safe phase details, measured durations, sanitized tool summaries, evidence sources, failures, and persisted completion metadata for the compact live-progress UI.

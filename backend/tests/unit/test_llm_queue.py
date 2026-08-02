@@ -54,6 +54,28 @@ def test_llm_queue_enqueues_and_reports_position():
     assert first["status"] == "queued"
     assert queue.queue_position(first["job_id"], "single") == 1
     assert queue.queue_position(second["job_id"], "single") == 2
+    assert [event["type"] for event in first["activity_events"]] == [
+        "analysis.planned",
+        "analysis.queued",
+    ]
+    assert first["activity_events"][0]["planned_steps"][0]["step_id"] == "single_scope"
+
+
+def test_llm_queue_appends_resumable_activity_in_sequence():
+    from src.agent.llm_queue import LLMJobQueue
+
+    queue = LLMJobQueue(client=FakeRedis())
+    record = queue.enqueue({"user_id": "u1"}, "single")
+
+    appended = queue.append_activity(
+        record["job_id"],
+        {"type": "analysis.started", "label": "Analysis started", "status": "active"},
+    )
+
+    updated = queue.get(record["job_id"])
+    assert appended["sequence"] == 3
+    assert [event["sequence"] for event in updated["activity_events"]] == [1, 2, 3]
+    assert updated["activity_events"][-1]["run_id"] == record["job_id"]
 
 
 def test_llm_queue_persists_progress_updates():
@@ -125,8 +147,9 @@ def test_llm_worker_processes_successful_job(monkeypatch):
     assert updated["status"] == "succeeded"
     assert updated["result"]["response"] == "ok"
     assert updated["progress"]["active_tool"] is None
-    assert "single_final" in updated["progress"]["completed_tools"]
+    assert updated["progress"]["completed_tools"] == []
     assert updated["progress"]["message"] == "Agent response completed."
+    assert updated["activity_events"][-1]["type"] == "analysis.completed"
 
 
 def test_llm_worker_records_callback_progress(monkeypatch):
@@ -149,19 +172,23 @@ def test_llm_worker_records_callback_progress(monkeypatch):
     seen_progress = []
 
     def fake_execute(job, progress_callback=None):
-        progress_callback({
-            "active_tool": "quant_researcher",
-            "completed_tools": [],
-            "active_label": "Quant Researcher",
-            "message": "Quant Researcher is working...",
-        })
+        progress_callback(
+            {
+                "active_tool": "quant_researcher",
+                "completed_tools": [],
+                "active_label": "Quant Researcher",
+                "message": "Quant Researcher is working...",
+            }
+        )
         seen_progress.append(queue.get(job.job_id)["progress"])
-        progress_callback({
-            "active_tool": "quant_analyst",
-            "completed_tools": ["quant_researcher"],
-            "active_label": "Quant Analyst",
-            "message": "Quant Analyst is working...",
-        })
+        progress_callback(
+            {
+                "active_tool": "quant_analyst",
+                "completed_tools": ["quant_researcher"],
+                "active_label": "Quant Analyst",
+                "message": "Quant Analyst is working...",
+            }
+        )
         seen_progress.append(queue.get(job.job_id)["progress"])
         return {"response": "ok", "session_id": "s1", "mode": "consensus"}
 
@@ -174,7 +201,10 @@ def test_llm_worker_records_callback_progress(monkeypatch):
     assert seen_progress[0]["active_tool"] == "quant_researcher"
     assert seen_progress[1]["active_tool"] == "quant_analyst"
     assert seen_progress[1]["completed_tools"] == ["quant_researcher"]
-    assert updated["progress"]["completed_tools"][-1] == "consensus_synthesis"
+    assert updated["progress"]["completed_tools"] == ["quant_researcher"]
+    activity_types = [event["type"] for event in updated["activity_events"]]
+    assert "step.completed" in activity_types
+    assert updated["activity_events"][-1]["type"] == "analysis.completed"
 
 
 def test_llm_worker_processes_background_memory_job_without_chat_progress(monkeypatch):

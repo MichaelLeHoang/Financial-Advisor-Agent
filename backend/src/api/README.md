@@ -8,6 +8,7 @@ Provides the FastAPI application and thin transport adapters for Quanfora backen
 - Expose Sabi-routed agent chat, selected-capability metadata, structured overviews, queued jobs, bounded RAG queries, market quote/search, prediction, portfolio, watchlist, and service endpoints.
 - Expose owned chat-history truncation for edit-and-regenerate and retry workflows.
 - Expose authenticated, owner-scoped memory review, confirmation, editing, settings, and deletion routes.
+- Stream owner-scoped, resumable agent activity and equity-research events over SSE, with polling contracts retained as a fallback.
 - Delegate domain behavior, including stateless chat-response caching, to dedicated modules and normalize HTTP errors/timeouts.
 
 ## Key Files
@@ -21,8 +22,7 @@ Provides the FastAPI application and thin transport adapters for Quanfora backen
 Route handlers should validate and translate requests only. Business logic belongs in agent, data, SaaS, billing, risk, backtesting, or service modules.
 
 ## Testing
-Use FastAPI `TestClient` with mocked dependencies for route contracts, authorization, provider timeouts, overview/workspace payloads, status rollups, and error responses.
+Use FastAPI `TestClient` with mocked dependencies for route contracts, authorization, resumable SSE cursors, provider timeouts, overview/workspace payloads, status rollups, and error responses.
 
 ## Latest Change
-- Registered the owner-scoped paper-trading account and deterministic order routes.
-- Added authenticated memory management and per-request memory controls while preserving the existing agent chat endpoint.
+- Added authenticated, owner-scoped SSE activity streams for queued chat and resumable numbered research events, while retaining status/list polling fallbacks.

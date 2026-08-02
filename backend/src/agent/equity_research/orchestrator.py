@@ -489,6 +489,8 @@ async def execute_research_run(run_id: UUID) -> None:
                 content="Data snapshot captured. Agents will reason from the same evidence base.",
             )
         )
+        for event in _snapshot_source_events(snapshot):
+            store.add_event(event)
 
         outputs: dict[str, EquityResearchReport] = {}
         for agent in AGENT_SEQUENCE:
@@ -600,6 +602,51 @@ async def execute_research_run(run_id: UUID) -> None:
                 content=str(exc),
             )
         )
+
+
+def _snapshot_source_events(
+    snapshot: EquityResearchSnapshot,
+) -> list[EquityResearchEvent]:
+    """Return de-duplicated, user-visible evidence events from a snapshot."""
+    events: list[EquityResearchEvent] = []
+    seen_sources: set[str] = set()
+    for item in snapshot.news_items[:12]:
+        title = str(item.get("title") or item.get("headline") or "Market evidence")
+        provider = str(item.get("source") or item.get("publisher") or "Market data")
+        url = str(item.get("url") or item.get("link") or "") or None
+        identity = url or f"{provider}:{title}"
+        if identity in seen_sources:
+            continue
+        seen_sources.add(identity)
+        events.append(
+            EquityResearchEvent(
+                run_id=snapshot.run_id,
+                event_type=ResearchEventType.SOURCE,
+                label=title[:240],
+                content=f"Evidence found via {provider}.",
+                source_url=url,
+                source_provider=provider[:120],
+                source_published_at=str(
+                    item.get("published_at") or item.get("published") or ""
+                )
+                or None,
+            )
+        )
+    for provider in snapshot.data_sources:
+        identity = f"provider:{provider}"
+        if identity in seen_sources:
+            continue
+        seen_sources.add(identity)
+        events.append(
+            EquityResearchEvent(
+                run_id=snapshot.run_id,
+                event_type=ResearchEventType.SOURCE,
+                label=str(provider)[:240],
+                content=f"{provider} contributed to the shared snapshot.",
+                source_provider=str(provider)[:120],
+            )
+        )
+    return events
 
 
 def _skipped_report(run_id: UUID, agent: AgentDefinition) -> EquityResearchReport:

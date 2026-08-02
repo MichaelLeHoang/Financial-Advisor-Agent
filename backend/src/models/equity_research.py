@@ -78,6 +78,7 @@ class ResearchEventType(str, Enum):
     STATUS = "status"
     FINAL = "final"
     ERROR = "error"
+    SOURCE = "source"
 
 
 AnalystKey = Literal["market", "social", "news", "fundamentals"]
@@ -178,6 +179,9 @@ class EquityResearchEvent(BaseModel):
     content: str
     tool_name: str | None = None
     tool_args: dict[str, Any] | None = None
+    source_url: str | None = None
+    source_provider: str | None = None
+    source_published_at: str | None = None
     token_input: int | None = None
     token_output: int | None = None
 
