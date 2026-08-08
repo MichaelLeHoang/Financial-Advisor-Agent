@@ -180,19 +180,20 @@ export default function TickerSuggestionInput({
                     top: dropdownRect.top,
                     left: dropdownRect.left,
                     width: dropdownRect.width,
+                    maxWidth: "calc(100vw - 1rem)",
                     zIndex: 9999,
                 }}
                 onMouseDown={(e) => e.preventDefault()}
             >
-                <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
-                    <div className="flex max-h-72 flex-col gap-1 overflow-y-auto px-2 py-0">
+                <div className="overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
+                    <div className="flex max-h-72 min-w-0 flex-col gap-1 overflow-x-hidden overflow-y-auto px-2 py-0 [scrollbar-color:var(--text-subtle)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-track]:bg-transparent">
                         {matches.map((match, index) => (
                             <motion.div
                                 key={`${match.ticker}-${match.exchange}-${index}`}
                                 initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
                                 animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
                                 transition={{ duration: 0.24, delay: Math.min(index * 0.035, 0.18), ease: [0.16, 1, 0.3, 1] }}
-                                className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-[var(--surface-selected)] hover:shadow-[var(--shadow-row-hover)]"
+                                className="group flex min-w-0 w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-[var(--surface-selected)] hover:shadow-[var(--shadow-row-hover)]"
                             >
                                 <button
                                     type="button"
@@ -207,11 +208,11 @@ export default function TickerSuggestionInput({
                                     onClick={() => selectTicker(match.ticker)}
                                     className="min-w-0 flex-1 text-left"
                                 >
-                                    <span className="flex items-center gap-2">
-                                        <span className="rounded-md px-1 py-0.5 text-sm font-semibold text-[var(--text-primary)] transition-colors group-hover:bg-indigo-primary/18 group-hover:text-indigo-primary">
+                                    <span className="flex min-w-0 items-center gap-2">
+                                        <span className="min-w-0 truncate rounded-md px-1 py-0.5 text-sm font-semibold text-[var(--text-primary)] transition-colors group-hover:bg-indigo-primary/18 group-hover:text-indigo-primary">
                                             {match.ticker}
                                         </span>
-                                        <Badge variant="outline" className="market-exchange-badge h-5 rounded-md text-[10px]">{match.exchange}</Badge>
+                                        <Badge variant="outline" className="market-exchange-badge max-w-[7rem] shrink-0 truncate h-5 rounded-md text-[10px]">{match.exchange}</Badge>
                                     </span>
                                     <span className="block truncate text-xs text-[var(--text-muted)]">{match.name}</span>
                                 </button>
