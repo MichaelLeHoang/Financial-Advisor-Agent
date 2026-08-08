@@ -106,12 +106,11 @@ export default function WatchlistMarketContext({ watchlistQuotes = [] }: { watch
 
   return (
     <section className="mt-10 border-t border-[var(--theme-border)] pt-7" aria-labelledby="market-context-title">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-subtle)]">Beyond your list</p>
           <h2 id="market-context-title" className="mt-1 text-2xl font-semibold">Market context</h2>
         </div>
-        <p className="max-w-lg text-sm text-[var(--text-muted)]">Use the broad tape, today&apos;s leaders, and recent headlines to interpret watchlist moves.</p>
       </div>
 
       <WatchlistMarketsSection />

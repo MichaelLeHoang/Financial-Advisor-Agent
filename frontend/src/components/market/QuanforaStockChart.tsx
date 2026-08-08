@@ -28,7 +28,7 @@ function ToolHint({ label, align = "center", children }: { label: string; align?
   return (
     <div className="group/chart-tool relative">
       {children}
-      <span role="tooltip" className={cn("pointer-events-none absolute top-full z-40 mt-2 w-max max-w-48 rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-popover-strong)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--text-primary)] opacity-0 shadow-[var(--shadow-tooltip)] transition-opacity group-hover/chart-tool:opacity-100 group-focus-within/chart-tool:opacity-100", align === "end" ? "right-0" : "left-1/2 -translate-x-1/2")}>{label}</span>
+      <span role="tooltip" className={cn("pointer-events-none absolute top-full z-40 mt-2 w-max max-w-48 rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-popover-strong)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--text-primary)] opacity-0 shadow-[var(--shadow-tooltip)] transition-opacity group-hover/chart-tool:opacity-100", align === "end" ? "right-0" : "left-1/2 -translate-x-1/2")}>{label}</span>
     </div>
   );
 }
@@ -147,7 +147,7 @@ export default function QuanforaStockChart({ symbol, className }: { symbol: stri
           <ToolHint label={`${MODE_LABELS[mode]} chart · Switch to ${MODE_LABELS[nextMode]}`}><Button type="button" size="icon" variant="ghost" aria-label={`Chart type: ${MODE_LABELS[mode]}`} className={TOOL_BUTTON_CLASS} onClick={() => setMode(nextMode)}>{mode === "candle" || mode === "bar" ? <CandlestickChart className="size-4" /> : <LineChart className="size-4" />}</Button></ToolHint>
           <ToolHint label="Indicators: SMA, EMA, and VWAP"><DropdownMenu>
               <DropdownMenuTrigger render={<Button type="button" size="icon" variant="ghost" aria-label="Chart indicators" className={TOOL_BUTTON_CLASS} />}><SlidersHorizontal className="size-4" /></DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 rounded-xl">
+              <DropdownMenuContent side="bottom" align="end" sideOffset={8} className="w-48 rounded-xl">
                 <DropdownMenuItem onClick={() => setShowSma((value) => !value)}><Check className={cn("size-4", !showSma && "opacity-0")} /> SMA 20</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowEma((value) => !value)}><Check className={cn("size-4", !showEma && "opacity-0")} /> EMA 20</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowVwap((value) => !value)}><Check className={cn("size-4", !showVwap && "opacity-0")} /> VWAP</DropdownMenuItem>

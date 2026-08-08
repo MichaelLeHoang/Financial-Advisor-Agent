@@ -102,7 +102,7 @@ export default function WatchlistWorkspace() {
     <main className="min-h-full bg-[var(--background)] px-4 py-5 text-[var(--text-primary)] lg:px-8">
       <div className="mx-auto max-w-[1700px]">
         <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--theme-border)] pb-4">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-subtle)]">Monitoring</p><h1 className="mt-1 text-3xl font-semibold">Watchlists & alerts</h1><p className="mt-1 text-sm text-[var(--text-muted)]">Keep the names you care about and the conditions that deserve your attention together.</p></div>
+          <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-subtle)]">Monitoring</p><h1 className="mt-1 text-3xl font-semibold">Watchlists & alerts</h1></div>
           <div className="flex flex-wrap gap-2"><Input value={newListName} onChange={(event) => setNewListName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void createList(); }} placeholder="New watchlist name" className="w-48 rounded-lg" /><Button variant="outline" className="rounded-lg" onClick={() => void createList()}><Plus className="size-4" /> New list</Button></div>
         </header>
 
@@ -112,7 +112,7 @@ export default function WatchlistWorkspace() {
 
         <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
           <section className="overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)]" aria-labelledby="watchlist-table-title">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--theme-border)] p-4"><div><h2 id="watchlist-table-title" className="font-semibold">{watchlists.find((item) => item.id === selectedId)?.name ?? "Watchlist"}</h2><p className="text-xs text-[var(--text-muted)]">{rows.length} tracked symbols</p></div><div className="flex gap-2"><Input value={symbol} onChange={(event) => setSymbol(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void addSymbol(); }} placeholder="Add symbol, e.g. AAPL" className="w-48 rounded-lg uppercase" /><Button className="theme-solid-action rounded-lg" onClick={() => void addSymbol()}><Plus className="size-4" /> Add stock</Button></div></div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--theme-border)] p-4"><div className="flex min-w-0 items-center gap-2"><h2 id="watchlist-table-title" className="font-semibold">{watchlists.find((item) => item.id === selectedId)?.name ?? "Watchlist"}</h2><span aria-hidden="true" className="text-[var(--text-subtle)]">·</span><p className="text-sm text-[var(--text-muted)]">{rows.length} tracked symbols</p></div><div className="flex gap-2"><Input value={symbol} onChange={(event) => setSymbol(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void addSymbol(); }} placeholder="Add symbol, e.g. AAPL" className="w-48 rounded-lg uppercase" /><Button className="theme-solid-action rounded-lg" onClick={() => void addSymbol()}><Plus className="size-4" /> Add stock</Button></div></div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[860px] text-left text-sm">
                 <thead className="bg-[var(--surface-panel)] text-xs uppercase tracking-wide text-[var(--text-subtle)]"><tr>{["Company", "Symbol", "Price", "Change", "Market cap", "P/E ratio", "Alert", ""].map((label) => <th key={label} className="px-4 py-3 font-medium">{label}</th>)}</tr></thead>
@@ -128,7 +128,7 @@ export default function WatchlistWorkspace() {
           </section>
 
           <aside className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)]" aria-labelledby="alerts-title">
-            <div className="flex items-center justify-between border-b border-[var(--theme-border)] p-4"><div><h2 id="alerts-title" className="font-semibold">Active alerts</h2><p className="text-xs text-[var(--text-muted)]">Inngest retries durable evaluations</p></div><Button size="sm" className="theme-solid-action rounded-lg" onClick={() => setAlertTarget({ symbol: rows[0]?.symbol ?? "AAPL" })}><Plus className="size-4" /> Create</Button></div>
+            <div className="flex items-center justify-between gap-3 border-b border-[var(--theme-border)] p-4"><div className="flex min-w-0 items-center"><h2 id="alerts-title" className="font-semibold">Active alerts</h2></div><Button size="sm" className="theme-solid-action rounded-lg" onClick={() => setAlertTarget({ symbol: rows[0]?.symbol ?? "AAPL" })}><Plus className="size-4" /> Create</Button></div>
             <div className="max-h-[720px] space-y-2 overflow-y-auto p-3">
               {alerts.length ? alerts.map((alert) => <AlertCard key={alert.id} alert={alert} onEdit={() => setAlertTarget({ symbol: alert.symbol || "AAPL", alert })} onDelete={async () => { await api.deleteAlert(alert.id); setAlerts((current) => current.filter((item) => item.id !== alert.id)); }} />) : <div className="py-16 text-center text-sm text-[var(--text-muted)]"><Bell className="mx-auto mb-3 size-6" />No alerts yet. Add one from a watchlist row.</div>}
             </div>

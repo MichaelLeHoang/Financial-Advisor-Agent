@@ -39,7 +39,7 @@ test("market discovery and stock details support the heatmap and both chart engi
   await expect(page.getByRole("heading", { name: "AAPL stock details" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Price chart" })).toBeVisible();
   await expect(page.getByRole("region", { name: "AAPL Quanfora chart" })).toBeVisible();
-  await page.getByRole("button", { name: /Chart type:/ }).focus();
+  await page.getByRole("button", { name: /Chart type:/ }).hover();
   await expect(page.getByRole("tooltip", { name: /chart · Switch to/ })).toBeVisible();
   await page.getByRole("button", { name: "TradingView" }).click();
   await expect(page.getByRole("region", { name: "AAPL advanced chart" })).toBeVisible();
