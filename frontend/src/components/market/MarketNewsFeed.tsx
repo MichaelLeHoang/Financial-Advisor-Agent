@@ -15,7 +15,7 @@ function timeAgo(iso: string | null): string {
   return `${Math.round(hours / 24)}d ago`;
 }
 
-export default function MarketNewsFeed({ limit = 8 }: { limit?: number }) {
+export default function MarketNewsFeed({ limit = 8, title = "Market news" }: { limit?: number; title?: string | null }) {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,26 +36,26 @@ export default function MarketNewsFeed({ limit = 8 }: { limit?: number }) {
   }, [limit]);
 
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
-      <div className="mb-3 text-sm font-semibold text-white">Market news</div>
+    <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-4">
+      {title && <div className="mb-3 text-sm font-semibold text-[var(--text-primary)]">{title}</div>}
       <div className="space-y-1">
-        {loading && <div className="py-6 text-center text-xs text-white/30">Loading…</div>}
-        {!loading && articles.length === 0 && <div className="py-6 text-center text-xs text-white/30">No news available.</div>}
+        {loading && <div className="py-6 text-center text-xs text-[var(--text-subtle)]">Loading…</div>}
+        {!loading && articles.length === 0 && <div className="py-6 text-center text-xs text-[var(--text-subtle)]">No news available.</div>}
         {articles.map((article) => (
           <a
             key={article.id}
             href={article.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-white/[0.04]"
+            className="flex gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-[var(--surface-card-hover)]"
           >
             {article.thumbnail ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={article.thumbnail} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" />
             ) : null}
             <div className="min-w-0">
-              <p className="line-clamp-2 text-sm font-medium leading-5 text-white">{article.title}</p>
-              <p className="mt-1 text-xs text-white/35">
+              <p className="line-clamp-2 text-sm font-medium leading-5 text-[var(--text-primary)]">{article.title}</p>
+              <p className="mt-1 text-xs text-[var(--text-subtle)]">
                 {article.publisher}
                 {article.published_at ? ` · ${timeAgo(article.published_at)}` : ""}
               </p>

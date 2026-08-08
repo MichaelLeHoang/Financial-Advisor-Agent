@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { ChevronDown, Sparkles } from "lucide-react";
 import { Popover } from "@base-ui/react/popover";
 import { cn } from "@/lib/utils";
@@ -85,7 +86,7 @@ function SourcesButton({ sources }: { sources: Source[] }) {
   return (
     <Popover.Root>
       <Popover.Trigger
-        className="flex shrink-0 items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.03] py-1 pl-1.5 pr-3 text-xs font-medium text-white/60 outline-none transition-colors hover:bg-white/[0.07] hover:text-white/85"
+        className="flex min-h-9 shrink-0 items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--surface-panel)] py-1 pl-1.5 pr-3 text-xs font-medium text-[var(--text-muted)] outline-none transition-colors hover:border-[var(--theme-border-strong)] hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
         aria-label={`${sources.length} sources`}
       >
         <span className="flex items-center">
@@ -96,7 +97,7 @@ function SourcesButton({ sources }: { sources: Source[] }) {
               src={faviconOf(source.url)}
               alt=""
               className={cn(
-                "h-5 w-5 rounded-full border border-[#0b0b10] bg-white/90 object-contain",
+                "h-5 w-5 rounded-full border border-[var(--surface-popover-strong)] bg-white/90 object-contain",
                 i > 0 && "-ml-2"
               )}
               loading="lazy"
@@ -107,8 +108,8 @@ function SourcesButton({ sources }: { sources: Source[] }) {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner side="bottom" align="end" sideOffset={8} className="z-[180]">
-          <Popover.Popup className="w-80 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover-strong)] p-2 text-white shadow-[var(--shadow-popover)] outline-none">
-            <p className="px-2 pb-1 pt-1.5 text-xs font-semibold uppercase tracking-wide text-white/40">
+          <Popover.Popup className="w-80 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover-strong)] p-2 text-[var(--text-primary)] shadow-[var(--shadow-popover)] outline-none">
+            <p className="px-2 pb-1 pt-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--text-subtle)]">
               Sources · {sources.length}
             </p>
             {/* Cap the visible height to ~3 rows; the rest scrolls within the popover. */}
@@ -119,7 +120,7 @@ function SourcesButton({ sources }: { sources: Source[] }) {
                 href={source.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-start gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-white/[0.055]"
+                className="flex items-start gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-[var(--surface-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -129,8 +130,8 @@ function SourcesButton({ sources }: { sources: Source[] }) {
                   loading="lazy"
                 />
                 <span className="min-w-0">
-                  <span className="line-clamp-2 text-sm font-medium leading-snug text-white/85">{source.title}</span>
-                  <span className="mt-0.5 block truncate text-xs text-white/40">{hostOf(source.url)}</span>
+                  <span className="line-clamp-2 text-sm font-medium leading-snug text-[var(--text-primary)]">{source.title}</span>
+                  <span className="mt-0.5 block truncate text-xs text-[var(--text-subtle)]">{hostOf(source.url)}</span>
                 </span>
               </a>
             ))}
@@ -144,13 +145,13 @@ function SourcesButton({ sources }: { sources: Source[] }) {
 
 function SummaryRow({ story, isOpen, onToggle }: { story: SummaryStory; isOpen: boolean; onToggle: () => void }) {
   return (
-    <div className="border-b border-white/[0.06] last:border-b-0">
+    <div className="rounded-xl border-b border-[var(--theme-border)] px-3 transition-colors last:border-b-0 hover:bg-[var(--surface-card-hover)]">
       <div className="flex items-center gap-3 py-4">
         <button
           type="button"
           onClick={onToggle}
           aria-expanded={isOpen}
-          className="flex-1 text-left text-sm font-medium text-white/85"
+          className="flex-1 text-left text-sm font-medium text-[var(--text-primary)] outline-none transition-colors hover:text-indigo-300 focus-visible:text-indigo-300"
         >
           {story.headline}
         </button>
@@ -162,7 +163,7 @@ function SummaryRow({ story, isOpen, onToggle }: { story: SummaryStory; isOpen: 
           onClick={onToggle}
           aria-expanded={isOpen}
           aria-label={isOpen ? "Collapse" : "Expand"}
-          className="group flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.03] text-white/50 transition-colors duration-150 hover:bg-white/[0.07] hover:text-white/80"
+          className="group flex size-9 shrink-0 items-center justify-center rounded-full border border-[var(--theme-border)] bg-[var(--surface-panel)] text-[var(--text-muted)] transition-colors duration-150 hover:border-[var(--theme-border-strong)] hover:bg-[var(--surface-control-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
         >
           <ChevronDown className={cn("h-4 w-4 transition-transform duration-150 motion-reduce:transition-none", isOpen && "rotate-180")} aria-hidden="true" />
         </button>
@@ -170,14 +171,14 @@ function SummaryRow({ story, isOpen, onToggle }: { story: SummaryStory; isOpen: 
 
       {isOpen && (
         <div className="pb-4 pr-10">
-          <p className="text-sm leading-relaxed text-white/55">{story.body}</p>
-          <button
-            type="button"
-            className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/[0.10] bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/[0.07] hover:text-white"
+          <p className="text-sm leading-relaxed text-[var(--text-muted)]">{story.body}</p>
+          <Link
+            href={`/ai?prompt=${encodeURIComponent(`Explain the market impact of: ${story.headline}`)}`}
+            className="mt-3 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-[var(--theme-border)] bg-[var(--surface-panel)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--theme-border-strong)] hover:bg-[var(--surface-control-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
           >
             <Sparkles className="h-3.5 w-3.5 text-indigo-300" aria-hidden="true" />
             Dive deeper on this topic with AI
-          </button>
+          </Link>
         </div>
       )}
     </div>
@@ -188,7 +189,7 @@ export default function MarketSummary() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] px-5 py-2">
+    <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] px-2 py-2 sm:px-3">
       {STORIES.map((story, index) => (
         <SummaryRow
           key={story.headline}

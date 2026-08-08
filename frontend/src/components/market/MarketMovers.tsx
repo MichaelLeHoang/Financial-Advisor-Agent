@@ -30,27 +30,27 @@ const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFra
 
 function MoverList({ title, rows, metric }: { title: string; rows: Row[]; metric: "change" | "volume" }) {
   return (
-    <div className="flex-1 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
-      <div className="mb-3 text-sm font-semibold text-white">{title}</div>
+    <div className="flex-1 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-4">
+      <div className="mb-3 text-sm font-semibold text-[var(--text-primary)]">{title}</div>
       <div className="space-y-1">
-        {rows.length === 0 && <div className="py-6 text-center text-xs text-white/30">Loading…</div>}
+        {rows.length === 0 && <div className="py-6 text-center text-xs text-[var(--text-subtle)]">Loading…</div>}
         {rows.map((row) => {
           const positive = row.changePct >= 0;
           const Arrow = positive ? ArrowUp : ArrowDown;
           return (
             <Link
               key={row.ticker}
-              href={`/market?ticker=${encodeURIComponent(row.ticker)}`}
-              className="flex items-center justify-between gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-white/[0.04]"
+              href={`/discover/markets/stocks/${encodeURIComponent(row.ticker)}`}
+              className="flex items-center justify-between gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-[var(--surface-card-hover)]"
             >
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-white">{row.ticker}</div>
-                <div className="truncate text-xs text-white/35">{row.name}</div>
+                <div className="text-sm font-semibold text-[var(--text-primary)]">{row.ticker}</div>
+                <div className="truncate text-xs text-[var(--text-subtle)]">{row.name}</div>
               </div>
               <div className="shrink-0 text-right">
-                <div className="text-sm tabular-nums text-white">${fmtPrice(row.price)}</div>
+                <div className="text-sm tabular-nums text-[var(--text-primary)]">${fmtPrice(row.price)}</div>
                 {metric === "volume" ? (
-                  <div className="text-xs tabular-nums text-white/40">{row.volume != null ? compact.format(row.volume) : "—"} vol</div>
+                  <div className="text-xs tabular-nums text-[var(--text-subtle)]">{row.volume != null ? compact.format(row.volume) : "—"} vol</div>
                 ) : (
                   <div className={cn("inline-flex items-center gap-0.5 text-xs font-semibold tabular-nums", positive ? "text-green-positive" : "text-red-negative")}>
                     <Arrow className="h-3 w-3" aria-hidden="true" />
