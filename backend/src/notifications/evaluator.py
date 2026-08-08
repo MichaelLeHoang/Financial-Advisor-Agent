@@ -70,4 +70,8 @@ def evaluate_alert(alert: AlertRead, provider: PriceProvider) -> AlertEventCreat
 def _recently_triggered(alert: AlertRead) -> bool:
     if alert.last_triggered_at is None:
         return False
-    return alert.last_triggered_at > datetime.now(timezone.utc) - timedelta(hours=6)
+    try:
+        cooldown_minutes = max(1, min(int(alert.condition.get("cooldown_minutes", 360)), 10_080))
+    except (TypeError, ValueError):
+        cooldown_minutes = 360
+    return alert.last_triggered_at > datetime.now(timezone.utc) - timedelta(minutes=cooldown_minutes)

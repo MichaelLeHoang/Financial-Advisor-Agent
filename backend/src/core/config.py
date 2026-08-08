@@ -75,12 +75,14 @@ class Settings(BaseSettings):
     inngest_app_id: str = "financial-advisor-agent"
     inngest_is_production: bool = False
     news_ingestion_cron: str = "0 * * * *"
+    news_digest_dispatch_cron: str = "*/15 * * * *"
     default_news_tickers: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["AAPL", "MSFT", "GOOGL", "NVDA", "TSLA", "AMZN", "META", "VOO", "QQQ", "VFV"]
     )
 
     # Notifications and observability
     resend_api_key: SecretStr | None = None
+    resend_from_email: str = "Quanfora Daily <digest@quanfora.com>"
     telegram_bot_token: SecretStr | None = None
     notification_secret_key: SecretStr | None = None
     sentry_dsn: SecretStr | None = None

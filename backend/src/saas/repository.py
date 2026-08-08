@@ -7,7 +7,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from uuid import UUID, uuid4
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from src.config import settings
 from src.investment_policy.models import InvestmentPolicyRead, InvestmentPolicyUpsert
@@ -19,6 +19,7 @@ from src.investment_workspace.models import (
 )
 from src.saas.models import (
     AlertCreate,
+    AlertUpdate,
     AlertEventCreate,
     AlertEventRead,
     AlertRead,
@@ -40,6 +41,9 @@ from src.saas.models import (
     Plan,
     NotificationChannelCreate,
     NotificationChannelRead,
+    NewsDigestDeliveryRead,
+    NewsDigestPreferenceRead,
+    NewsDigestPreferenceUpsert,
     QuantValidationRunCreate,
     QuantValidationRunRead,
     RecurringBuyCreate,
@@ -100,6 +104,8 @@ class UserScopedStore:
         self._notification_secrets: dict[UUID, dict[str, Any]] = {}
         self._alerts: dict[UUID, AlertRead] = {}
         self._alert_events: dict[UUID, AlertEventRead] = {}
+        self._news_digest_preferences: dict[UUID, NewsDigestPreferenceRead] = {}
+        self._news_digest_deliveries: dict[tuple[UUID, str], NewsDigestDeliveryRead] = {}
         self._risk_snapshots: dict[UUID, RiskSnapshotRead] = {}
         self._journal_entries: dict[UUID, JournalEntryRead] = {}
         self._quant_validation_runs: dict[UUID, QuantValidationRunRead] = {}
@@ -125,6 +131,8 @@ class UserScopedStore:
             self._notification_secrets.clear()
             self._alerts.clear()
             self._alert_events.clear()
+            self._news_digest_preferences.clear()
+            self._news_digest_deliveries.clear()
             self._risk_snapshots.clear()
             self._journal_entries.clear()
             self._quant_validation_runs.clear()
@@ -739,6 +747,25 @@ class UserScopedStore:
             alerts = [alert for alert in self._alerts.values() if alert.user_id == user_id]
             return sorted(alerts, key=lambda row: row.created_at, reverse=True)
 
+    def update_alert(self, user_id: UUID, alert_id: UUID, payload: AlertUpdate) -> AlertRead | None:
+        with self._lock:
+            current = self._alerts.get(alert_id)
+            if current is None or current.user_id != user_id:
+                return None
+            changes = payload.model_dump(exclude_unset=True)
+            changes["updated_at"] = datetime.now(timezone.utc)
+            updated = current.model_copy(update=changes)
+            self._alerts[alert_id] = updated
+            return updated
+
+    def delete_alert(self, user_id: UUID, alert_id: UUID) -> bool:
+        with self._lock:
+            current = self._alerts.get(alert_id)
+            if current is None or current.user_id != user_id:
+                return False
+            del self._alerts[alert_id]
+            return True
+
     def list_active_alerts(self) -> list[AlertRead]:
         with self._lock:
             return [alert for alert in self._alerts.values() if alert.is_active]
@@ -762,6 +789,109 @@ class UserScopedStore:
         with self._lock:
             events = [event for event in self._alert_events.values() if event.user_id == user_id]
             return sorted(events, key=lambda row: row.created_at, reverse=True)[:limit]
+
+    def get_news_digest_preference(self, user_id: UUID) -> NewsDigestPreferenceRead | None:
+        with self._lock:
+            return self._news_digest_preferences.get(user_id)
+
+    def upsert_news_digest_preference(
+        self,
+        user_id: UUID,
+        email: str | None,
+        payload: NewsDigestPreferenceUpsert,
+        next_run_at: datetime | None,
+    ) -> NewsDigestPreferenceRead:
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            current = self._news_digest_preferences.get(user_id)
+            preference = NewsDigestPreferenceRead(
+                **payload.model_dump(),
+                user_id=user_id,
+                email=email,
+                next_run_at=next_run_at,
+                last_sent_at=current.last_sent_at if current else None,
+                created_at=current.created_at if current else now,
+                updated_at=now,
+            )
+            self._news_digest_preferences[user_id] = preference
+            return preference
+
+    def list_due_news_digest_preferences(self, now: datetime) -> list[NewsDigestPreferenceRead]:
+        with self._lock:
+            return [
+                preference
+                for preference in self._news_digest_preferences.values()
+                if preference.is_enabled
+                and preference.email
+                and preference.next_run_at is not None
+                and preference.next_run_at <= now
+            ]
+
+    def list_user_watchlist_symbols(self, user_id: UUID, limit: int = 20) -> list[str]:
+        with self._lock:
+            owned = {row.id for row in self._watchlists.values() if row.user_id == user_id}
+            symbols = {
+                asset.symbol.upper()
+                for watchlist_id, assets in self._watchlist_assets.items()
+                if watchlist_id in owned
+                for asset in assets
+            }
+            return sorted(symbols)[:limit]
+
+    def claim_news_digest_delivery(self, user_id: UUID, digest_date: date) -> NewsDigestDeliveryRead | None:
+        key = (user_id, digest_date.isoformat())
+        with self._lock:
+            if key in self._news_digest_deliveries:
+                return None
+            delivery = NewsDigestDeliveryRead(user_id=user_id, digest_date=digest_date)
+            self._news_digest_deliveries[key] = delivery
+            return delivery
+
+    def finish_news_digest_delivery(
+        self,
+        delivery_id: UUID,
+        *,
+        status: str,
+        source_symbols: list[str],
+        article_count: int,
+        subject: str,
+        provider_message_id: str | None = None,
+        error: str | None = None,
+    ) -> NewsDigestDeliveryRead | None:
+        with self._lock:
+            for key, current in self._news_digest_deliveries.items():
+                if current.id != delivery_id:
+                    continue
+                updated = current.model_copy(update={
+                    "status": status,
+                    "source_symbols": source_symbols,
+                    "article_count": article_count,
+                    "subject": subject,
+                    "provider_message_id": provider_message_id,
+                    "error": error,
+                    "updated_at": datetime.now(timezone.utc),
+                })
+                self._news_digest_deliveries[key] = updated
+                if status == "sent":
+                    preference = self._news_digest_preferences.get(current.user_id)
+                    if preference:
+                        self._news_digest_preferences[current.user_id] = preference.model_copy(
+                            update={"last_sent_at": datetime.now(timezone.utc)}
+                        )
+                return updated
+            return None
+
+    def advance_news_digest_schedule(self, user_id: UUID, next_run_at: datetime) -> None:
+        with self._lock:
+            current = self._news_digest_preferences.get(user_id)
+            if current:
+                self._news_digest_preferences[user_id] = current.model_copy(
+                    update={
+                        "next_run_at": next_run_at,
+                        "last_sent_at": datetime.now(timezone.utc),
+                        "updated_at": datetime.now(timezone.utc),
+                    }
+                )
 
     def create_risk_snapshot(self, user_id: UUID, payload: RiskSnapshotCreate) -> RiskSnapshotRead:
         if self.get_portfolio(user_id, payload.portfolio_id) is None:
@@ -1562,6 +1692,27 @@ class SupabaseRestStore:
         rows = self._request("GET", "alerts", {"select": "*", "user_id": f"eq.{user_id}", "order": "created_at.desc"})
         return [AlertRead.model_validate(row) for row in rows]
 
+    def update_alert(self, user_id: UUID, alert_id: UUID, payload: AlertUpdate) -> AlertRead | None:
+        body = payload.model_dump(exclude_unset=True, mode="json")
+        if "symbol" in body and body["symbol"]:
+            body["symbol"] = str(body["symbol"]).upper()
+        body["updated_at"] = datetime.now(timezone.utc).isoformat()
+        rows = self._request(
+            "PATCH",
+            "alerts",
+            {"id": f"eq.{alert_id}", "user_id": f"eq.{user_id}"},
+            body=body,
+        )
+        return AlertRead.model_validate(rows[0]) if rows else None
+
+    def delete_alert(self, user_id: UUID, alert_id: UUID) -> bool:
+        rows = self._request(
+            "DELETE",
+            "alerts",
+            {"id": f"eq.{alert_id}", "user_id": f"eq.{user_id}"},
+        )
+        return bool(rows)
+
     def list_active_alerts(self) -> list[AlertRead]:
         rows = self._request("GET", "alerts", {"select": "*", "is_active": "eq.true"})
         return [AlertRead.model_validate(row) for row in rows]
@@ -1598,6 +1749,117 @@ class SupabaseRestStore:
             {"select": "*", "user_id": f"eq.{user_id}", "order": "created_at.desc", "limit": str(limit)},
         )
         return [AlertEventRead.model_validate(row) for row in rows]
+
+    def get_news_digest_preference(self, user_id: UUID) -> NewsDigestPreferenceRead | None:
+        rows = self._request(
+            "GET",
+            "news_digest_preferences",
+            {"select": "*,profiles(email)", "user_id": f"eq.{user_id}", "limit": "1"},
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        profile = row.pop("profiles", None) or {}
+        return NewsDigestPreferenceRead.model_validate({**row, "email": profile.get("email")})
+
+    def upsert_news_digest_preference(
+        self,
+        user_id: UUID,
+        email: str | None,
+        payload: NewsDigestPreferenceUpsert,
+        next_run_at: datetime | None,
+    ) -> NewsDigestPreferenceRead:
+        body = {
+            "user_id": str(user_id),
+            **payload.model_dump(mode="json"),
+            "next_run_at": next_run_at.isoformat() if next_run_at else None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        existing = self.get_news_digest_preference(user_id)
+        if existing:
+            rows = self._request("PATCH", "news_digest_preferences", {"user_id": f"eq.{user_id}"}, body=body)
+        else:
+            rows = self._request("POST", "news_digest_preferences", body=body)
+        return NewsDigestPreferenceRead.model_validate({**rows[0], "email": email})
+
+    def list_due_news_digest_preferences(self, now: datetime) -> list[NewsDigestPreferenceRead]:
+        rows = self._request(
+            "GET",
+            "news_digest_preferences",
+            {
+                "select": "*,profiles!inner(email)",
+                "is_enabled": "eq.true",
+                "next_run_at": f"lte.{now.isoformat()}",
+                "order": "next_run_at.asc",
+                "limit": "500",
+            },
+        )
+        preferences = []
+        for source in rows:
+            row = dict(source)
+            profile = row.pop("profiles", None) or {}
+            if profile.get("email"):
+                preferences.append(NewsDigestPreferenceRead.model_validate({**row, "email": profile["email"]}))
+        return preferences
+
+    def list_user_watchlist_symbols(self, user_id: UUID, limit: int = 20) -> list[str]:
+        watchlists = self._request("GET", "watchlists", {"select": "id", "user_id": f"eq.{user_id}"})
+        if not watchlists:
+            return []
+        ids = ",".join(str(row["id"]) for row in watchlists)
+        rows = self._request(
+            "GET",
+            "watchlist_assets",
+            {"select": "symbol", "watchlist_id": f"in.({ids})", "order": "created_at.asc", "limit": str(limit * 3)},
+        )
+        return list(dict.fromkeys(str(row["symbol"]).upper() for row in rows))[:limit]
+
+    def claim_news_digest_delivery(self, user_id: UUID, digest_date: date) -> NewsDigestDeliveryRead | None:
+        rows = self._request(
+            "POST",
+            "rpc/claim_news_digest_delivery",
+            body={"p_user_id": str(user_id), "p_digest_date": digest_date.isoformat()},
+        )
+        return NewsDigestDeliveryRead.model_validate(rows[0]) if rows else None
+
+    def finish_news_digest_delivery(
+        self,
+        delivery_id: UUID,
+        *,
+        status: str,
+        source_symbols: list[str],
+        article_count: int,
+        subject: str,
+        provider_message_id: str | None = None,
+        error: str | None = None,
+    ) -> NewsDigestDeliveryRead | None:
+        rows = self._request(
+            "PATCH",
+            "news_digest_deliveries",
+            {"id": f"eq.{delivery_id}"},
+            body={
+                "status": status,
+                "source_symbols": source_symbols,
+                "article_count": article_count,
+                "subject": subject,
+                "provider_message_id": provider_message_id,
+                "error": error,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        return NewsDigestDeliveryRead.model_validate(rows[0]) if rows else None
+
+    def advance_news_digest_schedule(self, user_id: UUID, next_run_at: datetime) -> None:
+        self._request(
+            "PATCH",
+            "news_digest_preferences",
+            {"user_id": f"eq.{user_id}"},
+            body={
+                "next_run_at": next_run_at.isoformat(),
+                "last_sent_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
     def create_risk_snapshot(self, user_id: UUID, payload: RiskSnapshotCreate) -> RiskSnapshotRead:
         if self.get_portfolio(user_id, payload.portfolio_id) is None:

@@ -1,16 +1,23 @@
-from fastapi import APIRouter, Depends
+from datetime import datetime, timezone
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from src.auth.supabase import get_current_or_guest_user
 from src.notifications.crypto import encrypt_json, encrypt_text
 from src.notifications.evaluator import evaluate_active_alerts
+from src.notifications.digest import next_digest_run
 from src.saas.entitlements import FeatureKey, enforce_feature, get_entitlement, raise_upgrade_required
 from src.saas.models import (
     AlertCreate,
     AlertEventRead,
     AlertRead,
+    AlertUpdate,
     AuthenticatedUser,
     NotificationChannelCreate,
     NotificationChannelRead,
+    NewsDigestPreferenceRead,
+    NewsDigestPreferenceUpsert,
 )
 from src.saas.repository import get_store
 
@@ -64,6 +71,30 @@ async def create_alert(
     return get_store(user).create_alert(user.id, payload)
 
 
+@router.patch("/alerts/{alert_id}", response_model=AlertRead)
+async def update_alert(
+    alert_id: UUID,
+    payload: AlertUpdate,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> AlertRead:
+    enforce_feature(user, FeatureKey.ALERTS)
+    alert = get_store(user).update_alert(user.id, alert_id, payload)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return alert
+
+
+@router.delete("/alerts/{alert_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_alert(
+    alert_id: UUID,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> Response:
+    enforce_feature(user, FeatureKey.ALERTS)
+    if not get_store(user).delete_alert(user.id, alert_id):
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/alerts/events", response_model=list[AlertEventRead])
 async def list_alert_events(
     limit: int = 20,
@@ -77,3 +108,28 @@ async def list_alert_events(
 async def evaluate_alerts(user: AuthenticatedUser = Depends(get_current_or_guest_user)) -> dict[str, int]:
     enforce_feature(user, FeatureKey.ALERTS)
     return evaluate_active_alerts()
+
+
+@router.get("/news-digest/preferences", response_model=NewsDigestPreferenceRead)
+async def get_news_digest_preferences(
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> NewsDigestPreferenceRead:
+    if user.is_guest:
+        raise HTTPException(status_code=401, detail="Sign in to manage news digests")
+    preference = get_store(user).get_news_digest_preference(user.id)
+    if preference:
+        return preference
+    return NewsDigestPreferenceRead(user_id=user.id, email=user.email)
+
+
+@router.put("/news-digest/preferences", response_model=NewsDigestPreferenceRead)
+async def update_news_digest_preferences(
+    payload: NewsDigestPreferenceUpsert,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> NewsDigestPreferenceRead:
+    if user.is_guest:
+        raise HTTPException(status_code=401, detail="Sign in to manage news digests")
+    if payload.is_enabled and not user.email:
+        raise HTTPException(status_code=400, detail="An account email is required")
+    next_run_at = next_digest_run(payload.timezone, payload.local_time, datetime.now(timezone.utc)) if payload.is_enabled else None
+    return get_store(user).upsert_news_digest_preference(user.id, user.email, payload, next_run_at)

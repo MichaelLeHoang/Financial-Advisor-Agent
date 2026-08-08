@@ -22,6 +22,8 @@ from src.jobs.functions import (
     scheduled_new_ingestion,
     on_demand_news_ingestion,
     scheduled_alert_evaluation,
+    scheduled_news_digest_dispatch,
+    send_daily_news_digest,
 )
 from src.rag.pipeline import ask as rag_ask
 from src.services.ingestion import ingest_news
@@ -104,7 +106,13 @@ app.include_router(paper_trading_router)
 inngest.fast_api.serve(
     app,
     inngest_client,
-    [scheduled_new_ingestion, on_demand_news_ingestion, scheduled_alert_evaluation],
+    [
+        scheduled_new_ingestion,
+        on_demand_news_ingestion,
+        scheduled_alert_evaluation,
+        scheduled_news_digest_dispatch,
+        send_daily_news_digest,
+    ],
 )
 
 # Lazy cache: agent setup is expensive, but model routing can vary by user plan/mode.
