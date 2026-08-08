@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { createPaperTradingPreset, createWorkspaceFromTemplate, type TradingWorkspaceTemplate } from "@/lib/trading/workspacePresets";
-import { clampWidget, migrateWorkspace, normalizeWorkspaceWidgets, uid, widgetsOverlap, WIDGET_MIN_SIZE, type TradingWorkspace, type WorkspaceWidgetInstance, type WorkspaceWidgetType } from "@/lib/trading/workspaceSchema";
+import { clampWidget, migrateWorkspace, normalizeWorkspaceWidgets, uid, widgetsOverlap, WIDGET_MIN_SIZE, WORKSPACE_LAYOUT_VERSION, type TradingWorkspace, type WorkspaceWidgetInstance, type WorkspaceWidgetType } from "@/lib/trading/workspaceSchema";
 
 export type WorkspaceSaveState = "saved" | "saving" | "unsaved";
 type PlacementDelta = { x: number; y: number };
@@ -120,7 +120,7 @@ export function useTradingWorkspace() {
     let suffix = 2;
     while (existingNames.has(name)) { name = `Untitled trading workspace ${suffix}`; suffix += 1; }
     const now = new Date().toISOString();
-    const created: TradingWorkspace = { id: uid("workspace"), name, presetType: "custom", basePresetType: "paper_trading", isDefault: false, layoutVersion: 1, selectedSymbol: workspace.selectedSymbol, widgets: [], createdAt: now, updatedAt: now };
+    const created: TradingWorkspace = { id: uid("workspace"), name, presetType: "custom", basePresetType: "paper_trading", isDefault: false, layoutVersion: WORKSPACE_LAYOUT_VERSION, selectedSymbol: workspace.selectedSymbol, widgets: [], createdAt: now, updatedAt: now };
     const next = [...workspaces, created];
     setWorkspaces(next); setWorkspace(created); setSaveState("saved"); setIsEditing(false); persistCollection(next, created.id);
   }, [persistCollection, workspace.selectedSymbol, workspaces]);
@@ -137,7 +137,7 @@ export function useTradingWorkspace() {
     const selected = workspaces.find((item) => item.id === id); if (!selected) return;
     setWorkspace(selected.presetType === "paper_trading" ? createPaperTradingPreset() : selected); setSaveState("saved"); setIsEditing(false); persistCollection(workspaces, id);
   }, [persistCollection, workspaces]);
-  const addWidget = useCallback((type: WorkspaceWidgetType) => update((current) => { const minimum = WIDGET_MIN_SIZE[type]; return { ...current, widgets: [...current.widgets, { instanceId: uid(type), type, position: { x: 0, y: Math.max(12, ...current.widgets.map((widget) => widget.position.y + widget.position.height)), width: type === "price_chart" || type === "trading_activity" || type === "options_chain" ? 7 : Math.max(3, minimum.width), height: type === "price_chart" || type === "options_chain" ? 7 : Math.max(4, minimum.height) }, settings: {}, linkedToWorkspaceSymbol: type !== "account", isVisible: true }] }; }), [update]);
+  const addWidget = useCallback((type: WorkspaceWidgetType) => update((current) => { const minimum = WIDGET_MIN_SIZE[type]; return { ...current, widgets: [...current.widgets, { instanceId: uid(type), type, position: { x: 0, y: Math.max(12, ...current.widgets.map((widget) => widget.position.y + widget.position.height)), width: type === "price_chart" || type === "trading_activity" || type === "options_chain" ? 7 : Math.max(3, minimum.width), height: type === "price_chart" || type === "options_chain" ? 7 : Math.max(4, minimum.height) }, settings: type === "price_chart" ? { chartEngine: "tradingview" } : {}, linkedToWorkspaceSymbol: type !== "account", isVisible: true }] }; }), [update]);
   const hiddenTypes = useMemo(() => new Set(workspace.widgets.filter((widget) => !widget.isVisible).map((widget) => widget.type)), [workspace.widgets]);
 
   return {

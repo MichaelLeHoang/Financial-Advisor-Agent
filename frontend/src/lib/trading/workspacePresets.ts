@@ -1,9 +1,9 @@
-import { uid, type TradingWorkspace, type WorkspaceWidgetType } from "./workspaceSchema.ts";
+import { WORKSPACE_LAYOUT_VERSION, uid, type TradingWorkspace, type WorkspaceWidgetType } from "./workspaceSchema.ts";
 
-const widget = (type: WorkspaceWidgetType, x: number, y: number, width: number, height: number, linkedToWorkspaceSymbol = true, settings: Record<string, unknown> = {}) => ({ instanceId: uid(type), type, position: { x, y, width, height }, settings, linkedToWorkspaceSymbol, isVisible: true });
-const customWorkspace = (name: string, widgets: TradingWorkspace["widgets"], now: string): TradingWorkspace => ({ id: uid("workspace"), name, presetType: "custom", basePresetType: "paper_trading", isDefault: false, layoutVersion: 1, selectedSymbol: "AMD", widgets, createdAt: now, updatedAt: now });
+const widget = (type: WorkspaceWidgetType, x: number, y: number, width: number, height: number, linkedToWorkspaceSymbol = true, settings: Record<string, unknown> = {}) => ({ instanceId: uid(type), type, position: { x, y, width, height }, settings: type === "price_chart" ? { chartEngine: "tradingview", ...settings } : settings, linkedToWorkspaceSymbol, isVisible: true });
+const customWorkspace = (name: string, widgets: TradingWorkspace["widgets"], now: string): TradingWorkspace => ({ id: uid("workspace"), name, presetType: "custom", basePresetType: "paper_trading", isDefault: false, layoutVersion: WORKSPACE_LAYOUT_VERSION, selectedSymbol: "AMD", widgets, createdAt: now, updatedAt: now });
 
-export function createPaperTradingPreset(now = new Date().toISOString()): TradingWorkspace { return { id: "paper-trading", name: "Paper Trading Desk", presetType: "paper_trading", isDefault: true, layoutVersion: 1, selectedSymbol: "AMD", widgets: [widget("watchlist", 0, 0, 2, 6), widget("active_signals", 0, 6, 2, 3), widget("price_chart", 2, 0, 7, 9), widget("trade_plan", 9, 0, 3, 9), widget("policy_check", 9, 9, 3, 7), widget("trading_activity", 2, 9, 7, 5)], createdAt: now, updatedAt: now }; }
+export function createPaperTradingPreset(now = new Date().toISOString()): TradingWorkspace { return { id: "paper-trading", name: "Paper Trading Desk", presetType: "paper_trading", isDefault: true, layoutVersion: WORKSPACE_LAYOUT_VERSION, selectedSymbol: "AMD", widgets: [widget("watchlist", 0, 0, 2, 6), widget("active_signals", 0, 6, 2, 3), widget("price_chart", 2, 0, 7, 9), widget("trade_plan", 9, 0, 3, 9), widget("policy_check", 9, 9, 3, 7), widget("trading_activity", 2, 9, 7, 5)], createdAt: now, updatedAt: now }; }
 
 export type TradingWorkspaceTemplate =
   | "paper_trading"

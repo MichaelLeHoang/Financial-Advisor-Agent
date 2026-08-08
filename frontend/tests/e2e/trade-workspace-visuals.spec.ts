@@ -32,6 +32,8 @@ test("captures the Paper Trading workspace acceptance states", async ({ page }, 
 
   if (testInfo.project.name === "desktop") {
     const chartWidget = page.locator('[data-widget-type="price_chart"]');
+    await expect(chartWidget.getByRole("button", { name: "TradingView" })).toHaveAttribute("aria-pressed", "true");
+    await chartWidget.getByRole("button", { name: "Quanfora" }).click();
     await chartWidget.locator("canvas").first().hover({ position: { x: 240, y: 160 }, force: true });
     await expect(chartWidget.getByText("AMD close", { exact: false })).toBeVisible();
     await capture(page, testInfo, "paper-trading-chart-tooltip");
