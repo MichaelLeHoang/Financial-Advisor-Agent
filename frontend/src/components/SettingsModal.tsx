@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { api, type NewsDigestPreferenceRequest } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,6 +75,10 @@ const APPEARANCE_DESCRIPTIONS: Record<AppAppearancePreference, string> = {
 };
 
 export default function SettingsModal({ isOpen, onClose, settings, setSettings }: SettingsModalProps) {
+    const { user } = useAuth();
+    const [digest, setDigest] = useState<NewsDigestPreferenceRequest>({ is_enabled: false, timezone: "UTC", local_time: "08:00", max_symbols: 20 });
+    const [digestLoading, setDigestLoading] = useState(false);
+    const [digestSaving, setDigestSaving] = useState(false);
     useEffect(() => {
         if (!isOpen) return;
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -79,6 +87,36 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [isOpen, onClose]);
+
+    useEffect(() => {
+        if (!isOpen || user.is_guest) return;
+        let canceled = false;
+        setDigestLoading(true);
+        api.newsDigestPreferences()
+            .then((preference) => {
+                if (!canceled) setDigest({ is_enabled: preference.is_enabled, timezone: preference.timezone, local_time: preference.local_time, max_symbols: preference.max_symbols });
+            })
+            .catch(() => {
+                if (!canceled) setDigest((current) => ({ ...current, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" }));
+            })
+            .finally(() => { if (!canceled) setDigestLoading(false); });
+        return () => { canceled = true; };
+    }, [isOpen, user.is_guest]);
+
+    const saveAndClose = async () => {
+        if (!user.is_guest) {
+            setDigestSaving(true);
+            try {
+                await api.updateNewsDigestPreferences(digest);
+            } catch (error) {
+                toast.error("Could not save news digest preferences", { description: error instanceof Error ? error.message : "Try again shortly." });
+                setDigestSaving(false);
+                return;
+            }
+            setDigestSaving(false);
+        }
+        onClose();
+    };
 
     if (!isOpen) return null;
 
@@ -153,6 +191,29 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                     </div>
 
                     <div className="space-y-4">
+                        <div>
+                            <h2 className="text-sm font-bold uppercase tracking-widest text-white/40">Daily market brief</h2>
+                            <p className="mt-1 text-sm text-[var(--text-muted)]">A concise news email personalized from up to 20 symbols across your watchlists.</p>
+                        </div>
+                        {user.is_guest ? (
+                            <p className="rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-4 text-sm text-[var(--text-muted)]">Sign in to schedule a daily market brief.</p>
+                        ) : digestLoading ? (
+                            <div className="flex h-24 items-center justify-center text-sm text-[var(--text-muted)]"><Loader2 className="mr-2 size-4 animate-spin" /> Loading email preferences</div>
+                        ) : (
+                            <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-4">
+                                <label className="flex cursor-pointer items-start justify-between gap-4">
+                                    <span><span className="block text-sm font-semibold">Send my daily brief</span><span className="mt-1 block text-xs text-[var(--text-muted)]">When no watchlist symbols exist, Quanfora sends a general-market edition.</span></span>
+                                    <input type="checkbox" checked={digest.is_enabled} onChange={(event) => setDigest((current) => ({ ...current, is_enabled: event.target.checked }))} className="mt-1 size-4 accent-indigo-500" />
+                                </label>
+                                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                    <label className="text-xs font-medium text-[var(--text-muted)]">Delivery time<input type="time" value={digest.local_time} onChange={(event) => setDigest((current) => ({ ...current, local_time: event.target.value }))} disabled={!digest.is_enabled} className="mt-1 h-10 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--surface-panel)] px-3 text-sm text-[var(--text-primary)] disabled:opacity-50" /></label>
+                                    <label className="text-xs font-medium text-[var(--text-muted)]">Time zone<input value={digest.timezone} onChange={(event) => setDigest((current) => ({ ...current, timezone: event.target.value }))} disabled={!digest.is_enabled} placeholder="America/Toronto" className="mt-1 h-10 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--surface-panel)] px-3 text-sm text-[var(--text-primary)] disabled:opacity-50" /></label>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-4">
                         <h2 className="text-sm font-bold text-white/40 uppercase tracking-widest">Surface Style</h2>
                         <div className="grid gap-3 sm:grid-cols-2">
                             {APP_APPEARANCE_OPTIONS.map((appearance) => {
@@ -192,10 +253,11 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
 
                         <div className="mt-5 flex shrink-0 gap-4 sm:mt-8">
                             <Button
-                                onClick={onClose}
+                                onClick={() => void saveAndClose()}
+                                disabled={digestSaving}
                                 className="on-accent theme-accent-surface h-12 flex-1 rounded-2xl font-bold"
                             >
-                                Save Changes
+                                {digestSaving && <Loader2 className="size-4 animate-spin" />} Save Changes
                             </Button>
                         </div>
                     </CardContent>

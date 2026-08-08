@@ -1184,6 +1184,28 @@ export interface AlertRequest {
   is_active?: boolean;
 }
 
+export type AlertUpdateRequest = Partial<AlertRequest>;
+
+export interface NewsDigestPreference {
+  user_id: string;
+  email?: string | null;
+  is_enabled: boolean;
+  timezone: string;
+  local_time: string;
+  max_symbols: number;
+  next_run_at?: string | null;
+  last_sent_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NewsDigestPreferenceRequest {
+  is_enabled: boolean;
+  timezone: string;
+  local_time: string;
+  max_symbols: number;
+}
+
 export interface AlertEvent {
   id: string;
   alert_id: string;
@@ -1728,9 +1750,20 @@ export const api = {
   createAlert: (payload: AlertRequest) =>
     post<Alert>("/api/v1/alerts", payload),
 
+  updateAlert: (alertId: string, payload: AlertUpdateRequest) =>
+    patch<Alert>(`/api/v1/alerts/${encodeURIComponent(alertId)}`, payload),
+
+  deleteAlert: (alertId: string) =>
+    del<void>(`/api/v1/alerts/${encodeURIComponent(alertId)}`),
+
   alertEvents: () => get<AlertEvent[]>("/api/v1/alerts/events"),
 
   evaluateAlerts: () => post<{ evaluated: number; triggered: number }>("/api/v1/alerts/evaluate", {}),
+
+  newsDigestPreferences: () => get<NewsDigestPreference>("/api/v1/news-digest/preferences"),
+
+  updateNewsDigestPreferences: (payload: NewsDigestPreferenceRequest) =>
+    put<NewsDigestPreference>("/api/v1/news-digest/preferences", payload),
 
   portfolioRisk: (portfolioId: string, book?: Exclude<PositionBook, "unclassified">) =>
     get<RiskSnapshotResult>(`/api/v1/risk/portfolios/${encodeURIComponent(portfolioId)}${book ? `?book=${encodeURIComponent(book)}` : ""}`),

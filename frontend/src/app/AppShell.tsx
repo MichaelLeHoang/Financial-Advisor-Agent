@@ -83,6 +83,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("settings") === "news-digest") setIsSettingsOpen(true);
+  }, [pathname]);
+
+  useEffect(() => {
     const stored = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (!stored) return;
 
