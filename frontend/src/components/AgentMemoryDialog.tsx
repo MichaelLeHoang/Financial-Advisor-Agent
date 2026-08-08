@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Brain, Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Brain, Check, ChevronDown, Info, Pencil, Plus, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import type { MemoryCategory, UserMemory } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { showToast } from "@/components/ui/toast";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 const CATEGORY_OPTIONS: Array<{ value: MemoryCategory; label: string }> = [
   { value: "investment_horizon", label: "Investment horizon" },
@@ -34,6 +35,31 @@ const CATEGORY_OPTIONS: Array<{ value: MemoryCategory; label: string }> = [
   { value: "communication_preference", label: "Communication style" },
   { value: "trading_rule", label: "Trading rule" },
 ];
+
+function MemoryCategorySelect({ value, onChange }: { value: MemoryCategory; onChange: (value: MemoryCategory) => void }) {
+  const selected = CATEGORY_OPTIONS.find((option) => option.value === value)?.label ?? value;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={(
+          <button type="button" aria-label="Memory category" className="flex h-9 min-w-0 w-full items-center justify-between rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-2 text-left text-sm text-[var(--text-primary)] outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50">
+            <span className="truncate">{selected}</span>
+            <ChevronDown className="ml-2 size-3.5 shrink-0 text-[var(--text-subtle)]" />
+          </button>
+        )}
+      />
+      <DropdownMenuContent side="bottom" align="start" sideOffset={6} className="w-56 rounded-xl p-1.5">
+        {CATEGORY_OPTIONS.map((option) => (
+          <DropdownMenuItem key={option.value} onClick={() => onChange(option.value)} className="h-9 rounded-lg px-2 text-sm">
+            <span className="grid size-4 place-items-center">{option.value === value && <Check className="size-3.5" />}</span>
+            {option.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function MemoryCandidateCard({
   memory,
@@ -194,13 +220,23 @@ export default function AgentMemoryDialog({
         <DialogContent className="max-w-2xl p-0 sm:w-[min(92vw,680px)]">
           <DialogHeader className="border-b border-[var(--theme-border)] px-5 pb-4 pt-5 pr-14">
             <DialogTitle className="flex items-center gap-2"><Brain className="size-5 text-indigo-primary" />AI Desk memory</DialogTitle>
-            <DialogDescription>Sabi uses only memories you approve. Live market and account data always come from their source services.</DialogDescription>
+            <DialogDescription className="flex items-center gap-2">
+              <span>Memory controls</span>
+              <span className="group relative inline-flex">
+                <button type="button" aria-label="About memory privacy" className="grid size-4 place-items-center rounded-full text-[var(--text-muted)] outline-none transition-colors hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-indigo-primary/50">
+                  <Info className="size-4" aria-hidden="true" />
+                </button>
+                <span role="tooltip" className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-72 rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-popover-strong)] p-3 text-xs leading-5 text-[var(--text-primary)] opacity-0 shadow-[var(--shadow-tooltip)] transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                  Sabi uses only memories you approve. Live market and account data always come from their source services.
+                </span>
+              </span>
+            </DialogDescription>
           </DialogHeader>
           <div className="max-h-[70vh] space-y-5 overflow-y-auto px-5 py-4">
             <div className="flex items-center justify-between gap-4 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-4">
               <div><p className="text-sm font-semibold text-[var(--text-primary)]">Use personal memory</p><p className="mt-1 text-xs text-[var(--text-muted)]">Turning this off keeps saved memories but excludes them from answers.</p></div>
-              <button type="button" role="switch" aria-checked={enabled} onClick={() => void toggle()} className={`relative h-7 w-12 shrink-0 rounded-full border transition-colors duration-150 motion-reduce:transition-none ${enabled ? "border-indigo-primary bg-indigo-primary" : "border-[var(--theme-border-strong)] bg-[var(--surface-control)]"}`}>
-                <span className={`absolute top-1 size-5 rounded-full bg-white transition-transform duration-150 motion-reduce:transition-none ${enabled ? "translate-x-5" : "translate-x-1"}`} />
+              <button type="button" role="switch" aria-label="Use personal memory" aria-checked={enabled} onClick={() => void toggle()} className={`relative h-7 w-12 shrink-0 rounded-full border transition-colors duration-150 motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-card)] ${enabled ? "border-indigo-primary bg-indigo-primary" : "border-[var(--theme-border-strong)] bg-[var(--surface-control)]"}`}>
+                <span className={`absolute left-1 top-1 size-5 rounded-full bg-white shadow-sm transition-transform duration-150 motion-reduce:transition-none ${enabled ? "translate-x-5" : "translate-x-0"}`} />
                 <span className="sr-only">{enabled ? "Disable memory" : "Enable memory"}</span>
               </button>
             </div>
@@ -209,7 +245,7 @@ export default function AgentMemoryDialog({
 
             <section className="space-y-2">
               <div className="flex items-center justify-between"><h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-subtle)]">Saved memories</h3><Button size="sm" variant="outline" className="h-8 rounded-lg text-xs" onClick={() => setAdding((current) => !current)}><Plus className="size-3.5" /> Add</Button></div>
-              {adding && <div className="grid gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-3 sm:grid-cols-[180px_1fr_auto]"><select aria-label="Memory category" value={category} onChange={(event) => setCategory(event.target.value as MemoryCategory)} className="h-9 rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-2 text-sm">{CATEGORY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><input aria-label="Memory description" value={label} onChange={(event) => setLabel(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void add(); }} placeholder="What should Sabi remember?" className="h-9 rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-3 text-sm" /><Button size="sm" className="h-9 rounded-lg" disabled={!label.trim()} onClick={() => void add()}>Save</Button></div>}
+              {adding && <div className="grid gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-3 sm:grid-cols-[180px_1fr_auto]"><MemoryCategorySelect value={category} onChange={setCategory} /><input aria-label="Memory description" value={label} onChange={(event) => setLabel(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void add(); }} placeholder="What should Sabi remember?" className="h-9 rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-3 text-sm" /><Button size="sm" className="h-9 rounded-lg" disabled={!label.trim()} onClick={() => void add()}>Save</Button></div>}
               <LoadingRegion
                 loading={loading}
                 label="Loading memories"
