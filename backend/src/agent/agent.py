@@ -587,9 +587,8 @@ class FinancialAdvisorAgent:
 
             asyncio.run(collect_events())
 
-            for tool in ("single_synthesis", "single_final"):
-                if tool not in completed_tools:
-                    completed_tools.append(tool)
+            if "single_synthesis" not in completed_tools:
+                completed_tools.append("single_synthesis")
             progress_callback(
                 {
                     "active_tool": None,
@@ -597,6 +596,10 @@ class FinancialAdvisorAgent:
                     "active_label": "Agent Execution",
                     "message": "Agent response completed.",
                     "activity_detail": "Prepared the response from the completed analysis.",
+                    "completed_summaries": {
+                        "single_scope": "Identified the requested assets, timeframe, and decision context.",
+                        "single_synthesis": "Combined the available context, tool results, risks, and caveats into the response.",
+                    },
                 }
             )
         else:

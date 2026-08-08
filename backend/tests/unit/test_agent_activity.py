@@ -149,3 +149,35 @@ def test_activity_collector_records_safe_detail_and_step_duration(monkeypatch):
         "Returned a neutral view at 72% confidence and flagged 2 risks."
     )
     assert completed[0].duration_ms == 2345
+
+
+def test_activity_collector_uses_clear_single_agent_labels_and_summaries():
+    collector = ActivityEventCollector("run-single", "single")
+    collector.consume(
+        {
+            "active_tool": "single_scope",
+            "completed_tools": [],
+            "activity_detail": "Identifying the request scope.",
+        }
+    )
+
+    events = collector.consume(
+        {
+            "active_tool": None,
+            "completed_tools": ["single_scope", "single_synthesis"],
+            "completed_summaries": {
+                "single_scope": "Identified the requested assets and timeframe.",
+                "single_synthesis": "Combined the available evidence and caveats.",
+            },
+        }
+    )
+
+    completed = [event for event in events if event.type == "step.completed"]
+    assert {event.label for event in completed} == {
+        "Understand the request",
+        "Synthesize findings",
+    }
+    assert {event.description for event in completed} == {
+        "Identified the requested assets and timeframe.",
+        "Combined the available evidence and caveats.",
+    }

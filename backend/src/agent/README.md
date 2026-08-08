@@ -36,4 +36,4 @@ Reuse `data.market_data_service`, `llm.gateway`, `risk`, `quant`, and `saas` rat
 Cover routing, grounding, overview metadata, response structure, bounded personal context, response caching, consensus, queue state, activity ordering/redaction, history ownership, background maintenance, and tool failure behavior with mocked providers.
 
 ## Latest Change
-- Added truthful, resumable agent activity traces for queued and direct chat, including safe phase details, measured durations, sanitized tool summaries, evidence sources, failures, and persisted completion metadata for the compact live-progress UI.
+- Refined single-agent activity traces with clearer user-facing phase names and distinct, safe completion summaries so the activity drawer explains scope and synthesis without exposing private reasoning.

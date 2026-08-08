@@ -35,6 +35,11 @@ _TOOL_INPUT_ALLOWLIST: dict[str, set[str]] = {
     "build_data_snapshot": {"ticker"},
 }
 
+_ACTIVITY_LABELS = {
+    "single_scope": "Understand the request",
+    "single_synthesis": "Synthesize findings",
+}
+
 
 def _compact_text(value: Any, limit: int) -> str:
     text = " ".join(str(value or "").split())
@@ -145,6 +150,10 @@ def activity_category(name: str) -> str:
     ):
         return "market"
     return "system"
+
+
+def activity_label(name: str) -> str:
+    return _ACTIVITY_LABELS.get(name, name.replace("_", " ").title())
 
 
 def _activity_description(update: dict[str, Any]) -> str | None:
@@ -261,7 +270,7 @@ class ActivityEventCollector:
                     (
                         update.get("active_label")
                         if name == active
-                        else name.replace("_", " ").title()
+                        else activity_label(name)
                     ),
                     160,
                 ),
@@ -278,7 +287,7 @@ class ActivityEventCollector:
                     category=activity_category(name),
                     tool_call_id=call_id,
                     tool_name=name,
-                    label=name.replace("_", " ").title(),
+                    label=activity_label(name),
                     status="warning" if warning else "complete",
                     output_summary=sanitize_output_summary(update.get("tool_output")),
                     duration_ms=duration_ms,
@@ -299,7 +308,7 @@ class ActivityEventCollector:
                 step_id=failed_name,
                 category=activity_category(failed_name),
                 label=_compact_text(
-                    update.get("active_label") or failed_name.replace("_", " ").title(),
+                    update.get("active_label") or activity_label(failed_name),
                     160,
                 ),
                 description=error.message,
@@ -315,7 +324,7 @@ class ActivityEventCollector:
                     category=activity_category(failed_name),
                     tool_call_id=call_id,
                     tool_name=failed_name,
-                    label=failed_name.replace("_", " ").title(),
+                    label=activity_label(failed_name),
                     status="error",
                     duration_ms=duration_ms,
                     error=error,
@@ -327,7 +336,7 @@ class ActivityEventCollector:
                 self._started.add(active)
                 self._step_started_at[active] = time.monotonic()
                 label = _compact_text(
-                    update.get("active_label") or active.replace("_", " ").title(), 160
+                    update.get("active_label") or activity_label(active), 160
                 )
                 self._emit(
                     "step.started",
@@ -379,7 +388,7 @@ class ActivityEventCollector:
                 steps[event.step_id] = AgentActivityStepSummary(
                     step_id=event.step_id,
                     category=event.category or "system",
-                    label=event.label or event.step_id.replace("_", " ").title(),
+                    label=event.label or activity_label(event.step_id),
                     description=event.description,
                     status=event.status or "pending",
                     duration_ms=event.duration_ms,
@@ -394,7 +403,7 @@ class ActivityEventCollector:
                     tool_call_id=event.tool_call_id,
                     step_id=event.step_id,
                     tool_name=event.tool_name,
-                    label=event.label or event.tool_name.replace("_", " ").title(),
+                    label=event.label or activity_label(event.tool_name),
                     status=event.status or (previous.status if previous else "pending"),
                     tool_input=(
                         event.tool_input
