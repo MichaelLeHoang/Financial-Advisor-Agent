@@ -46,6 +46,7 @@ import {
     type MarketSymbol,
 } from "@/lib/market-data";
 import InteractiveMarketChart from "@/components/market/InteractiveMarketChart";
+import MarketDiscoveryWidgets from "@/components/market/MarketDiscoveryWidgets";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -515,19 +516,9 @@ export default function MarketPage() {
 
     const openChartForTicker = (ticker: string) => {
         const normalized = normalizeTicker(ticker);
-        const existing = stocks.find((stock) => stock.ticker === normalized);
-        const next = existing ?? createPendingStock(normalized);
-        setSelectedStock(next);
-        setSelectedRange(DEFAULT_MARKET_RANGE);
-        setChartStyle("area");
-        setComparisonSymbols([]);
-
-        fetchQuote(normalized, next)
-            .then((fresh) => {
-                setSelectedStock((current) => current?.ticker === fresh.ticker ? fresh : current);
-                setStocks((current) => current.map((stock) => stock.ticker === fresh.ticker ? fresh : stock));
-            })
-            .catch(() => undefined);
+        const exchange = stocks.find((stock) => stock.ticker === normalized)?.exchange;
+        const query = exchange ? `?exchange=${encodeURIComponent(exchange)}` : "";
+        router.push(`/discover/markets/stocks/${encodeURIComponent(normalized)}${query}`);
     };
 
     const changeChartRange = (range: MarketChartRange) => {
@@ -679,6 +670,8 @@ export default function MarketPage() {
                 </div>
             </div>
 
+            <MarketDiscoveryWidgets />
+
             {stocks.length === 0 ? (
                 <Empty className="min-h-[24rem]">
                     <EmptyTitle>No tickers selected</EmptyTitle>
@@ -699,21 +692,6 @@ export default function MarketPage() {
                     ))}
                 </div>
             )}
-
-            <MarketChartDialog
-                stock={selectedStock}
-                mounted={mounted}
-                range={selectedRange}
-                chartStyle={chartStyle}
-                comparisonSymbols={comparisonSymbols}
-                onRangeChange={changeChartRange}
-                onStyleChange={setChartStyle}
-                onComparisonChange={setComparisonSymbols}
-                onStockLoaded={handleStockLoaded}
-                onOpenChange={(open) => {
-                    if (!open) setSelectedStock(null);
-                }}
-            />
 
             <RemoveTickerDialog
                 stock={pendingRemoval}

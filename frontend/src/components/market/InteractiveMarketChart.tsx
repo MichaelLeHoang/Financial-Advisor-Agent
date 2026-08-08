@@ -204,6 +204,8 @@ export default function InteractiveMarketChart<T extends InteractiveChartPoint>(
       line,
       positive,
       negative,
+      volumePositive: colorWithAlpha(positiveColor, 0.34, "rgba(34, 199, 169, 0.34)"),
+      volumeNegative: colorWithAlpha(negativeColor, 0.34, "rgba(240, 68, 100, 0.34)"),
       areaTop: colorWithAlpha(color, 0.34, "rgba(129, 140, 248, 0.34)"),
       areaBottom: colorWithAlpha(color, 0.04, "rgba(129, 140, 248, 0.04)"),
       compareLines: compareLines.map((lineConfig) => ({
@@ -488,12 +490,12 @@ export default function InteractiveMarketChart<T extends InteractiveChartPoint>(
         priceFormat: { type: "volume" },
         lastValueVisible: false,
         priceLineVisible: false,
-        color: "rgba(99,102,241,0.18)",
+        color: chartColors.volumePositive,
       });
       volumeSeries.setData(data.map((point, index) => ({
         time: pointTime(index),
         value: typeof point.volume === "number" ? point.volume : 0,
-        color: "rgba(99,102,241,0.18)",
+        color: point.price >= (typeof point.open === "number" ? point.open : data[index - 1]?.price ?? point.price) ? chartColors.volumePositive : chartColors.volumeNegative,
       })));
       chart.priceScale("").applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
       seriesRef.current.push(volumeSeries);

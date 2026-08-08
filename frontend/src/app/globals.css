@@ -15,6 +15,15 @@
   }
 }
 
+/* Keep first- and third-party stock analysis panels on the same quiet canvas. */
+.stock-detail-chart-surface {
+  background-color: #121318;
+}
+
+body[data-theme="White"] .stock-detail-chart-surface {
+  background-color: #ffffff;
+}
+
 /* Optional glass surface treatment. Theme controls color; appearance controls material. */
 body[data-appearance="Glass"] {
   --background: rgba(7, 8, 14, 0.68);
