@@ -149,7 +149,7 @@ export function AgentActivitySummary({
           )}
         </span>
 
-        <span className="min-w-0 flex-1">
+        <span className={cn("min-w-0", isRunning ? "flex-1" : "shrink-0")}>
           {isRunning ? (
             <AnimatePresence mode="wait" initial={false}>
               <motion.span
