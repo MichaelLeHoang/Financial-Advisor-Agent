@@ -77,7 +77,7 @@ function useActivityDuration(activity: LiveAgentActivity) {
 
 function ToolRow({ tool }: { tool: AgentToolActivity }) {
   return (
-    <Tool defaultOpen={tool.status === "error"}>
+    <Tool defaultOpen={tool.status === "active" || tool.status === "error" || tool.status === "warning" || Boolean(tool.output_summary)}>
       <ToolHeader type="dynamic-tool" toolName={tool.tool_name} state={toolState(tool)} title={tool.label} />
       <ToolContent>
         {tool.tool_input && <ToolInput input={tool.tool_input} />}
@@ -85,6 +85,29 @@ function ToolRow({ tool }: { tool: AgentToolActivity }) {
       </ToolContent>
     </Tool>
   );
+}
+
+const singleStepCopy: Record<string, { label: string; description: string }> = {
+  single_scope: {
+    label: "Understand the request",
+    description: "Identified the requested assets, timeframe, and decision the response should address.",
+  },
+  single_synthesis: {
+    label: "Synthesize findings",
+    description: "Combined the available context, tool results, risks, and caveats into the response.",
+  },
+  single_final: {
+    label: "Finalize response",
+    description: "Checked the answer structure and prepared it for delivery.",
+  },
+};
+
+function activityStepCopy(step: AgentActivityStep) {
+  const fallback = singleStepCopy[step.step_id];
+  return {
+    label: fallback?.label ?? step.label,
+    description: fallback?.description ?? step.description,
+  };
 }
 
 export function AgentSources({ sources, className }: { sources: AgentActivitySource[]; className?: string }) {
@@ -197,15 +220,16 @@ function ActivityPhase({
   tools: AgentToolActivity[];
   sources: AgentActivitySource[];
 }) {
-  const hasDetails = Boolean(step.description || tools.length || sources.length);
-  const defaultOpen = step.status === "active" || step.status === "error" || step.status === "warning";
+  const copy = activityStepCopy(step);
+  const hasDetails = Boolean(copy.description || tools.length || sources.length);
+  const defaultOpen = hasDetails;
   const [open, setOpen] = useState(defaultOpen);
 
   if (!hasDetails) {
     return (
       <div className="flex min-h-12 gap-3 py-3">
         <span className="mt-0.5"><StepStatusIcon step={step} /></span>
-        <span className="min-w-0 flex-1 text-sm font-medium text-[var(--text-primary)]">{step.label}</span>
+        <span className="min-w-0 flex-1 text-sm font-medium text-[var(--text-primary)]">{copy.label}</span>
         {step.duration_ms != null && <span className="text-xs text-[var(--text-subtle)]">{formatActivityDuration(step.duration_ms)}</span>}
       </div>
     );
@@ -215,12 +239,12 @@ function ActivityPhase({
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger className="group flex min-h-12 w-full items-start gap-3 rounded-lg py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50">
         <span className="mt-0.5"><StepStatusIcon step={step} /></span>
-        <span className="min-w-0 flex-1 text-sm font-medium text-[var(--text-primary)]">{step.label}</span>
+        <span className="min-w-0 flex-1 text-sm font-medium text-[var(--text-primary)]">{copy.label}</span>
         {step.duration_ms != null && <span className="mt-0.5 text-xs text-[var(--text-subtle)]">{formatActivityDuration(step.duration_ms)}</span>}
         <ChevronDown className={cn("mt-0.5 size-4 shrink-0 text-[var(--text-subtle)] transition-transform duration-150 motion-reduce:transition-none", open && "rotate-180")} aria-hidden="true" />
       </CollapsibleTrigger>
       <CollapsibleContent className="ml-[1.625rem] border-l border-[var(--theme-border)] pb-3 pl-4 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0">
-        {step.description && <p className="pb-3 text-sm leading-6 text-[var(--text-subtle)]">{step.description}</p>}
+        {copy.description && <p className="pb-3 text-sm leading-6 text-[var(--text-secondary)]">{copy.description}</p>}
         <div className="space-y-2">
           {tools.map((tool) => <ToolRow key={tool.tool_call_id} tool={tool} />)}
           {sources.length > 0 && <AgentSources sources={sources} />}
@@ -246,13 +270,19 @@ export function AgentActivityDrawer({
 
   const unassignedTools = activity.tools.filter((tool) => !tool.step_id || !assignedToolIds.has(tool.step_id));
   const unassignedSources = activity.sources.filter((source) => !source.step_id || !assignedToolIds.has(source.step_id));
+  const completedSteps = steps.filter((step) => step.status === "complete" || step.status === "warning").length;
+  const runSummary = [
+    `${completedSteps} of ${steps.length} steps`,
+    `${activity.tools.length} tool${activity.tools.length === 1 ? "" : "s"}`,
+    `${activity.sources.length} source${activity.sources.length === 1 ? "" : "s"}`,
+  ].join(" · ");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!inset-y-0 !left-auto !right-0 !top-0 !h-dvh !max-h-dvh !w-full !max-w-[480px] !translate-x-0 !translate-y-0 !rounded-none border-y-0 border-r-0 sm:!w-[min(480px,100vw)]" data-testid="agent-activity-drawer">
+      <DialogContent className="!inset-y-0 !left-auto !right-0 !top-0 !h-dvh !max-h-dvh !w-full !max-w-[480px] !translate-x-0 !translate-y-0 !scale-100 !rounded-none border-y-0 border-r-0 transition-[transform] duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)] data-[ending-style]:!translate-x-full data-[starting-style]:!translate-x-full motion-reduce:transition-none motion-reduce:data-[ending-style]:!translate-x-0 motion-reduce:data-[starting-style]:!translate-x-0 sm:!w-[min(480px,100vw)]" data-testid="agent-activity-drawer">
         <DialogHeader className="border-b border-[var(--theme-border)] px-5 pb-5 pt-5 pr-16">
           <DialogTitle className="text-lg font-medium">Activity <span className="px-1.5 text-[var(--text-subtle)]">·</span> {duration}</DialogTitle>
-          <DialogDescription className="sr-only">Live analysis phases, tool activity, warnings, and sources for this response.</DialogDescription>
+          <DialogDescription>{runSummary}</DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">

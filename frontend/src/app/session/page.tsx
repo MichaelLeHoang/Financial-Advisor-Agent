@@ -524,6 +524,8 @@ export default function ChatPage() {
   const [memoryAnnouncement, setMemoryAnnouncement] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const uploadMenuRef = useRef<HTMLDivElement>(null);
+  const uploadTriggerRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const appliedPromptRef = useRef<string | null>(null);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -655,12 +657,33 @@ export default function ChatPage() {
     const handleClickOutside = (event: globalThis.MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
         if (!input) setIsActive(false);
-        setUploadMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [input]);
+
+  useEffect(() => {
+    if (!uploadMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!uploadMenuRef.current?.contains(target) && !uploadTriggerRef.current?.contains(target)) {
+        setUploadMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setUploadMenuOpen(false);
+        uploadTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [uploadMenuOpen]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -1370,6 +1393,7 @@ export default function ChatPage() {
           >
             <div className="relative flex items-center gap-2">
               <button
+                ref={uploadTriggerRef}
                 type="button"
                 aria-label="Add files"
                 aria-expanded={uploadMenuOpen}
@@ -1440,12 +1464,15 @@ export default function ChatPage() {
             <AnimatePresence>
               {uploadMenuOpen && (
                 <motion.div
-                  initial={{ opacity: 0, y: -8, scale: 0.98, filter: "blur(8px)" }}
-                  animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-                  exit={{ opacity: 0, y: -8, scale: 0.98, filter: "blur(8px)" }}
-                  transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                  ref={uploadMenuRef}
+                  role="group"
+                  aria-label="Attach files"
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: placement === "dock" ? 8 : -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: placement === "dock" ? 8 : -8, scale: 0.98 }}
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.18, ease: [0.16, 1, 0.3, 1] }}
                   className={cn(
-                    "absolute left-0 right-0 z-40 rounded-[1.45rem] border border-white/[0.08] bg-[#202124]/95 p-2 shadow-[0_24px_70px_rgba(0,0,0,0.46)] backdrop-blur-xl",
+                    "absolute left-0 z-40 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover-strong)] p-2 shadow-[var(--shadow-popover)]",
                     placement === "dock" ? "bottom-[calc(100%+0.75rem)]" : "top-[calc(100%+0.75rem)]"
                   )}
                   onClick={(event) => event.stopPropagation()}

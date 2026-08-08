@@ -97,6 +97,52 @@ test("prompt navigation removes movement for reduced-motion users", async ({ pag
   await expect(menu).toHaveCSS("transform", "none");
 });
 
+test("attachment picker closes when focus moves elsewhere or Escape is pressed", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("financial-advisor.coverSeen", "true"));
+  await page.goto("/session");
+
+  const trigger = page.getByRole("button", { name: "Add files" });
+  await trigger.click();
+  await expect(page.getByRole("group", { name: "Attach files" })).toBeVisible();
+
+  await page.getByRole("textbox").click();
+  await expect(page.getByRole("group", { name: "Attach files" })).toHaveCount(0);
+
+  await trigger.click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("group", { name: "Attach files" })).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
+test("recent conversations stay inside the viewport and scroll to the final thread", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "The compact recent-conversations popover is desktop-only.");
+  await page.addInitScript(() => window.localStorage.setItem("financial-advisor.coverSeen", "true"));
+  const sessions = Array.from({ length: 16 }, (_, index) => ({
+    session_id: `recent-${index + 1}`,
+    title: `Conversation ${index + 1}`,
+    message_count: 2,
+    last_active: new Date(Date.UTC(2026, 7, 8, 12, 0, 16 - index)).toISOString(),
+  }));
+  await page.route("**/api/v1/agent/sessions", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(sessions) });
+  });
+
+  await page.goto("/session");
+  await page.getByRole("button", { name: "Recents" }).click();
+  const menu = page.getByRole("menu", { name: "Recent conversations" });
+  await expect(page.getByText("Recent conversations", { exact: true })).toBeVisible();
+  const finalThread = page.getByRole("link", { name: "Conversation 16" });
+  await finalThread.scrollIntoViewIfNeeded();
+  await expect(finalThread).toBeVisible();
+  await expect.poll(() => menu.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return rect.top >= 0 && rect.bottom <= window.innerHeight;
+  })).toBe(true);
+
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+});
+
 test("AI desk shows a thinking orb while an analysis is queued", async ({ page }) => {
   await page.addInitScript(() => window.localStorage.setItem("financial-advisor.coverSeen", "true"));
   await page.route("**/api/v1/agent/chat/jobs", async (route) => {
@@ -235,7 +281,9 @@ test("AI desk uses a compact completed activity row and borderless assistant res
   const drawer = page.getByTestId("agent-activity-drawer");
   await expect(drawer).toBeVisible();
   await expect(drawer.getByText("Activity", { exact: false }).first()).toBeVisible();
+  await expect(drawer.getByText("1 of 1 steps · 0 tools · 0 sources", { exact: true })).toBeVisible();
   await expect(drawer.getByText("Evaluated downside risk", { exact: true })).toBeVisible();
+  await expect(drawer.getByText("Calculated drawdown, VaR, and volatility exposure.", { exact: true })).toBeVisible();
   await expect(drawer.getByText("Comparing portfolio impact", { exact: true })).toHaveCount(0);
   await expect(drawer.getByText("Memory", { exact: true })).toHaveCount(0);
 });

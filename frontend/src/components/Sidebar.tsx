@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ComponentType } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
     Atom,
     BookOpen,
@@ -448,24 +448,47 @@ function MiniSidebar({
     onAlertsClick?: () => void;
 }) {
     const [moreOpen, setMoreOpen] = useState(false);
+    const reduceMotion = useReducedMotion();
     const recentsRef = useRef<HTMLDivElement>(null);
+    const recentsPopupRef = useRef<HTMLDivElement>(null);
+    const [recentsPosition, setRecentsPosition] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null);
     const moreActive = moreNav.some((item) => path === item.href);
 
     useEffect(() => {
         if (!recentsOpen) return;
         const handlePointerDown = (event: PointerEvent) => {
-            if (!recentsRef.current?.contains(event.target as Node)) onToggleRecents();
+            const target = event.target as Node;
+            if (!recentsRef.current?.contains(target) && !recentsPopupRef.current?.contains(target)) onToggleRecents();
         };
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") onToggleRecents();
         };
+        const updatePosition = () => {
+            const rect = recentsRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            const gutter = 16;
+            const width = Math.min(288, window.innerWidth - gutter * 2);
+            const maxHeight = Math.min(448, window.innerHeight - gutter * 2);
+            const left = Math.min(rect.right + 8, window.innerWidth - width - gutter);
+            const top = Math.min(Math.max(gutter, rect.top), window.innerHeight - maxHeight - gutter);
+            setRecentsPosition({ left: Math.max(gutter, left), top: Math.max(gutter, top), width, maxHeight });
+        };
+        updatePosition();
         document.addEventListener("pointerdown", handlePointerDown);
         document.addEventListener("keydown", handleKeyDown);
+        window.addEventListener("resize", updatePosition);
+        window.addEventListener("scroll", updatePosition, true);
         return () => {
             document.removeEventListener("pointerdown", handlePointerDown);
             document.removeEventListener("keydown", handleKeyDown);
+            window.removeEventListener("resize", updatePosition);
+            window.removeEventListener("scroll", updatePosition, true);
         };
     }, [onToggleRecents, recentsOpen]);
+
+    useEffect(() => {
+        if (!recentsOpen) setRecentsPosition(null);
+    }, [recentsOpen]);
 
     return (
         <div className="workspace-side-rail relative flex h-full flex-col items-center rounded-full border border-[var(--theme-border)] bg-[var(--surface-header)] py-4 shadow-[var(--shadow-sidebar)] backdrop-blur-xl">
@@ -597,21 +620,25 @@ function MiniSidebar({
                     {!recentsOpen && <MiniTooltip label="Recent conversations" />}
                 </button>
 
-                <AnimatePresence>
-                    {recentsOpen && (
+                {typeof document !== "undefined" && createPortal(
+                  <AnimatePresence>
+                    {recentsOpen && recentsPosition && (
                         <motion.div
+                            ref={recentsPopupRef}
                             role="menu"
-                            initial={{ opacity: 0, x: -8, scale: 0.98 }}
+                            aria-label="Recent conversations"
+                            initial={reduceMotion ? false : { opacity: 0, x: -8, scale: 0.98 }}
                             animate={{ opacity: 1, x: 0, scale: 1 }}
-                            exit={{ opacity: 0, x: -8, scale: 0.98 }}
-                            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                            className="absolute left-12 top-0 w-72 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
+                            exit={reduceMotion ? { opacity: 1 } : { opacity: 0, x: -8, scale: 0.98 }}
+                            transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.16, 1, 0.3, 1] }}
+                            style={recentsPosition}
+                            className="fixed z-[100] flex flex-col overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
                         >
-                            <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/38">Recent conversations</div>
+                            <div className="shrink-0 px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-subtle)]">Recent conversations</div>
                             {sessionsLoading && sessions.length === 0 ? (
                                 <ChatHistorySkeleton compact count={4} />
                             ) : sessions.length > 0 ? (
-                                <div className="max-h-72 overflow-y-auto pr-1">
+                                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-1 pr-1 [scrollbar-color:var(--text-subtle)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-track]:bg-transparent">
                                     <AnimatePresence initial={false}>
                                         {sessions.map((session) => (
                                             <RecentThreadRow
@@ -630,7 +657,9 @@ function MiniSidebar({
                             )}
                         </motion.div>
                     )}
-                </AnimatePresence>
+                  </AnimatePresence>,
+                  document.body
+                )}
             </div>
 
             <div className="mt-auto flex flex-col items-center gap-2">
