@@ -109,7 +109,7 @@ export default function QuanforaStockChart({ symbol, className }: { symbol: stri
   const [showSma, setShowSma] = useState(true);
   const [showEma, setShowEma] = useState(true);
   const [showVwap, setShowVwap] = useState(false);
-  const [measure, setMeasure] = useState(false);
+  const [measure, setMeasure] = useState(true);
   const [fitKey, setFitKey] = useState(0);
 
   useEffect(() => {

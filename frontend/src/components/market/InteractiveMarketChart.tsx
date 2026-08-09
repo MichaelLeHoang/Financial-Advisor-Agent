@@ -615,7 +615,7 @@ function MeasurementOverlay({
   const formatter = axisFormatter ?? ((value: number) => value.toFixed(2));
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-10">
+    <div className="pointer-events-none absolute inset-0 z-10" data-testid="chart-measurement">
       <div className="absolute bottom-0 top-0 w-px bg-indigo-200/80" style={{ left: measurement.startX }} />
       <div className="absolute bottom-0 top-0 w-px bg-indigo-200/80" style={{ left: measurement.endX }} />
       <div className="absolute bottom-0 top-0 border-x border-indigo-300/20 bg-indigo-300/[0.055]" style={{ left, width }} />

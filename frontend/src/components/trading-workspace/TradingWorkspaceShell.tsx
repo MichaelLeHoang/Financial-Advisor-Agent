@@ -248,7 +248,7 @@ function PriceChartWidget({ symbol, plan, timeframe, setTimeframe, chartEngine, 
   const [showSma, setShowSma] = useState(true);
   const [showEma, setShowEma] = useState(false);
   const [showVwap, setShowVwap] = useState(false);
-  const [activeTool, setActiveTool] = useState<"crosshair" | "measure">("crosshair");
+  const [activeTool, setActiveTool] = useState<"crosshair" | "measure">("measure");
   const [showLevels, setShowLevels] = useState(true);
   const [fitKey, setFitKey] = useState(0);
   const [quote, setQuote] = useState<MarketQuote | null>(null);

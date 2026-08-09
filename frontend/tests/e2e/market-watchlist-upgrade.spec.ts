@@ -39,6 +39,18 @@ test("market discovery and stock details support the heatmap and both chart engi
   await expect(page.getByRole("heading", { name: "AAPL stock details" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Price chart" })).toBeVisible();
   await expect(page.getByRole("region", { name: "AAPL Quanfora chart" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Disable price measurement" })).toHaveAttribute("aria-pressed", "true");
+  const quanforaChart = page.getByTestId("interactive-market-chart");
+  const chartBounds = await quanforaChart.boundingBox();
+  expect(chartBounds).not.toBeNull();
+  if (chartBounds) {
+    await page.mouse.move(chartBounds.x + chartBounds.width * 0.3, chartBounds.y + chartBounds.height * 0.55);
+    await page.mouse.down();
+    await page.mouse.move(chartBounds.x + chartBounds.width * 0.7, chartBounds.y + chartBounds.height * 0.55, { steps: 6 });
+    await page.mouse.up();
+  }
+  await expect(quanforaChart.getByTestId("chart-measurement")).toBeVisible();
+  await expect(quanforaChart.getByText(/bars$/)).toBeVisible();
   await page.getByRole("button", { name: /Chart type:/ }).hover();
   await expect(page.getByRole("tooltip", { name: /chart · Switch to/ })).toBeVisible();
   await page.getByRole("button", { name: "TradingView" }).click();
