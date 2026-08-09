@@ -5,7 +5,7 @@ import type { ChangeEvent, ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Brain, Check, ChevronDown, Clipboard, ClipboardList, FileText, Image, Loader2, Paperclip, Pencil, PieChart, RotateCcw, Send, SlidersHorizontal, ThumbsDown, ThumbsUp, TableProperties, TrendingUp } from "lucide-react";
-import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import { motion, AnimatePresence, useReducedMotion, type Variants } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
 import type { AgentActivitySource, AgentActivityTrace, AiDeskMode, ChatJobProgress, ChatJobStatusResponse, ChatResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, GroundingMetadata, MemoryContextUsage, Overview, ResearchDepth, ResearchReportType, SabiCapability, UserMemory } from "@/lib/api";
 import { notifyCompletion, requestCompletionNotification } from "@/lib/completion-notifications";
@@ -446,6 +446,30 @@ const PLACEHOLDERS = [
   "What are the risks of holding SMCI right now?",
 ];
 
+const PLACEHOLDER_CONTAINER_VARIANTS: Variants = {
+  initial: {},
+  animate: { transition: { staggerChildren: 0.006 } },
+  exit: {
+    transition: { staggerChildren: 0.003, staggerDirection: -1 },
+  },
+};
+
+const PLACEHOLDER_LETTER_VARIANTS: Variants = {
+  initial: { opacity: 0, filter: "blur(8px)", y: 6 },
+  animate: {
+    opacity: 1,
+    filter: "blur(0px)",
+    y: 0,
+    transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
+  },
+  exit: {
+    opacity: 0,
+    filter: "blur(8px)",
+    y: -6,
+    transition: { duration: 0.14, ease: [0.4, 0, 1, 1] },
+  },
+};
+
 function sabiCapabilityLabel(capability: SabiCapability) {
   return capability === "trade_proposal"
     ? "Trade Proposal"
@@ -643,20 +667,27 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (isActive || input) return;
-    const interval = setInterval(() => {
+    let revealTimer: number | undefined;
+    const interval = window.setInterval(() => {
       setShowPlaceholder(false);
-      setTimeout(() => {
+      revealTimer = window.setTimeout(() => {
         setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDERS.length);
         setShowPlaceholder(true);
-      }, 400);
+      }, prefersReducedMotion ? 0 : 400);
     }, 4000);
-    return () => clearInterval(interval);
-  }, [isActive, input]);
+    return () => {
+      window.clearInterval(interval);
+      if (revealTimer !== undefined) window.clearTimeout(revealTimer);
+    };
+  }, [isActive, input, prefersReducedMotion]);
 
   useEffect(() => {
     const handleClickOutside = (event: globalThis.MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-        if (!input) setIsActive(false);
+        if (!input) {
+          setIsActive(false);
+          setShowPlaceholder(true);
+        }
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -1425,11 +1456,37 @@ export default function ChatPage() {
                   )}
                 />
                 <div className="absolute inset-0 pointer-events-none flex items-center px-3">
-                  {showPlaceholder && !isActive && !input && (
-                    <span className="max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-5 text-white/24">
-                      {PLACEHOLDERS[placeholderIndex]}
-                    </span>
-                  )}
+                  <AnimatePresence mode="wait" initial={false}>
+                    {showPlaceholder && !isActive && !input && (
+                      prefersReducedMotion ? (
+                        <span
+                          key={placeholderIndex}
+                          className="block max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-5 text-white/24"
+                        >
+                          {PLACEHOLDERS[placeholderIndex]}
+                        </span>
+                      ) : (
+                        <motion.span
+                          key={placeholderIndex}
+                          className="block max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-5 text-white/24"
+                          variants={PLACEHOLDER_CONTAINER_VARIANTS}
+                          initial="initial"
+                          animate="animate"
+                          exit="exit"
+                        >
+                          {Array.from(PLACEHOLDERS[placeholderIndex]).map((character, index) => (
+                            <motion.span
+                              key={`${character}-${index}`}
+                              className="inline-block"
+                              variants={PLACEHOLDER_LETTER_VARIANTS}
+                            >
+                              {character === " " ? "\u00a0" : character}
+                            </motion.span>
+                          ))}
+                        </motion.span>
+                      )
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
 
