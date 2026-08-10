@@ -518,7 +518,8 @@ export default function MarketPage() {
         const normalized = normalizeTicker(ticker);
         const exchange = stocks.find((stock) => stock.ticker === normalized)?.exchange;
         const query = exchange ? `?exchange=${encodeURIComponent(exchange)}` : "";
-        router.push(`/discover/markets/stocks/${encodeURIComponent(normalized)}${query}`);
+        const detailRoute = /^(BTC|ETH|LTC|DOGE|ADA)-(CAD|USD|USDT)$/i.test(normalized) ? "crypto" : "stocks";
+        router.push(`/discover/markets/${detailRoute}/${encodeURIComponent(normalized)}${query}`);
     };
 
     const changeChartRange = (range: MarketChartRange) => {

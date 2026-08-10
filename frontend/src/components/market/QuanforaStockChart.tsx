@@ -78,16 +78,16 @@ function Metric({ color, label, value }: { color: string; label: string; value: 
   return <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full" style={{ backgroundColor: color }} />{label} <span className="tabular-nums text-[var(--text-primary)]">{value.toFixed(2)}</span></span>;
 }
 
-function ChartTooltip({ point, symbol, indicators }: { point: ChartPoint; symbol: string; indicators: { sma: boolean; ema: boolean; vwap: boolean } }) {
+function ChartTooltip({ point, symbol, currency, indicators }: { point: ChartPoint; symbol: string; currency: string; indicators: { sma: boolean; ema: boolean; vwap: boolean } }) {
   const positive = point.price >= (point.open ?? point.price);
   return (
     <div className="min-w-56 space-y-2 text-xs">
       <div className="flex items-center justify-between gap-4"><strong>{point.label}</strong><span className="font-semibold">{symbol}</span></div>
       <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-[var(--text-muted)]">
-        <span>Open <b className="text-[var(--text-primary)]">{(point.open ?? point.price).toFixed(2)}</b></span>
-        <span>High <b className="text-emerald-400">{(point.high ?? point.price).toFixed(2)}</b></span>
-        <span>Low <b className="text-rose-400">{(point.low ?? point.price).toFixed(2)}</b></span>
-        <span>Close <b className={positive ? "text-emerald-400" : "text-rose-400"}>{point.price.toFixed(2)}</b></span>
+        <span>Open <b className="text-[var(--text-primary)]">{formatCurrency(point.open ?? point.price, currency)}</b></span>
+        <span>High <b className="text-emerald-400">{formatCurrency(point.high ?? point.price, currency)}</b></span>
+        <span>Low <b className="text-rose-400">{formatCurrency(point.low ?? point.price, currency)}</b></span>
+        <span>Close <b className={positive ? "text-emerald-400" : "text-rose-400"}>{formatCurrency(point.price, currency)}</b></span>
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-[var(--theme-border)] pt-2 text-[var(--text-muted)]">
         {indicators.sma && <Metric color="#818cf8" label="SMA 20" value={point.sma20} />}
@@ -99,7 +99,11 @@ function ChartTooltip({ point, symbol, indicators }: { point: ChartPoint; symbol
   );
 }
 
-export default function QuanforaStockChart({ symbol, className }: { symbol: string; className?: string }) {
+function formatCurrency(value: number, currency: string) {
+  return new Intl.NumberFormat("en-CA", { style: "currency", currency: currency === "USDT" ? "USD" : currency, maximumFractionDigits: value >= 1_000 ? 0 : 2 }).format(value).replace("US$", currency === "USDT" ? "USDT " : "US$");
+}
+
+export default function QuanforaStockChart({ symbol, displaySymbol = symbol, currency = "USD", className }: { symbol: string; displaySymbol?: string; currency?: string; className?: string }) {
   const [range, setRange] = useState<ChartRange>("6M");
   const [mode, setMode] = useState<InteractiveChartMode>("candle");
   const [quote, setQuote] = useState<MarketQuote | null>(null);
@@ -137,11 +141,11 @@ export default function QuanforaStockChart({ symbol, className }: { symbol: stri
   ];
 
   return (
-    <section aria-label={`${symbol} Quanfora chart`} className={cn("overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)]", className)}>
+    <section aria-label={`${displaySymbol} Quanfora chart`} className={cn("overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)]", className)}>
       <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-[var(--theme-border)] px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-indigo-primary/15 text-indigo-300"><Crosshair className="size-4" /></span>
-          <div><div className="flex items-center gap-2"><strong>{symbol}</strong>{quote && <span className="tabular-nums">${last.toFixed(2)}</span>}</div><p className={cn("text-xs tabular-nums", change >= 0 ? "text-emerald-400" : "text-rose-400")}>{change >= 0 ? "+" : ""}{change.toFixed(2)}% over {range}</p></div>
+          <div><div className="flex items-center gap-2"><strong>{displaySymbol}</strong>{quote && <span className="tabular-nums">{formatCurrency(last, currency)}</span>}</div><p className={cn("text-xs tabular-nums", change >= 0 ? "text-emerald-400" : "text-rose-400")}>{change >= 0 ? "+" : ""}{change.toFixed(2)}% over {range}</p></div>
         </div>
         <div className="flex flex-wrap items-center gap-1">
           <ToolHint label={`${MODE_LABELS[mode]} chart · Switch to ${MODE_LABELS[nextMode]}`}><Button type="button" size="icon" variant="ghost" aria-label={`Chart type: ${MODE_LABELS[mode]}`} className={TOOL_BUTTON_CLASS} onClick={() => setMode(nextMode)}>{mode === "candle" || mode === "bar" ? <CandlestickChart className="size-4" /> : <LineChart className="size-4" />}</Button></ToolHint>
@@ -171,7 +175,7 @@ export default function QuanforaStockChart({ symbol, className }: { symbol: stri
 
       <div className="relative h-[520px] sm:h-[620px]">
         {loading && <div role="status" className="absolute inset-0 z-10 grid place-items-center bg-[var(--surface-card)]/80 text-sm text-[var(--text-muted)]"><span><Loader2 className="mr-2 inline size-4 animate-spin" />Loading {symbol} chart</span></div>}
-        {!loading && (error || !data.length) ? <div className="grid h-full place-items-center px-6 text-center text-sm text-[var(--text-muted)]">{error ?? "No price history is available for this range."}</div> : <InteractiveMarketChart data={data} mode={mode} color={change >= 0 ? "#34d399" : "#f87171"} positiveColor="#22c7a9" negativeColor="#f04464" volume={showVolume} overlayLines={overlays} rangeKey={`${symbol}-${range}`} fitKey={fitKey} measurementEnabled={measure} axisFormatter={(value) => `$${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}`} timeFormatter={(label) => formatTime(label, range)} tooltip={(point) => <ChartTooltip point={point} symbol={symbol} indicators={indicators} />} tooltipClassName="rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-popover-strong)] p-3 shadow-[var(--shadow-popover)]" />}
+        {!loading && (error || !data.length) ? <div className="grid h-full place-items-center px-6 text-center text-sm text-[var(--text-muted)]">{error ?? "No price history is available for this range."}</div> : <InteractiveMarketChart data={data} mode={mode} color={change >= 0 ? "#34d399" : "#f87171"} positiveColor="#22c7a9" negativeColor="#f04464" volume={showVolume} overlayLines={overlays} rangeKey={`${symbol}-${range}`} fitKey={fitKey} measurementEnabled={measure} axisFormatter={(value) => formatCurrency(value, currency)} timeFormatter={(label) => formatTime(label, range)} tooltip={(point) => <ChartTooltip point={point} symbol={displaySymbol} currency={currency} indicators={indicators} />} tooltipClassName="rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-popover-strong)] p-3 shadow-[var(--shadow-popover)]" />}
       </div>
       <p className="border-t border-[var(--theme-border)] px-3 py-2 text-[11px] text-[var(--text-subtle)]">Scroll to pan · Ctrl + wheel to zoom · Double-click to fit{measure ? " · Drag to measure" : ""}</p>
     </section>

@@ -869,6 +869,131 @@ export interface MarketQuote {
   provider_status?: Array<Record<string, unknown>>;
 }
 
+export interface CryptoProviderStatus {
+  provider: string;
+  status: string;
+  detail?: string | null;
+  timestamp: string;
+}
+
+export interface CryptoOverview {
+  asset_type: "crypto";
+  base_asset: string;
+  quote_currency: string;
+  provider_symbol: string;
+  name: string;
+  venue: string;
+  price: number;
+  change_24h?: number | null;
+  high_24h?: number | null;
+  low_24h?: number | null;
+  volume_24h?: number | null;
+  market_cap?: number | null;
+  market_cap_rank?: number | null;
+  circulating_supply?: number | null;
+  total_supply?: number | null;
+  max_supply?: number | null;
+  ath?: number | null;
+  ath_date?: string | null;
+  ath_drawdown_pct?: number | null;
+  updated_at: string;
+  data_sources: string[];
+  provider_status: CryptoProviderStatus[];
+}
+
+export interface CryptoSeriesPoint {
+  timestamp: string;
+  price: number;
+  volume?: number | null;
+  market_cap?: number | null;
+  sma_50?: number | null;
+  sma_100?: number | null;
+  sma_200?: number | null;
+}
+
+export interface CryptoSeries {
+  base_asset: string;
+  quote_currency: string;
+  range: string;
+  visible_from: string;
+  points: CryptoSeriesPoint[];
+  updated_at: string;
+  data_sources: string[];
+  provider_status: CryptoProviderStatus[];
+}
+
+export interface FearGreedPoint {
+  timestamp: string;
+  value: number;
+  classification: string;
+}
+
+export interface FearGreed {
+  range: string;
+  current_value?: number | null;
+  current_classification?: string | null;
+  daily_change?: number | null;
+  points: FearGreedPoint[];
+  updated_at: string;
+  data_sources: string[];
+  provider_status: CryptoProviderStatus[];
+}
+
+export interface HalvingCycle {
+  previous_halving_date: string;
+  previous_halving_height: number;
+  latest_block_height: number;
+  next_halving_height: number;
+  next_halving_number: number;
+  progress_pct: number;
+  blocks_completed: number;
+  blocks_remaining: number;
+  estimated_days_remaining: number;
+  estimated_next_halving_date: string;
+  average_block_minutes: number;
+  updated_at: string;
+  data_sources: string[];
+  provider_status: CryptoProviderStatus[];
+}
+
+export interface CryptoContext {
+  base_asset: string;
+  quote_currency: string;
+  fear_greed?: FearGreed | null;
+  halving?: HalvingCycle | null;
+  network?: {
+    hash_rate?: number | null;
+    difficulty?: number | null;
+    transactions_24h?: number | null;
+    fees_btc_24h?: number | null;
+    blocks_mined_24h?: number | null;
+  } | null;
+  mempool?: {
+    block_height?: number | null;
+    unconfirmed_transactions?: number | null;
+    virtual_size_bytes?: number | null;
+    total_fees_btc?: number | null;
+    fastest_fee_sats_vb?: number | null;
+    half_hour_fee_sats_vb?: number | null;
+    hour_fee_sats_vb?: number | null;
+    economy_fee_sats_vb?: number | null;
+    minimum_fee_sats_vb?: number | null;
+  } | null;
+  defi?: {
+    total_value_locked_usd?: number | null;
+    dex_volume_24h_usd?: number | null;
+    top_chains: Array<{ name: string; tvl_usd: number }>;
+  } | null;
+  market?: {
+    bitcoin_dominance_pct?: number | null;
+    total_market_cap_usd?: number | null;
+    total_volume_24h_usd?: number | null;
+  } | null;
+  updated_at: string;
+  data_sources: string[];
+  provider_status: CryptoProviderStatus[];
+}
+
 export interface PaperAccount {
   id: string;
   user_id?: string | null;
@@ -1919,6 +2044,15 @@ export const api = {
 
   marketQuote: (ticker: string, period = "1mo", interval = "1d") =>
     get<MarketQuote>(`/api/v1/market/quote/${encodeURIComponent(ticker)}?period=${period}&interval=${interval}`),
+
+  cryptoOverview: (base: string, quote = "CAD") =>
+    get<CryptoOverview>(`/api/v1/crypto/assets/${encodeURIComponent(base)}/overview?quote=${encodeURIComponent(quote)}`),
+
+  cryptoSeries: (base: string, quote = "CAD", range = "1Y") =>
+    get<CryptoSeries>(`/api/v1/crypto/assets/${encodeURIComponent(base)}/series?quote=${encodeURIComponent(quote)}&range=${encodeURIComponent(range)}`),
+
+  cryptoContext: (base: string, quote = "CAD", sentimentRange = "30D") =>
+    get<CryptoContext>(`/api/v1/crypto/assets/${encodeURIComponent(base)}/context?quote=${encodeURIComponent(quote)}&sentiment_range=${encodeURIComponent(sentimentRange)}`),
 
   marketSearch: (query: string, limit = 12) =>
     get<MarketSymbolSearchResult[]>(`/api/v1/market/search?q=${encodeURIComponent(query)}&limit=${limit}`),

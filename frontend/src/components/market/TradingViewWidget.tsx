@@ -87,11 +87,11 @@ export function tradingViewSymbol(symbol: string, exchange?: string | null) {
     "^GSPTSE": "TSX:TSX",
     "^RUT": "TVC:RUT",
     "^VIX": "CBOE:VIX",
-    "BTC-CAD": "COINBASE:BTCCAD",
-    "ETH-CAD": "COINBASE:ETHCAD",
-    "LTC-CAD": "COINBASE:LTCCAD",
-    "DOGE-CAD": "COINBASE:DOGECAD",
-    "ADA-CAD": "COINBASE:ADACAD",
+    "BTC-CAD": "KRAKEN:BTCCAD",
+    "ETH-CAD": "KRAKEN:ETHCAD",
+    "LTC-CAD": "KRAKEN:LTCCAD",
+    "DOGE-CAD": "KRAKEN:DOGECAD",
+    "ADA-CAD": "KRAKEN:ADACAD",
     "YM=F": "CBOT_MINI:YM1!",
     "ES=F": "CME_MINI:ES1!",
     "NQ=F": "CME_MINI:NQ1!",
@@ -105,6 +105,13 @@ export function tradingViewSymbol(symbol: string, exchange?: string | null) {
   const venue = (exchange || "NASDAQ").toUpperCase().replace(/[^A-Z]/g, "");
   const supportedVenue = venue.includes("NYSE") ? "NYSE" : venue.includes("TSX") ? "TSX" : venue.includes("AMEX") ? "AMEX" : "NASDAQ";
   return `${supportedVenue}:${normalized}`;
+}
+
+export function tradingViewCryptoSymbol(base: string, quote: string) {
+  const safeBase = base.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const safeQuote = quote.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const venue = safeQuote === "CAD" ? "KRAKEN" : safeQuote === "USDT" ? "BINANCE" : "COINBASE";
+  return `${venue}:${safeBase}${safeQuote}`;
 }
 
 export const TRADINGVIEW_SCRIPTS = {

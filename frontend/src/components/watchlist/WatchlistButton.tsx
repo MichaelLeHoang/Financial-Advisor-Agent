@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { api, type Watchlist, type WatchlistAsset } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-export default function WatchlistButton({ symbol, className }: { symbol: string; className?: string }) {
+export default function WatchlistButton({ symbol, assetType = "equity", className }: { symbol: string; assetType?: string; className?: string }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -31,7 +31,7 @@ export default function WatchlistButton({ symbol, className }: { symbol: string;
         if (!canceled) {
           setWatchlists(resolved);
           const nextAssets = Object.fromEntries(rows);
-          const nextSelected = new Set(resolved.filter((watchlist) => (nextAssets[watchlist.id] ?? []).some((asset: WatchlistAsset) => asset.symbol.toUpperCase() === symbol.toUpperCase())).map((watchlist) => watchlist.id));
+          const nextSelected = new Set(resolved.filter((watchlist) => (nextAssets[watchlist.id] ?? []).some((asset: WatchlistAsset) => asset.symbol.toUpperCase() === symbol.toUpperCase() && asset.asset_type === assetType)).map((watchlist) => watchlist.id));
           setAssets(nextAssets);
           setSelectedIds(nextSelected);
           setInitialIds(new Set(nextSelected));
@@ -40,7 +40,7 @@ export default function WatchlistButton({ symbol, className }: { symbol: string;
       .catch((error) => toast.error("Watchlists are unavailable", { description: error instanceof Error ? error.message : "Try again shortly." }))
       .finally(() => { if (!canceled) setLoading(false); });
     return () => { canceled = true; };
-  }, [open, symbol, user.is_guest]);
+  }, [assetType, open, symbol, user.is_guest]);
 
   const toggle = (watchlistId: string) => {
     setSelectedIds((current) => {
@@ -61,11 +61,11 @@ export default function WatchlistButton({ symbol, className }: { symbol: string;
     try {
       const nextAssets = { ...assets };
       for (const watchlist of additions) {
-        const created = await api.addWatchlistAsset(watchlist.id, symbol);
+        const created = await api.addWatchlistAsset(watchlist.id, symbol, assetType);
         nextAssets[watchlist.id] = [...(nextAssets[watchlist.id] ?? []), created];
       }
       for (const watchlist of removals) {
-        const existing = (nextAssets[watchlist.id] ?? []).find((asset) => asset.symbol.toUpperCase() === symbol.toUpperCase());
+        const existing = (nextAssets[watchlist.id] ?? []).find((asset) => asset.symbol.toUpperCase() === symbol.toUpperCase() && asset.asset_type === assetType);
         if (existing) await api.removeWatchlistAsset(watchlist.id, existing.id);
         nextAssets[watchlist.id] = (nextAssets[watchlist.id] ?? []).filter((asset) => asset.id !== existing?.id);
       }
