@@ -54,6 +54,7 @@ from src.api.news_routes import router as news_router
 from src.api.routes.intelligence import router as intelligence_router
 from src.api.equity_research import router as equity_research_router
 from src.api.memory import router as memory_router
+from src.api.crypto_market import router as crypto_market_router
 from src.investment_policy.routes import router as investment_policy_router
 from src.investment_workspace.routes import router as investment_workspace_router
 from src.paper_trading.routes import router as paper_trading_router
@@ -98,6 +99,7 @@ app.include_router(news_router)
 app.include_router(intelligence_router)
 app.include_router(equity_research_router)
 app.include_router(memory_router)
+app.include_router(crypto_market_router)
 app.include_router(investment_policy_router)
 app.include_router(investment_workspace_router)
 app.include_router(paper_trading_router)
