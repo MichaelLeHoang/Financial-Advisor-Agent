@@ -18,6 +18,7 @@ import WatchlistMarketsSection from "@/components/watchlist/WatchlistMarketsSect
 import { fetchQuotes, invalidate } from "@/lib/quote-cache";
 import type { EarningsPoint, MarketQuote } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { marketDetailsHref } from "@/lib/market-routes";
 
 const INDEXES = [
   { symbol: "^GSPC", label: "S&P 500" },
@@ -32,7 +33,7 @@ type UpcomingEarning = EarningsPoint & {
 };
 
 function stockDetailsHref(symbol: string) {
-  return `/discover/markets/stocks/${encodeURIComponent(symbol)}`;
+  return marketDetailsHref(symbol);
 }
 
 function buildMarketBrief(quotes: Map<string, MarketQuote>) {

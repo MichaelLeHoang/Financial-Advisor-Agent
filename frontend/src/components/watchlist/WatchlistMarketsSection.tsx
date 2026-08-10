@@ -92,7 +92,7 @@ export default function WatchlistMarketsSection() {
           return (
             <Link
               key={instrument.symbol}
-              href={`/discover/markets/stocks/${encodeURIComponent(instrument.symbol)}`}
+              href={`${category === "Crypto" ? "/discover/markets/crypto" : "/discover/markets/stocks"}/${encodeURIComponent(instrument.symbol)}`}
               aria-label={`Open ${instrument.label} market details`}
               className="group flex h-36 min-w-[260px] snap-start flex-col justify-between rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-4 transition-[transform,border-color,background-color,box-shadow] duration-150 hover:-translate-y-0.5 hover:border-[var(--theme-border-strong)] hover:bg-[var(--surface-card-hover)] hover:shadow-[var(--shadow-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 motion-reduce:transform-none sm:min-w-[300px]"
             >
