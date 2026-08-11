@@ -83,7 +83,13 @@ test("workspace subnavigation exposes focused Portfolio and Discover routes", as
   await portfolioNav.getByRole("link", { name: "Holdings" }).click();
   await expect(page).toHaveURL(/\/portfolio\/holdings$/);
   await expect(portfolioNav.getByRole("link", { name: "Holdings" })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("heading", { name: "Portfolio", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Holdings", exact: true })).toBeVisible();
+
+  await portfolioNav.getByRole("link", { name: "Activity" }).click();
+  await expect(page).toHaveURL(/\/portfolio\/activity$/);
+  await expect(portfolioNav.getByRole("link", { name: "Activity" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Activity", exact: true })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Portfolio activity filters" })).toBeVisible();
 
   await page.goto("/discover/picks");
   await waitForWorkspace(page);

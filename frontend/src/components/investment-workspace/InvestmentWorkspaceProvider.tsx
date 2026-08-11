@@ -328,7 +328,7 @@ export function InvestmentWorkspaceProvider({ children }: { children: React.Reac
   useEffect(() => {
     const { period, interval } = PERIOD_REQUESTS[preferences.period];
     const symbols = Array.from(new Set([
-      ...investmentHoldings.map(({ holding }) => holding.symbol),
+      ...selectedHoldings.map(({ holding }) => holding.symbol),
       ...watchlistAssets.map((asset) => asset.symbol),
       preferences.benchmark,
     ].filter(Boolean)));
@@ -345,17 +345,17 @@ export function InvestmentWorkspaceProvider({ children }: { children: React.Reac
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Market history could not be loaded."); })
       .finally(() => { if (active) setQuotesLoading(false); });
     return () => { active = false; };
-  }, [investmentHoldings, preferences.benchmark, preferences.period, watchlistAssets]);
+  }, [preferences.benchmark, preferences.period, selectedHoldings, watchlistAssets]);
 
   useEffect(() => {
-    const currencies = Array.from(new Set(investmentHoldings.map(({ holding }) => (
+    const currencies = Array.from(new Set(selectedHoldings.map(({ holding }) => (
       quotes.get(holding.symbol.toUpperCase())?.currency || holding.cost_currency || "USD"
     )).map((currency) => currency.toUpperCase())));
     let active = true;
     Promise.all(currencies.map(async (currency) => [currency, E2E_ENABLED ? 1 : await fetchCurrencyRate(currency, preferences.displayCurrency)] as const))
       .then((pairs) => { if (active) setCurrencyRates(new Map(pairs)); });
     return () => { active = false; };
-  }, [investmentHoldings, preferences.displayCurrency, quotes]);
+  }, [preferences.displayCurrency, quotes, selectedHoldings]);
 
   const setPreference = useCallback(<K extends keyof Preferences>(key: K, value: Preferences[K]) => {
     setPreferences((current) => {

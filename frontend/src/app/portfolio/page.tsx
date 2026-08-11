@@ -418,11 +418,6 @@ export default function PortfolioPage() {
 
   useEffect(() => {
     const targetByPath: Record<string, string> = {
-      "/portfolio/holdings": "portfolio-holdings",
-      "/portfolio/allocation": "portfolio-allocation",
-      "/portfolio/performance": "portfolio-performance",
-      "/portfolio/accounts": "portfolio-accounts",
-      "/portfolio/activity": "portfolio-activity",
       "/invest/holdings": "portfolio-holdings",
       "/invest/rebalance": "portfolio-rebalance",
     };
