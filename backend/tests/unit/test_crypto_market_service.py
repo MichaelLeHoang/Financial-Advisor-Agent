@@ -78,6 +78,60 @@ def test_series_falls_back_to_normalized_yfinance_history(monkeypatch):
     assert [status.status for status in result.provider_status] == ["error", "ok"]
 
 
+def test_overview_falls_back_to_normalized_market_snapshot_on_rate_limit(monkeypatch):
+    monkeypatch.setattr(module, "_get_json", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("HTTP Error 429")))
+    monkeypatch.setattr(
+        module.market_data_service,
+        "fetch_snapshot",
+        lambda *args, **kwargs: SimpleNamespace(
+            latest_price=91_250.0,
+            daily_change=2.4,
+            day_high=92_000.0,
+            day_low=88_500.0,
+            volume=12_000_000,
+            market_cap=1_800_000_000_000,
+            company_name="Bitcoin CAD",
+            exchange="CCC",
+            quote_timestamp="2026-08-10T12:00:00+00:00",
+        ),
+    )
+
+    result = fresh_service().overview("BTC", "CAD")
+
+    assert result.price == 91_250
+    assert result.change_24h == 2.4
+    assert result.volume_24h == 12_000_000 * 91_250
+    assert result.venue == "Yahoo Finance composite"
+    assert result.data_sources == ["yfinance"]
+    assert [(status.provider, status.status) for status in result.provider_status] == [
+        ("coingecko", "error"),
+        ("yfinance", "ok"),
+    ]
+
+
+def test_bitcoin_overview_uses_mempool_price_when_primary_fallbacks_fail(monkeypatch):
+    def fake_get_json(url, *args, **kwargs):
+        if "coingecko" in url:
+            raise RuntimeError("rate limited")
+        if url.endswith("/api/v1/prices"):
+            return {"USD": 65_100, "CAD": 89_400}
+        raise AssertionError(url)
+
+    monkeypatch.setattr(module, "_get_json", fake_get_json)
+    monkeypatch.setattr(
+        module.market_data_service,
+        "fetch_snapshot",
+        lambda *args, **kwargs: SimpleNamespace(latest_price=None),
+    )
+
+    result = fresh_service().overview("BTC", "CAD")
+
+    assert result.price == 89_400
+    assert result.venue == "mempool.space"
+    assert result.data_sources == ["mempool.space"]
+    assert result.provider_status[-1].status == "ok"
+
+
 def test_mempool_normalizes_backlog_and_recommended_fees(monkeypatch):
     def fake_get_json(url, *args, **kwargs):
         if url.endswith("/api/mempool"):

@@ -97,6 +97,7 @@ class CryptoMarketService:
 
         def load() -> CryptoOverviewResponse:
             now = datetime.now(UTC).isoformat()
+            statuses: list[CryptoProviderStatus] = []
             try:
                 payload = _get_json(
                     "https://api.coingecko.com/api/v3/coins/markets",
@@ -131,7 +132,63 @@ class CryptoMarketService:
                     provider_status=[self._status("coingecko", "ok")],
                 )
             except Exception as exc:
-                raise RuntimeError(f"Crypto overview is unavailable: {str(exc)[:160]}") from exc
+                statuses.append(self._status("coingecko", "error", str(exc)[:160]))
+
+            provider_quote = "USD" if normalized_quote == "USDT" else normalized_quote
+            try:
+                snapshot = market_data_service.fetch_snapshot(
+                    f"{normalized_base}-{provider_quote}",
+                    "5d",
+                    "1d",
+                    include_news=False,
+                    include_sec=False,
+                    include_fundamentals=False,
+                )
+                if snapshot.latest_price is None:
+                    raise RuntimeError("Yahoo Finance returned no current price")
+                statuses.append(self._status("yfinance", "ok", "Fallback used after CoinGecko was unavailable."))
+                fallback_volume = _clean_number(snapshot.volume)
+                return CryptoOverviewResponse(
+                    base_asset=normalized_base,
+                    quote_currency=normalized_quote,
+                    provider_symbol=f"{normalized_base}-{normalized_quote}",
+                    name=snapshot.company_name or name,
+                    venue="Yahoo Finance composite",
+                    price=float(snapshot.latest_price),
+                    change_24h=_clean_number(snapshot.daily_change),
+                    high_24h=_clean_number(snapshot.day_high),
+                    low_24h=_clean_number(snapshot.day_low),
+                    volume_24h=fallback_volume * float(snapshot.latest_price) if fallback_volume is not None else None,
+                    market_cap=_clean_number(snapshot.market_cap),
+                    updated_at=snapshot.quote_timestamp or now,
+                    data_sources=["yfinance"],
+                    provider_status=statuses,
+                )
+            except Exception as exc:
+                statuses.append(self._status("yfinance", "error", str(exc)[:160]))
+
+            if normalized_base == "BTC":
+                try:
+                    prices = _get_json("https://mempool.space/api/v1/prices")
+                    price = _clean_number(prices.get(provider_quote)) if isinstance(prices, dict) else None
+                    if price is None:
+                        raise RuntimeError(f"mempool.space returned no {provider_quote} price")
+                    statuses.append(self._status("mempool.space", "ok", "Price-only fallback used."))
+                    return CryptoOverviewResponse(
+                        base_asset=normalized_base,
+                        quote_currency=normalized_quote,
+                        provider_symbol=f"{normalized_base}-{normalized_quote}",
+                        name=name,
+                        venue="mempool.space",
+                        price=price,
+                        updated_at=now,
+                        data_sources=["mempool.space"],
+                        provider_status=statuses,
+                    )
+                except Exception as exc:
+                    statuses.append(self._status("mempool.space", "error", str(exc)[:160]))
+
+            raise RuntimeError("Crypto overview is temporarily unavailable from all configured providers")
 
         return self._cached(f"overview:{normalized_base}:{normalized_quote}", 60, load)
 

@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CandlestickChart, ExternalLink, Loader2 } from "lucide-react";
+import { ArrowLeft, CandlestickChart, ExternalLink, Loader2, RefreshCw } from "lucide-react";
 
 import CryptoAnalytics from "@/components/market/CryptoAnalytics";
 import QuanforaStockChart from "@/components/market/QuanforaStockChart";
 import TradingViewWidget, { TRADINGVIEW_SCRIPTS, tradingViewCryptoSymbol } from "@/components/market/TradingViewWidget";
 import WatchlistButton from "@/components/watchlist/WatchlistButton";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoTooltip, MetricLabel } from "@/components/ui/info-tooltip";
 import { api, type CryptoOverview } from "@/lib/api";
@@ -15,6 +16,14 @@ import { cn } from "@/lib/utils";
 
 type QuoteCurrency = "CAD" | "USD" | "USDT";
 const QUOTES: QuoteCurrency[] = ["CAD", "USD", "USDT"];
+
+function overviewSource(overview: CryptoOverview | null) {
+  const source = overview?.data_sources[0];
+  if (source === "yfinance") return "Yahoo Finance fallback";
+  if (source === "mempool.space") return "mempool.space fallback";
+  if (source === "coingecko") return "CoinGecko";
+  return null;
+}
 
 function money(value: number | null | undefined, quote: string, compact = false) {
   if (value == null) return "—";
@@ -70,6 +79,7 @@ export default function CryptoDetails({ base, initialQuote }: { base: string; in
   const [overview, setOverview] = useState<CryptoOverview | null>(null);
   const [overviewError, setOverviewError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [overviewRetry, setOverviewRetry] = useState(0);
   const [chartEngine, setChartEngine] = useState<"quanfora" | "tradingview">("quanfora");
   const marketSymbol = `${base}-${quote === "USDT" ? "USD" : quote}`;
   const displaySymbol = `${base}-${quote}`;
@@ -78,18 +88,21 @@ export default function CryptoDetails({ base, initialQuote }: { base: string; in
   useEffect(() => {
     let canceled = false;
     setLoading(true);
+    setOverview(null);
     setOverviewError(null);
     api.cryptoOverview(base, quote)
       .then((value) => { if (!canceled) setOverview(value); })
-      .catch((error) => { if (!canceled) setOverviewError(error instanceof Error ? error.message : "Crypto overview is unavailable."); })
+      .catch(() => { if (!canceled) setOverviewError("Live market overview is temporarily unavailable."); })
       .finally(() => { if (!canceled) setLoading(false); });
     return () => { canceled = true; };
-  }, [base, quote]);
+  }, [base, overviewRetry, quote]);
 
-  const positive = (overview?.change_24h ?? 0) >= 0;
+  const dailyChange = overview?.change_24h;
+  const positive = (dailyChange ?? 0) >= 0;
   const name = overview?.name ?? (base === "BTC" ? "Bitcoin" : base);
   const quoteNote = quote === "USDT" ? "Quanfora analytics use a USD proxy; TradingView shows the USDT venue pair." : null;
   const headerPrice = useMemo(() => overview ? money(overview.price, overview.quote_currency) : "—", [overview]);
+  const dataSource = overviewSource(overview);
 
   return (
     <main className="min-h-full bg-[var(--background)] px-4 py-5 text-[var(--text-primary)] md:px-6 lg:px-8">
@@ -112,10 +125,10 @@ export default function CryptoDetails({ base, initialQuote }: { base: string; in
           <CardContent className="flex min-h-36 flex-wrap items-center justify-between gap-6 px-5 py-6 sm:px-6">
             <div>
               <p className="text-sm font-medium text-[var(--text-muted)]">{name} · {displaySymbol}</p>
-              {loading ? <p className="mt-3 text-sm text-[var(--text-muted)]"><Loader2 className="mr-2 inline size-4 animate-spin motion-reduce:animate-none" />Loading market price</p> : overviewError ? <p className="mt-3 text-sm text-rose-300">{overviewError}</p> : <><p className="mt-2 text-4xl font-semibold tabular-nums">{headerPrice}</p><p className={cn("mt-2 text-sm font-semibold tabular-nums", positive ? "text-emerald-400" : "text-rose-400")}>{positive ? "+" : ""}{overview?.change_24h?.toFixed(2) ?? "0.00"}% over 24h</p></>}
+              {loading ? <p className="mt-3 text-sm text-[var(--text-muted)]"><Loader2 className="mr-2 inline size-4 animate-spin motion-reduce:animate-none" />Loading market price</p> : overviewError ? <div role="alert" className="mt-3 flex flex-wrap items-center gap-3"><p className="text-sm text-rose-300">{overviewError}</p><Button type="button" size="sm" variant="outline" onClick={() => setOverviewRetry((value) => value + 1)}><RefreshCw className="size-3.5" />Try again</Button></div> : <><p className="mt-2 text-4xl font-semibold tabular-nums">{headerPrice}</p>{dailyChange == null ? <p className="mt-2 text-sm text-[var(--text-muted)]">24h change unavailable from this fallback</p> : <p className={cn("mt-2 text-sm font-semibold tabular-nums", positive ? "text-emerald-400" : "text-rose-400")}>{positive ? "+" : ""}{dailyChange.toFixed(2)}% over 24h</p>}</>}
               {quoteNote && <p className="mt-2 max-w-xl text-xs text-[var(--text-subtle)]">{quoteNote}</p>}
             </div>
-            <div className="text-right text-xs text-[var(--text-muted)]"><p>Market trades continuously</p><p className="mt-1">{overview?.updated_at ? `Updated ${new Date(overview.updated_at).toLocaleString("en-CA")}` : "Awaiting provider timestamp"}</p></div>
+            <div className="text-right text-xs text-[var(--text-muted)]"><p>{dataSource ? `Data: ${dataSource}` : "Market trades continuously"}</p><p className="mt-1">{overview?.updated_at ? `Updated ${new Date(overview.updated_at).toLocaleString("en-CA")}` : overviewError ? "Fallback providers unavailable" : "Awaiting provider timestamp"}</p></div>
           </CardContent>
         </Card>
 

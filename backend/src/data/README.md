@@ -13,7 +13,7 @@ Provides equity and crypto market-data normalization, historical price fetching,
 
 ## Key Files
 - `market_data_service.py`: normalized market snapshots, news, fundamentals, search, and provider quality.
-- `crypto_market_service.py`: CoinGecko, Alternative.me, Blockchain.com, mempool.space, and DefiLlama normalization with isolated provider failures, bounded caching, and a yfinance history fallback.
+- `crypto_market_service.py`: CoinGecko, Alternative.me, Blockchain.com, mempool.space, and DefiLlama normalization with isolated provider failures, bounded caching, yfinance history/overview fallbacks, and a Bitcoin price-only safety net.
 - `fetch.py`: legacy historical price helpers.
 - `vector_db.py`: Qdrant adapter.
 
@@ -24,4 +24,4 @@ Consumers should use the normalized service instead of calling providers directl
 Mock provider payloads and cover normalization, duplicate symbols, malformed responses, timeouts, missing data, source quality, deterministic indicators, crypto moving averages, sentiment boundaries, and halving progress.
 
 ## Latest Change
-- Added resilient crypto history plus Bitcoin mempool, fee, market-breadth, supply-context, and DeFi metrics for a skimmable crypto research view.
+- Added a CoinGecko → normalized yfinance → mempool.space Bitcoin overview chain so provider rate limits no longer blank the primary crypto quote.
