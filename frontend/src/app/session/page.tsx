@@ -1300,6 +1300,19 @@ export default function ChatPage() {
     event.target.value = "";
   };
 
+  const fillComposer = (prompt: string) => {
+    setInput(prompt);
+    setIsActive(true);
+    window.requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.style.height = "auto";
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
+      textarea.scrollIntoView({ block: "nearest", behavior: prefersReducedMotion ? "auto" : "smooth" });
+    });
+  };
+
   const hasConversation = messages.some((message) => message.id !== "welcome");
   const isStarterState = !hasConversation && !isHistoryLoading;
   const selectedDrawerActivity = useMemo(() => {
@@ -1698,7 +1711,7 @@ export default function ChatPage() {
                                 <AgentSources sources={messageActivitySources(msg)} />
                                 {msg.researchTicker ? (
                                   <div className="space-y-3">
-                                    <ResearchMessageTabs content={msg.content} reports={msg.researchReports} overview={msg.overview} />
+                                    <ResearchMessageTabs content={msg.content} reports={msg.researchReports} overview={msg.overview} onQuestionSelect={fillComposer} />
                                     <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
                                       <p className="text-sm font-semibold text-white">
                                         {msg.researchRunId ? "Quanfora 2.1 Agent Reports" : "Generate a full Quanfora 2.1 Research Report?"}
@@ -1728,7 +1741,7 @@ export default function ChatPage() {
                                     </div>
                                   </div>
                                 ) : (
-                                  <AssistantMessageContent content={msg.content} consensusOpinions={msg.consensusOpinions} overview={msg.overview} />
+                                  <AssistantMessageContent content={msg.content} consensusOpinions={msg.consensusOpinions} overview={msg.overview} onQuestionSelect={fillComposer} />
                                 )}
                             </div>
                             {msg.memoryCandidates?.map((memory) => (
@@ -1957,13 +1970,13 @@ function ResearchModeSelector({
   );
 }
 
-function ResearchMessageTabs({ content, reports, overview }: { content: string; reports?: EquityResearchReport[]; overview?: Overview | null }) {
+function ResearchMessageTabs({ content, reports, overview, onQuestionSelect }: { content: string; reports?: EquityResearchReport[]; overview?: Overview | null; onQuestionSelect: (question: string) => void }) {
   const [active, setActive] = useState("final");
   const reportTabs = (reports ?? []).filter((report) => report.markdown && report.markdown.trim());
   if (reportTabs.length === 0) {
     return (
       <div className="space-y-3">
-        {overview && <OverviewCard overview={overview} />}
+        {overview && <OverviewCard overview={overview} onQuestionSelect={onQuestionSelect} />}
         <Markdown content={content} />
       </div>
     );
@@ -1972,7 +1985,7 @@ function ResearchMessageTabs({ content, reports, overview }: { content: string; 
 
   return (
     <div className="space-y-3">
-      {overview && <OverviewCard overview={overview} />}
+      {overview && <OverviewCard overview={overview} onQuestionSelect={onQuestionSelect} />}
       <ResponseTabs
         tabs={[{ id: "final", label: "Report" }, ...reportTabs.map((report) => ({ id: report.report_id, label: report.agent_name }))]}
         active={active}
@@ -2032,13 +2045,13 @@ function ResponseTabs({ tabs, active, onChange }: { tabs: Array<{ id: string; la
   );
 }
 
-function AssistantMessageContent({ content, consensusOpinions, overview }: { content: string; consensusOpinions?: ConsensusOpinion[]; overview?: Overview | null }) {
+function AssistantMessageContent({ content, consensusOpinions, overview, onQuestionSelect }: { content: string; consensusOpinions?: ConsensusOpinion[]; overview?: Overview | null; onQuestionSelect: (question: string) => void }) {
   const prediction = parsePredictionSummary(content);
 
   if (consensusOpinions?.length) {
     return (
       <div className="space-y-3">
-        {overview && <OverviewCard overview={overview} />}
+        {overview && <OverviewCard overview={overview} onQuestionSelect={onQuestionSelect} />}
         <ConsensusMessageTabs content={content} opinions={consensusOpinions} />
       </div>
     );
@@ -2047,7 +2060,7 @@ function AssistantMessageContent({ content, consensusOpinions, overview }: { con
   if (!prediction) {
     return (
       <div className="space-y-3">
-        {overview && <OverviewCard overview={overview} />}
+        {overview && <OverviewCard overview={overview} onQuestionSelect={onQuestionSelect} />}
         <Markdown content={content} />
       </div>
     );
@@ -2063,7 +2076,7 @@ function AssistantMessageContent({ content, consensusOpinions, overview }: { con
 
   return (
     <div className="space-y-3">
-      {overview && <OverviewCard overview={overview} />}
+      {overview && <OverviewCard overview={overview} onQuestionSelect={onQuestionSelect} />}
       <div className="rounded-xl border border-white/[0.10] bg-white/[0.04] p-3">
         <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
           {rows.map(([label, value]) => (

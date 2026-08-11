@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { DynamicToolUIPart } from "ai";
 import {
   BarChart3,
@@ -21,7 +21,7 @@ import { ThinkingOrb, type OrbState } from "thinking-orbs";
 import { Source, Sources, SourcesContent, SourcesTrigger } from "@/components/ai-elements/sources";
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from "@/components/ai-elements/tool";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   activeActivityStep,
   activityElapsedMs,
@@ -172,7 +172,7 @@ export function AgentActivitySummary({
           )}
         </span>
 
-        <span className={cn("min-w-0", isRunning ? "flex-1" : "shrink-0")}>
+        <span className="min-w-0 max-w-3xl shrink">
           {isRunning ? (
             <AnimatePresence mode="wait" initial={false}>
               <motion.span
@@ -263,27 +263,30 @@ export function AgentActivityDrawer({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const duration = useActivityDuration(activity ?? emptyDrawerActivity);
-  const steps = useMemo(() => activity ? visibleActivitySteps(activity) : [], [activity]);
+  const retainedActivityRef = useRef<LiveAgentActivity | null>(activity);
+  if (activity) retainedActivityRef.current = activity;
+  const renderedActivity = activity ?? retainedActivityRef.current;
+  const duration = useActivityDuration(renderedActivity ?? emptyDrawerActivity);
+  const steps = useMemo(() => renderedActivity ? visibleActivitySteps(renderedActivity) : [], [renderedActivity]);
   const assignedToolIds = useMemo(() => new Set(steps.map((step) => step.step_id)), [steps]);
-  if (!activity) return null;
+  if (!renderedActivity) return null;
 
-  const unassignedTools = activity.tools.filter((tool) => !tool.step_id || !assignedToolIds.has(tool.step_id));
-  const unassignedSources = activity.sources.filter((source) => !source.step_id || !assignedToolIds.has(source.step_id));
+  const unassignedTools = renderedActivity.tools.filter((tool) => !tool.step_id || !assignedToolIds.has(tool.step_id));
+  const unassignedSources = renderedActivity.sources.filter((source) => !source.step_id || !assignedToolIds.has(source.step_id));
   const completedSteps = steps.filter((step) => step.status === "complete" || step.status === "warning").length;
   const runSummary = [
     `${completedSteps} of ${steps.length} steps`,
-    `${activity.tools.length} tool${activity.tools.length === 1 ? "" : "s"}`,
-    `${activity.sources.length} source${activity.sources.length === 1 ? "" : "s"}`,
+    `${renderedActivity.tools.length} tool${renderedActivity.tools.length === 1 ? "" : "s"}`,
+    `${renderedActivity.sources.length} source${renderedActivity.sources.length === 1 ? "" : "s"}`,
   ].join(" · ");
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!inset-y-0 !left-auto !right-0 !top-0 !h-dvh !max-h-dvh !w-full !max-w-[480px] !translate-x-0 !translate-y-0 !scale-100 !rounded-none border-y-0 border-r-0 transition-[transform] duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)] data-[ending-style]:!translate-x-full data-[starting-style]:!translate-x-full motion-reduce:transition-none motion-reduce:data-[ending-style]:!translate-x-0 motion-reduce:data-[starting-style]:!translate-x-0 sm:!w-[min(480px,100vw)]" data-testid="agent-activity-drawer">
-        <DialogHeader className="border-b border-[var(--theme-border)] px-5 pb-5 pt-5 pr-16">
-          <DialogTitle className="text-lg font-medium">Activity <span className="px-1.5 text-[var(--text-subtle)]">·</span> {duration}</DialogTitle>
-          <DialogDescription>{runSummary}</DialogDescription>
-        </DialogHeader>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" data-testid="agent-activity-drawer">
+        <SheetHeader className="border-b border-[var(--theme-border)] px-5 pb-5 pt-5 pr-16">
+          <SheetTitle className="text-lg font-medium">Activity <span className="px-1.5 text-[var(--text-subtle)]">·</span> {duration}</SheetTitle>
+          <SheetDescription>{runSummary}</SheetDescription>
+        </SheetHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--text-subtle)]">Analysis</h2>
@@ -292,8 +295,8 @@ export function AgentActivityDrawer({
               <ActivityPhase
                 key={step.step_id}
                 step={step}
-                tools={activity.tools.filter((tool) => tool.step_id === step.step_id)}
-                sources={activity.sources.filter((source) => source.step_id === step.step_id)}
+                tools={renderedActivity.tools.filter((tool) => tool.step_id === step.step_id)}
+                sources={renderedActivity.sources.filter((source) => source.step_id === step.step_id)}
               />
             ))}
           </div>
@@ -311,8 +314,8 @@ export function AgentActivityDrawer({
             </section>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
 

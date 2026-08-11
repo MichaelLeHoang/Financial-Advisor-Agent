@@ -29,13 +29,13 @@ export const SourcesTrigger = ({
   ...props
 }: SourcesTriggerProps) => (
   <CollapsibleTrigger
-    className={cn("flex min-h-9 items-center gap-2 rounded-lg px-2 text-left transition-colors duration-150 hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 motion-reduce:transition-none", className)}
+    className={cn("group/sources flex min-h-9 items-center gap-2 rounded-lg px-2 text-left transition-colors duration-150 hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 motion-reduce:transition-none", className)}
     {...props}
   >
     {children ?? (
       <>
         <p className="font-medium">Used {count} sources</p>
-        <ChevronDownIcon className="h-4 w-4" />
+        <ChevronDownIcon className="size-4 shrink-0 transition-transform duration-150 ease-out group-data-[panel-open]/sources:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
       </>
     )}
   </CollapsibleTrigger>

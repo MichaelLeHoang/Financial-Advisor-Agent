@@ -237,6 +237,20 @@ test("AI desk uses a compact completed activity row and borderless assistant res
             role: "assistant",
             content: "TSLA has mixed near-term signals, with elevated volatility and limited model conviction.",
             metadata: {
+              overview: {
+                title: "Tesla (TSLA)",
+                verdict: "hold",
+                summary: "TSLA has mixed near-term signals.",
+                metrics: [],
+                catalysts: [],
+                risks: [],
+                sources: [],
+                next_questions: [
+                  "What would make TSLA a clearer buy?",
+                  "Compare TSLA against its closest peers.",
+                ],
+                disclaimer: "Educational analysis, not financial advice.",
+              },
               activity_trace: {
                 run_id: "activity-run",
                 mode: "single",
@@ -279,6 +293,7 @@ test("AI desk uses a compact completed activity row and borderless assistant res
 
   await page.getByTestId("agent-activity-summary").click();
   const drawer = page.getByTestId("agent-activity-drawer");
+  await expect.poll(() => drawer.evaluate((element) => element.getAnimations().length)).toBeGreaterThan(0);
   await expect(drawer).toBeVisible();
   await expect(drawer.getByText("Activity", { exact: false }).first()).toBeVisible();
   await expect(drawer.getByText("1 of 1 steps · 0 tools · 0 sources", { exact: true })).toBeVisible();
@@ -286,4 +301,16 @@ test("AI desk uses a compact completed activity row and borderless assistant res
   await expect(drawer.getByText("Calculated drawdown, VaR, and volatility exposure.", { exact: true })).toBeVisible();
   await expect(drawer.getByText("Comparing portfolio impact", { exact: true })).toHaveCount(0);
   await expect(drawer.getByText("Memory", { exact: true })).toHaveCount(0);
+  await expect(drawer).toHaveAttribute("data-slot", "sheet-content");
+
+  await page.keyboard.press("Escape");
+  await expect.poll(() => drawer.evaluate((element) =>
+    element.getAnimations().some((animation) => animation.playState === "running")
+  )).toBe(true);
+  await expect(drawer).toBeHidden();
+
+  const followUp = page.getByRole("button", { name: "What would make TSLA a clearer buy?" });
+  await expect(followUp).toBeVisible();
+  await followUp.click();
+  await expect(page.getByRole("textbox")).toHaveValue("What would make TSLA a clearer buy?");
 });
