@@ -22,12 +22,15 @@ import {
   Undo2,
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { useStrategyStudio } from "@/components/strategy-studio/StrategyStudioProvider";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { LockedFeature } from "@/components/LockedFeature";
 import { backtestHref, moveNode, proposalFor, removeNode, updateNode, validateStrategy } from "@/components/strategy-studio/model";
 import type { StrategyDraft, StrategyNode, StrategyNodeType } from "@/components/strategy-studio/types";
 import { Status } from "@/components/workspace/WorkspaceUI";
+import { APP_RADIUS } from "@/lib/ui-design";
+import { cn } from "@/lib/utils";
 
 const NODE_TYPES: StrategyNodeType[] = ["universe", "asset", "group", "condition", "filter", "rank", "select", "weight", "entry", "exit", "risk", "schedule"];
 type MobilePanel = "architect" | "tree" | "preview";
@@ -134,40 +137,39 @@ export default function StrategyStudioPage({ strategyId }: { strategyId: string 
   };
 
   return (
-    <div className="min-h-full bg-[var(--theme-bg)] text-[var(--text-primary)]">
-      <header className="border-b border-[var(--theme-border)] bg-[var(--surface-sidebar)] px-4 py-3 lg:px-6">
+    <div className="min-h-full bg-[var(--theme-bg)] px-3 pb-4 pt-16 text-[var(--text-primary)] sm:px-4 md:pt-4 lg:px-5">
+      <div className={cn(APP_RADIUS.surface, "mx-auto max-w-[1800px] overflow-hidden border border-[var(--theme-border)] bg-[var(--surface-card)] shadow-[var(--shadow-card)]")}>
+      <header className="border-b border-[var(--theme-border)] bg-[var(--surface-header)] px-4 py-3 lg:px-5">
         <div className="flex flex-wrap items-center gap-3">
-          <Link href={basePath} aria-label="Back to strategies" title="Back to strategies" className="inline-flex size-9 items-center justify-center border border-[var(--theme-border-strong)] hover:bg-[var(--surface-card-hover)]"><ArrowLeft className="size-4" /></Link>
-          <input aria-label="Strategy name" value={draft.name} onChange={(event) => updateStrategy(draft.id, (current) => ({ ...current, name: event.target.value }))} className="h-9 min-w-0 flex-1 bg-transparent text-base font-semibold outline-none sm:min-w-64" />
+          <Button render={<Link href={basePath} aria-label="Back to strategies" title="Back to strategies" />} nativeButton={false} variant="outline" size="icon"><ArrowLeft className="size-4" /></Button>
+          <input aria-label="Strategy name" value={draft.name} onChange={(event) => updateStrategy(draft.id, (current) => ({ ...current, name: event.target.value }))} className="h-9 min-w-0 flex-1 rounded-lg bg-transparent px-2 text-base font-semibold outline-none transition-[background-color,box-shadow] duration-150 hover:bg-[var(--surface-card-hover)] focus-visible:bg-[var(--surface-control)] focus-visible:ring-2 focus-visible:ring-indigo-primary/45 motion-reduce:transition-none sm:min-w-64" />
           <span className="text-xs text-[var(--text-muted)]">{draft.mode === "investment" ? "Investment" : "Trading"} · Draft v{draft.versions.length + 1}</span>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
             <IconButton label="Undo" disabled={undoStack.length === 0} onClick={undo}><Undo2 className="size-4" /></IconButton>
             <IconButton label="Redo" disabled={redoStack.length === 0} onClick={redo}><Redo2 className="size-4" /></IconButton>
-            <button type="button" onClick={validate} className="inline-flex h-9 items-center gap-2 border border-[var(--theme-border-strong)] px-3 text-xs font-semibold"><ShieldCheck className="size-4" /> Validate</button>
-            <button type="button" onClick={save} className="inline-flex h-9 items-center gap-2 border border-[var(--theme-border-strong)] px-3 text-xs font-semibold"><Save className="size-4" /> Save version</button>
-            <button type="button" onClick={requestDeploy} className="inline-flex h-9 items-center gap-2 bg-white px-3 text-xs font-semibold text-black"><Rocket className="size-4" /> Paper deploy</button>
+            <Button type="button" onClick={validate} variant="outline" size="sm"><ShieldCheck className="size-4" /> Validate</Button>
+            <Button type="button" onClick={save} variant="outline" size="sm"><Save className="size-4" /> Save version</Button>
+            <Button type="button" onClick={requestDeploy} size="sm" className="theme-solid-action"><Rocket className="size-4" /> Paper deploy</Button>
           </div>
         </div>
       </header>
 
-      <div className="border-b border-[var(--theme-border)] px-4 py-2 xl:hidden">
-        <div role="tablist" aria-label="Studio panels" className="grid grid-cols-3 border border-[var(--theme-border)]">
-          {(["architect", "tree", "preview"] as MobilePanel[]).map((panel) => <button key={panel} id={`studio-tab-${panel}`} type="button" role="tab" aria-controls={`studio-panel-${panel}`} aria-selected={mobilePanel === panel} tabIndex={mobilePanel === panel ? 0 : -1} onKeyDown={(event) => handleTabKey(event, ["architect", "tree", "preview"], mobilePanel, setMobilePanel)} onClick={() => setMobilePanel(panel)} className={`h-9 text-xs font-semibold capitalize ${mobilePanel === panel ? "bg-white text-black" : "text-[var(--text-muted)]"}`}>{panel}</button>)}
-        </div>
+      <div className="border-b border-[var(--theme-border)] bg-[var(--surface-header)] px-4 py-3 xl:hidden">
+        <StudioTabList tabs={["architect", "tree", "preview"]} current={mobilePanel} onSelect={setMobilePanel} label="Studio panels" idPrefix="studio-tab" panelId={(tab) => `studio-panel-${tab}`} className="grid w-full grid-cols-3" />
       </div>
 
-      <main className="grid min-h-[680px] xl:grid-cols-[270px_minmax(360px,1fr)_340px]">
+      <main className="grid min-h-[680px] bg-[var(--surface-sidebar)] xl:grid-cols-[270px_minmax(360px,1fr)_340px]">
         <section id="studio-panel-architect" role="tabpanel" aria-labelledby="studio-tab-architect" aria-label="Strategy Architect" className={`${mobilePanel === "architect" ? "block" : "hidden"} border-r border-[var(--theme-border)] p-4 xl:block`}>
           <div className="flex items-center gap-2"><Bot className="size-4 text-indigo-primary" /><h2 className="text-sm font-semibold">Strategy Architect</h2></div>
-          {!proposalDismissed ? <div className="mt-5 border-l-2 border-indigo-primary bg-indigo-primary/7 p-4">
+          {!proposalDismissed ? <div className="mt-5 rounded-xl border border-indigo-primary/25 bg-indigo-primary/7 p-4">
             <p className="text-xs font-semibold text-indigo-primary">Prepared change</p>
             <h3 className="mt-3 text-sm font-semibold">{proposal.title}</h3>
             <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">{proposal.description}</p>
             <div className="mt-4 flex gap-2">
-              <button type="button" disabled={proposalAccepted} onClick={() => { commitNodes([...nodes, proposal.node]); setProposalAccepted(true); }} className="h-8 bg-white px-3 text-xs font-semibold text-black disabled:opacity-45">{proposalAccepted ? "Accepted" : "Accept change"}</button>
-              <button type="button" onClick={() => setProposalDismissed(true)} className="h-8 border border-[var(--theme-border-strong)] px-3 text-xs font-semibold">Dismiss</button>
+              <Button type="button" size="sm" disabled={proposalAccepted} onClick={() => { commitNodes([...nodes, proposal.node]); setProposalAccepted(true); }} className="theme-solid-action">{proposalAccepted ? "Accepted" : "Accept change"}</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => setProposalDismissed(true)}>Dismiss</Button>
             </div>
-          </div> : <div role="status" className="mt-5 border-l-2 border-[var(--theme-border-strong)] p-4 text-xs text-[var(--text-muted)]">Proposal dismissed for this editing session.</div>}
+          </div> : <div role="status" className="mt-5 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-control)] p-4 text-xs text-[var(--text-muted)]">Proposal dismissed for this editing session.</div>}
           <div className="mt-6">
             <div className="flex items-center gap-2 text-xs font-semibold"><History className="size-3.5" /> Version history</div>
             <div className="mt-3 space-y-3">
@@ -177,23 +179,23 @@ export default function StrategyStudioPage({ strategyId }: { strategyId: string 
           </div>
         </section>
 
-        <section id="studio-panel-tree" role="tabpanel" aria-labelledby="studio-tab-tree" aria-label="Visual Strategy Tree" className={`${mobilePanel === "tree" ? "block" : "hidden"} min-w-0 border-r border-[var(--theme-border)] p-4 xl:block xl:p-5`}>
+        <section id="studio-panel-tree" role="tabpanel" aria-labelledby="studio-tab-tree" aria-label="Visual Strategy Tree" className={`${mobilePanel === "tree" ? "block" : "hidden"} min-w-0 border-r border-[var(--theme-border)] bg-[var(--theme-bg)] p-4 xl:block xl:p-5`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><h2 className="text-sm font-semibold">Visual Strategy Tree</h2><p className="mt-1 text-xs text-[var(--text-muted)]">{nodes.length} top-level rules · {draft.symbols.join(", ")}</p></div>
             <div className="flex items-center gap-2">
-              <select aria-label="New node type" value={newNodeType} onChange={(event) => setNewNodeType(event.target.value as StrategyNodeType)} className="h-9 border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-2 text-xs outline-none">{NODE_TYPES.map((type) => <option key={type} value={type}>{titleCase(type)}</option>)}</select>
-              <button type="button" onClick={addNode} aria-label="Add strategy node" title="Add node" className="inline-flex size-9 items-center justify-center bg-white text-black"><Plus className="size-4" /></button>
+              <select aria-label="New node type" value={newNodeType} onChange={(event) => setNewNodeType(event.target.value as StrategyNodeType)} className="h-9 rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-3 text-xs outline-none transition-[background-color,border-color,box-shadow] duration-150 hover:bg-[var(--surface-card-hover)] focus-visible:ring-2 focus-visible:ring-indigo-primary/45 motion-reduce:transition-none">{NODE_TYPES.map((type) => <option key={type} value={type}>{titleCase(type)}</option>)}</select>
+              <Button type="button" onClick={addNode} aria-label="Add strategy node" title="Add node" size="icon" className="theme-solid-action"><Plus className="size-4" /></Button>
             </div>
           </div>
           <ol className="mt-5 space-y-2">
             {nodes.map((current, index) => <StrategyNodeRow key={current.id} node={current} selectedNodeId={selectedNodeId} onSelect={setSelectedNodeId} onMove={(nodeId, direction) => commitNodes(moveNode(nodes, nodeId, direction))} onRemove={(nodeId) => { commitNodes(removeNode(nodes, nodeId)); if (selectedNodeId === nodeId) setSelectedNodeId(null); }} first={index === 0} last={index === nodes.length - 1} depth={0} />)}
           </ol>
-          {selectedNode && <div className="mt-5 border-t border-[var(--theme-border)] pt-5"><label className="text-xs font-semibold">Selected rule<input aria-label="Selected node label" value={selectedNode.label} onChange={(event) => commitNodes(updateNode(nodes, selectedNode.id, (current) => ({ ...current, label: event.target.value })))} className="mt-2 h-10 w-full border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-3 text-sm outline-none" /></label><label className="mt-4 block text-xs font-semibold">Rule detail<textarea aria-label="Selected node detail" value={selectedNode.detail} onChange={(event) => commitNodes(updateNode(nodes, selectedNode.id, (current) => ({ ...current, detail: event.target.value })))} rows={3} className="mt-2 w-full resize-none border border-[var(--theme-border-strong)] bg-[var(--surface-control)] p-3 text-sm outline-none" /></label></div>}
+          {selectedNode && <div className="mt-5 border-t border-[var(--theme-border)] pt-5"><label className="text-xs font-semibold">Selected rule<input aria-label="Selected node label" value={selectedNode.label} onChange={(event) => commitNodes(updateNode(nodes, selectedNode.id, (current) => ({ ...current, label: event.target.value })))} className="mt-2 h-10 w-full rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-control)] px-3 text-sm outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-indigo-primary/55 focus-visible:ring-2 focus-visible:ring-indigo-primary/25 motion-reduce:transition-none" /></label><label className="mt-4 block text-xs font-semibold">Rule detail<textarea aria-label="Selected node detail" value={selectedNode.detail} onChange={(event) => commitNodes(updateNode(nodes, selectedNode.id, (current) => ({ ...current, detail: event.target.value })))} rows={3} className="mt-2 w-full resize-none rounded-xl border border-[var(--theme-border-strong)] bg-[var(--surface-control)] p-3 text-sm outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-indigo-primary/55 focus-visible:ring-2 focus-visible:ring-indigo-primary/25 motion-reduce:transition-none" /></label></div>}
         </section>
 
         <section id="studio-panel-preview" role="tabpanel" aria-labelledby="studio-tab-preview" aria-label="Backtest Preview" className={`${mobilePanel === "preview" ? "block" : "hidden"} p-4 xl:block`}>
           <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">Backtest Preview</h2><Status tone={errors.length === 0 ? "positive" : "danger"}>{errors.length === 0 ? "Ready" : `${errors.length} blocked`}</Status></div>
-          <div className="mt-5 h-44">
+          <div className="mt-5 h-44 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-control)] p-3">
             <svg viewBox="0 0 320 176" preserveAspectRatio="none" role="img" aria-label="Illustrative strategy equity curve" className="h-full w-full">
               <path d="M0 150H320M0 105H320M0 60H320M0 15H320" stroke="currentColor" strokeOpacity=".08" />
               <path d="M0 145 L64 112 L128 128 L192 72 L256 42 L320 15" fill="none" stroke="#7dd3fc" strokeWidth="3" vectorEffect="non-scaling-stroke" />
@@ -202,19 +204,20 @@ export default function StrategyStudioPage({ strategyId }: { strategyId: string 
           </div>
           <div className="grid grid-cols-2 gap-3 border-y border-[var(--theme-border)] py-4"><PreviewMetric label="Return" value="+18.0%" /><PreviewMetric label="Benchmark" value="+10.0%" /><PreviewMetric label="Max drawdown" value="-8.4%" /><PreviewMetric label="Sharpe" value="1.31" /></div>
           <p className="mt-4 text-xs leading-5 text-[var(--text-muted)]">Illustrative preview only. Historical results do not guarantee future performance.</p>
-          <Link href={backtestHref(workingDraft)} className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 border border-[var(--theme-border-strong)] text-sm font-semibold"><FlaskConical className="size-4" /> Open deterministic Backtest Lab</Link>
+          <Button render={<Link href={backtestHref(workingDraft)} />} nativeButton={false} variant="outline" size="lg" className="mt-4 w-full"><FlaskConical className="size-4" /> Open deterministic Backtest Lab</Button>
 
-          {showValidation && <div className="mt-5 space-y-2" aria-label="Validation results">{issues.length === 0 ? <div className="flex gap-2 border-l-2 border-emerald-400 bg-emerald-400/7 p-3 text-xs"><Check className="size-4 shrink-0 text-emerald-400" /> Structural validation passed.</div> : issues.map((issue) => <div key={issue.id} className={`flex gap-2 border-l-2 p-3 text-xs ${issue.severity === "error" ? "border-rose-400 bg-rose-400/7" : "border-amber-300 bg-amber-300/7"}`}><AlertTriangle className={`size-4 shrink-0 ${issue.severity === "error" ? "text-rose-400" : "text-amber-300"}`} />{issue.message}</div>)}</div>}
+          {showValidation && <div className="mt-5 space-y-2" aria-label="Validation results">{issues.length === 0 ? <div className="flex gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/7 p-3 text-xs"><Check className="size-4 shrink-0 text-emerald-400" /> Structural validation passed.</div> : issues.map((issue) => <div key={issue.id} className={`flex gap-2 rounded-xl border p-3 text-xs ${issue.severity === "error" ? "border-rose-400/25 bg-rose-400/7" : "border-amber-300/25 bg-amber-300/7"}`}><AlertTriangle className={`size-4 shrink-0 ${issue.severity === "error" ? "text-rose-400" : "text-amber-300"}`} />{issue.message}</div>)}</div>}
         </section>
       </main>
 
-      <div role="tablist" aria-label="Strategy results" className="flex overflow-x-auto border-t border-[var(--theme-border)] bg-[var(--surface-sidebar)] px-4">
-        {(["overview", "backtest", "validation", "journal"] as ResultTab[]).map((tab) => <button key={tab} id={`result-tab-${tab}`} type="button" role="tab" aria-controls="strategy-result-panel" aria-selected={resultTab === tab} tabIndex={resultTab === tab ? 0 : -1} onKeyDown={(event) => handleTabKey(event, ["overview", "backtest", "validation", "journal"], resultTab, setResultTab)} onClick={() => setResultTab(tab)} className={`relative h-11 shrink-0 px-4 text-xs font-semibold capitalize ${resultTab === tab ? "text-[var(--text-primary)] after:absolute after:inset-x-4 after:bottom-0 after:h-0.5 after:bg-white" : "text-[var(--text-muted)]"}`}>{tab}</button>)}
+      <div className="border-t border-[var(--theme-border)] bg-[var(--surface-header)] px-4 py-3">
+        <StudioTabList tabs={["overview", "backtest", "validation", "journal"]} current={resultTab} onSelect={setResultTab} label="Strategy results" idPrefix="result-tab" panelId={() => "strategy-result-panel"} className="max-w-full overflow-x-auto" />
       </div>
-      <section id="strategy-result-panel" role="tabpanel" aria-labelledby={`result-tab-${resultTab}`} className="border-t border-[var(--theme-border)] bg-[var(--surface-card)] px-5 py-4 text-sm"><StrategyResultPanel tab={resultTab} draft={workingDraft} issues={issues} /></section>
+      <section id="strategy-result-panel" role="tabpanel" aria-labelledby={`result-tab-${resultTab}`} className="min-h-24 border-t border-[var(--theme-border)] bg-[var(--surface-card)] px-5 py-4 text-sm"><StrategyResultPanel tab={resultTab} draft={workingDraft} issues={issues} /></section>
+      </div>
 
       <AlertDialog open={deployOpen} onOpenChange={setDeployOpen}>
-        <AlertDialogContent className="max-w-lg rounded-none bg-[#090a0f]">
+        <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader><p className="text-xs font-semibold uppercase text-sky-300">Paper deployment preview</p><AlertDialogTitle>Deploy {draft.name}</AlertDialogTitle><AlertDialogDescription>This records prototype approval only. It does not start a scheduler or submit an order.</AlertDialogDescription></AlertDialogHeader>
           <div className="mt-6 space-y-3 border-y border-white/10 py-4 text-sm"><DeployRow label="Version" value={`Version ${draft.versions[0]?.number ?? 1}`} /><DeployRow label="Mode" value="Paper only" /><DeployRow label="Schedule" value={draft.mode === "investment" ? "Quarterly review" : "Daily after close"} /><DeployRow label="Execution" value="No broker connected" /></div>
           <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => deployPaper(draft.id)}>Confirm paper deployment</AlertDialogAction></AlertDialogFooter>
@@ -226,11 +229,38 @@ export default function StrategyStudioPage({ strategyId }: { strategyId: string 
 
 function StrategyNodeRow({ node, selectedNodeId, onSelect, onMove, onRemove, first, last, depth }: { node: StrategyNode; selectedNodeId: string | null; onSelect: (nodeId: string) => void; onMove: (nodeId: string, direction: -1 | 1) => void; onRemove: (nodeId: string) => void; first: boolean; last: boolean; depth: number }) {
   const selected = selectedNodeId === node.id;
-  return <li><div className={`grid grid-cols-[1fr_auto] gap-2 border p-3 ${selected ? "border-white/35 bg-white/7" : "border-[var(--theme-border)] bg-[var(--surface-card)]"}`}><button type="button" onClick={() => onSelect(node.id)} className="min-w-0 text-left"><span className="flex items-center gap-2 text-[11px] font-semibold uppercase text-[var(--text-subtle)]">{titleCase(node.type)} <ChevronRight className="size-3" /></span><strong className="mt-1 block truncate text-sm">{node.label}</strong><span className="mt-1 block truncate text-xs text-[var(--text-muted)]">{node.detail}</span></button><div className="flex items-center gap-1"><IconButton label={`Move ${node.label} up`} disabled={first} onClick={() => onMove(node.id, -1)}><ArrowUp className="size-3.5" /></IconButton><IconButton label={`Move ${node.label} down`} disabled={last} onClick={() => onMove(node.id, 1)}><ArrowDown className="size-3.5" /></IconButton><IconButton label={`Remove ${node.label}`} onClick={() => onRemove(node.id)}><Trash2 className="size-3.5" /></IconButton></div></div>{node.children.length > 0 && <ol aria-label={`${node.label} rules`} className="mt-2 space-y-2 border-l border-[var(--theme-border-strong)] pl-3">{node.children.map((child, index) => <StrategyNodeRow key={child.id} node={child} selectedNodeId={selectedNodeId} onSelect={onSelect} onMove={onMove} onRemove={onRemove} first={index === 0} last={index === node.children.length - 1} depth={depth + 1} />)}</ol>}</li>;
+  return <li><div className={cn("grid grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-xl border p-3 transition-[background-color,border-color,box-shadow] duration-150 hover:border-[var(--theme-border-strong)] hover:bg-[var(--surface-card-hover)] motion-reduce:transition-none", selected ? "border-indigo-primary/45 bg-indigo-primary/8 shadow-[var(--shadow-control)]" : "border-[var(--theme-border)] bg-[var(--surface-card)]")}><button type="button" onClick={() => onSelect(node.id)} className="min-w-0 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/45"><span className="flex items-center gap-2 text-[11px] font-semibold uppercase text-[var(--text-subtle)]">{titleCase(node.type)} <ChevronRight className={cn("size-3 transition-transform duration-150 motion-reduce:transition-none", selected && "translate-x-0.5")} /></span><strong className="mt-1 block truncate text-sm">{node.label}</strong><span className="mt-1 block truncate text-xs text-[var(--text-muted)]">{node.detail}</span></button><div className="flex items-center gap-1"><IconButton label={`Move ${node.label} up`} disabled={first} onClick={() => onMove(node.id, -1)}><ArrowUp className="size-3.5" /></IconButton><IconButton label={`Move ${node.label} down`} disabled={last} onClick={() => onMove(node.id, 1)}><ArrowDown className="size-3.5" /></IconButton><IconButton label={`Remove ${node.label}`} onClick={() => onRemove(node.id)}><Trash2 className="size-3.5" /></IconButton></div></div>{node.children.length > 0 && <ol aria-label={`${node.label} rules`} className="mt-2 space-y-2 border-l border-[var(--theme-border-strong)] pl-3">{node.children.map((child, index) => <StrategyNodeRow key={child.id} node={child} selectedNodeId={selectedNodeId} onSelect={onSelect} onMove={onMove} onRemove={onRemove} first={index === 0} last={index === node.children.length - 1} depth={depth + 1} />)}</ol>}</li>;
 }
 
 function IconButton({ label, disabled, onClick, children }: { label: string; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
-  return <button type="button" aria-label={label} title={label} disabled={disabled} onClick={onClick} className="inline-flex size-8 items-center justify-center border border-[var(--theme-border)] text-[var(--text-muted)] hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)] disabled:opacity-30">{children}</button>;
+  return <Button type="button" aria-label={label} title={label} disabled={disabled} onClick={onClick} variant="outline" size="icon-sm">{children}</Button>;
+}
+
+function StudioTabList<T extends string>({ tabs, current, onSelect, label, idPrefix, panelId, className }: { tabs: readonly T[]; current: T; onSelect: (tab: T) => void; label: string; idPrefix: string; panelId: (tab: T) => string; className?: string }) {
+  return (
+    <div role="tablist" aria-label={label} className={cn("flex w-max items-center rounded-full border border-[var(--theme-border)] bg-[var(--surface-header)] px-1", className)}>
+      {tabs.map((tab) => {
+        const active = current === tab;
+        return (
+          <button
+            key={tab}
+            id={`${idPrefix}-${tab}`}
+            type="button"
+            role="tab"
+            aria-controls={panelId(tab)}
+            aria-selected={active}
+            tabIndex={active ? 0 : -1}
+            onKeyDown={(event) => handleTabKey(event, tabs, current, onSelect)}
+            onClick={() => onSelect(tab)}
+            className={cn("relative h-11 min-w-0 shrink-0 px-4 text-xs font-semibold capitalize text-[var(--text-muted)] transition-colors duration-150 hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-primary/45 motion-reduce:transition-none", active && "text-[var(--text-primary)]")}
+          >
+            {tab}
+            {active && <span aria-hidden="true" className="pointer-events-none absolute bottom-1.5 left-1/2 h-1 w-8 -translate-x-1/2"><span className="workspace-tab-line absolute inset-x-0 top-1/2 h-px -translate-y-1/2 rounded-full bg-[var(--text-primary)]" /></span>}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function PreviewMetric({ label, value }: { label: string; value: string }) { return <div><p className="text-[11px] text-[var(--text-muted)]">{label}</p><p className="mt-1 text-sm font-semibold">{value}</p></div>; }
