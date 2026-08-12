@@ -38,7 +38,7 @@ export default function PublicAccessGate() {
             <ArrowRight className="size-4" />
           </Link>
           <Link
-            href="/market"
+            href="/discover/markets"
             className="inline-flex h-10 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.04] px-4 text-sm font-medium text-white/72 transition-colors hover:bg-white/[0.08] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
           >
             Continue to market lookup

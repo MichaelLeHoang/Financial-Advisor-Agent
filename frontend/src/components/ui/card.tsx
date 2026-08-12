@@ -1,5 +1,6 @@
 import * as React from "react"
 
+import { APP_RADIUS } from "@/lib/ui-design"
 import { cn } from "@/lib/utils"
 
 function Card({
@@ -12,7 +13,8 @@ function Card({
       data-slot="card"
       data-size={size}
       className={cn(
-        "group/card flex flex-col gap-6 overflow-hidden rounded-2xl border border-[var(--border-card)] bg-[var(--surface-card)] py-6 text-sm text-card-foreground shadow-[var(--shadow-card)] has-[>img:first-child]:pt-0 data-[size=sm]:gap-4 data-[size=sm]:py-4 *:[img:first-child]:rounded-t-2xl *:[img:last-child]:rounded-b-2xl",
+        APP_RADIUS.surface,
+        "group/card flex flex-col gap-6 overflow-hidden border border-[var(--border-card)] bg-[var(--surface-card)] py-6 text-sm text-card-foreground shadow-[var(--shadow-card)] has-[>img:first-child]:pt-0 data-[size=sm]:gap-4 data-[size=sm]:py-4 *:[img:first-child]:rounded-t-2xl *:[img:last-child]:rounded-b-2xl",
         className
       )}
       {...props}

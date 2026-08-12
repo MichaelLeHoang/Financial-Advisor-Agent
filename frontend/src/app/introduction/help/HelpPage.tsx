@@ -130,7 +130,7 @@ export default function HelpPage() {
             Support for account access, billing, profile setup, AI research workflows, market data, bug reports, security questions, and feature requests.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <a href="mailto:support@quantumadvisor.app?subject=Support%20request" className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-indigo-500 px-5 text-sm font-semibold text-white shadow-[0_0_0_1px_rgba(99,102,241,0.5),0_8px_24px_rgba(99,102,241,0.28)] transition-colors hover:bg-indigo-400">
+            <a href="mailto:support@quantumadvisor.app?subject=Support%20request" className="theme-accent-surface on-accent inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold">
               <Mail className="h-4 w-4" />
               Email support
             </a>

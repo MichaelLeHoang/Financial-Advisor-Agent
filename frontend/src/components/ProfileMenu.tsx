@@ -8,12 +8,20 @@ import {
     Building2,
     Check,
     ChevronRight,
+    Flame,
     HelpCircle,
+    Keyboard,
+    Languages,
     LogIn,
     LogOut,
+    Monitor,
+    Moon,
+    Palette,
+    PanelsTopLeft,
     Plus,
     Settings,
     Sparkles,
+    Sun,
     User,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -26,10 +34,29 @@ import {
     DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuSeparator,
+    DropdownMenuSubmenu,
+    DropdownMenuSubmenuContent,
+    DropdownMenuSubmenuTrigger,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { getAvatarColor, getAvatarInitials } from "@/lib/avatar";
+import {
+    APP_APPEARANCE_OPTIONS,
+    persistAppearancePreference,
+    persistThemePreference,
+    readAppearancePreference,
+    readThemePreference,
+    type AppAppearancePreference,
+    type AppThemePreference,
+} from "@/lib/app-theme";
+
+const PROFILE_THEME_OPTIONS: Array<{ name: AppThemePreference; label: string; icon: ComponentType<{ className?: string }> }> = [
+    { name: "White", label: "Light", icon: Sun },
+    { name: "Deep Space", label: "Dark", icon: Moon },
+    { name: "Crimson", label: "Red", icon: Flame },
+    { name: "System", label: "System", icon: Monitor },
+];
 
 export default function ProfileMenu({
     compact = false,
@@ -52,6 +79,8 @@ export default function ProfileMenu({
     const [policyAccepted, setPolicyAccepted] = useState(false);
     const [authFormError, setAuthFormError] = useState<string | null>(null);
     const [authSubmitting, setAuthSubmitting] = useState(false);
+    const [themePreference, setThemePreference] = useState<AppThemePreference>("Deep Space");
+    const [appearancePreference, setAppearancePreference] = useState<AppAppearancePreference>("Solid");
     const triggerRef = useRef<HTMLButtonElement>(null);
 
     const currentUserName = loading ? "Loading account..." : user?.display_name || user?.email?.split("@")[0] || "Researcher";
@@ -72,7 +101,10 @@ export default function ProfileMenu({
             if (authMode === "signin") {
                 await signIn(email, password);
             } else {
-                await signUp(email, password);
+                window.sessionStorage.setItem("quanfora.onboarding.intent", "signup");
+                await signUp(email, password, "/home");
+                window.localStorage.setItem("financial-advisor.coverSeen", "true");
+                router.push("/onboarding?next=/home");
             }
             setSignInOpen(false);
         } finally {
@@ -98,9 +130,27 @@ export default function ProfileMenu({
         onAlertsClick?.();
     };
 
+    const openShortcuts = () => {
+        window.dispatchEvent(new Event("financial-advisor:shortcuts-open"));
+    };
+
+    const chooseTheme = (theme: AppThemePreference) => {
+        setThemePreference(theme);
+        persistThemePreference(theme);
+    };
+
+    const chooseAppearance = (appearance: AppAppearancePreference) => {
+        setAppearancePreference(appearance);
+        persistAppearancePreference(appearance);
+    };
+
     return (
         <DropdownMenu
             onOpenChange={(open) => {
+                if (open) {
+                    setThemePreference(readThemePreference());
+                    setAppearancePreference(readAppearancePreference());
+                }
                 if (!open) {
                     setAccountSwitcherOpen(false);
                     setSignInOpen(false);
@@ -111,7 +161,7 @@ export default function ProfileMenu({
                 ref={triggerRef}
                 aria-label="Open profile menu"
                 className={compact
-                    ? "flex h-10 w-10 items-center justify-center rounded-xl bg-transparent p-0 text-left transition-colors hover:bg-white/[0.07] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                    ? "flex h-10 w-10 items-center justify-center rounded-full bg-transparent p-0 text-left transition-colors hover:bg-[var(--surface-card-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     : "flex w-full items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.035] py-2 pl-1 pr-2.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-white/[0.065] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                 }
             >
@@ -129,22 +179,22 @@ export default function ProfileMenu({
                 )}
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent side="right" align="end" sideOffset={compact ? 8 : 14} className="bg-[var(--surface-popover-strong)] text-[var(--text-secondary)]">
+            <DropdownMenuContent side="right" align="end" sideOffset={compact ? 8 : 14} className="w-64 p-2 text-[var(--text-secondary)]">
                 <DropdownMenuGroup>
                     <DropdownMenuItem
                         closeOnClick={false}
                         onClick={() => setAccountSwitcherOpen((open) => !open)}
-                        className="h-auto py-3"
+                        className="h-auto gap-2.5 px-2 py-2"
                     >
                         <ProfileAvatar
                             avatarUrl={user?.avatar_url}
                             initial={initial}
                             placeholderColor={avatarColor}
-                            size="lg"
+                            size="default"
                         />
                         <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-semibold text-[var(--text-primary)]">{currentUserName}</div>
-                            <div className="truncate text-xs text-[var(--text-muted)]">Current plan: {formatPlan(currentPlan)}</div>
+                            <div className="truncate text-[11px] text-[var(--text-muted)]">Current plan: {formatPlan(currentPlan)}</div>
                         </div>
                         <ChevronRight className="size-4 text-[var(--text-subtle)]" />
                     </DropdownMenuItem>
@@ -191,13 +241,64 @@ export default function ProfileMenu({
                     )}
                     <MenuItem icon={Sparkles} label={isGuest ? "Upgrade plan" : "Plans & billing"} onClick={() => router.push("/pricing")} />
                     {!isGuest && <MenuItem icon={User} label="Profile" onClick={() => { onProfileClick?.(); }} />}
+                    {!isGuest && <MenuItem icon={Sparkles} label="Workspace setup" onClick={() => router.push("/onboarding?next=/home")} />}
                     <MenuItem icon={Bell} label="Alerts" onClick={openAlerts} />
                     <MenuItem icon={HelpCircle} label="Help center" onClick={openHelpCenter} />
+                    <DropdownMenuSubmenu>
+                        <DropdownMenuSubmenuTrigger openOnHover>
+                            <Palette className="size-4 shrink-0 text-[var(--text-muted)]" />
+                            <span className="min-w-0 flex-1 truncate">Appearance</span>
+                            <ChevronRight className="size-4 text-[var(--text-subtle)]" />
+                        </DropdownMenuSubmenuTrigger>
+                        <DropdownMenuSubmenuContent aria-label="Appearance">
+                            {PROFILE_THEME_OPTIONS.map((theme) => {
+                                const Icon = theme.icon;
+                                const selected = themePreference === theme.name;
+                                return (
+                                    <DropdownMenuItem key={theme.name} closeOnClick={false} onClick={() => chooseTheme(theme.name)} className="h-10 gap-2.5 px-2">
+                                        <Icon className="size-4 shrink-0 text-[var(--text-muted)]" />
+                                        <span className="flex-1">{theme.label}</span>
+                                        <span className={cn("flex size-5 items-center justify-center rounded-full border-2 border-[var(--theme-border-strong)]", selected && "border-[var(--text-primary)] bg-[var(--text-primary)] text-[var(--surface-popover-strong)]")}>
+                                            {selected && <Check className="size-3" strokeWidth={3} />}
+                                        </span>
+                                    </DropdownMenuItem>
+                                );
+                            })}
+                            <DropdownMenuSeparator className="my-1.5" />
+                            <div className="px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-subtle)]" role="presentation">Surface style</div>
+                            {APP_APPEARANCE_OPTIONS.map((appearance) => {
+                                const selected = appearancePreference === appearance.name;
+                                return (
+                                    <DropdownMenuItem key={appearance.name} closeOnClick={false} onClick={() => chooseAppearance(appearance.name)} className="h-10 gap-2.5 px-2">
+                                        <PanelsTopLeft aria-hidden="true" className="size-4 shrink-0 text-[var(--text-muted)]" />
+                                        <span className="flex-1">{appearance.label}</span>
+                                        <span className={cn("flex size-5 items-center justify-center rounded-full border-2 border-[var(--theme-border-strong)]", selected && "border-[var(--text-primary)] bg-[var(--text-primary)] text-[var(--surface-popover-strong)]")}>
+                                            {selected && <Check aria-hidden="true" className="size-3" strokeWidth={3} />}
+                                        </span>
+                                    </DropdownMenuItem>
+                                );
+                            })}
+                        </DropdownMenuSubmenuContent>
+                    </DropdownMenuSubmenu>
+                    <DropdownMenuSubmenu>
+                        <DropdownMenuSubmenuTrigger openOnHover>
+                            <Languages className="size-4 shrink-0 text-[var(--text-muted)]" />
+                            <span className="min-w-0 flex-1 truncate">Language</span>
+                            <ChevronRight className="size-4 text-[var(--text-subtle)]" />
+                        </DropdownMenuSubmenuTrigger>
+                        <DropdownMenuSubmenuContent aria-label="Language" className="w-52">
+                            <DropdownMenuItem closeOnClick={false} className="h-10 gap-2.5 px-2">
+                                <span className="flex-1">English (US)</span>
+                                <Check className="size-4" />
+                            </DropdownMenuItem>
+                            <p className="px-2 pb-1 pt-2 text-[11px] text-[var(--text-subtle)]">More languages will appear here as localization is added.</p>
+                        </DropdownMenuSubmenuContent>
+                    </DropdownMenuSubmenu>
+                    <MenuItem icon={Keyboard} label="Shortcuts" onClick={openShortcuts} />
                     <MenuItem icon={Settings} label="Settings" onClick={openSettings} />
+                    {!isGuest && <DropdownMenuSeparator className="my-1.5" />}
                     {!isGuest && <MenuItem icon={LogOut} label="Sign out" onClick={signOut} />}
                 </DropdownMenuGroup>
-
-                <DropdownMenuSeparator />
 
                 {signInOpen && (
                     <form
@@ -305,7 +406,7 @@ function ProfileAvatar({
             >
                 {initial}
             </AvatarFallback>
-            <AvatarBadge className="bg-green-positive shadow-[0_0_8px_rgba(52,211,153,0.72)] ring-[var(--surface-sidebar)]" />
+            <AvatarBadge className="bg-green-positive shadow-none ring-[var(--surface-sidebar)]" />
         </Avatar>
     );
 }
@@ -332,8 +433,9 @@ function MenuItem({
         <DropdownMenuItem
             onClick={onClick}
             closeOnClick={closeOnClick}
+            className="h-9 gap-2.5 px-2"
         >
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.055] text-[var(--text-muted)] ring-1 ring-white/10">
+            <div className="flex size-5 shrink-0 items-center justify-center text-[var(--text-muted)]">
                 <Icon className="size-4" />
             </div>
             <div className="min-w-0 truncate text-sm text-[var(--text-secondary)]">{label}</div>

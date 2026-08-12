@@ -50,7 +50,10 @@ def _is_guest_user(user_id: str) -> bool:
 
 def _get_connection() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(DB_PATH), timeout=5)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -246,20 +249,61 @@ def append_message(
     content: str,
     user_id: str = "00000000-0000-0000-0000-000000000001",
     metadata: dict | None = None,
-) -> None:
+) -> int | None:
     """Append a single message to the session history."""
     if _is_guest_user(user_id):
-        return
+        return None
     conn = _get_connection()
     title = _default_title(content) if role == "user" else None
     _touch_session(conn, user_id, session_id, title)
     metadata_json = json.dumps(metadata) if metadata else None
-    conn.execute(
+    cursor = conn.execute(
         "INSERT INTO messages (user_id, session, role, content, metadata, created_at) VALUES (?,?,?,?,?,?)",
         (user_id, session_id, role, content, metadata_json, datetime.now(UTC).isoformat()),
     )
     conn.commit()
     conn.close()
+    return int(cursor.lastrowid)
+
+
+def truncate_history(
+    session_id: str,
+    keep_count: int,
+    user_id: str = "00000000-0000-0000-0000-000000000001",
+) -> int:
+    """Remove messages after ``keep_count`` while preserving the owned session."""
+    if _is_guest_user(user_id) or keep_count < 0:
+        return 0
+    conn = _get_connection()
+    rows = conn.execute(
+        "SELECT id FROM messages WHERE user_id=? AND session=? ORDER BY id",
+        (user_id, session_id),
+    ).fetchall()
+    if not rows:
+        conn.close()
+        return 0
+
+    remove_ids = [row[0] for row in rows[keep_count:]]
+    if remove_ids:
+        placeholders = ",".join("?" for _ in remove_ids)
+        conn.execute(
+            f"DELETE FROM messages WHERE user_id=? AND session=? AND id IN ({placeholders})",
+            (user_id, session_id, *remove_ids),
+        )
+        now = datetime.now(UTC).isoformat()
+        if keep_count == 0:
+            conn.execute(
+                "UPDATE sessions SET title='New chat', updated_at=? WHERE user_id=? AND session=?",
+                (now, user_id, session_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE sessions SET updated_at=? WHERE user_id=? AND session=?",
+                (now, user_id, session_id),
+            )
+        conn.commit()
+    conn.close()
+    return len(remove_ids)
 
 
 def clear_history(session_id: str, user_id: str = "00000000-0000-0000-0000-000000000001") -> bool:

@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CheckCircle2, FileText, Search, Shield, TrendingUp } from "lucide-react";
-import { AnimatePresence, motion, useInView, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useInView } from "motion/react";
 
 import { trackLandingEvent } from "./landing-analytics";
+import { useHydratedReducedMotion } from "@/hooks/useHydratedReducedMotion";
 
 const JOURNEY_STEPS = [
   {
@@ -52,7 +53,7 @@ const JOURNEY_STEPS = [
 type JourneyStep = (typeof JOURNEY_STEPS)[number];
 
 export function ResearchJourney() {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useHydratedReducedMotion();
   const [activeIndex, setActiveIndex] = useState(0);
   const [timeline, setTimeline] = useState({ top: 0, height: 0 });
   const stepsContainerRef = useRef<HTMLDivElement>(null);
@@ -142,7 +143,7 @@ export function ResearchJourney() {
                 onClick={() => {
                   trackLandingEvent("landing_launch_app_click", { location: "journey_cta" });
                   window.localStorage.setItem("financial-advisor.coverSeen", "true");
-                  window.location.href = "/session";
+                  window.location.href = "/login?next=%2Fhome";
                 }}
                 className="intro-primary-action inline-flex h-11 items-center justify-center rounded-full px-6 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
               >
@@ -317,7 +318,7 @@ function ResearchJourneyFrame({ step, reduceMotion }: { step: JourneyStep; reduc
               </div>
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.10]">
                 <motion.div
-                  className="h-full origin-left rounded-full bg-gradient-to-r from-indigo-primary to-emerald-300"
+                  className="h-full origin-left rounded-full bg-indigo-primary"
                   initial={reduceMotion ? false : { scaleX: 0.2 }}
                   animate={{ scaleX: step.id === "decision" ? 0.92 : step.id === "risk" ? 0.74 : step.id === "evidence" ? 0.56 : 0.34 }}
                   transition={{ duration: reduceMotion ? 0 : 0.28, ease: "easeOut" }}

@@ -16,12 +16,20 @@ def _b64url(value: bytes) -> str:
 def _sign(payload: dict, secret: str = "test-secret") -> str:
     header = _b64url(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
     body = _b64url(json.dumps(payload).encode())
-    signature = hmac.new(secret.encode(), f"{header}.{body}".encode(), hashlib.sha256).digest()
+    signature = hmac.new(
+        secret.encode(), f"{header}.{body}".encode(), hashlib.sha256
+    ).digest()
     return f"{header}.{body}.{_b64url(signature)}"
 
 
 def _auth_headers(user_id) -> dict[str, str]:
-    token = _sign({"sub": str(user_id), "email": f"{user_id}@example.com", "exp": int(time.time()) + 3600})
+    token = _sign(
+        {
+            "sub": str(user_id),
+            "email": f"{user_id}@example.com",
+            "exp": int(time.time()) + 3600,
+        }
+    )
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -36,7 +44,9 @@ def test_status_endpoint_redacts_secrets_and_reports_services(monkeypatch):
             return FakeCollections()
 
     monkeypatch.setattr(api_app, "get_qdrant_client", lambda: FakeQdrantClient())
-    monkeypatch.setattr(api_app, "_check_redis", lambda: {"status": "ok", "configured": True})
+    monkeypatch.setattr(
+        api_app, "_check_redis", lambda: {"status": "ok", "configured": True}
+    )
 
     response = TestClient(api_app.app).get("/api/v1/status")
 
@@ -84,7 +94,10 @@ def test_agent_reset_uses_default_session(monkeypatch):
             self.reset = True
 
     monkeypatch.setattr(api_app, "get_agent", lambda: FakeAgent())
-    monkeypatch.setattr("src.agent.history.clear_history", lambda session_id, user_id=None: cleared_sessions.append((session_id, user_id)))
+    monkeypatch.setattr(
+        "src.agent.history.clear_history",
+        lambda session_id, user_id=None: cleared_sessions.append((session_id, user_id)),
+    )
 
     response = TestClient(api_app.app).post("/api/v1/agent/reset")
 
@@ -122,11 +135,20 @@ def test_agent_chat_job_endpoints_use_queue(monkeypatch):
     client = TestClient(api_app.app)
     create = client.post(
         "/api/v1/agent/chat/jobs",
-        json={"message": "What is AAPL?", "session_id": "s1", "mode": "single"},
+        json={"message": "What is AAPL?", "session_id": "s1"},
     )
 
     assert create.status_code == 200
     assert create.json() == {"job_id": "job-1", "status": "queued", "queue_position": 1}
+    assert fake_queue.record["payload"]["mode"] == "sabi"
+
+    sabi = client.post(
+        "/api/v1/agent/chat/jobs",
+        json={"message": "Should I buy NVDA?", "session_id": "sabi-1", "mode": "sabi"},
+    )
+    assert sabi.status_code == 200
+    assert fake_queue.record["kind"] == "consensus"
+    assert fake_queue.record["payload"]["mode"] == "sabi"
 
     status = client.get("/api/v1/agent/chat/jobs/job-1")
     assert status.status_code == 200
@@ -138,7 +160,9 @@ def test_agent_chat_job_status_is_scoped_to_current_user(monkeypatch):
     from src.auth import supabase
     import src.agent.llm_queue as queue_module
 
-    monkeypatch.setattr(supabase.settings, "supabase_jwt_secret", SecretStr("test-secret"))
+    monkeypatch.setattr(
+        supabase.settings, "supabase_jwt_secret", SecretStr("test-secret")
+    )
 
     class FakeQueue:
         def __init__(self):
@@ -169,17 +193,88 @@ def test_agent_chat_job_status_is_scoped_to_current_user(monkeypatch):
 
     create = client.post(
         "/api/v1/agent/chat/jobs",
-        json={"message": "What is AAPL?", "session_id": "user-a-session", "mode": "single"},
+        json={
+            "message": "What is AAPL?",
+            "session_id": "user-a-session",
+            "mode": "single",
+        },
         headers=_auth_headers(user_a),
     )
 
     assert create.status_code == 200
     assert fake_queue.record["payload"]["user_id"] == str(user_a)
-    assert client.get("/api/v1/agent/chat/jobs/job-user-a", headers=_auth_headers(user_b)).status_code == 404
+    assert (
+        client.get(
+            "/api/v1/agent/chat/jobs/job-user-a", headers=_auth_headers(user_b)
+        ).status_code
+        == 404
+    )
 
-    own_status = client.get("/api/v1/agent/chat/jobs/job-user-a", headers=_auth_headers(user_a))
+    own_status = client.get(
+        "/api/v1/agent/chat/jobs/job-user-a", headers=_auth_headers(user_a)
+    )
     assert own_status.status_code == 200
     assert own_status.json()["status"] == "queued"
+
+
+def test_agent_chat_activity_stream_is_owner_scoped_and_resumable(monkeypatch):
+    from src.api import app as api_app
+    from src.auth import supabase
+    import src.agent.llm_queue as queue_module
+
+    monkeypatch.setattr(
+        supabase.settings, "supabase_jwt_secret", SecretStr("test-secret")
+    )
+    owner_id = uuid4()
+    other_id = uuid4()
+
+    class FakeQueue:
+        def get(self, job_id):
+            if job_id != "job-stream":
+                return None
+            return {
+                "job_id": job_id,
+                "kind": "single",
+                "status": "succeeded",
+                "payload": {"user_id": str(owner_id)},
+                "activity_events": [
+                    {
+                        "run_id": job_id,
+                        "sequence": 1,
+                        "type": "analysis.planned",
+                        "label": "Analysis plan ready",
+                    },
+                    {
+                        "run_id": job_id,
+                        "sequence": 2,
+                        "type": "analysis.completed",
+                        "label": "Analysis completed",
+                        "status": "complete",
+                    },
+                ],
+            }
+
+        def queue_position(self, job_id, kind):
+            return None
+
+    monkeypatch.setattr(queue_module, "get_llm_job_queue", lambda: FakeQueue())
+    client = TestClient(api_app.app)
+
+    denied = client.get(
+        "/api/v1/agent/chat/jobs/job-stream/events",
+        headers=_auth_headers(other_id),
+    )
+    assert denied.status_code == 404
+
+    resumed = client.get(
+        "/api/v1/agent/chat/jobs/job-stream/events?after=1",
+        headers=_auth_headers(owner_id),
+    )
+    assert resumed.status_code == 200
+    assert resumed.headers["content-type"].startswith("text/event-stream")
+    assert "id: 1" not in resumed.text
+    assert "id: 2" in resumed.text
+    assert "event: analysis.completed" in resumed.text
 
 
 def test_agent_session_endpoints_scope_to_current_user(tmp_path, monkeypatch):
@@ -188,12 +283,16 @@ def test_agent_session_endpoints_scope_to_current_user(tmp_path, monkeypatch):
     from src.auth import supabase
 
     monkeypatch.setattr(history, "DB_PATH", tmp_path / "conversations.db")
-    monkeypatch.setattr(supabase.settings, "supabase_jwt_secret", SecretStr("test-secret"))
+    monkeypatch.setattr(
+        supabase.settings, "supabase_jwt_secret", SecretStr("test-secret")
+    )
 
     user_a = uuid4()
     user_b = uuid4()
     history.append_message("session-a", "user", "User A private question", str(user_a))
-    history.append_message("session-a", "assistant", "User A private answer", str(user_a))
+    history.append_message(
+        "session-a", "assistant", "User A private answer", str(user_a)
+    )
     history.append_message("session-b", "user", "User B private question", str(user_b))
 
     client = TestClient(api_app.app)
@@ -209,13 +308,29 @@ def test_agent_session_endpoints_scope_to_current_user(tmp_path, monkeypatch):
 
     sessions_a = client.get("/api/v1/agent/sessions", headers=_auth_headers(user_a))
     assert sessions_a.status_code == 200
-    assert {row["session_id"] for row in sessions_a.json()} == {"session-a", "empty-session"}
+    assert {row["session_id"] for row in sessions_a.json()} == {
+        "session-a",
+        "empty-session",
+    }
 
-    own_messages = client.get("/api/v1/agent/sessions/session-a/messages", headers=_auth_headers(user_a))
+    own_messages = client.get(
+        "/api/v1/agent/sessions/session-a/messages", headers=_auth_headers(user_a)
+    )
     assert own_messages.status_code == 200
     assert own_messages.json()["messages"][0]["content"] == "User A private question"
 
-    cross_messages = client.get("/api/v1/agent/sessions/session-b/messages", headers=_auth_headers(user_a))
+    truncated = client.patch(
+        "/api/v1/agent/sessions/session-a/messages",
+        headers=_auth_headers(user_a),
+        json={"keep_count": 1},
+    )
+    assert truncated.status_code == 200
+    assert truncated.json()["removed_count"] == 1
+    assert len(history.load_history("session-a", str(user_a))) == 1
+
+    cross_messages = client.get(
+        "/api/v1/agent/sessions/session-b/messages", headers=_auth_headers(user_a)
+    )
     assert cross_messages.status_code == 404
 
     cross_rename = client.patch(
@@ -225,9 +340,21 @@ def test_agent_session_endpoints_scope_to_current_user(tmp_path, monkeypatch):
     )
     assert cross_rename.status_code == 404
 
-    cross_delete = client.delete("/api/v1/agent/sessions/session-b", headers=_auth_headers(user_a))
+    cross_truncate = client.patch(
+        "/api/v1/agent/sessions/session-b/messages",
+        headers=_auth_headers(user_a),
+        json={"keep_count": 0},
+    )
+    assert cross_truncate.status_code == 404
+
+    cross_delete = client.delete(
+        "/api/v1/agent/sessions/session-b", headers=_auth_headers(user_a)
+    )
     assert cross_delete.status_code == 404
-    assert history.load_history("session-b", str(user_b))[0]["content"] == "User B private question"
+    assert (
+        history.load_history("session-b", str(user_b))[0]["content"]
+        == "User B private question"
+    )
 
 
 def test_guest_cannot_load_or_mutate_saved_chat_sessions(tmp_path, monkeypatch):
@@ -237,10 +364,24 @@ def test_guest_cannot_load_or_mutate_saved_chat_sessions(tmp_path, monkeypatch):
     monkeypatch.setattr(history, "DB_PATH", tmp_path / "conversations.db")
 
     client = TestClient(api_app.app)
-    assert client.post("/api/v1/agent/sessions", json={"session_id": "any", "title": "New chat"}).status_code == 401
+    assert (
+        client.post(
+            "/api/v1/agent/sessions", json={"session_id": "any", "title": "New chat"}
+        ).status_code
+        == 401
+    )
     assert client.get("/api/v1/agent/sessions").status_code == 401
     assert client.get("/api/v1/agent/sessions/any/messages").status_code == 401
-    assert client.patch("/api/v1/agent/sessions/any", json={"title": "x"}).status_code == 401
+    assert (
+        client.patch(
+            "/api/v1/agent/sessions/any/messages", json={"keep_count": 0}
+        ).status_code
+        == 401
+    )
+    assert (
+        client.patch("/api/v1/agent/sessions/any", json={"title": "x"}).status_code
+        == 401
+    )
     assert client.delete("/api/v1/agent/sessions/any").status_code == 401
 
 
@@ -277,9 +418,13 @@ def test_rag_query_uses_ai_quota(monkeypatch):
             confidence=0.5,
         ),
     )
-    monkeypatch.setattr(api_app.usage_tracker, "increment", lambda *args: increments.append(args))
+    monkeypatch.setattr(
+        api_app.usage_tracker, "increment", lambda *args: increments.append(args)
+    )
 
-    response = TestClient(api_app.app).post("/api/v1/query", params={"question": "AAPL outlook"})
+    response = TestClient(api_app.app).post(
+        "/api/v1/query", params={"question": "AAPL outlook"}
+    )
 
     assert response.status_code == 200
     assert len(increments) == 1

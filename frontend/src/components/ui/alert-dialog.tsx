@@ -163,7 +163,7 @@ function AlertDialogClose({
         alt=""
         aria-hidden="true"
         data-icon="inline-start"
-        className="size-5 opacity-65 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.68)]"
+        className="size-5 opacity-65 transition-opacity duration-200 group-hover:opacity-100"
       />
       <span className="sr-only">Close</span>
     </AlertDialogPrimitive.Close>

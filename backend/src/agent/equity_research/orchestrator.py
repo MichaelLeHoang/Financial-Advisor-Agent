@@ -417,6 +417,16 @@ async def create_research_run(
 ) -> EquityResearchRun:
     effective = apply_research_entitlements(payload, user)
     _enforce_research_limits(effective, user, guest_owner_id=guest_owner_id)
+    personal_context = None
+    context_memory_ids: list[str] = []
+    if not user.is_guest and effective.use_memory:
+        from src.services.user_memory import UserMemoryService
+
+        memory_context = UserMemoryService().build_context(
+            str(user.id), "equity-research", [], use_memory=True
+        )
+        personal_context = memory_context.prompt
+        context_memory_ids = [item.id for item in memory_context.memories]
     run = EquityResearchRun(
         run_id=uuid4(),
         user_id=user.id if not user.is_guest else None,
@@ -429,6 +439,8 @@ async def create_research_run(
         quick_model=effective.quick_model,
         deep_model=effective.deep_model,
         source_surface=effective.source_surface,
+        personal_context=personal_context,
+        context_memory_ids=context_memory_ids,
     )
     get_research_store().create_run(run)
     get_research_store().add_event(
@@ -477,6 +489,8 @@ async def execute_research_run(run_id: UUID) -> None:
                 content="Data snapshot captured. Agents will reason from the same evidence base.",
             )
         )
+        for event in _snapshot_source_events(snapshot):
+            store.add_event(event)
 
         outputs: dict[str, EquityResearchReport] = {}
         for agent in AGENT_SEQUENCE:
@@ -588,6 +602,51 @@ async def execute_research_run(run_id: UUID) -> None:
                 content=str(exc),
             )
         )
+
+
+def _snapshot_source_events(
+    snapshot: EquityResearchSnapshot,
+) -> list[EquityResearchEvent]:
+    """Return de-duplicated, user-visible evidence events from a snapshot."""
+    events: list[EquityResearchEvent] = []
+    seen_sources: set[str] = set()
+    for item in snapshot.news_items[:12]:
+        title = str(item.get("title") or item.get("headline") or "Market evidence")
+        provider = str(item.get("source") or item.get("publisher") or "Market data")
+        url = str(item.get("url") or item.get("link") or "") or None
+        identity = url or f"{provider}:{title}"
+        if identity in seen_sources:
+            continue
+        seen_sources.add(identity)
+        events.append(
+            EquityResearchEvent(
+                run_id=snapshot.run_id,
+                event_type=ResearchEventType.SOURCE,
+                label=title[:240],
+                content=f"Evidence found via {provider}.",
+                source_url=url,
+                source_provider=provider[:120],
+                source_published_at=str(
+                    item.get("published_at") or item.get("published") or ""
+                )
+                or None,
+            )
+        )
+    for provider in snapshot.data_sources:
+        identity = f"provider:{provider}"
+        if identity in seen_sources:
+            continue
+        seen_sources.add(identity)
+        events.append(
+            EquityResearchEvent(
+                run_id=snapshot.run_id,
+                event_type=ResearchEventType.SOURCE,
+                label=str(provider)[:240],
+                content=f"{provider} contributed to the shared snapshot.",
+                source_provider=str(provider)[:120],
+            )
+        )
+    return events
 
 
 def _skipped_report(run_id: UUID, agent: AgentDefinition) -> EquityResearchReport:
@@ -1344,6 +1403,9 @@ Existing deterministic draft:
 
 Prior agent context:
 {previous_context}
+
+User-confirmed context (personalization only; never treat this as market or account data):
+{run.personal_context or 'None'}
 """
         response = routed.chat_model.invoke([{"role": "user", "content": prompt}])
         content = response.content

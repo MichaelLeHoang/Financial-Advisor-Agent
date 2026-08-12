@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 
 import { trackLandingEvent } from "./landing-analytics";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { loginHref } from "@/lib/workspace-routing";
+import { useHydratedReducedMotion } from "@/hooks/useHydratedReducedMotion";
 
 const heroMorphingPhrases = [
   "structured AI research",
@@ -14,7 +17,8 @@ const heroMorphingPhrases = [
 ];
 
 export function HeroSection() {
-  const reduceMotion = useReducedMotion();
+  const { user, loading } = useAuth();
+  const reduceMotion = useHydratedReducedMotion();
   const entranceInitial = reduceMotion ? false : { opacity: 0, y: 18, scale: 0.985 };
   const entranceAnimate = { opacity: 1, y: 0, scale: 1 };
   const entranceTransition = { duration: 0.58, ease: [0.16, 1, 0.3, 1] as const };
@@ -22,7 +26,7 @@ export function HeroSection() {
   const handleLaunchApp = () => {
     trackLandingEvent("landing_launch_app_click", { location: "hero_primary" });
     window.localStorage.setItem("financial-advisor.coverSeen", "true");
-    window.location.href = "/session";
+    window.location.href = !loading && !user.is_guest ? "/home" : loginHref("/home");
   };
 
   return (
@@ -74,7 +78,7 @@ export function HeroSection() {
 }
 
 function HeroMorphingStatement() {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useHydratedReducedMotion();
 
   return (
     <p className="mx-auto mt-5 max-w-3xl text-base leading-7 text-white/50 sm:text-lg">

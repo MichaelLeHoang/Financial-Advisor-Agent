@@ -111,28 +111,6 @@ const PLACEHOLDERS = [
   "Drag a CSV of headlines or call transcript snippets into this panel...",
 ];
 
-const placeholderContainerVariants = {
-  initial: {},
-  animate: { transition: { staggerChildren: 0.015 } },
-  exit: { transition: { staggerChildren: 0.01, staggerDirection: -1 } },
-};
-
-const letterVariants = {
-  initial: { opacity: 0, filter: "blur(12px)", y: 10 },
-  animate: {
-    opacity: 1,
-    filter: "blur(0px)",
-    y: 0,
-    transition: { opacity: { duration: 0.25 }, filter: { duration: 0.4 }, y: { type: "spring" as const, stiffness: 80, damping: 20 } },
-  },
-  exit: {
-    opacity: 0,
-    filter: "blur(12px)",
-    y: -10,
-    transition: { opacity: { duration: 0.2 }, filter: { duration: 0.3 }, y: { type: "spring" as const, stiffness: 80, damping: 20 } },
-  },
-};
-
 function getId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `headline-${Date.now()}-${Math.random()}`;
 }
@@ -487,7 +465,7 @@ export default function SentimentPage() {
             }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
-            className="overflow-hidden rounded-3xl border p-2 text-white transition-colors"
+            className="overflow-hidden rounded-2xl border p-2 text-white transition-colors"
             animate={{
               borderColor: isDragging ? "rgba(99,102,241,0.75)" : isActive || input ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)",
               backgroundColor: isDragging ? "rgba(99,102,241,0.10)" : isActive || input ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.035)",
@@ -512,24 +490,11 @@ export default function SentimentPage() {
                       className="relative z-10 max-h-[220px] min-h-28 resize-none border-transparent bg-transparent px-3 py-3 pr-4 text-sm leading-6 text-white focus-visible:border-transparent focus-visible:ring-0"
                     />
                     <div className="pointer-events-none absolute inset-0 flex items-start px-3 py-3">
-                      <AnimatePresence mode="wait">
-                        {showPlaceholder && !isActive && !input && (
-                          <motion.span
-                            key={placeholderIndex}
-                            className="mt-0.5 max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white/24"
-                            variants={placeholderContainerVariants}
-                            initial="initial"
-                            animate="animate"
-                            exit="exit"
-                          >
-                            {PLACEHOLDERS[placeholderIndex].split("").map((char, index) => (
-                              <motion.span key={index} variants={letterVariants} style={{ display: "inline-block" }}>
-                                {char === " " ? "\u00A0" : char}
-                              </motion.span>
-                            ))}
-                          </motion.span>
-                        )}
-                      </AnimatePresence>
+                      {showPlaceholder && !isActive && !input && (
+                        <span className="mt-0.5 max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white/24">
+                          {PLACEHOLDERS[placeholderIndex]}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -577,7 +542,7 @@ export default function SentimentPage() {
                             aria-live="polite"
                             title="Fast keyword-based preview only. Final classification comes from FinBERT after analysis."
                           >
-                            <span className="h-2 w-2 rounded-full bg-current shadow-[0_0_12px_currentColor]" />
+                            <span className="h-2 w-2 rounded-full bg-current" />
                             Draft read: {currentGuess.label} {currentGuess.score > 0 ? "+" : ""}{currentGuess.score.toFixed(2)}
                           </div>
                         </div>
@@ -606,7 +571,7 @@ export default function SentimentPage() {
                 </AnimatePresence>
           </motion.div>
 
-          <Card className="rounded-3xl border-white/[0.07] bg-white/[0.035]">
+          <Card className="border-white/[0.07] bg-white/[0.035]">
             <CardContent className="space-y-4 p-5">
               <div className="flex items-center gap-3">
                 <Brain className="h-5 w-5 text-indigo-primary" />
@@ -641,14 +606,14 @@ export default function SentimentPage() {
               <Button
                 onClick={analyze}
                 disabled={headlines.length === 0 || loading}
-                className="on-accent accent-gradient-surface h-10 rounded-xl px-4 text-sm font-bold shadow-[var(--shadow-primary-action)]"
+                className="on-accent theme-accent-surface h-10 rounded-xl px-4 text-sm font-bold"
               >
                 {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Analyzing...</> : `Analyze ${headlines.length} headline${headlines.length !== 1 ? "s" : ""}`}
               </Button>
             </div>
           </div>
           {headlines.length === 0 ? (
-            <label className="flex cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-white/[0.08] bg-white/[0.02] p-8 text-center text-sm text-white/35 transition-colors hover:border-indigo-primary/35 hover:bg-indigo-primary/10 hover:text-indigo-100">
+            <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] p-8 text-center text-sm text-white/35 transition-colors hover:border-indigo-primary/35 hover:bg-indigo-primary/10 hover:text-indigo-100">
               <UploadCloud className="mb-2 h-5 w-5" />
               Add headlines above, or click here to upload a CSV/transcript into the queue.
               <input type="file" accept=".csv,.txt,.md" className="sr-only" onChange={uploadHeadlines} />
@@ -702,7 +667,7 @@ export default function SentimentPage() {
             <div className="grid gap-6 xl:grid-cols-[22rem_minmax(0,1fr)]">
               <SentimentGauge score={aggregateScore} angle={gaugeAngle} signal={mood.signal} breakdown={mood.breakdown} />
 
-              <Card className="rounded-3xl border-white/[0.07] bg-white/[0.035]">
+              <Card className="border-white/[0.07] bg-white/[0.035]">
                 <CardContent className="space-y-5 p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -737,7 +702,7 @@ export default function SentimentPage() {
             {(contradiction || flsItems.length > 0) && (
               <div className="grid gap-4 lg:grid-cols-2">
                 {contradiction && (
-                  <div className="rounded-3xl border border-amber-warning/20 bg-amber-warning/10 p-5">
+                  <div className="rounded-2xl border border-amber-warning/20 bg-amber-warning/10 p-5">
                     <div className="flex items-start gap-3">
                       <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-warning" />
                       <div>
@@ -750,7 +715,7 @@ export default function SentimentPage() {
                   </div>
                 )}
                 {flsItems.length > 0 && (
-                  <div className="rounded-3xl border border-indigo-primary/20 bg-indigo-primary/10 p-5">
+                  <div className="rounded-2xl border border-indigo-primary/20 bg-indigo-primary/10 p-5">
                     <div className="flex items-start gap-3">
                       <FileText className="mt-0.5 h-5 w-5 text-indigo-primary" />
                       <div>
@@ -845,7 +810,7 @@ function SentimentGauge({
   const color = score > 0.1 ? "var(--color-green-positive)" : score < -0.1 ? "var(--color-red-negative)" : "var(--color-amber-warning)";
 
   return (
-    <Card className="rounded-3xl border-white/[0.07] bg-white/[0.035]">
+    <Card className="border-white/[0.07] bg-white/[0.035]">
       <CardContent className="flex flex-col items-center p-6">
         <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-white">
           <Gauge className="h-5 w-5 text-indigo-primary" />
@@ -912,7 +877,7 @@ function AspectRow({ label, count, score }: { label: string; count: number; scor
 
 function EntityMatrix({ data }: { data: EntityImpact[] }) {
   return (
-    <Card className="rounded-3xl border-white/[0.07] bg-white/[0.035]">
+    <Card className="border-white/[0.07] bg-white/[0.035]">
       <CardContent className="p-5">
         <div className="mb-4 flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-indigo-primary" />
@@ -971,7 +936,7 @@ function TimeSeriesOverlay({
   quoteLoading: boolean;
 }) {
   return (
-    <Card className="rounded-3xl border-white/[0.07] bg-white/[0.035]">
+    <Card className="border-white/[0.07] bg-white/[0.035]">
       <CardContent className="p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>

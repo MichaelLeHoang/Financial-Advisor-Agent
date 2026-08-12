@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import { clearLocalChatHistory, notifyChatPrivacyReset } from "@/lib/local-chat-history";
 import { clearAccountScopedBrowserState } from "@/lib/privacy-storage";
+import { authCallbackHref, normalizeAppPath } from "@/lib/workspace-routing";
 
 export type Plan = "free" | "pro" | "trader" | "quant" | "execution_addon";
 
@@ -26,7 +27,7 @@ interface AuthContextValue {
   error: string | null;
   updateProfile: (profile: Partial<Pick<AuthUser, "display_name" | "username" | "avatar_url">>) => void;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, nextPath?: string) => Promise<void>;
   signInWithOAuth: (provider: Provider, nextPath?: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -38,6 +39,14 @@ const GUEST_USER: AuthUser = {
   display_name: "Guest",
   plan: "free",
   is_guest: true,
+};
+const E2E_AUTH_ENABLED = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_E2E_AUTH === "1";
+const E2E_USER: AuthUser = {
+  id: "00000000-0000-0000-0000-000000000099",
+  email: "e2e@quanfora.local",
+  display_name: "E2E Researcher",
+  plan: "trader",
+  is_guest: false,
 };
 
 function normalizeUser(payload: User): AuthUser {
@@ -64,14 +73,20 @@ function isPlan(value: unknown): value is Plan {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authSession, setAuthSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<AuthUser>(GUEST_USER);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser>(E2E_AUTH_ENABLED ? E2E_USER : GUEST_USER);
+  const [loading, setLoading] = useState(!E2E_AUTH_ENABLED);
   const [error, setError] = useState<string | null>(null);
   const previousIdentityRef = useRef<string | null>(null);
+  const appliedAccessTokenRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     let mounted = true;
     let sessionGeneration = 0;
+    if (E2E_AUTH_ENABLED) {
+      return () => {
+        mounted = false;
+      };
+    }
     if (!isSupabaseConfigured()) {
       setLoading(false);
       return () => {
@@ -81,13 +96,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const supabase = getSupabaseBrowserClient();
 
-    const applySession = async (nextSession: Session | null) => {
+    const applySession = async (nextSession: Session | null, forceProfileRefresh = false) => {
       if (!mounted) return;
+      const nextAccessToken = nextSession?.access_token ?? null;
+      if (!forceProfileRefresh && appliedAccessTokenRef.current === nextAccessToken) return;
+      appliedAccessTokenRef.current = nextAccessToken;
       const generation = ++sessionGeneration;
       const isCurrent = () => mounted && generation === sessionGeneration;
 
       setAuthSession(nextSession);
-      api.setAuthToken(nextSession?.access_token ?? null);
+      api.setAuthToken(nextAccessToken);
 
       if (!nextSession) {
         setUser(GUEST_USER);
@@ -97,28 +115,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       let fallbackUser = normalizeUser(nextSession.user);
       setUser(fallbackUser);
+      // The verified session already gives the app a safe identity and token.
+      // Release route hydration now while fresher profile/plan data loads in parallel.
+      setLoading(false);
 
-      try {
-        const { data: freshUserData } = await supabase.auth.getUser();
-        if (freshUserData.user) {
-          fallbackUser = normalizeUser(freshUserData.user);
-          if (isCurrent()) setUser(fallbackUser);
-        }
+      const [freshUserResult, apiUserResult] = await Promise.allSettled([
+        supabase.auth.getUser(),
+        api.me(),
+      ]);
+      if (!isCurrent()) return;
 
-        const apiUser = await api.me();
-        if (isCurrent() && !apiUser.is_guest) {
-          setUser({
-            ...fallbackUser,
-            ...apiUser,
-            display_name: apiUser.display_name ?? fallbackUser.display_name,
-            username: apiUser.username ?? fallbackUser.username,
-            avatar_url: apiUser.avatar_url ?? fallbackUser.avatar_url,
-          });
-        }
-      } catch {
-        if (isCurrent()) setUser(fallbackUser);
-      } finally {
-        if (isCurrent()) setLoading(false);
+      if (freshUserResult.status === "fulfilled" && freshUserResult.value.data.user) {
+        fallbackUser = normalizeUser(freshUserResult.value.data.user);
+      }
+      if (apiUserResult.status === "fulfilled" && !apiUserResult.value.is_guest) {
+        const apiUser = apiUserResult.value;
+        setUser({
+          ...fallbackUser,
+          ...apiUser,
+          display_name: apiUser.display_name ?? fallbackUser.display_name,
+          username: apiUser.username ?? fallbackUser.username,
+          avatar_url: apiUser.avatar_url ?? fallbackUser.avatar_url,
+        });
+      } else {
+        setUser(fallbackUser);
       }
     };
 
@@ -135,8 +155,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      void applySession(nextSession);
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      void applySession(nextSession, event === "USER_UPDATED");
     });
 
     return () => {
@@ -173,14 +193,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, nextPath = "/home") => {
     setError(null);
     const supabase = getSupabaseBrowserClient();
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/login`,
+        emailRedirectTo: `${window.location.origin}${authCallbackHref(nextPath)}`,
       },
     });
 
@@ -210,14 +230,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api.setAuthToken(null);
   };
 
-  const signInWithOAuth = async (provider: Provider, nextPath = "/session") => {
+  const signInWithOAuth = async (provider: Provider, nextPath = "/home") => {
     setError(null);
     const supabase = getSupabaseBrowserClient();
-    const safeNext = nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/session";
+    const safeNext = normalizeAppPath(nextPath);
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/login?next=${encodeURIComponent(safeNext)}`,
+        redirectTo: `${window.location.origin}${authCallbackHref(safeNext)}`,
         queryParams: provider === "google" ? { prompt: "select_account" } : undefined,
       },
     });

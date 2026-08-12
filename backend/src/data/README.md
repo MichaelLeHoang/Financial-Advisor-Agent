@@ -1,16 +1,19 @@
 # Data Module
 
 ## Purpose
-Provides market-data normalization, historical price fetching, and Qdrant persistence adapters.
+Provides equity and crypto market-data normalization, historical price fetching, and Qdrant persistence adapters.
 
 ## Responsibilities
-- Fetch current and historical market data.
-- Merge and normalize yfinance, Finnhub, Alpha Vantage, and SEC evidence.
+- Fetch current and historical market data, including batch release calendars, normalized earnings dates, EPS results, and provider company logos.
+- Fetch normalized crypto overviews, long-term price series, sentiment, and Bitcoin network context.
+- Merge and normalize timestamped yfinance, Finnhub, Alpha Vantage, and SEC evidence.
+- Preserve SEC current tickers, exchanges, and former company names for identity-sensitive research.
 - Search and deduplicate symbols while preserving exchange and instrument metadata.
 - Manage Qdrant collections, inserts, and filtered similarity searches.
 
 ## Key Files
 - `market_data_service.py`: normalized market snapshots, news, fundamentals, search, and provider quality.
+- `crypto_market_service.py`: CoinGecko, Alternative.me, Blockchain.com, mempool.space, and DefiLlama normalization with isolated provider failures, bounded caching, yfinance history/overview fallbacks, and a Bitcoin price-only safety net.
 - `fetch.py`: legacy historical price helpers.
 - `vector_db.py`: Qdrant adapter.
 
@@ -18,7 +21,7 @@ Provides market-data normalization, historical price fetching, and Qdrant persis
 Consumers should use the normalized service instead of calling providers directly. RAG orchestration belongs in `rag/`; ingestion belongs in `services/`.
 
 ## Testing
-Mock provider payloads and cover normalization, duplicate symbols, malformed responses, timeouts, missing data, source quality, and deterministic indicators.
+Mock provider payloads and cover normalization, duplicate symbols, malformed responses, timeouts, missing data, source quality, deterministic indicators, crypto moving averages, sentiment boundaries, and halving progress.
 
 ## Latest Change
-- Merged symbol-search provider results, removed instrument types from the exchange field, and deduplicated repeated ticker candidates.
+- Replaced HTML-scraped earnings dates with yfinance's batch calendar and API-backed history, merged Finnhub timing/revenue estimates, and exposed Finnhub company logos for symbol marks.

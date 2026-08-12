@@ -30,6 +30,9 @@ backend/data/*
 
 # Documentation
 doc/
+!doc/
+doc/*
+!doc/financial-model-lab-roadmap.md
 *.pages
 
 .claude/

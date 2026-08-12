@@ -47,25 +47,24 @@ const navigationMenuTriggerStyle = cva(
   'cursor-pointer group inline-flex h-9 w-max items-center justify-center rounded-md bg-transparent px-4 py-2 text-sm font-medium text-[var(--text-subtle)] hover:bg-white/[0.08] hover:text-[var(--text-primary)] focus:bg-white/[0.08] focus:text-[var(--text-primary)] disabled:pointer-events-none disabled:opacity-50 data-[active=true]:bg-white/[0.08] data-[state=open]:bg-white/[0.08] data-[active=true]:text-[var(--text-primary)] ring-ring/10 dark:ring-ring/20 dark:outline-ring/40 outline-ring/50 transition-[color,box-shadow,background-color] focus-visible:ring-4 focus-visible:outline-1',
 );
 
-function NavigationMenuTrigger({
-  className,
-  children,
-  ...props
-}: React.ComponentProps<typeof NavigationMenuPrimitive.Trigger>) {
-  return (
-    <NavigationMenuPrimitive.Trigger
-      data-slot="navigation-menu-trigger"
-      className={cn(navigationMenuTriggerStyle(), 'group', className)}
-      {...props}
-    >
-      {children}{' '}
-      <ChevronDownIcon
-        className="relative top-[1px] ms-1 size-3.5 opacity-60 transition duration-300 group-data-[state=open]:rotate-180"
-        aria-hidden="true"
-      />
-    </NavigationMenuPrimitive.Trigger>
-  );
-}
+const NavigationMenuTrigger = React.forwardRef<
+  React.ElementRef<typeof NavigationMenuPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof NavigationMenuPrimitive.Trigger>
+>(({ className, children, ...props }, ref) => (
+  <NavigationMenuPrimitive.Trigger
+    ref={ref}
+    data-slot="navigation-menu-trigger"
+    className={cn(navigationMenuTriggerStyle(), 'group', className)}
+    {...props}
+  >
+    {children}{' '}
+    <ChevronDownIcon
+      className="relative top-[1px] ms-1 size-3.5 opacity-60 transition-transform duration-150 group-data-[state=open]:rotate-180"
+      aria-hidden="true"
+    />
+  </NavigationMenuPrimitive.Trigger>
+));
+NavigationMenuTrigger.displayName = NavigationMenuPrimitive.Trigger.displayName;
 
 function NavigationMenuContent({ className, ...props }: React.ComponentProps<typeof NavigationMenuPrimitive.Content>) {
   return (
@@ -99,18 +98,21 @@ function NavigationMenuViewport({
   );
 }
 
-function NavigationMenuLink({ className, ...props }: React.ComponentProps<typeof NavigationMenuPrimitive.Link>) {
-  return (
-    <NavigationMenuPrimitive.Link
-      data-slot="navigation-menu-link"
-      className={cn(
-        'hover:bg-[var(--surface-selected)] hover:text-[var(--text-primary)] focus:bg-[var(--surface-selected)] focus:text-[var(--text-primary)] data-[active=true]:bg-[var(--surface-selected)] data-[active=true]:text-[var(--text-primary)] ring-ring/10 dark:ring-ring/20 dark:outline-ring/40 outline-ring/50 flex flex-col gap-1 rounded-lg p-3 text-sm transition-[color,box-shadow,background-color] focus-visible:ring-4 focus-visible:outline-1',
-        className,
-      )}
-      {...props}
-    />
-  );
-}
+const NavigationMenuLink = React.forwardRef<
+  React.ElementRef<typeof NavigationMenuPrimitive.Link>,
+  React.ComponentPropsWithoutRef<typeof NavigationMenuPrimitive.Link>
+>(({ className, ...props }, ref) => (
+  <NavigationMenuPrimitive.Link
+    ref={ref}
+    data-slot="navigation-menu-link"
+    className={cn(
+      'hover:bg-[var(--surface-selected)] hover:text-[var(--text-primary)] focus:bg-[var(--surface-selected)] focus:text-[var(--text-primary)] data-[active=true]:bg-[var(--surface-selected)] data-[active=true]:text-[var(--text-primary)] ring-ring/10 dark:ring-ring/20 dark:outline-ring/40 outline-ring/50 flex flex-col gap-1 rounded-lg p-3 text-sm transition-[color,box-shadow,background-color] focus-visible:ring-4 focus-visible:outline-1',
+      className,
+    )}
+    {...props}
+  />
+));
+NavigationMenuLink.displayName = NavigationMenuPrimitive.Link.displayName;
 
 function NavigationMenuIndicator({
   className,

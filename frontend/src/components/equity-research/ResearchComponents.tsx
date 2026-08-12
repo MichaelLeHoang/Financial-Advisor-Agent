@@ -45,6 +45,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { OverviewCard } from "@/components/ui/overview-card";
+import { LoadingRegion, SkeletonBlock, SkeletonText } from "@/components/ui/DataLoading";
 
 const AGENT_GROUPS = [
   { title: "Analyst Agents", agents: [["market", "Market Analyst"], ["social", "Social Media Analyst"], ["news", "News Analyst"], ["fundamentals", "Fundamentals Analyst"]] },
@@ -305,7 +306,7 @@ export function ResearchDemoProgressLoop({ surface = "dark" }: { surface?: "dark
       </div>
       <div className={cn("h-1.5 overflow-hidden rounded-full", isLight ? "bg-slate-200" : "bg-white/[0.06]")}>
         <div
-          className="h-full rounded-full bg-gradient-to-r from-indigo-primary via-cyan-secondary to-emerald-300 transition-[width] duration-500"
+          className="h-full rounded-full bg-indigo-primary transition-[width] duration-200"
           style={{ width: `${((active + 1) / steps.length) * 100}%` }}
         />
       </div>
@@ -824,7 +825,46 @@ export function AnalysisWorkspace({ runId }: { runId: string }) {
   }, [selectedAgent, visibleReports]);
 
   if (error) return <div className="rounded-2xl border border-red-negative/30 bg-red-negative/10 p-5 text-red-negative">{error}</div>;
-  if (!detail) return <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-8 text-white/45">Loading Quanfora 2.1 workspace...</div>;
+  if (!detail) return (
+    <LoadingRegion
+      loading
+      delay={0}
+      label="Loading Quanfora 2.1 workspace"
+      className="grid min-h-[calc(100vh-5rem)] gap-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]"
+      skeleton={(
+        <>
+          <aside className="rounded-2xl bg-white/[0.03] p-4">
+            <SkeletonBlock className="h-5 w-36 rounded-sm" />
+            <div className="mt-6 space-y-4">
+              {Array.from({ length: 7 }, (_, index) => (
+                <div key={index} className="flex items-center gap-3">
+                  <SkeletonBlock className="size-7 rounded-full" />
+                  <SkeletonBlock className="h-3 flex-1 rounded-sm" />
+                </div>
+              ))}
+            </div>
+          </aside>
+          <main className="min-w-0 space-y-4">
+            <div className="rounded-2xl bg-white/[0.035] p-5">
+              <SkeletonBlock className="h-3 w-28 rounded-sm" />
+              <SkeletonBlock className="mt-4 h-8 w-3/5 rounded-sm" />
+              <SkeletonText className="mt-5" lines={4} widths={["100%", "92%", "84%", "60%"]} />
+            </div>
+            <SkeletonBlock className="h-12 w-full rounded-2xl" />
+            <div className="min-h-[30rem] rounded-2xl bg-white/[0.035] p-5">
+              <SkeletonText lines={9} widths={["72%", "100%", "94%", "86%", "100%", "64%", "90%", "82%", "55%"]} />
+            </div>
+          </main>
+          <aside className="rounded-2xl bg-white/[0.03] p-4">
+            <SkeletonBlock className="h-5 w-28 rounded-sm" />
+            <SkeletonText className="mt-6" lines={6} widths={["100%", "78%", "92%", "66%", "86%", "54%"]} />
+          </aside>
+        </>
+      )}
+    >
+      {null}
+    </LoadingRegion>
+  );
 
   const selectedReport = visibleReports.find((report) => report.agent_key === selectedAgent) ?? visibleReports.find((report) => report.agent_key === "pm") ?? visibleReports[0];
   const hasFinalDecision = visibleReports.some((report) => report.agent_key === "pm");
@@ -1077,7 +1117,7 @@ export function ResearchRunCompactResult({
       {showOpenLink && (
         <Link
           href={fullReportHref}
-          className="on-accent accent-gradient-surface mt-4 inline-flex h-9 w-full items-center justify-center rounded-full px-3 text-sm font-semibold"
+          className="on-accent theme-accent-surface mt-4 inline-flex h-9 w-full items-center justify-center rounded-full px-3 text-sm font-semibold"
         >
           Open Full Report
         </Link>

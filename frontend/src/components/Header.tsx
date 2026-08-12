@@ -24,6 +24,7 @@ import {
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 export default function Header({
     onSettingsClick,
@@ -49,7 +50,7 @@ export default function Header({
     const profileRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        router.prefetch("/market?focus=search");
+        router.prefetch("/discover/markets?focus=search");
     }, [router]);
 
     useEffect(() => {
@@ -100,11 +101,11 @@ export default function Header({
         setAccountSwitcherOpen(false);
         setSignInOpen(false);
 
-        if (pathname === "/market") {
+        if (pathname === "/discover/markets") {
             window.dispatchEvent(new Event("market-search:focus"));
             return;
         }
-        router.push("/market?focus=search");
+        router.push("/discover/markets?focus=search");
     };
 
     const currentUserName = user?.display_name || user?.email?.split("@")[0] || "Researcher";
@@ -124,7 +125,10 @@ export default function Header({
             if (authMode === "signin") {
                 await signIn(email, password);
             } else {
-                await signUp(email, password);
+                window.sessionStorage.setItem("quanfora.onboarding.intent", "signup");
+                await signUp(email, password, "/home");
+                window.localStorage.setItem("financial-advisor.coverSeen", "true");
+                router.push("/onboarding?next=/home");
             }
             setSignInOpen(false);
             setProfileOpen(false);
@@ -152,7 +156,7 @@ export default function Header({
                         className="flex h-10 items-center gap-2 rounded-full border border-[var(--theme-border)] bg-[var(--surface-control)] px-4 text-sm font-semibold text-white/86 shadow-[var(--shadow-control)] transition-colors hover:bg-[var(--surface-control-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
                         Quanfora 1.0
-                        <ChevronDown className="h-4 w-4 text-white/45" />
+                        <ChevronDown className={cn("h-4 w-4 text-white/45 transition-transform duration-150 motion-reduce:transition-none", modelOpen && "rotate-180")} />
                     </button>
 
                     <AnimatePresence>
@@ -219,7 +223,7 @@ export default function Header({
                     >
                         <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-primary/20 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/30">
                             {initial}
-                            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-space-black bg-green-positive shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-space-black bg-green-positive" />
                         </div>
                         <div className="hidden min-w-0 sm:block">
                             <div className="truncate text-sm font-medium text-white/85">{currentUserName}</div>

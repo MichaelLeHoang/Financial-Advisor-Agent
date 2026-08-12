@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle,
@@ -34,6 +34,7 @@ import type { MarketIntelligenceResponse, NewsArticle, NewsBriefCard, NewsRespon
 import { useAuth } from "@/components/auth/AuthProvider";
 import { IntroductionFooter, IntroductionNav } from "@/app/introduction/components";
 import InteractiveMarketChart from "@/components/market/InteractiveMarketChart";
+import { LoadingRegion, SkeletonBlock, SkeletonText } from "@/components/ui/DataLoading";
 import { cn } from "@/lib/utils";
 import type { MarketQuote, MarketQuotePoint } from "@/lib/api";
 
@@ -282,10 +283,13 @@ function riskToneClass(tone: RiskTone) {
 
 function NewsPageContent() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const isSignedIn = !authLoading && !user?.is_guest;
-  const activeTab = sanitizeTab(searchParams.get("tab"));
+  const embedded = pathname.startsWith("/discover/");
+  const routeTab: IntelligenceTab | null = pathname === "/discover/picks" ? "picks" : pathname === "/discover/reports" ? "reports" : null;
+  const activeTab = routeTab ?? sanitizeTab(searchParams.get("tab"));
   const [selected, setSelected] = useState<string[]>([]);
   const [hasSetPrefs, setHasSetPrefs] = useState(false);
   const [rawNews, setRawNews] = useState<NewsResponse | null>(null);
@@ -295,8 +299,8 @@ function NewsPageContent() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!isSignedIn) router.replace("/login?next=/news");
-  }, [authLoading, isSignedIn, router]);
+    if (!isSignedIn) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+  }, [authLoading, isSignedIn, pathname, router]);
 
   useEffect(() => {
     if (!isSignedIn || !user?.id) return;
@@ -363,10 +367,15 @@ function NewsPageContent() {
     setRawNews(null);
     setWorkspace(null);
     setHasSetPrefs(false);
-    router.replace("/news", { scroll: false });
+    router.replace(embedded ? "/discover/news" : "/news", { scroll: false });
   };
 
   const setTab = (tab: IntelligenceTab) => {
+    if (embedded) {
+      const destination = tab === "picks" ? "/discover/picks" : tab === "reports" ? "/discover/reports" : tab === "briefing" ? "/discover/news?tab=briefing" : "/discover/news";
+      router.replace(destination, { scroll: false });
+      return;
+    }
     router.replace(`/news?tab=${tab}`, { scroll: false });
   };
 
@@ -377,7 +386,7 @@ function NewsPageContent() {
 
   return (
     <main className="news-page min-h-screen">
-      <IntroductionNav />
+      {!embedded && <IntroductionNav />}
 
       {(authLoading || !isSignedIn) && (
         <section className="mx-auto flex min-h-[calc(100dvh-6rem)] max-w-3xl flex-col items-center justify-center px-6 pb-16 pt-32">
@@ -445,39 +454,53 @@ function NewsPageContent() {
             </div>
           )}
 
-          {loading && !workspace && !rawNews && (
-            <div className="news-card flex min-h-96 flex-col items-center justify-center gap-4 rounded-xl border">
-              <Loader2 className="size-8 animate-spin text-indigo-300" />
-              <p className="text-sm text-white/45">Building the intelligence brief...</p>
-            </div>
-          )}
+          <LoadingRegion
+            loading={loading && !workspace && !rawNews}
+            label="Building the intelligence brief"
+            skeleton={(
+              <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+                <div className="news-card min-h-96 rounded-2xl border p-5 sm:p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <SkeletonBlock className="h-4 w-40 rounded-sm" />
+                    <SkeletonBlock className="h-7 w-20 rounded-full" />
+                  </div>
+                  <SkeletonBlock className="mt-6 h-7 w-4/5 rounded-sm" />
+                  <SkeletonText className="mt-5" lines={5} widths={["100%", "94%", "88%", "96%", "62%"]} />
+                  <div className="mt-7 grid grid-cols-3 gap-3">
+                    {Array.from({ length: 3 }, (_, index) => <SkeletonBlock key={index} className="h-16 rounded-lg" />)}
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  {Array.from({ length: 3 }, (_, index) => (
+                    <div key={index} className="news-card rounded-2xl border p-5">
+                      <SkeletonBlock className="h-3 w-24 rounded-sm" />
+                      <SkeletonText className="mt-4" lines={3} widths={["100%", "84%", "56%"]} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          >
+            <>
+              {!loading && activeTab === "news" && rawNews && rawNews.articles.length === 0 && (
+                <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-2xl border text-center">
+                  <Newspaper className="size-10 text-white/20" />
+                  <p className="max-w-md text-sm text-white/42">
+                    No source articles were returned. Refresh again or choose a different market mix.
+                  </p>
+                </div>
+              )}
 
-          {!loading && activeTab === "news" && rawNews && rawNews.articles.length === 0 && (
-            <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border text-center">
-              <Newspaper className="size-10 text-white/20" />
-              <p className="max-w-md text-sm text-white/42">
-                No source articles were returned. Refresh again or choose a different market mix.
-              </p>
-            </div>
-          )}
+              {!loading && activeTab !== "news" && workspace && workspace.briefing.length === 0 && (
+                <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-2xl border text-center">
+                  <Newspaper className="size-10 text-white/20" />
+                  <p className="max-w-md text-sm text-white/42">
+                    No intelligence cards were generated from this source set. Refresh again or choose a different market mix.
+                  </p>
+                </div>
+              )}
 
-          {!loading && activeTab !== "news" && workspace && workspace.briefing.length === 0 && (
-            <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border text-center">
-              <Newspaper className="size-10 text-white/20" />
-              <p className="max-w-md text-sm text-white/42">
-                No intelligence cards were generated from this source set. Refresh again or choose a different market mix.
-              </p>
-            </div>
-          )}
-
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-            >
+              <div key={activeTab}>
               {activeTab === "news" && rawNews && rawNews.articles.length > 0 && (
                 <NewsTab articles={rawNews.articles} />
               )}
@@ -491,21 +514,22 @@ function NewsPageContent() {
                       reports={workspace.reports}
                       onViewReport={(reportId) => {
                         setTab("reports");
-                        window.setTimeout(() => {
-                          document.getElementById(reportId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-                        }, 260);
+                        window.requestAnimationFrame(() => {
+                          document.getElementById(reportId)?.scrollIntoView({ behavior: "auto", block: "start" });
+                        });
                       }}
                     />
                   )}
                   {activeTab === "reports" && <ReportsTab reports={workspace.reports} />}
                 </>
               )}
-            </motion.div>
-          </AnimatePresence>
+              </div>
+            </>
+          </LoadingRegion>
         </section>
       )}
 
-      {isSignedIn && <IntroductionFooter />}
+      {isSignedIn && !embedded && <IntroductionFooter />}
     </main>
   );
 }
@@ -524,7 +548,7 @@ function CategorySetup({
       <motion.div
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35 }}
+        transition={{ duration: 0.22 }}
         className="w-full"
       >
         <div className="mx-auto max-w-2xl text-center">
@@ -636,7 +660,7 @@ function FeaturedNewsArticle({ article }: { article: NewsArticle }) {
       href={article.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="news-card group mb-6 block overflow-hidden rounded-xl border transition-colors"
+      className="news-card group mb-6 block overflow-hidden rounded-2xl border transition-colors"
     >
       <div className="grid min-h-[280px] md:grid-cols-[0.9fr_1.1fr]">
         <div className="news-media relative min-h-56 overflow-hidden">
@@ -644,7 +668,7 @@ function FeaturedNewsArticle({ article }: { article: NewsArticle }) {
             <img
               src={article.thumbnail}
               alt=""
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+              className="h-full w-full object-cover"
             />
           ) : (
             <NewsVisualFallback category={category} />
@@ -681,14 +705,14 @@ function NewsArticleCard({ article }: { article: NewsArticle }) {
       href={article.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="news-card group flex min-h-[360px] flex-col overflow-hidden rounded-xl border transition-colors"
+      className="news-card group flex min-h-[360px] flex-col overflow-hidden rounded-2xl border transition-colors"
     >
       <div className="news-media relative h-40 overflow-hidden">
         {article.thumbnail ? (
           <img
             src={article.thumbnail}
             alt=""
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+            className="h-full w-full object-cover"
           />
         ) : (
           <NewsVisualFallback category={category} compact />
@@ -755,7 +779,7 @@ function BriefingTab({ cards }: { cards: NewsBriefCard[] }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {cards.map((card) => (
-        <article key={card.id} className="news-card rounded-xl border p-5">
+        <article key={card.id} className="news-card rounded-2xl border p-5">
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <SentimentBadge sentiment={card.sentiment} />
             <ScorePill label="Impact" value={card.impact_score} />
@@ -822,7 +846,7 @@ function PicksTab({
         const evidence = compactEvidence(pick);
 
         return (
-          <article key={pick.id} className="news-card flex min-h-[430px] flex-col rounded-xl border p-4">
+          <article key={pick.id} className="news-card flex min-h-[430px] flex-col rounded-2xl border p-4">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -979,7 +1003,7 @@ function ReportsTab({ reports }: { reports: ResearchReport[] }) {
                 setSelectedReport(report);
               }
             }}
-            className="news-card cursor-pointer rounded-xl border p-5 transition-colors lg:p-6"
+            className="news-card cursor-pointer rounded-2xl border p-5 transition-colors lg:p-6"
           >
             <div className="flex flex-col gap-4 border-b border-white/[0.08] pb-5 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -1030,8 +1054,8 @@ function ReportTickerRail({
 }) {
   return (
     <div className="group fixed right-5 top-1/2 z-30 hidden -translate-y-1/2 lg:block">
-      <div className="news-rail-panel rounded-2xl border border-transparent bg-transparent p-2 transition-all duration-200 group-hover:shadow-2xl">
-        <div className="flex w-8 flex-col items-center gap-2 py-1 transition-all duration-200 group-hover:w-32 group-hover:items-stretch">
+      <div className="news-rail-panel rounded-2xl border border-transparent bg-transparent p-2 transition-shadow duration-[180ms] group-hover:shadow-2xl">
+        <div className="flex w-8 flex-col items-center gap-2 py-1 transition-[width] duration-[180ms] group-hover:w-32 group-hover:items-stretch">
           {reports.map((report) => {
             const ticker = report.affected_tickers[0] ?? "Memo";
             const active = report.id === activeReportId;
@@ -1039,17 +1063,17 @@ function ReportTickerRail({
               <button
                 key={report.id}
                 type="button"
-                onClick={() => {
+                onClick={(event) => {
                   onNavigate(report.id);
-                  document.getElementById(report.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  document.getElementById(report.id)?.scrollIntoView({ behavior: event.detail === 0 ? "auto" : "smooth", block: "start" });
                 }}
                 className="news-rail-item flex h-6 w-full items-center gap-3 rounded-md px-1 text-left transition-colors"
                 aria-label={`Jump to ${ticker} report`}
               >
                 <span
                   className={cn(
-                    "h-1 w-7 shrink-0 rounded-full transition-all duration-200",
-                    active ? "news-rail-line-active shadow-[0_0_10px_rgba(255,255,255,0.65)]" : "news-rail-line"
+                    "h-1 w-7 shrink-0 rounded-full transition-[background-color,box-shadow] duration-150",
+                    active ? "news-rail-line-active" : "news-rail-line"
                   )}
                 />
                 <span className="hidden min-w-0 flex-1 overflow-hidden whitespace-nowrap opacity-0 transition-opacity duration-150 group-hover:block group-hover:opacity-100">
@@ -1172,7 +1196,7 @@ function ReportMarketChart({ report }: { report: ResearchReport }) {
         {loading ? (
           <div className="flex h-full items-center justify-center gap-2 text-sm text-[#77707c]">
             <Loader2 className="size-4 animate-spin" />
-            Loading chart data...
+            Loading chart data…
           </div>
         ) : error ? (
           <div className="flex h-full items-center justify-center text-sm text-[#77707c]">{error}</div>
@@ -1731,7 +1755,7 @@ function SourceList({ sources }: { sources: { title: string; url: string | null;
 
 function EmptyPanel({ icon, message }: { icon: ReactNode; message: string }) {
   return (
-    <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-xl border text-center text-white/38">
+    <div className="news-card flex min-h-80 flex-col items-center justify-center gap-3 rounded-2xl border text-center text-white/38">
       {icon}
       <p className="max-w-md text-sm">{message}</p>
     </div>

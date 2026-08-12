@@ -237,7 +237,7 @@ export default function ReplaySessionPage({ params }: { params: Promise<{ id: st
   return (
     <div className="flex-1 overflow-y-auto p-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-6">
-        <Link href="/backtest/sessions" className="inline-flex w-fit items-center gap-2 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">
+        <Link href="/trade/strategies/sessions" className="inline-flex w-fit items-center gap-2 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">
           <ArrowLeft className="h-4 w-4" />
           Back to sessions
         </Link>
@@ -372,7 +372,7 @@ export default function ReplaySessionPage({ params }: { params: Promise<{ id: st
                       <Metric label="Win rate" value={formatPercent(Number(session.metrics.win_rate ?? 0))} />
                       <Metric label="Closed trades" value={String(session.metrics.number_of_trades ?? replay.trades.filter((trade) => trade.side === "sell").length)} />
                     </div>
-                    <Button render={<Link href="/backtest/sessions" />} nativeButton={false} variant="outline" className="h-10 w-full rounded-xl text-sm">
+                    <Button render={<Link href="/trade/strategies/sessions" />} nativeButton={false} variant="outline" className="h-10 w-full rounded-xl text-sm">
                       Start another session
                     </Button>
                   </CardContent>

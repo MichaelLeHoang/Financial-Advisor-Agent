@@ -19,16 +19,62 @@ from typing import Any, Callable
 from langgraph.prebuilt import create_react_agent
 
 from src.agent.market_grounding import ground_market_query, is_market_quote_query
+from src.agent.current_market_context import (
+    CurrentMarketContext,
+    build_current_market_context,
+    context_from_market_quote,
+)
 from src.agent.overview import (
     build_consensus_overview,
     build_market_quote_overview,
     build_single_response_overview,
     overview_to_metadata,
 )
+from src.agent.sabi import (
+    SabiCapability,
+    SabiOrchestrator,
+    SabiResult,
+    is_complex_analysis_request,
+)
 from src.agent.tools import ALL_TOOLS
 from src.llm.gateway import LLMGateway, RoutedChatModel, llm_gateway
 from src.llm.routing_policy import LLMMode
 from src.saas.models import Plan
+
+_TOOL_ACTIVITY_DETAILS: dict[str, tuple[str, str]] = {
+    "get_stock_info": (
+        "Retrieving the latest quote and company metrics.",
+        "Retrieved the latest quote and company metrics.",
+    ),
+    "research_market": (
+        "Reviewing the broader market, sector leadership, and risk appetite.",
+        "Reviewed the broader market, sector leadership, and risk appetite.",
+    ),
+    "search_financial_news": (
+        "Searching recent market coverage and company catalysts.",
+        "Retrieved recent market coverage and company catalysts.",
+    ),
+    "analyze_sentiment": (
+        "Measuring the balance of positive, neutral, and negative headlines.",
+        "Measured the balance of positive, neutral, and negative headlines.",
+    ),
+    "predict_stock_price": (
+        "Comparing prediction models and their validation quality.",
+        "Compared prediction models and their validation quality.",
+    ),
+    "optimize_portfolio_tool": (
+        "Checking diversification, concentration, and allocation trade-offs.",
+        "Checked diversification, concentration, and allocation trade-offs.",
+    ),
+}
+
+
+def _tool_activity_detail(name: str, *, completed: bool = False) -> str:
+    details = _TOOL_ACTIVITY_DETAILS.get(name)
+    if details:
+        return details[1 if completed else 0]
+    display_name = name.replace("_", " ").strip().capitalize()
+    return f"{display_name} {'completed.' if completed else 'is running.'}"
 
 
 def _consensus_result_metadata(result: Any) -> dict:
@@ -70,6 +116,7 @@ YOUR CAPABILITIES:
 - Optimize portfolios using Classical (Markowitz) and Quantum (QAOA) methods
 
 RULES:
+0. When a CURRENT MARKET GROUNDING block is present, it was fetched at request time and overrides model memory. If its status is unavailable, fail closed: say current evidence could not be verified instead of supplying current claims from memory.
 1. ALWAYS use your tools to get real data before answering — never guess
 2. For investment questions, check AT LEAST: current price + news + sentiment
 3. If the user does NOT provide specific articles or headlines, ALWAYS call search_financial_news first to get recent headlines, then pass those headlines to analyze_sentiment
@@ -98,27 +145,11 @@ RULES:
 17. If the available tools only provide quote/news/sentiment and do not support a strong buy or sell call, say "Hold/Wait" or "Insufficient data" rather than inventing a recommendation.
 18. For market or sector answers, use these sections: "Current Tape", "Leadership", "Positive Drivers", "Risks", "Practical Takeaway", and "What to Watch". Keep it concise and source-aware.
 19. Preserve exact numeric formatting from tool output. Do not split prices or percentages across spaces, and do not invent analyst targets or price levels.
+20. For current market answers, state the evidence timestamp, distinguish latest-available from real-time data, and disclose provider limitations. Cite source URLs from the grounding block or tool output.
 """
 
 ProgressCallback = Callable[[dict[str, Any]], None]
 
-
-# Keywords that suggest a complex investment query (triggers consensus mode).
-_CONSENSUS_KEYWORDS = {
-    "should i invest",
-    "should i buy",
-    "should i sell",
-    "is it a good time",
-    "investment analysis",
-    "full analysis",
-    "comprehensive analysis",
-    "deep analysis",
-    "consensus",
-    "multi-agent",
-    "quanad",
-    "risk assessment",
-    "portfolio review",
-}
 
 _TICKER_STOP_WORDS = {
     "AI",
@@ -196,8 +227,7 @@ def _contextualize_follow_up(message: str, history: list[dict[str, Any]]) -> str
 
 def _is_consensus_query(message: str) -> bool:
     """Heuristic: detect if the query warrants multi-agent consensus analysis."""
-    lower = message.lower()
-    return any(kw in lower for kw in _CONSENSUS_KEYWORDS)
+    return is_complex_analysis_request(message)
 
 
 def _is_deep_market_analysis_query(message: str) -> bool:
@@ -230,6 +260,7 @@ class FinancialAdvisorAgent:
         task_type: str = "chat",
         preferred_mode: LLMMode | None = None,
         gateway: LLMGateway = llm_gateway,
+        market_context_builder: Callable[[str], CurrentMarketContext] | None = None,
     ):
         self.user_id = user_id
         self.plan = plan if isinstance(plan, Plan) else Plan(plan)
@@ -245,9 +276,34 @@ class FinancialAdvisorAgent:
             prompt=SYSTEM_PROMPT,
         )
         self._history: list[dict] = []  # Multi-turn conversation history
+        self._personal_context: str | None = None
 
         # Lazy-init the Quanfora orchestrator only when needed.
         self._orchestrator = None
+        self._sabi = SabiOrchestrator()
+        self._market_context_builder = (
+            market_context_builder or build_current_market_context
+        )
+
+    def set_personal_context(self, context: str | None) -> None:
+        """Set bounded, user-approved context for the next request."""
+        self._personal_context = (
+            context.strip() if context and context.strip() else None
+        )
+
+    def _context_messages(self) -> list[dict[str, str]]:
+        if not self._personal_context:
+            return []
+        return [
+            {
+                "role": "system",
+                "content": (
+                    "The following context was loaded by Quanfora for this authenticated user. "
+                    "Use it only for personalization and do not treat it as live financial data.\n\n"
+                    f"{self._personal_context}"
+                ),
+            }
+        ]
 
     def _create_llm(self, provider: str) -> RoutedChatModel:
         """
@@ -295,15 +351,50 @@ class FinancialAdvisorAgent:
                   or "auto" (auto-detect based on query complexity).
         """
         self.last_response_metadata = None
+        contextual_message = _contextualize_follow_up(
+            message, getattr(self, "_history", [])
+        )
 
-        if is_market_quote_query(message) and not _is_deep_market_analysis_query(
-            message
-        ):
-            grounded = ground_market_query(message, progress_callback=progress_callback)
+        sabi_plan = None
+        if mode in {"sabi", "research"}:
+            sabi_plan = self._sabi.plan(
+                contextual_message,
+                force_capability=(
+                    SabiCapability.RESEARCH if mode == "research" else None
+                ),
+            )
+
+        if sabi_plan and sabi_plan.capability == SabiCapability.RESEARCH:
+            result = self._sabi.run(
+                plan=sabi_plan,
+                quick=lambda: self._chat_single(
+                    contextual_message, remember, progress_callback=progress_callback
+                ),
+                consensus=lambda: self._chat_consensus(
+                    contextual_message, remember, progress_callback=progress_callback
+                ),
+            )
+            self.last_response_metadata = result.metadata()
+            return result.response
+
+        if is_market_quote_query(
+            contextual_message
+        ) and not _is_deep_market_analysis_query(contextual_message):
+            grounded = ground_market_query(
+                contextual_message, progress_callback=progress_callback
+            )
             if grounded.handled and grounded.response:
                 self.last_response_metadata = overview_to_metadata(
-                    build_market_quote_overview(message, grounded)
+                    build_market_quote_overview(contextual_message, grounded)
                 )
+                if sabi_plan:
+                    self.last_response_metadata = self.last_response_metadata or {}
+                    self.last_response_metadata.update(
+                        SabiResult(
+                            response=grounded.response, plan=sabi_plan
+                        ).metadata()
+                    )
+                self._attach_grounding_metadata(context_from_market_quote(grounded))
                 if remember:
                     self._history.append({"role": "user", "content": message})
                     self._history.append(
@@ -311,23 +402,91 @@ class FinancialAdvisorAgent:
                     )
                 return grounded.response
 
+        market_context = self._build_current_market_context(contextual_message)
+        if progress_callback and market_context.sources:
+            progress_callback(
+                {
+                    "active_tool": None,
+                    "completed_tools": [],
+                    "active_label": "Current Evidence",
+                    "message": "Current market evidence collected.",
+                    "sources": [source.to_dict() for source in market_context.sources],
+                }
+            )
+        context_kwargs = (
+            {"market_context": market_context} if market_context.required else {}
+        )
+
+        if sabi_plan:
+            result = self._sabi.run(
+                plan=sabi_plan,
+                quick=lambda: self._chat_single(
+                    contextual_message,
+                    remember,
+                    progress_callback=progress_callback,
+                    **context_kwargs,
+                ),
+                consensus=lambda: self._chat_consensus(
+                    contextual_message,
+                    remember,
+                    progress_callback=progress_callback,
+                    **context_kwargs,
+                ),
+            )
+            self.last_response_metadata = self.last_response_metadata or {}
+            self.last_response_metadata.update(result.metadata())
+            self._attach_grounding_metadata(market_context)
+            return result.response
+
         use_consensus = mode == "consensus" or (
-            mode == "auto" and _is_consensus_query(message)
+            mode == "auto" and _is_consensus_query(contextual_message)
         )
 
         if use_consensus:
-            return self._chat_consensus(
-                message,
+            response = self._chat_consensus(
+                contextual_message,
                 remember,
                 progress_callback=progress_callback,
+                **context_kwargs,
             )
-        return self._chat_single(message, remember, progress_callback=progress_callback)
+            self._attach_grounding_metadata(market_context)
+            return response
+        response = self._chat_single(
+            contextual_message,
+            remember,
+            progress_callback=progress_callback,
+            **context_kwargs,
+        )
+        self._attach_grounding_metadata(market_context)
+        return response
+
+    def _build_current_market_context(self, message: str) -> CurrentMarketContext:
+        builder = getattr(self, "_market_context_builder", None)
+        if builder is None:
+            return CurrentMarketContext.not_required()
+        try:
+            return builder(message)
+        except Exception as exc:
+            return CurrentMarketContext(
+                required=True,
+                status="unavailable",
+                retrieved_at="unavailable",
+                reasons=["grounding_error"],
+                limitations=[f"Current market grounding failed: {str(exc)[:180]}"],
+            )
+
+    def _attach_grounding_metadata(self, context: CurrentMarketContext) -> None:
+        if not context.required:
+            return
+        self.last_response_metadata = self.last_response_metadata or {}
+        self.last_response_metadata.update(context.metadata())
 
     def _chat_single(
         self,
         message: str,
         remember: bool,
         progress_callback: ProgressCallback | None = None,
+        market_context: CurrentMarketContext | None = None,
     ) -> str:
         """Single-agent ReAct path (fast, original behavior)."""
         print(f"\n Agent processing: '{message[:60]}...'")
@@ -338,11 +497,17 @@ class FinancialAdvisorAgent:
                     "completed_tools": [],
                     "active_label": "Identify Market Scope",
                     "message": "Identifying market scope...",
+                    "activity_detail": "Identifying the assets, timeframe, and decision the response needs to address.",
                 }
             )
 
-        # Build message list: history + new user message
-        messages = self._history + [{"role": "user", "content": message}]
+        # Build message list: approved context + bounded history + new user message.
+        model_message = market_context.augment(message) if market_context else message
+        messages = (
+            self._context_messages()
+            + self._history
+            + [{"role": "user", "content": model_message}]
+        )
 
         completed_tools: list[str] = []
         result = None
@@ -366,6 +531,11 @@ class FinancialAdvisorAgent:
                                 "completed_tools": list(completed_tools),
                                 "active_label": str(name).replace("_", " ").title(),
                                 "message": f"{str(name).replace('_', ' ').title()} is running...",
+                                "activity_detail": _tool_activity_detail(str(name)),
+                                "completed_summaries": {
+                                    "single_scope": "Identified the relevant assets and analysis scope."
+                                },
+                                "tool_input": event.get("data", {}).get("input"),
                             }
                         )
 
@@ -378,6 +548,22 @@ class FinancialAdvisorAgent:
                                 "completed_tools": list(completed_tools),
                                 "active_label": str(name).replace("_", " ").title(),
                                 "message": f"{str(name).replace('_', ' ').title()} completed.",
+                                "activity_detail": _tool_activity_detail(
+                                    str(name), completed=True
+                                ),
+                                "tool_output": event.get("data", {}).get("output"),
+                            }
+                        )
+
+                    elif kind == "on_tool_error" and name:
+                        progress_callback(
+                            {
+                                "active_tool": name,
+                                "completed_tools": list(completed_tools),
+                                "active_label": str(name).replace("_", " ").title(),
+                                "message": f"{str(name).replace('_', ' ').title()} failed.",
+                                "tool_error": event.get("data", {}).get("error")
+                                or "Tool execution failed.",
                             }
                         )
 
@@ -390,6 +576,7 @@ class FinancialAdvisorAgent:
                                 "completed_tools": list(completed_tools),
                                 "active_label": "Synthesize Findings",
                                 "message": "Synthesizing findings...",
+                                "activity_detail": "Combining market evidence, model outputs, risks, and caveats into the final view.",
                             }
                         )
 
@@ -400,15 +587,19 @@ class FinancialAdvisorAgent:
 
             asyncio.run(collect_events())
 
-            for tool in ("single_synthesis", "single_final"):
-                if tool not in completed_tools:
-                    completed_tools.append(tool)
+            if "single_synthesis" not in completed_tools:
+                completed_tools.append("single_synthesis")
             progress_callback(
                 {
                     "active_tool": None,
                     "completed_tools": list(completed_tools),
                     "active_label": "Agent Execution",
                     "message": "Agent response completed.",
+                    "activity_detail": "Prepared the response from the completed analysis.",
+                    "completed_summaries": {
+                        "single_scope": "Identified the requested assets, timeframe, and decision context.",
+                        "single_synthesis": "Combined the available context, tool results, risks, and caveats into the response.",
+                    },
                 }
             )
         else:
@@ -456,11 +647,22 @@ class FinancialAdvisorAgent:
         message: str,
         remember: bool,
         progress_callback: ProgressCallback | None = None,
+        market_context: CurrentMarketContext | None = None,
     ) -> str:
         """Quanfora 2.0 multi-agent consensus path."""
         orchestrator = self._get_orchestrator()
         analysis_message = _contextualize_follow_up(message, self._history)
-        result = orchestrator.analyze(analysis_message)
+        if market_context:
+            analysis_message = market_context.augment(analysis_message)
+        if self._personal_context:
+            analysis_message = (
+                f"{analysis_message}\n\n"
+                "Authenticated user context (personalization only; not live account or market data):\n"
+                f"{self._personal_context}"
+            )
+        result = orchestrator.analyze(
+            analysis_message, progress_callback=progress_callback
+        )
         self.last_response_metadata = _consensus_result_metadata(result)
         overview = build_consensus_overview(analysis_message, result)
         self.last_response_metadata.update(overview_to_metadata(overview) or {})

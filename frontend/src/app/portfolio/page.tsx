@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Building2,
@@ -24,14 +25,19 @@ import {
 import { PieChart, Pie, Cell } from "recharts";
 import { cn } from "@/lib/utils";
 import { api, isUpgradeRequiredError } from "@/lib/api";
-import type { Holding, OptimizeResult, Portfolio, RecurringBuy } from "@/lib/api";
+import type { Holding, OptimizeResult, Portfolio, PositionBook, RecurringBuy } from "@/lib/api";
 import { fetchQuote } from "@/lib/quote-cache";
+import { fetchCurrencyRate } from "@/lib/currency";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { usePortfolioBooks } from "@/components/portfolio/PortfolioBooksProvider";
+import { usePortfolioBookView, type PortfolioBookView } from "@/components/portfolio/PortfolioBookViewProvider";
+import PortfolioBookSwitch from "@/components/portfolio/PortfolioBookSwitch";
 import TickerSuggestionInput from "@/components/market/TickerSuggestionInput";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
 import { ThinSlider } from "@/components/ui/thin-slider";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,6 +54,7 @@ import {
   ChartTooltip,
 } from "@/components/ui/chart";
 import { showToast } from "@/components/ui/toast";
+import { LoadingRegion, SkeletonBlock, SkeletonText } from "@/components/ui/DataLoading";
 
 const PALETTE = [
   "#6366f1",
@@ -174,46 +181,6 @@ function formatPrivateMoney(value: number, currency: string | null | undefined, 
 async function convertAmount(amount: number, sourceCurrency: string, targetCurrency: string) {
   const rate = await fetchCurrencyRate(sourceCurrency, targetCurrency);
   return amount * rate;
-}
-
-async function fetchCurrencyRate(sourceCurrency: string, targetCurrency: string): Promise<number> {
-  const source = normalizeCurrency(sourceCurrency);
-  const target = normalizeCurrency(targetCurrency);
-  if (source === target) return 1;
-
-  if (source === "USD" && target === "CAD") {
-    try {
-      const quote = await fetchQuote("CAD=X", "1d", "1d");
-      return quote.price || 1;
-    } catch {
-      return 1;
-    }
-  }
-
-  if (source === "CAD" && target === "USD") {
-    try {
-      const quote = await fetchQuote("CAD=X", "1d", "1d");
-      return quote.price ? 1 / quote.price : 1;
-    } catch {
-      return 1;
-    }
-  }
-
-  try {
-    const direct = await fetchQuote(`${source}${target}=X`, "1d", "1d");
-    if (direct.price) return direct.price;
-  } catch {
-    // Fall through to the inverse pair below.
-  }
-
-  try {
-    const inverse = await fetchQuote(`${target}${source}=X`, "1d", "1d");
-    if (inverse.price) return 1 / inverse.price;
-  } catch {
-    // Keep the portfolio usable if an uncommon FX pair is unavailable.
-  }
-
-  return 1;
 }
 
 function emptyMetrics(baseCurrency: string): Pick<
@@ -394,7 +361,19 @@ function formatRecurringSchedule(buy: RecurringBuy) {
 }
 
 export default function PortfolioPage() {
+  const pathname = usePathname();
   const { loading: authLoading, token } = useAuth();
+  const sharedBooks = usePortfolioBooks();
+  const { refresh: refreshSharedBooks } = sharedBooks;
+  const { book: centralBook } = usePortfolioBookView();
+  const fixedBook: PortfolioBookView | null = pathname === "/invest" || pathname.startsWith("/invest/")
+    ? "investment"
+    : pathname === "/trade" || pathname.startsWith("/trade/")
+      ? "trading"
+      : null;
+  const activeBook = fixedBook ?? centralBook;
+  const isInvestmentBook = activeBook === "investment";
+  const bookLabel = isInvestmentBook ? "Investment" : "Trade";
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [holdings, setHoldings] = useState<HoldingRow[]>([]);
@@ -431,10 +410,22 @@ export default function PortfolioPage() {
   const [newCurrencySearch, setNewCurrencySearch] = useState("");
   const [portfolioToDelete, setPortfolioToDelete] = useState<Portfolio | null>(null);
   const [holdingToDelete, setHoldingToDelete] = useState<HoldingRow | null>(null);
+  const [bookUpdatingId, setBookUpdatingId] = useState<string | null>(null);
   const [recurringBuyToDelete, setRecurringBuyToDelete] = useState<RecurringBuy | null>(null);
   const [recurringBuyDraft, setRecurringBuyDraft] = useState<RecurringBuyDraft>(() => createRecurringBuyDraft());
   const [recurringTickerInput, setRecurringTickerInput] = useState("");
   const [expandedRecurringBuyId, setExpandedRecurringBuyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const targetByPath: Record<string, string> = {
+      "/invest/holdings": "portfolio-holdings",
+      "/invest/rebalance": "portfolio-rebalance",
+    };
+    const targetId = targetByPath[pathname];
+    if (!targetId) return;
+    const frame = window.requestAnimationFrame(() => document.getElementById(targetId)?.scrollIntoView({ block: "start" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [pathname]);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [returnPeriod, setReturnPeriod] = useState<"5D" | "1M" | "YTD" | "1Y" | "5Y">("1Y");
   const [sortBy, setSortBy] = useState<"total" | "weight" | "today" | "allTime" | "symbol">("total");
@@ -516,7 +507,7 @@ export default function PortfolioPage() {
   useEffect(() => {
     if (!canLoadPortfolioData) return;
     let cancelled = false;
-    setPortfoliosLoading(true);
+    setPortfoliosLoading(!sharedBooks.portfolio);
     setError(null);
     api.portfolios()
       .then((list) => {
@@ -607,15 +598,37 @@ export default function PortfolioPage() {
   }, []);
 
   useEffect(() => {
+    if (sharedBooks.loading || !sharedBooks.portfolio) return;
+    setPortfolios((current) => current.length ? current : [sharedBooks.portfolio!]);
+    setActiveId((current) => current ?? sharedBooks.portfolio!.id);
+    setPortfoliosLoading(false);
+    if (activeId && activeId !== sharedBooks.portfolio.id) return;
+    setHoldings((current) => current.length ? current : sharedBooks.holdings.map((holding) => ({
+      ...holding,
+      ...emptyMetrics(sharedBooks.portfolio!.base_currency),
+    })));
+    setHoldingsLoading(false);
+    if (sharedBooks.holdings.length) fetchPricesForHoldings(sharedBooks.holdings, sharedBooks.portfolio.base_currency);
+  }, [activeId, fetchPricesForHoldings, sharedBooks.holdings, sharedBooks.loading, sharedBooks.portfolio]);
+
+  useEffect(() => {
     if (!activeId) return;
-    setHoldings([]);
+    if (sharedBooks.portfolio?.id !== activeId) setHoldings([]);
     setRecurringBuys([]);
     setResult(null);
-  }, [activeId]);
+  }, [activeId, sharedBooks.portfolio?.id]);
 
   const loadHoldings = useCallback(async () => {
     if (!activeId) return;
-    setHoldingsLoading(true);
+    const sharedForActive = sharedBooks.portfolio?.id === activeId;
+    if (sharedForActive && sharedBooks.holdings.length) {
+      const rows: HoldingRow[] = sharedBooks.holdings.map((holding) => ({ ...holding, ...emptyMetrics(activeBaseCurrency) }));
+      setHoldings(rows);
+      setHoldingsLoading(false);
+      fetchPricesForHoldings(sharedBooks.holdings, activeBaseCurrency);
+    } else {
+      setHoldingsLoading(true);
+    }
     try {
       const list = await api.portfolioHoldings(activeId);
       const rows: HoldingRow[] = list.map((h) => ({
@@ -627,7 +640,7 @@ export default function PortfolioPage() {
     } finally {
       setHoldingsLoading(false);
     }
-  }, [activeId, activeBaseCurrency, fetchPricesForHoldings]);
+  }, [activeId, activeBaseCurrency, fetchPricesForHoldings, sharedBooks.holdings, sharedBooks.portfolio?.id]);
 
   const loadRecurringBuys = useCallback(async () => {
     if (!activeId) return;
@@ -736,7 +749,17 @@ export default function PortfolioPage() {
     setSaving(true);
     setError(null);
     try {
-      const holding = await api.addHolding(activeId, addSymbol.toUpperCase(), qty, cost, addCostCurrency);
+      const createdHolding = await api.addHolding(activeId, addSymbol.toUpperCase(), qty, cost, addCostCurrency);
+      let holding: Holding;
+      try {
+        holding = await api.classifyHolding(activeId, createdHolding.id, activeBook);
+        await refreshSharedBooks();
+      } catch (classificationError) {
+        await api.removeHolding(activeId, createdHolding.id).catch(() => undefined);
+        throw new Error(
+          `${classificationError instanceof Error ? classificationError.message : "Unable to select a portfolio book."} The incomplete holding was removed.`,
+        );
+      }
       const row: HoldingRow = { ...holding, ...emptyMetrics(activeBaseCurrency) };
       setHoldings((prev) => [...prev, row]);
       setTickerInput("");
@@ -962,13 +985,35 @@ export default function PortfolioPage() {
 
   const cancelEdit = () => setEdit(null);
 
+  const updateHoldingBook = async (holding: HoldingRow, book: PositionBook) => {
+    if (!activeId || holding.book_type === book) return;
+    const previous = holding;
+    setBookUpdatingId(holding.id);
+    setError(null);
+    setHoldings((current) => current.map((row) => row.id === holding.id ? {
+      ...row,
+      book_type: book,
+      classification_source: "user",
+    } : row));
+    try {
+      const saved = await api.classifyHolding(activeId, holding.id, book);
+      setHoldings((current) => current.map((row) => row.id === holding.id ? { ...row, ...saved } : row));
+      await refreshSharedBooks();
+    } catch (cause) {
+      setHoldings((current) => current.map((row) => row.id === holding.id ? previous : row));
+      setError(`${cause instanceof Error ? cause.message : "Unable to classify holding."} The previous book was restored.`);
+    } finally {
+      setBookUpdatingId(null);
+    }
+  };
+
   const handleEditKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
     if (e.key === "Escape") cancelEdit();
   };
 
   const optimize = async () => {
-    const symbols = [...new Set(holdings.map((h) => h.symbol))];
+    const symbols = [...new Set(bookHoldings.map((h) => h.symbol))];
     if (symbols.length < 2) {
       setError("Add at least 2 holdings to run optimization.");
       return;
@@ -986,15 +1031,20 @@ export default function PortfolioPage() {
     }
   };
 
-  const totalValue = holdings.reduce((s, h) => s + (h.value ?? 0), 0);
-  const totalCost = holdings.reduce((s, h) => s + (h.costBasis ?? h.quantity * h.average_cost), 0);
+  const bookHoldings = useMemo(
+    () => holdings.filter((holding) => holding.book_type === activeBook),
+    [activeBook, holdings],
+  );
+  const unclassifiedHoldingCount = holdings.filter((holding) => holding.book_type === "unclassified").length;
+  const totalValue = bookHoldings.reduce((s, h) => s + (h.value ?? 0), 0);
+  const totalCost = bookHoldings.reduce((s, h) => s + (h.costBasis ?? h.quantity * h.average_cost), 0);
   const totalPnl = totalValue > 0 ? totalValue - totalCost : null;
   const totalPnlPct = totalCost > 0 && totalPnl != null ? (totalPnl / totalCost) * 100 : null;
-  const totalDailyReturn = holdings.reduce((s, h) => s + (h.dailyChange ?? 0), 0);
+  const totalDailyReturn = bookHoldings.reduce((s, h) => s + (h.dailyChange ?? 0), 0);
   const priorPortfolioValue = totalValue - totalDailyReturn;
   const totalDailyReturnPct = priorPortfolioValue > 0 ? (totalDailyReturn / priorPortfolioValue) * 100 : null;
-  const pricedHoldingCount = holdings.filter((h) => h.value != null).length;
-  const canShowAccountSummary = holdings.length > 0;
+  const pricedHoldingCount = bookHoldings.filter((h) => h.value != null).length;
+  const canShowAccountSummary = bookHoldings.length > 0;
   const portfolioGoalProgress = portfolioGoal > 0 ? Math.min((totalValue / portfolioGoal) * 100, 100) : 0;
   const goalTargetLabel = formatGoalDate(goalTargetDate);
   const goalDateDelta = getGoalDateDelta(goalTargetDate);
@@ -1023,11 +1073,11 @@ export default function PortfolioPage() {
     };
   }, [activeBaseCurrency, displayBaseCurrency, totalValue]);
 
-  const uniqueSymbols = [...new Set(holdings.map((h) => h.symbol))];
+  const uniqueSymbols = [...new Set(bookHoldings.map((h) => h.symbol))];
 
   const allocationData = useMemo(() => {
     const bySymbol: Record<string, number> = {};
-    for (const h of holdings) {
+    for (const h of bookHoldings) {
       bySymbol[h.symbol] = (bySymbol[h.symbol] ?? 0) + (h.value ?? h.costBasis ?? h.quantity * h.average_cost);
     }
     return Object.entries(bySymbol).map(([symbol, value], i) => ({
@@ -1035,16 +1085,16 @@ export default function PortfolioPage() {
       value,
       fill: PALETTE[i % PALETTE.length],
     }));
-  }, [holdings]);
+  }, [bookHoldings]);
 
-  const crossCurrencyCount = holdings.filter(
+  const crossCurrencyCount = bookHoldings.filter(
     (h) => h.quoteCurrency && normalizeCurrency(h.quoteCurrency) !== activeBaseCurrency
   ).length;
   const topWeight = totalValue > 0
     ? Math.max(...allocationData.map((d) => (d.value / totalValue) * 100), 0)
     : 0;
   const portfolioBadges = [
-    `${holdings.length} holding${holdings.length !== 1 ? "s" : ""}`,
+    `${bookHoldings.length} holding${bookHoldings.length !== 1 ? "s" : ""}`,
     `${uniqueSymbols.length} symbol${uniqueSymbols.length !== 1 ? "s" : ""}`,
     crossCurrencyCount > 0 ? `${crossCurrencyCount} FX converted` : null,
     totalValue > 0 ? (topWeight >= 50 ? "Concentrated" : "Balanced") : null,
@@ -1060,7 +1110,7 @@ export default function PortfolioPage() {
     allocationData.find((d) => d.symbol === symbol)?.fill ?? PALETTE[0];
 
   const sortedHoldings = useMemo(() => {
-    return [...holdings].sort((a, b) => {
+    return [...bookHoldings].sort((a, b) => {
       const weightA = totalValue > 0 && a.value != null ? a.value / totalValue : 0;
       const weightB = totalValue > 0 && b.value != null ? b.value / totalValue : 0;
       if (sortBy === "symbol") return a.symbol.localeCompare(b.symbol);
@@ -1069,7 +1119,7 @@ export default function PortfolioPage() {
       if (sortBy === "allTime") return (b.pnl ?? Number.NEGATIVE_INFINITY) - (a.pnl ?? Number.NEGATIVE_INFINITY);
       return (b.value ?? Number.NEGATIVE_INFINITY) - (a.value ?? Number.NEGATIVE_INFINITY);
     });
-  }, [holdings, sortBy, totalValue]);
+  }, [bookHoldings, sortBy, totalValue]);
 
   const filteredCurrencies = useMemo(() => {
     const query = currencySearch.trim().toLowerCase();
@@ -1193,12 +1243,23 @@ export default function PortfolioPage() {
           </div>
         )}
 
-        <div>
-          <h1 className="text-3xl font-bold tracking-[-0.03em] text-white">Portfolio</h1>
+        <div data-portfolio-page-heading>
+          <h1 className="text-3xl font-bold tracking-[-0.03em] text-white">
+            {fixedBook ? `${bookLabel} Portfolio` : "Portfolio"}
+          </h1>
+          {!fixedBook && <PortfolioBookSwitch className="mt-4" />}
+          <p className={cn(fixedBook ? "mt-1" : "mt-3", "text-sm text-white/45")}>
+            {bookLabel} book · {bookHoldings.length} classified holding{bookHoldings.length === 1 ? "" : "s"}
+          </p>
+          {unclassifiedHoldingCount > 0 && (
+            <p className="mt-1 text-xs text-amber-300/75">
+              {unclassifiedHoldingCount} holding{unclassifiedHoldingCount === 1 ? " needs" : "s need"} a book before appearing in these totals.
+            </p>
+          )}
         </div>
 
         {activePortfolio && (
-          <section className="space-y-4">
+          <section id="portfolio-accounts" className="scroll-mt-16 space-y-4">
             <div className="flex items-center justify-between border-b border-white/12 pb-3">
               <button type="button" className="text-sm text-white/86">All</button>
               <div ref={accountMenuRef} className="relative">
@@ -1209,7 +1270,7 @@ export default function PortfolioPage() {
                 >
                   Showing:
                   <span className="text-white">{activePortfolio?.name ?? "All Accounts"}</span>
-                  <ChevronDown className={cn("size-4 transition-transform", showAccountMenu && "rotate-180")} />
+                  <ChevronDown className={cn("size-4 transition-transform duration-150 motion-reduce:transition-none", showAccountMenu && "rotate-180")} />
                 </button>
                 {showAccountMenu && (
                   <div className="absolute right-0 top-8 z-40 w-80 rounded-2xl border border-white/12 bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]">
@@ -1239,7 +1300,7 @@ export default function PortfolioPage() {
                               setPortfolioToDelete(portfolio);
                               setShowAccountMenu(false);
                             }}
-                            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-white/30 opacity-0 transition-all hover:bg-red-negative/10 hover:text-red-negative group-hover/portfolio:opacity-100"
+                            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-white/30 opacity-0 transition-[color,background-color,opacity] duration-150 hover:bg-red-negative/10 hover:text-red-negative group-hover/portfolio:opacity-100"
                             aria-label={`Delete ${portfolio.name}`}
                           >
                             <Trash2 className="size-4" />
@@ -1278,7 +1339,7 @@ export default function PortfolioPage() {
                               type="button"
                               onClick={createPortfolio}
                               disabled={saving || !newPortfolioName.trim()}
-                              className="h-10 flex-1 rounded-xl bg-[#a78bfa] text-sm font-bold text-black hover:bg-[#b8a6ff]"
+                              className="theme-accent-surface on-accent h-10 flex-1 rounded-xl text-sm font-bold"
                             >
                               {saving ? <Loader2 className="size-4 animate-spin" /> : "Create"}
                             </Button>
@@ -1288,7 +1349,7 @@ export default function PortfolioPage() {
                         <button
                           type="button"
                           onClick={() => setShowNewForm(true)}
-                          className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/12 text-sm text-white/55 transition-colors hover:border-[#a78bfa]/60 hover:text-white"
+                          className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/12 text-sm text-white/55 transition-colors hover:border-indigo-primary/60 hover:text-white"
                         >
                           <Plus className="size-4" />
                           New portfolio
@@ -1300,13 +1361,10 @@ export default function PortfolioPage() {
               </div>
             </div>
 
-            <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.85fr)]">
+            <div id="portfolio-allocation" className="scroll-mt-16 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.85fr)]">
               <div className="min-w-0 rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-3 shadow-[var(--shadow-card)]">
                 {holdingsLoading || portfoliosLoading ? (
-                  <div className="flex min-h-[270px] items-center justify-center gap-2 text-sm text-white/45">
-                    <Loader2 className="size-4 animate-spin" />
-                    Loading portfolio…
-                  </div>
+                  <LoadingRegion loading label="Loading portfolio allocation" className="min-h-[270px] p-6" skeleton={<div><SkeletonBlock className="h-5 w-36 rounded-sm" /><SkeletonBlock className="mx-auto mt-6 size-44 rounded-full" /></div>}>{null}</LoadingRegion>
                 ) : allocationData.length > 0 ? (
                   <div className="relative mx-auto flex min-h-[270px] max-w-[540px] items-center justify-center">
                     <ChartContainer config={chartConfig} className="h-[250px] w-[250px]">
@@ -1458,7 +1516,7 @@ export default function PortfolioPage() {
                   </div>
                   <ActionButton
                     icon={<Building2 className="size-5" />}
-                    label="Add Investments"
+                    label={`Add ${isInvestmentBook ? "investments" : "trades"}`}
                     tone="green"
                     onClick={() => setShowAddPanel((value) => !value)}
                   />
@@ -1475,17 +1533,14 @@ export default function PortfolioPage() {
         )}
 
         {portfoliosLoading ? (
-          <section className="flex min-h-48 items-center justify-center gap-2 rounded-2xl border border-white/12 bg-[var(--surface-card-strong)] p-10 text-sm text-white/45 shadow-[var(--shadow-card)]">
-            <Loader2 className="size-4 animate-spin" />
-            Loading portfolios…
-          </section>
+          <LoadingRegion loading label="Loading portfolios" className="min-h-48 rounded-2xl border border-white/12 bg-[var(--surface-card-strong)] p-7 shadow-[var(--shadow-card)]" skeleton={<div><SkeletonBlock className="h-7 w-52 rounded-sm" /><SkeletonText className="mt-5" lines={3} widths={["100%", "86%", "58%"]} /></div>}>{null}</LoadingRegion>
         ) : activePortfolio ? (
           <>
             {showAddPanel && (
               <section className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
                 <div className="flex flex-wrap items-center gap-2">
                   {addSymbol ? (
-                    <span className="flex h-10 items-center gap-1.5 rounded-xl bg-[#a78bfa]/15 px-3 text-xs font-semibold text-[#c4b5fd] ring-1 ring-[#a78bfa]/25">
+                    <span className="flex h-10 items-center gap-1.5 rounded-xl bg-indigo-primary/15 px-3 text-xs font-semibold text-indigo-primary ring-1 ring-indigo-primary/25">
                       {addSymbol}
                       <button type="button" onClick={() => setAddSymbol("")} className="opacity-60 hover:opacity-100" aria-label="Clear ticker">
                         ×
@@ -1499,7 +1554,7 @@ export default function PortfolioPage() {
                       existingTickers={holdings.map((holding) => holding.symbol)}
                       placeholder="Symbol or company name"
                       className="w-64"
-                      inputClassName="h-10 rounded-xl border border-white/[0.10] bg-black/20 text-sm focus-visible:ring-0 focus-visible:border-[#a78bfa]/60"
+                      inputClassName="h-10 rounded-xl border border-white/[0.10] bg-black/20 text-sm focus-visible:ring-0 focus-visible:border-indigo-primary/60"
                     />
                   )}
                   <input
@@ -1509,7 +1564,7 @@ export default function PortfolioPage() {
                     placeholder="Qty"
                     value={addQty}
                     onChange={(event) => setAddQty(event.target.value)}
-                    className="h-10 w-24 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-[#a78bfa]/60"
+                    className="h-10 w-24 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-indigo-primary/60"
                   />
                   <input
                     type="number"
@@ -1518,12 +1573,12 @@ export default function PortfolioPage() {
                     placeholder={`Avg cost (${addCostCurrency})`}
                     value={addCost}
                     onChange={(event) => setAddCost(event.target.value)}
-                    className="h-10 w-36 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-[#a78bfa]/60"
+                    className="h-10 w-36 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-indigo-primary/60"
                   />
                   <select
                     value={addCostCurrency}
                     onChange={(event) => setAddCostCurrency(event.target.value as (typeof SUPPORTED_BASE_CURRENCIES)[number])}
-                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none focus:border-[#a78bfa]/60"
+                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none focus:border-indigo-primary/60"
                     aria-label="Average cost currency"
                   >
                     {SUPPORTED_BASE_CURRENCIES.map((currency) => (
@@ -1535,26 +1590,27 @@ export default function PortfolioPage() {
                   <Button
                     onClick={addHolding}
                     disabled={saving || !addSymbol || !addQty || !addCost}
-                    className="h-10 rounded-xl bg-[#a78bfa] px-5 text-sm font-bold text-black hover:bg-[#b8a6ff]"
+                    className="theme-accent-surface on-accent h-10 rounded-xl px-5 text-sm font-bold"
                   >
-                    {saving ? <Loader2 className="size-4 animate-spin" /> : "Add holding"}
+                    {saving ? <Loader2 className="size-4 animate-spin" /> : `Add ${bookLabel.toLowerCase()} holding`}
                   </Button>
                 </div>
               </section>
             )}
 
-            <section className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
+            {isInvestmentBook && (
+              <section id="portfolio-activity" className="scroll-mt-16 rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-semibold text-white">Recurring buys</h2>
-                  <p className="mt-1 text-sm text-white/42">Completed recurring buys automatically keep linked holdings updated.</p>
+                  <h2 className="text-xl font-semibold text-white">Record recurring purchases</h2>
+                  <p className="mt-1 text-sm text-white/42">Records a completed purchase and updates its linked holding. It does not schedule or execute an order.</p>
                 </div>
                 <span className="rounded-full border border-white/10 bg-black/24 px-3 py-1.5 text-xs font-semibold text-white/55">
-                  {recurringBuys.length} synced
+                  {recurringBuys.length} recorded
                 </span>
               </div>
 
-              <div className="mt-4 grid gap-3 rounded-2xl border border-white/[0.07] bg-black/18 p-3 lg:grid-cols-4 xl:grid-cols-[minmax(150px,1fr)_96px_160px_130px_90px_120px_120px_120px_auto]">
+              <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 rounded-2xl border border-white/[0.07] bg-black/18 p-3 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0 [&_input]:w-full [&_select]:w-full">
                 {recurringBuyDraft.symbol ? (
                   <span className="flex h-10 items-center justify-between gap-1.5 rounded-xl bg-white/[0.06] px-3 text-xs font-semibold text-white ring-1 ring-white/10">
                     {recurringBuyDraft.symbol}
@@ -1702,18 +1758,15 @@ export default function PortfolioPage() {
                     || !recurringBuyDraft.symbol
                     || (recurringBuyDraft.purchaseMode === "amount" ? !recurringBuyDraft.enteredAmount : !recurringBuyDraft.filledQuantity)
                   }
-                  className="h-10 rounded-xl bg-white px-4 text-sm font-bold text-black hover:bg-white/86"
+                  className="h-10 w-full rounded-xl bg-white px-4 text-sm font-bold text-black hover:bg-white/86 sm:col-span-2 lg:col-span-4 lg:ml-auto lg:w-auto"
                 >
-                  {saving ? <Loader2 className="size-4 animate-spin" /> : "Price & sync"}
+                  {saving ? <Loader2 className="size-4 animate-spin" /> : "Price & record"}
                 </Button>
               </div>
 
               <div className="mt-4 space-y-3">
                 {recurringBuysLoading ? (
-                  <div className="flex min-h-28 items-center justify-center gap-2 rounded-2xl border border-white/[0.07] bg-black/14 text-sm text-white/42">
-                    <Loader2 className="size-4 animate-spin" />
-                    Loading recurring buys…
-                  </div>
+                  <LoadingRegion loading label="Loading recurring buys" className="min-h-28 rounded-2xl border border-white/[0.07] bg-black/14 p-4" skeleton={<div><SkeletonBlock className="h-5 w-40 rounded-sm" /><SkeletonBlock className="mt-3 h-10 w-full rounded-lg" /></div>}>{null}</LoadingRegion>
                 ) : recurringBuys.length > 0 ? (
                   recurringBuys.map((buy) => {
                     const expanded = expandedRecurringBuyId === buy.id;
@@ -1743,7 +1796,7 @@ export default function PortfolioPage() {
                             <span className="text-right text-lg font-bold tabular-nums text-white">
                               {formatPrivateMoney(totalCost, buy.entered_currency, hideAmounts)} {buy.entered_currency}
                             </span>
-                            <ChevronDown className={cn("size-5 text-white/72 transition-transform", expanded && "rotate-180")} />
+                            <ChevronDown className={cn("size-5 text-white/72 transition-transform duration-150 motion-reduce:transition-none", expanded && "rotate-180")} />
                           </div>
                         </button>
 
@@ -1794,7 +1847,7 @@ export default function PortfolioPage() {
                             <div className="flex items-center justify-between border-t border-white/[0.07] pt-4 md:col-span-2">
                               <div>
                                 <p className="text-sm font-semibold text-white">Total cost</p>
-                                <p className="mt-1 text-xs text-white/42">Synced to linked holding</p>
+                                <p className="mt-1 text-xs text-white/42">Recorded against the linked holding</p>
                               </div>
                               <div className="flex items-center gap-3">
                                 <span className="text-lg font-bold tabular-nums text-white">
@@ -1817,15 +1870,17 @@ export default function PortfolioPage() {
                   })
                 ) : (
                   <div className="flex min-h-28 items-center justify-center rounded-2xl border border-dashed border-white/[0.10] bg-black/14 text-sm text-white/42">
-                    No recurring buys yet.
+                    No recurring purchases recorded yet.
                   </div>
                 )}
               </div>
-            </section>
+              </section>
+            )}
 
-            <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(280px,420px)_minmax(0,1fr)]">
+            <div id="portfolio-performance" className="scroll-mt-16 grid min-w-0 gap-6 xl:grid-cols-[minmax(280px,420px)_minmax(0,1fr)]">
               <section className="min-w-0 space-y-5">
-                <div className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
+                {isInvestmentBook && (
+                  <div className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
                   <div className="flex items-center justify-between gap-4">
                     <h2 className="text-xl font-bold">Portfolio Goal</h2>
                     {editingGoal ? (
@@ -1842,29 +1897,29 @@ export default function PortfolioPage() {
                               setEditingGoal(false);
                             }
                           }}
-                          className="h-9 w-32 rounded-xl border border-white/[0.12] bg-black/20 px-3 text-right text-sm text-white outline-none focus:border-[#a78bfa]/60"
+                          className="h-9 w-32 rounded-xl border border-white/[0.12] bg-black/20 px-3 text-right text-sm text-white outline-none focus:border-indigo-primary/60"
                           autoFocus
                         />
-                        <button type="button" onClick={commitGoal} className="text-sm text-[#c4b5fd] hover:text-white">
+                        <button type="button" onClick={commitGoal} className="text-sm text-indigo-primary hover:text-white">
                           Save
                         </button>
                       </div>
                     ) : (
-                      <button type="button" onClick={() => setEditingGoal(true)} className="text-base text-white/86 transition-colors hover:text-[#c4b5fd]">
+                      <button type="button" onClick={() => setEditingGoal(true)} className="text-base text-white/86 transition-colors hover:text-indigo-primary">
                         Edit goal
                       </button>
                     )}
                   </div>
                   <div className="mt-4 text-xl font-semibold tracking-[-0.04em]">
-                    <span className="text-[#a78bfa]">{formatPrivateMoney(totalValue, activeBaseCurrency, hideAmounts)}</span>
+                    <span className="text-indigo-primary">{formatPrivateMoney(totalValue, activeBaseCurrency, hideAmounts)}</span>
                     <span className="text-white/82">/{formatMoney(portfolioGoal, activeBaseCurrency, 0)}</span>
                   </div>
                   <div className="mt-4 h-3 overflow-visible rounded-full bg-black/30">
                     <div
-                      className="relative h-full rounded-full bg-[#a78bfa]"
+                      className="relative h-full rounded-full bg-indigo-primary"
                       style={{ width: `${portfolioGoalProgress}%` }}
                     >
-                      <span className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 rounded-full bg-[#a78bfa] px-1.5 py-0.5 text-xs font-semibold text-space-black">
+                      <span className="on-accent absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 rounded-full bg-indigo-primary px-1.5 py-0.5 text-xs font-semibold">
                         {portfolioGoalProgress.toFixed(0)}%
                       </span>
                     </div>
@@ -1874,22 +1929,13 @@ export default function PortfolioPage() {
                       <p className="text-sm text-white/78">You&apos;re aiming to reach this by</p>
                       {editingGoalDate ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <input
-                            type="date"
-                            value={goalDateDraft}
-                            onChange={(event) => setGoalDateDraft(event.target.value)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") commitGoalDate();
-                              if (event.key === "Escape") {
-                                setGoalDateDraft(goalTargetDate);
-                                setEditingGoalDate(false);
-                              }
-                            }}
-                            className="h-9 rounded-xl border border-white/[0.12] bg-black/20 px-3 text-sm text-white outline-none [color-scheme:dark] focus:border-[#a78bfa]/60"
+                          <DatePicker
                             aria-label="Portfolio goal target date"
-                            autoFocus
+                            value={goalDateDraft}
+                            onValueChange={setGoalDateDraft}
+                            className="h-9 min-w-48 bg-black/20 text-white"
                           />
-                          <button type="button" onClick={commitGoalDate} className="text-sm text-[#c4b5fd] hover:text-white">
+                          <button type="button" onClick={commitGoalDate} className="text-sm text-indigo-primary hover:text-white">
                             Save
                           </button>
                           <button
@@ -1910,7 +1956,7 @@ export default function PortfolioPage() {
                             setGoalDateDraft(goalTargetDate);
                             setEditingGoalDate(true);
                           }}
-                          className="mt-1.5 inline-flex items-center gap-2 text-sm text-[#c4b5fd] transition-colors hover:text-white"
+                          className="mt-1.5 inline-flex items-center gap-2 text-sm text-indigo-primary transition-colors hover:text-white"
                         >
                           <CalendarDays className="size-4" />
                           <span>{goalTargetLabel}</span>
@@ -1923,14 +1969,15 @@ export default function PortfolioPage() {
                           "rounded-full border px-2.5 py-1 text-xs font-semibold",
                           goalDateDelta != null && goalDateDelta < 0
                             ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
-                            : "border-[#a78bfa]/24 bg-[#a78bfa]/10 text-[#c4b5fd]"
+                            : "border-indigo-primary/25 bg-indigo-primary/10 text-indigo-primary"
                         )}
                       >
                         {goalDateDeltaLabel}
                       </span>
                     )}
                   </div>
-                </div>
+                  </div>
+                )}
 
                 <div className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
                   <div className="flex flex-wrap items-center justify-between gap-4">
@@ -1972,7 +2019,7 @@ export default function PortfolioPage() {
                 </div>
               </section>
 
-              <section className="min-w-0">
+              <section id="portfolio-holdings" className="scroll-mt-16 min-w-0">
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <h2 className="text-xl font-semibold">Holdings</h2>
@@ -1995,7 +2042,7 @@ export default function PortfolioPage() {
                       <span className="text-white">
                         {sortBy === "total" ? "Total value" : sortBy === "allTime" ? "All-time return" : sortBy === "today" ? "Today" : sortBy === "weight" ? "% of portfolio" : "Symbol"}
                       </span>
-                      <ChevronDown className={cn("size-4 transition-transform", showSortMenu && "rotate-180")} />
+                      <ChevronDown className={cn("size-4 transition-transform duration-150 motion-reduce:transition-none", showSortMenu && "rotate-180")} />
                     </button>
                     {showSortMenu && (
                       <div className="absolute right-0 top-8 z-30 w-48 rounded-2xl border border-white/12 bg-[var(--surface-popover)] p-1 shadow-[var(--shadow-popover)]">
@@ -2025,21 +2072,19 @@ export default function PortfolioPage() {
 
                 <div className="overflow-hidden rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] shadow-[var(--shadow-card)]">
                   {holdingsLoading ? (
-                    <div className="flex min-h-80 items-center justify-center gap-2 text-sm text-white/45">
-                      <Loader2 className="size-4 animate-spin" />
-                      Loading holdings…
-                    </div>
+                    <LoadingRegion loading label="Loading holdings" className="min-h-80 p-5" skeleton={<div className="space-y-3">{Array.from({ length: 5 }, (_, index) => <SkeletonBlock key={index} className="h-12 w-full rounded-lg" />)}</div>}>{null}</LoadingRegion>
                   ) : sortedHoldings.length > 0 ? (
                     <HorizontalScroll className="w-full">
-                      <table className="w-full min-w-[700px] table-fixed text-xs sm:text-sm">
+                      <table className="w-full min-w-[860px] table-fixed text-xs sm:text-sm">
                         <thead>
                           <tr className="border-b border-white/10 text-xs text-white/60">
-                            <th className="w-[32%] px-3 py-3 text-left font-medium">Holdings</th>
-                            <th className="w-[12%] px-3 py-3 text-right font-medium">% of portfolio</th>
-                            <th className="w-[13%] px-3 py-3 text-right font-medium">Position</th>
-                            <th className="w-[12%] px-3 py-3 text-center font-medium">Shares</th>
-                            <th className="w-[14%] px-3 py-3 text-right font-medium">Today&apos;s Return</th>
-                            <th className="w-[14%] px-3 py-3 text-right font-medium">All-Time Return</th>
+                            <th className="w-[24%] px-3 py-3 text-left font-medium">Holdings</th>
+                            <th className="w-[13%] px-3 py-3 text-left font-medium">Book</th>
+                            <th className="w-[11%] px-3 py-3 text-right font-medium">% of portfolio</th>
+                            <th className="w-[12%] px-3 py-3 text-right font-medium">Position</th>
+                            <th className="w-[11%] px-3 py-3 text-center font-medium">Shares</th>
+                            <th className="w-[13%] px-3 py-3 text-right font-medium">Today&apos;s Return</th>
+                            <th className="w-[13%] px-3 py-3 text-right font-medium">All-Time Return</th>
                             <th className="w-[3%] px-1 py-3" />
                           </tr>
                         </thead>
@@ -2068,6 +2113,19 @@ export default function PortfolioPage() {
                                       <p className="truncate text-xs text-white/56">{holdingName}</p>
                                     </div>
                                   </div>
+                                </td>
+                                <td className="px-3 py-3">
+                                  <select
+                                    aria-label={`Book for ${holding.symbol}`}
+                                    value={holding.book_type}
+                                    disabled={bookUpdatingId !== null}
+                                    onChange={(event) => void updateHoldingBook(holding, event.target.value as PositionBook)}
+                                    className="h-8 w-full border border-white/12 bg-black/25 px-2 text-xs text-white outline-none focus:ring-2 focus:ring-sky-300/35 disabled:opacity-45"
+                                  >
+                                    <option value="unclassified">Unclassified</option>
+                                    <option value="investment">Investment</option>
+                                    <option value="trading">Trading</option>
+                                  </select>
                                 </td>
                                 <td className="px-3 py-3 text-right font-semibold tabular-nums text-white">{rowWeight.toFixed(2)}%</td>
                                 <td className="px-3 py-3 text-right tabular-nums">
@@ -2106,7 +2164,7 @@ export default function PortfolioPage() {
                                   <button
                                     type="button"
                                     onClick={() => setHoldingToDelete(holding)}
-                                    className="flex size-8 items-center justify-center rounded-full text-white/28 opacity-0 transition-all hover:bg-white/[0.07] hover:text-red-negative group-hover:opacity-100"
+                                    className="flex size-8 items-center justify-center rounded-full text-white/28 opacity-0 transition-[color,background-color,opacity] duration-150 hover:bg-white/[0.07] hover:text-red-negative group-hover:opacity-100"
                                     aria-label={`Remove ${holding.symbol}`}
                                   >
                                     <Trash2 className="size-4" />
@@ -2124,9 +2182,9 @@ export default function PortfolioPage() {
                       <button
                         type="button"
                         onClick={() => setShowAddPanel(true)}
-                        className="rounded-full bg-[#a78bfa] px-4 py-2 text-sm font-bold text-black hover:bg-[#b8a6ff]"
+                        className="theme-accent-surface on-accent rounded-full px-4 py-2 text-sm font-bold"
                       >
-                        Add your first investment
+                        Add your first {bookLabel.toLowerCase()} holding
                       </button>
                     </div>
                   )}
@@ -2143,8 +2201,8 @@ export default function PortfolioPage() {
               </section>
             </div>
 
-            {uniqueSymbols.length >= 2 && (
-              <section className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-6 shadow-[var(--shadow-card)]">
+            {isInvestmentBook && uniqueSymbols.length >= 2 && (
+              <section id="portfolio-rebalance" className="scroll-mt-16 rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-6 shadow-[var(--shadow-card)]">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
                     <h2 className="text-lg font-semibold text-white">Optimizer</h2>
@@ -2174,7 +2232,7 @@ export default function PortfolioPage() {
                       <ThinSlider min={0.1} max={3} step={0.1} value={risk} onValueChange={(value) => { setRisk(value); setResult(null); }} aria-label="Risk tolerance" />
                       <span className="w-8 text-right text-sm text-white/55">{risk.toFixed(1)}</span>
                     </div>
-                    <Button onClick={optimize} disabled={optimizing} className="rounded-full bg-[#a78bfa] px-5 text-sm font-bold text-black hover:bg-[#b8a6ff]">
+                    <Button onClick={optimize} disabled={optimizing} className="theme-accent-surface on-accent rounded-full px-5 text-sm font-bold">
                       {optimizing ? <Loader2 className="size-4 animate-spin" /> : "Run Optimization"}
                     </Button>
                   </div>
@@ -2185,7 +2243,7 @@ export default function PortfolioPage() {
                     {[
                       { label: "Expected Return", value: `${((result.expected_annual_return ?? 0) * 100).toFixed(1)}%`, cls: "text-green-positive" },
                       { label: "Volatility", value: `${((result.annual_volatility ?? 0) * 100).toFixed(1)}%`, cls: "text-amber-warning" },
-                      { label: "Sharpe", value: (result.sharpe_ratio ?? 0).toFixed(2), cls: "text-[#a78bfa]" },
+                      { label: "Sharpe", value: (result.sharpe_ratio ?? 0).toFixed(2), cls: "text-indigo-primary" },
                     ].map((metric) => (
                       <div key={metric.label} className="rounded-2xl border border-white/[0.08] bg-black/16 p-4">
                         <p className="text-xs text-white/42">{metric.label}</p>
@@ -2197,7 +2255,7 @@ export default function PortfolioPage() {
               </section>
             )}
 
-            {uniqueSymbols.length === 1 && (
+            {isInvestmentBook && uniqueSymbols.length === 1 && (
               <p className="text-center text-xs text-white/28">Add at least one more holding to enable optimization.</p>
             )}
           </>
@@ -2216,7 +2274,7 @@ export default function PortfolioPage() {
                   }}
                   placeholder="Portfolio name"
                   autoFocus
-                  className="h-11 w-full rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-[#a78bfa]/60"
+                  className="h-11 w-full rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-indigo-primary/60"
                 />
                 <div className="flex gap-2">
                   <div ref={newCurrencyMenuRef} className="relative w-32 shrink-0">
@@ -2232,11 +2290,11 @@ export default function PortfolioPage() {
                           return next;
                         });
                       }}
-                      className="flex h-11 w-full items-center justify-between rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none transition-colors hover:border-white/18 focus:border-[#a78bfa]/60"
+                      className="flex h-11 w-full items-center justify-between rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none transition-colors hover:border-white/18 focus:border-indigo-primary/60"
                       aria-label="Portfolio base currency"
                     >
                       {normalizeCurrency(newBaseCurrency)}
-                      <ChevronDown className={cn("size-4 text-white/45 transition-transform", showNewCurrencyMenu && "rotate-180")} />
+                      <ChevronDown className={cn("size-4 text-white/45 transition-transform duration-150 motion-reduce:transition-none", showNewCurrencyMenu && "rotate-180")} />
                     </button>
                     {showNewCurrencyMenu && (
                       <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-44 rounded-2xl border border-white/12 bg-[var(--surface-popover)] p-1 shadow-[var(--shadow-popover)]">
@@ -2331,7 +2389,7 @@ export default function PortfolioPage() {
                     type="button"
                     onClick={createPortfolio}
                     disabled={saving || !newPortfolioName.trim()}
-                    className="h-11 flex-1 rounded-xl bg-[#a78bfa] text-sm font-bold text-black hover:bg-[#b8a6ff]"
+                    className="theme-accent-surface on-accent h-11 flex-1 rounded-xl text-sm font-bold"
                   >
                     {saving ? <Loader2 className="size-4 animate-spin" /> : "Create portfolio"}
                   </Button>
@@ -2348,7 +2406,7 @@ export default function PortfolioPage() {
               <button
                 type="button"
                 onClick={() => setShowNewForm(true)}
-                className="mt-4 rounded-full bg-[#a78bfa] px-5 py-2 text-sm font-bold text-black hover:bg-[#b8a6ff]"
+                className="theme-accent-surface on-accent mt-4 rounded-full px-5 py-2 text-sm font-bold"
               >
                 New portfolio
               </button>
@@ -2505,7 +2563,7 @@ function ActionButton({
     <button
       type="button"
       onClick={onClick}
-      className="group flex h-full min-h-[74px] w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl text-center transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a78bfa]/50"
+      className="group flex h-full min-h-[74px] w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl text-center transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
     >
       <span className={cn("flex size-8 items-center justify-center rounded-full transition-transform group-hover:scale-105", styles[tone])}>
         {icon}

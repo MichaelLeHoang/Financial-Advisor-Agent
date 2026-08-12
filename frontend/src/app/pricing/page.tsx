@@ -311,8 +311,8 @@ function PlanCard({
         isCurrent
           ? "border-green-positive/30 bg-green-positive/[0.075] shadow-[inset_0_0_0_1px_rgba(52,211,153,0.12)]"
           : isRecommended
-            ? "border-indigo-500/55 bg-[#101225]/95 shadow-[0_0_0_1px_rgba(99,102,241,0.24),0_20px_60px_rgba(99,102,241,0.16)] hover:-translate-y-1 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.48),0_28px_82px_rgba(99,102,241,0.28)]"
-            : "border-white/[0.10] bg-[#0f1117]/94 shadow-[0_18px_58px_rgba(0,0,0,0.18)] hover:-translate-y-1 hover:border-indigo-primary/45 hover:bg-[#141827]/96 hover:shadow-[0_24px_76px_rgba(0,0,0,0.28),0_0_32px_rgba(99,102,241,0.12)]"
+            ? "border-indigo-500/55 bg-[#101225]/95 shadow-[0_20px_60px_rgba(0,0,0,0.24)] hover:-translate-y-1 hover:shadow-[0_28px_82px_rgba(0,0,0,0.32)]"
+            : "border-white/[0.10] bg-[#0f1117]/94 shadow-[0_18px_58px_rgba(0,0,0,0.18)] hover:-translate-y-1 hover:border-indigo-primary/45 hover:bg-[#141827]/96 hover:shadow-[0_24px_76px_rgba(0,0,0,0.28)]"
       }`}
     >
       <div className="mb-5 flex min-h-12 items-start justify-between gap-3">
@@ -347,7 +347,7 @@ function PlanCard({
           isCurrent
             ? "border border-green-positive/20 bg-green-positive/10 text-green-positive"
             : isRecommended
-              ? "on-accent bg-indigo-500 text-white shadow-[0_0_0_1px_rgba(99,102,241,0.5),0_6px_18px_rgba(99,102,241,0.3)] hover:bg-indigo-400"
+              ? "theme-accent-surface on-accent"
               : "border border-white/[0.10] bg-[#171a23] text-white/76 hover:bg-[#202432] hover:text-white"
         } disabled:cursor-not-allowed disabled:opacity-60`}
       >

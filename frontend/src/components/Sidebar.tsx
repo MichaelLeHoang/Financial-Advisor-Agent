@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ComponentType } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
     Atom,
     BookOpen,
@@ -29,6 +29,11 @@ import {
     Sparkles,
     Trash2,
     TrendingUp,
+    Home,
+    Compass,
+    CandlestickChart,
+    BriefcaseBusiness,
+    Bell,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { ChatSession } from "@/lib/api";
@@ -39,6 +44,9 @@ import type { Plan } from "@/components/auth/AuthProvider";
 import ChatSearchDialog from "@/components/ChatSearchDialog";
 import ProfileMenu from "@/components/ProfileMenu";
 import { showToast } from "@/components/ui/toast";
+import { LoadingRegion, SkeletonBlock } from "@/components/ui/DataLoading";
+import { PRIMARY_NAVIGATION } from "@/config/workspace-navigation";
+import { keyboardShortcutsEnabled } from "@/lib/keyboard-shortcuts";
 
 type NavItem = {
     href: string;
@@ -47,28 +55,22 @@ type NavItem = {
     minPlan?: Plan;
 };
 
-const NAV: NavItem[] = [
-    { href: "/dashboard", icon: Sparkles, label: "Dashboard" },
-    { href: "/session", icon: MessageSquare, label: "AI Advisor" },
-    { href: "/market", icon: TrendingUp, label: "Market" },
-    { href: "/sentiment", icon: Brain, label: "Sentiment" },
-    { href: "/watchlist", icon: Pin, label: "Watchlist" },
-    { href: "/portfolio", icon: PieChart, label: "Portfolio" },
-    { href: "/backtest", icon: FlaskConical, label: "Backtest Lab", minPlan: "trader" },
-    { href: "/quantum", icon: Atom, label: "Quantum", minPlan: "quant" },
-];
+const PRIMARY_ICONS = { home: Home, portfolio: PieChart, invest: BriefcaseBusiness, trade: CandlestickChart, discover: Compass, journal: BookOpen, ai: MessageSquare };
+const NAV: NavItem[] = PRIMARY_NAVIGATION.map((item) => ({ ...item, icon: PRIMARY_ICONS[item.id] }));
 
 const MORE_NAV: NavItem[] = [
-    { href: "/risk", icon: Shield, label: "Risk", minPlan: "pro" },
-    { href: "/journal", icon: BookOpen, label: "Journal", minPlan: "trader" },
+    { href: "/sentiment", icon: Brain, label: "Sentiment" },
+    { href: "/quantum", icon: Atom, label: "Quantum", minPlan: "quant" },
     { href: "/strategy-compare", icon: LineChart, label: "Strategy Compare", minPlan: "quant" },
     { href: "/validation", icon: BarChart3, label: "Validation", minPlan: "quant" },
-    { href: "/signals", icon: Signal, label: "Signals", minPlan: "quant" },
     { href: "/export", icon: Code2, label: "Export", minPlan: "quant" },
 ];
 
+const WORKSPACE_SUBNAV_PREFIXES = ["/invest", "/portfolio", "/trade", "/journal", "/discover"];
+
 function isNavItemActive(path: string, href: string) {
-    return path === href || (href === "/session" && path.startsWith("/session/"));
+    if (href === "/discover/markets") return path.startsWith("/discover/");
+    return path === href || path.startsWith(`${href}/`);
 }
 
 export default function Sidebar({
@@ -91,15 +93,17 @@ export default function Sidebar({
     const [mobileOpen, setMobileOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
     const [sessions, setSessions] = useState<ChatSession[]>([]);
-    const [sessionsLoading, setSessionsLoading] = useState(true);
+    const [sessionsLoading, setSessionsLoading] = useState(false);
     const isGuest = !authLoading && Boolean(user?.is_guest);
     const visibleNav = isGuest
-        ? NAV.filter((item) => item.href === "/session" || item.href === "/market")
+        ? NAV.filter((item) => item.href === "/ai" || item.href === "/discover/markets")
         : getVisibleNav(user?.plan ?? "free");
     const visibleMoreNav = isGuest ? [] : getVisibleMoreNav(user?.plan ?? "free");
-    const isSessionPath = path === "/session" || path.startsWith("/session/");
-    const routeSessionId = isSessionPath && path !== "/session" ? decodeURIComponent(path.split("/")[2] || "") : null;
+    const isSessionPath = path === "/ai" || path.startsWith("/ai/");
+    const routeSessionId = isSessionPath && path !== "/ai" ? decodeURIComponent(path.split("/")[2] || "") : null;
     const activeSessionId = isSessionPath ? routeSessionId || searchParams.get("session") || "default" : null;
+    const shouldLoadSessions = isSessionPath || isOpen || mobileOpen || searchOpen;
+    const hasWorkspaceSubnav = WORKSPACE_SUBNAV_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
     const displaySessions = useMemo(() => sessions, [sessions]);
     const creatingSessionRef = useRef(false);
 
@@ -109,8 +113,8 @@ export default function Sidebar({
     }, []);
 
     const refreshSessions = useCallback(async () => {
-        setSessionsLoading(true);
         if (authLoading) return;
+        setSessionsLoading(true);
         if (user?.is_guest) {
             setSessions(listLocalChatSessions());
             setSessionsLoading(false);
@@ -129,7 +133,7 @@ export default function Sidebar({
     const startNewAnalysis = useCallback(() => {
         const activeSessionIsListed = activeSessionId ? sessions.some((session) => session.session_id === activeSessionId) : false;
         if (activeSessionId && !activeSessionIsListed) {
-            router.push(activeSessionId === "default" ? "/session" : `/session/${encodeURIComponent(activeSessionId)}`);
+            router.push(activeSessionId === "default" ? "/ai" : `/ai/${encodeURIComponent(activeSessionId)}`);
             setMobileOpen(false);
             window.setTimeout(() => window.dispatchEvent(new Event("chat-input:focus")), 80);
             return;
@@ -137,7 +141,7 @@ export default function Sidebar({
 
         const reusableBlankSession = sessions.find((session) => session.message_count === 0);
         if (reusableBlankSession) {
-            router.push(`/session/${encodeURIComponent(reusableBlankSession.session_id)}`);
+            router.push(`/ai/${encodeURIComponent(reusableBlankSession.session_id)}`);
             setMobileOpen(false);
             window.setTimeout(() => window.dispatchEvent(new Event("chat-input:focus")), 80);
             return;
@@ -156,7 +160,7 @@ export default function Sidebar({
         };
 
         setSessions((current) => [optimisticSession, ...current.filter((session) => session.session_id !== nextSessionId)]);
-        router.push(`/session/${encodeURIComponent(nextSessionId)}`);
+        router.push(`/ai/${encodeURIComponent(nextSessionId)}`);
         setMobileOpen(false);
         window.setTimeout(() => window.dispatchEvent(new Event("chat-input:focus")), 80);
 
@@ -172,7 +176,7 @@ export default function Sidebar({
             })
             .catch(() => {
                 setSessions((current) => current.filter((session) => session.session_id !== nextSessionId));
-                router.replace("/session");
+                router.replace("/ai");
             })
             .finally(() => {
                 creatingSessionRef.current = false;
@@ -182,7 +186,7 @@ export default function Sidebar({
     const handleSessionDeleted = useCallback((sessionId: string) => {
         refreshSessions();
         if (activeSessionId === sessionId) {
-            router.push("/session");
+            router.push("/ai");
         }
     }, [activeSessionId, refreshSessions, router]);
 
@@ -192,7 +196,7 @@ export default function Sidebar({
 
     useEffect(() => {
         const handleShortcut = (event: KeyboardEvent) => {
-            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+            if (keyboardShortcutsEnabled() && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
                 event.preventDefault();
                 openSearch();
             }
@@ -206,9 +210,11 @@ export default function Sidebar({
     }, [openSearch]);
 
     useEffect(() => {
-        refreshSessions();
+        if (shouldLoadSessions) refreshSessions();
 
-        const handleChanged = () => refreshSessions();
+        const handleChanged = () => {
+            if (shouldLoadSessions) refreshSessions();
+        };
         const handlePrivacyReset = () => {
             setSessions([]);
             setSessionsLoading(false);
@@ -220,7 +226,7 @@ export default function Sidebar({
             window.removeEventListener("chat-sessions:changed", handleChanged);
             window.removeEventListener("chat-privacy:reset", handlePrivacyReset);
         };
-    }, [refreshSessions]);
+    }, [refreshSessions, shouldLoadSessions]);
 
     return (
         <>
@@ -236,7 +242,7 @@ export default function Sidebar({
                         src="/close-svgrepo-com.svg"
                         alt=""
                         aria-hidden="true"
-                        className="h-5 w-5 opacity-70 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]"
+                        className="h-5 w-5 opacity-70 transition-opacity duration-200 group-hover:opacity-100"
                     />
                 ) : (
                     <Menu className="h-5 w-5 transition-colors group-hover:text-[var(--text-primary)]" />
@@ -246,6 +252,7 @@ export default function Sidebar({
             <DesktopSidebar
                 path={path}
                 isOpen={isOpen}
+                hasWorkspaceSubnav={hasWorkspaceSubnav}
                 onToggle={onToggle}
                 nav={visibleNav}
                 moreNav={visibleMoreNav}
@@ -310,6 +317,7 @@ export default function Sidebar({
 function DesktopSidebar({
     path,
     isOpen,
+    hasWorkspaceSubnav,
     onToggle,
     nav,
     moreNav,
@@ -327,6 +335,7 @@ function DesktopSidebar({
 }: {
     path: string;
     isOpen: boolean;
+    hasWorkspaceSubnav: boolean;
     onToggle: () => void;
     nav: NavItem[];
     moreNav: NavItem[];
@@ -344,17 +353,22 @@ function DesktopSidebar({
 }) {
     const [recentsOpen, setRecentsOpen] = useState(false);
 
+    useEffect(() => setRecentsOpen(false), [activeSessionId, path]);
+
     return (
-        <motion.aside
+        <aside
+            data-desktop-sidebar
+            data-sidebar-shape={isOpen ? "panel" : "pill"}
             className={cn(
-                "fixed inset-y-0 left-0 z-50 hidden overflow-visible md:block",
-                isOpen ? "w-72" : "w-16"
+                "fixed left-4 z-50 hidden overflow-visible md:block",
+                isOpen
+                    ? hasWorkspaceSubnav ? "bottom-4 top-16 w-72" : "inset-y-4 w-72"
+                    : "top-1/2 h-[min(48rem,calc(100dvh-2rem))] w-14 -translate-y-1/2"
             )}
-            animate={{ width: isOpen ? 288 : 64 }}
-            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
         >
             {isOpen ? (
                 <SidebarSurface
+                    floating
                     path={path}
                     onToggle={onToggle}
                     nav={nav}
@@ -392,7 +406,7 @@ function DesktopSidebar({
                     onAlertsClick={onAlertsClick}
                 />
             )}
-        </motion.aside>
+        </aside>
     );
 }
 
@@ -434,40 +448,83 @@ function MiniSidebar({
     onAlertsClick?: () => void;
 }) {
     const [moreOpen, setMoreOpen] = useState(false);
+    const reduceMotion = useReducedMotion();
+    const recentsRef = useRef<HTMLDivElement>(null);
+    const recentsPopupRef = useRef<HTMLDivElement>(null);
+    const [recentsPosition, setRecentsPosition] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null);
     const moreActive = moreNav.some((item) => path === item.href);
 
+    useEffect(() => {
+        if (!recentsOpen) return;
+        const handlePointerDown = (event: PointerEvent) => {
+            const target = event.target as Node;
+            if (!recentsRef.current?.contains(target) && !recentsPopupRef.current?.contains(target)) onToggleRecents();
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") onToggleRecents();
+        };
+        const updatePosition = () => {
+            const rect = recentsRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            const gutter = 16;
+            const width = Math.min(288, window.innerWidth - gutter * 2);
+            const maxHeight = Math.min(448, window.innerHeight - gutter * 2);
+            const left = Math.min(rect.right + 8, window.innerWidth - width - gutter);
+            const top = Math.min(Math.max(gutter, rect.top), window.innerHeight - maxHeight - gutter);
+            setRecentsPosition({ left: Math.max(gutter, left), top: Math.max(gutter, top), width, maxHeight });
+        };
+        updatePosition();
+        document.addEventListener("pointerdown", handlePointerDown);
+        document.addEventListener("keydown", handleKeyDown);
+        window.addEventListener("resize", updatePosition);
+        window.addEventListener("scroll", updatePosition, true);
+        return () => {
+            document.removeEventListener("pointerdown", handlePointerDown);
+            document.removeEventListener("keydown", handleKeyDown);
+            window.removeEventListener("resize", updatePosition);
+            window.removeEventListener("scroll", updatePosition, true);
+        };
+    }, [onToggleRecents, recentsOpen]);
+
+    useEffect(() => {
+        if (!recentsOpen) setRecentsPosition(null);
+    }, [recentsOpen]);
+
     return (
-        <div className="relative flex h-full flex-col items-center border-r border-[var(--theme-border)] bg-[var(--surface-popover-strong)] py-4 shadow-[var(--shadow-sidebar)]">
+        <div className="workspace-side-rail relative flex h-full flex-col items-center rounded-full border border-[var(--theme-border)] bg-[var(--surface-header)] py-4 shadow-[var(--shadow-sidebar)] backdrop-blur-xl">
             <button
                 type="button"
                 aria-label="Open sidebar"
                 onClick={onToggleSidebar}
-                className="group relative mb-3 flex h-10 w-10 cursor-e-resize items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                className="group relative mb-3 flex h-10 w-10 cursor-e-resize items-center justify-center rounded-full text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
-                    <span className="absolute flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] opacity-100 shadow-[var(--shadow-brand-mark)] transition-opacity group-hover:opacity-0">
+                <span data-sidebar-logo-mark className="absolute flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.04] opacity-100 transition-opacity group-hover:opacity-0">
                     <img src="/logo.svg" alt="" className="h-6 w-6 object-contain" />
                 </span>
                 <span className="absolute flex h-10 w-10 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
                     <SidebarGlyph />
                 </span>
+                <MiniTooltip label="Open navigation" />
             </button>
 
             <button
                 type="button"
                 onClick={onNewAnalysis}
-	                aria-label="New chat"
-                className="mb-4 flex h-11 w-10 items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                aria-label="New chat"
+                className="group relative mb-4 flex h-10 w-10 items-center justify-center rounded-full text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
                 <PenLine className="h-5 w-5" />
+                <MiniTooltip label="New chat" />
             </button>
 
             <button
                 type="button"
                 onClick={onSearchClick}
                 aria-label="Search chats"
-                className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                className="group relative mb-4 flex h-10 w-10 items-center justify-center rounded-full text-white/58 transition-colors hover:bg-white/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
             >
                 <Search className="h-5 w-5" />
+                <MiniTooltip label="Search chats" shortcut="⌘K" />
             </button>
 
             <div className="h-6" />
@@ -483,11 +540,12 @@ function MiniSidebar({
                             aria-label={label}
                             aria-current={active ? "page" : undefined}
                             className={cn(
-                                "flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                                "group relative flex h-10 w-10 items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                                 active ? "bg-white/[0.09] text-indigo-primary" : "text-white/42 hover:bg-white/[0.07] hover:text-white"
                             )}
                         >
                             <Icon className="h-5 w-5" />
+                            <MiniTooltip label={label} />
                         </Link>
                     );
                 })}
@@ -502,11 +560,12 @@ function MiniSidebar({
                         aria-expanded={moreOpen}
                         onClick={() => setMoreOpen((open) => !open)}
                         className={cn(
-                            "flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                            "group flex h-10 w-10 items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                             moreOpen || moreActive ? "bg-white/[0.09] text-indigo-primary" : "text-white/42 hover:bg-white/[0.07] hover:text-white"
                         )}
                     >
                         <MoreHorizontal className="h-5 w-5" />
+                        {!moreOpen && <MiniTooltip label="More sections" />}
                     </button>
                     <AnimatePresence>
                         {moreOpen && (
@@ -544,7 +603,7 @@ function MiniSidebar({
 
             <div className="mt-6 h-px w-8 bg-white/[0.08]" />
 
-            <div className="relative mt-3">
+            <div ref={recentsRef} className="relative mt-3">
                 <button
                     type="button"
                     aria-label="Recents"
@@ -552,29 +611,34 @@ function MiniSidebar({
                     aria-expanded={recentsOpen}
                     onClick={onToggleRecents}
                     className={cn(
-                        "group flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                        "group flex h-10 w-10 items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                         recentsOpen ? "bg-white/[0.09] text-white" : "text-white/52 hover:bg-white/[0.07] hover:text-white"
                     )}
                 >
                     <RecentsGlyph />
                     <span className="sr-only">Recents</span>
+                    {!recentsOpen && <MiniTooltip label="Recent conversations" />}
                 </button>
 
-                <AnimatePresence>
-                    {recentsOpen && (
+                {typeof document !== "undefined" && createPortal(
+                  <AnimatePresence>
+                    {recentsOpen && recentsPosition && (
                         <motion.div
+                            ref={recentsPopupRef}
                             role="menu"
-                            initial={{ opacity: 0, x: -8, scale: 0.98 }}
+                            aria-label="Recent conversations"
+                            initial={reduceMotion ? false : { opacity: 0, x: -8, scale: 0.98 }}
                             animate={{ opacity: 1, x: 0, scale: 1 }}
-                            exit={{ opacity: 0, x: -8, scale: 0.98 }}
-                            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                            className="absolute left-12 top-0 w-72 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
+                            exit={reduceMotion ? { opacity: 1 } : { opacity: 0, x: -8, scale: 0.98 }}
+                            transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.16, 1, 0.3, 1] }}
+                            style={recentsPosition}
+                            className="fixed z-[100] flex flex-col overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover)] p-2 shadow-[var(--shadow-popover)]"
                         >
-                            <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/38">Recent conversations</div>
+                            <div className="shrink-0 px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-subtle)]">Recent conversations</div>
                             {sessionsLoading && sessions.length === 0 ? (
                                 <ChatHistorySkeleton compact count={4} />
                             ) : sessions.length > 0 ? (
-                                <div className="max-h-72 overflow-y-auto pr-1">
+                                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-1 pr-1 [scrollbar-color:var(--text-subtle)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-track]:bg-transparent">
                                     <AnimatePresence initial={false}>
                                         {sessions.map((session) => (
                                             <RecentThreadRow
@@ -593,13 +657,40 @@ function MiniSidebar({
                             )}
                         </motion.div>
                     )}
-                </AnimatePresence>
+                  </AnimatePresence>,
+                  document.body
+                )}
             </div>
 
-            <div className="mt-auto">
+            <div className="mt-auto flex flex-col items-center gap-2">
+                {onAlertsClick && (
+                    <button
+                        type="button"
+                        aria-label="Notifications"
+                        data-notification-trigger
+                        onClick={onAlertsClick}
+                        className="group relative flex h-10 w-10 items-center justify-center rounded-full bg-transparent text-white/72 transition-colors duration-150 hover:bg-[var(--surface-card-hover)] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 motion-reduce:transition-none"
+                    >
+                        <Bell className="size-5" />
+                        <span aria-hidden="true" className="absolute right-2 top-2 size-2 rounded-full bg-blue-400 ring-2 ring-[var(--surface-popover-strong)]" />
+                        <MiniTooltip label="Notifications" />
+                    </button>
+                )}
                 <ProfileMenu compact onSettingsClick={onSettingsClick} onProfileClick={onProfileClick} onAlertsClick={onAlertsClick} />
             </div>
         </div>
+    );
+}
+
+function MiniTooltip({ label, shortcut }: { label: string; shortcut?: string }) {
+    return (
+        <span
+            role="tooltip"
+            className="pointer-events-none absolute left-12 top-1/2 z-[90] hidden -translate-y-1/2 items-center gap-2 whitespace-nowrap rounded-xl border border-[var(--theme-border-strong)] bg-[var(--surface-popover)] px-3 py-2 text-xs font-medium text-[var(--text-primary)] opacity-0 shadow-[var(--shadow-popover)] transition-opacity duration-150 group-hover:flex group-hover:opacity-100 group-focus-visible:flex group-focus-visible:opacity-100 motion-reduce:transition-none"
+        >
+            {label}
+            {shortcut && <kbd className="text-[10px] text-[var(--text-muted)]">{shortcut}</kbd>}
+        </span>
     );
 }
 
@@ -619,6 +710,7 @@ function SidebarSurface({
     onSettingsClick,
     onProfileClick,
     onAlertsClick,
+    floating = false,
 }: {
     path: string;
     nav: NavItem[];
@@ -635,26 +727,34 @@ function SidebarSurface({
     onSettingsClick?: () => void;
     onProfileClick?: () => void;
     onAlertsClick?: () => void;
+    floating?: boolean;
 }) {
     const [showProCard, setShowProCard] = useState(true);
     const [moreOpen, setMoreOpen] = useState(false);
     const moreActive = moreNav.some((item) => path === item.href);
 
     return (
-        <div className="relative flex h-full flex-col overflow-hidden border-r border-[var(--theme-border)] bg-[var(--surface-sidebar)] px-3 py-4 shadow-[var(--shadow-sidebar)]">
+        <div className={cn(
+            "relative flex h-full flex-col overflow-hidden bg-[var(--surface-header)] px-3 py-4 shadow-[var(--shadow-sidebar)] backdrop-blur-xl",
+            floating
+                ? "workspace-side-rail rounded-[2rem] border border-[var(--theme-border)]"
+                : "border-r border-[var(--theme-border)]",
+        )}>
 
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
                 <div className="mb-3 flex h-10 items-center justify-between">
                     <Link
-                        href="/session"
+                        href="/home"
                         aria-label="Quanfora home"
-                        className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] shadow-[var(--shadow-brand-mark-strong)] outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                        data-sidebar-logo-mark
+                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04] outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
                         <img src="/logo.svg" alt="" className="h-6 w-6 object-contain" />
                     </Link>
                     {onToggle && (
                         <button
                             type="button"
+                            data-notification-trigger
                             aria-label="Close sidebar"
                             onClick={onToggle}
                             className="hidden h-10 w-10 cursor-w-resize items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.035] text-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-white/[0.07] hover:text-white md:flex"
@@ -667,7 +767,7 @@ function SidebarSurface({
                 <button
                     type="button"
                     onClick={onNewAnalysis}
-                    className="accent-gradient-surface on-accent mb-4 flex h-11 items-center justify-between rounded-xl px-3 text-sm font-semibold shadow-[var(--shadow-create-action)] outline-none transition-all duration-200 hover:shadow-[var(--shadow-create-action-hover)] active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-space-black"
+                    className="theme-accent-surface on-accent mb-4 flex h-11 items-center justify-between rounded-xl px-3 text-sm font-semibold outline-none transition-transform duration-150 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-space-black"
                 >
                     <span className="flex items-center gap-2">
                         <PenLine className="h-5 w-5" />
@@ -688,7 +788,7 @@ function SidebarSurface({
                     </span>
                 </button>
 
-                <div className="flex min-h-0 flex-1 flex-col gap-6 pr-1">
+                <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden pr-1">
                     <section className="shrink-0">
                         <div className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-widest text-white/35">
                             Workspace
@@ -703,19 +803,13 @@ function SidebarSurface({
                                         href={href}
                                         aria-current={active ? "page" : undefined}
                                         className={cn(
-                                            "group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                                            "group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                                             active
                                                 ? "bg-white/[0.09] text-white shadow-[var(--shadow-selected-nav)]"
                                                 : "text-white/55 hover:bg-white/[0.055] hover:text-white"
                                         )}
                                     >
-                                        {active && (
-                                            <motion.span
-                                                layoutId="active-sidebar-pill"
-                                                className="absolute inset-0 rounded-xl border border-indigo-primary/25 bg-gradient-to-r from-indigo-primary/14 to-cyan-secondary/5"
-                                                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                                            />
-                                        )}
+                                        {active && <span className="absolute inset-0 rounded-xl border border-indigo-primary/25 bg-[var(--surface-accent-soft)]" />}
                                         <Icon className={cn("relative h-5 w-5 shrink-0", active ? "text-indigo-primary" : "text-white/40 group-hover:text-white/75")} />
                                         <span className="relative min-w-0 flex-1 truncate">{label}</span>
                                         {active && <ChevronRight className="relative h-4 w-4 text-white/35" />}
@@ -730,22 +824,16 @@ function SidebarSurface({
                                     aria-expanded={moreOpen}
                                     onClick={() => setMoreOpen((open) => !open)}
                                     className={cn(
-                                        "group relative flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                                        "group relative flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                                         moreOpen || moreActive
                                             ? "bg-white/[0.09] text-white shadow-[var(--shadow-selected-nav)]"
                                             : "text-white/55 hover:bg-white/[0.055] hover:text-white"
                                     )}
                                 >
-                                    {(moreOpen || moreActive) && (
-                                        <motion.span
-                                            layoutId="active-sidebar-more-pill"
-                                            className="absolute inset-0 rounded-xl border border-indigo-primary/25 bg-gradient-to-r from-indigo-primary/14 to-cyan-secondary/5"
-                                            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                                        />
-                                    )}
+                                    {(moreOpen || moreActive) && <span className="absolute inset-0 rounded-xl border border-indigo-primary/25 bg-[var(--surface-accent-soft)]" />}
                                     <MoreHorizontal className={cn("relative h-5 w-5 shrink-0", moreOpen || moreActive ? "text-indigo-primary" : "text-white/40 group-hover:text-white/75")} />
                                     <span className="relative min-w-0 flex-1 text-left">More</span>
-                                    <ChevronRight className={cn("relative h-4 w-4 text-white/35 transition-transform", moreOpen && "rotate-90")} />
+                                    <ChevronRight className={cn("relative h-4 w-4 text-white/35 transition-transform duration-150 motion-reduce:transition-none", moreOpen && "rotate-90")} />
                                 </button>
                                 <AnimatePresence initial={false}>
                                     {moreOpen && (
@@ -812,7 +900,7 @@ function SidebarSurface({
 
                 <div className="mt-auto flex flex-col gap-3 border-t border-white/[0.06] pt-3">
                     {showProCard && (
-                        <div className="relative overflow-hidden rounded-2xl border border-indigo-primary/20 bg-[var(--pro-card-bg)] p-3 shadow-[var(--pro-card-shadow)]">
+                        <div className="relative overflow-hidden rounded-2xl border border-indigo-primary/20 bg-[var(--pro-card-bg)] p-3 shadow-[var(--pro-card-shadow)] [@media(max-height:820px)]:hidden">
                             <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-cyan-secondary/15 blur-2xl" />
                             <button
                                 type="button"
@@ -820,11 +908,11 @@ function SidebarSurface({
                                 onClick={() => setShowProCard(false)}
                                 className="group absolute right-2 top-2 z-10 flex size-6 items-center justify-center rounded-lg text-white/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                             >
-                                <img src="/close-svgrepo-com.svg" alt="" aria-hidden="true" className="size-3.5 opacity-70 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_7px_rgba(255,255,255,0.65)]" />
+                                <img src="/close-svgrepo-com.svg" alt="" aria-hidden="true" className="size-3.5 opacity-70 transition-opacity duration-200 group-hover:opacity-100" />
                             </button>
                             <div className="relative pr-6">
                                 <div className="text-sm font-semibold text-white">
-                                    Upgrade to <span className="bg-gradient-to-r from-cyan-secondary to-indigo-primary bg-clip-text text-transparent">PRO</span>
+                                    Upgrade to <span className="text-indigo-primary">PRO</span>
                                 </div>
                                 <p className="mt-1 text-xs leading-relaxed text-white/38">
                                     Unlock deeper portfolio simulations, faster agents, and premium market memory.
@@ -838,6 +926,19 @@ function SidebarSurface({
                                 </Link>
                             </div>
                         </div>
+                    )}
+                    {onAlertsClick && (
+                        <button
+                            type="button"
+                            onClick={onAlertsClick}
+                            className="group flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium text-white/62 transition-colors duration-150 hover:bg-white/[0.06] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 motion-reduce:transition-none"
+                        >
+                            <span className="relative flex size-7 items-center justify-center">
+                                <Bell className="size-5 text-white/55 group-hover:text-white" />
+                                <span aria-hidden="true" className="absolute right-0 top-0 size-2 rounded-full bg-blue-400 ring-2 ring-[var(--surface-sidebar)]" />
+                            </span>
+                            <span className="flex-1 text-left">Notifications</span>
+                        </button>
                     )}
                     <ProfileMenu onSettingsClick={onSettingsClick} onProfileClick={onProfileClick} onAlertsClick={onAlertsClick} />
                 </div>
@@ -870,18 +971,24 @@ function getVisibleMoreNav(plan: Plan): NavItem[] {
 
 function ChatHistorySkeleton({ compact = false, count = 5 }: { compact?: boolean; count?: number }) {
     return (
-        <div className="space-y-1 px-1" aria-label="Loading chat history">
-            {Array.from({ length: count }, (_, index) => (
-                <div
-                    key={index}
-                    className={cn(
-                        "animate-pulse rounded-xl bg-white/[0.045]",
-                        compact ? "h-9" : "h-10"
-                    )}
-                    style={{ width: `${92 - (index % 3) * 10}%` }}
-                />
-            ))}
-        </div>
+        <LoadingRegion
+            loading
+            label="Loading chat history"
+            className="px-1"
+            skeleton={(
+                <div className="space-y-1">
+                    {Array.from({ length: count }, (_, index) => (
+                        <SkeletonBlock
+                            key={index}
+                            className={cn("rounded-xl", compact ? "h-9" : "h-10")}
+                            style={{ width: `${92 - (index % 3) * 10}%` }}
+                        />
+                    ))}
+                </div>
+            )}
+        >
+            {null}
+        </LoadingRegion>
     );
 }
 
@@ -1063,10 +1170,10 @@ function RecentThreadRow({
                 />
             ) : (
                 <Link
-                    href={`/session/${encodeURIComponent(session.session_id)}`}
+                    href={`/ai/${encodeURIComponent(session.session_id)}`}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                        "flex items-center rounded-xl text-sm outline-none transition-all duration-200 hover:bg-white/[0.05] hover:text-white focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
+                        "flex items-center rounded-xl text-sm outline-none hover:bg-white/[0.05] hover:text-white focus-visible:ring-2 focus-visible:ring-indigo-primary/50",
                         "pr-10",
                         compact ? "h-9 px-3 text-white/48" : "h-10 px-3 text-white/62",
                         active && "bg-white/[0.07] text-white"

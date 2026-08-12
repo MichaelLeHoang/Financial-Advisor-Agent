@@ -7,9 +7,12 @@ from src.saas.entitlements import FeatureKey, enforce_feature, get_entitlement, 
 from src.saas.models import (
     AuthenticatedUser,
     HoldingCreate,
+    HoldingClassificationUpdate,
     HoldingRead,
     HoldingUpdate,
     PortfolioCreate,
+    PortfolioBookEventRead,
+    PortfolioBooksRead,
     PortfolioRead,
     RecurringBuyCreate,
     RecurringBuyRead,
@@ -19,7 +22,8 @@ from src.saas.models import (
     WatchlistCreate,
     WatchlistRead,
 )
-from src.saas.repository import get_store
+from src.saas.repository import SupabaseSchemaUnavailableError, get_store
+from src.saas.portfolio_books import build_portfolio_books
 
 
 router = APIRouter(prefix="/api/v1", tags=["saas"])
@@ -28,6 +32,13 @@ router = APIRouter(prefix="/api/v1", tags=["saas"])
 def require_signed_in(user: AuthenticatedUser) -> None:
     if user.is_guest:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to save workspace data.")
+
+
+def _recurring_buy_storage_unavailable() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Recurring-buy storage is unavailable. Apply Supabase migrations 014 and 015.",
+    )
 
 
 @router.get("/me", response_model=AuthenticatedUser)
@@ -85,6 +96,32 @@ async def list_holdings(
     return holdings
 
 
+@router.get("/portfolios/{portfolio_id}/books", response_model=PortfolioBooksRead)
+async def read_portfolio_books(
+    portfolio_id: UUID,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> PortfolioBooksRead:
+    require_signed_in(user)
+    store = get_store(user)
+    portfolio = store.get_portfolio(user.id, portfolio_id)
+    holdings = store.list_holdings(user.id, portfolio_id)
+    if portfolio is None or holdings is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+    return build_portfolio_books(portfolio_id, portfolio.base_currency, holdings)
+
+
+@router.get("/portfolios/{portfolio_id}/book-events", response_model=list[PortfolioBookEventRead])
+async def list_portfolio_book_events(
+    portfolio_id: UUID,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> list[PortfolioBookEventRead]:
+    require_signed_in(user)
+    events = get_store(user).list_portfolio_book_events(user.id, portfolio_id)
+    if events is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+    return events
+
+
 @router.post("/portfolios/{portfolio_id}/holdings", response_model=HoldingRead, status_code=status.HTTP_201_CREATED)
 async def create_holding(
     portfolio_id: UUID,
@@ -107,6 +144,23 @@ async def update_holding(
 ) -> HoldingRead:
     require_signed_in(user)
     holding = get_store(user).update_holding(user.id, portfolio_id, holding_id, payload)
+    if holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+    return holding
+
+
+@router.patch(
+    "/portfolios/{portfolio_id}/holdings/{holding_id}/classification",
+    response_model=HoldingRead,
+)
+async def classify_holding(
+    portfolio_id: UUID,
+    holding_id: UUID,
+    payload: HoldingClassificationUpdate,
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+) -> HoldingRead:
+    require_signed_in(user)
+    holding = get_store(user).classify_holding(user.id, portfolio_id, holding_id, payload)
     if holding is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
     return holding
@@ -144,7 +198,10 @@ async def create_recurring_buy(
     user: AuthenticatedUser = Depends(get_current_or_guest_user),
 ) -> RecurringBuyRead:
     require_signed_in(user)
-    recurring_buy = get_store(user).add_recurring_buy(user.id, portfolio_id, payload)
+    try:
+        recurring_buy = get_store(user).add_recurring_buy(user.id, portfolio_id, payload)
+    except SupabaseSchemaUnavailableError as error:
+        raise _recurring_buy_storage_unavailable() from error
     if recurring_buy is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
     return recurring_buy
@@ -158,7 +215,10 @@ async def update_recurring_buy(
     user: AuthenticatedUser = Depends(get_current_or_guest_user),
 ) -> RecurringBuyRead:
     require_signed_in(user)
-    recurring_buy = get_store(user).update_recurring_buy(user.id, portfolio_id, recurring_buy_id, payload)
+    try:
+        recurring_buy = get_store(user).update_recurring_buy(user.id, portfolio_id, recurring_buy_id, payload)
+    except SupabaseSchemaUnavailableError as error:
+        raise _recurring_buy_storage_unavailable() from error
     if recurring_buy is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recurring buy not found")
     return recurring_buy
@@ -171,7 +231,10 @@ async def delete_recurring_buy(
     user: AuthenticatedUser = Depends(get_current_or_guest_user),
 ) -> None:
     require_signed_in(user)
-    removed = get_store(user).delete_recurring_buy(user.id, portfolio_id, recurring_buy_id)
+    try:
+        removed = get_store(user).delete_recurring_buy(user.id, portfolio_id, recurring_buy_id)
+    except SupabaseSchemaUnavailableError as error:
+        raise _recurring_buy_storage_unavailable() from error
     if not removed:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recurring buy not found")
 

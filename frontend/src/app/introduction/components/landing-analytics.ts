@@ -5,7 +5,10 @@ export type LandingEventName =
   | "landing_sample_research_click"
   | "landing_pricing_click"
   | "landing_scattered_workspace_view"
-  | "landing_journey_step_view";
+  | "landing_journey_step_view"
+  | "platform_overview_view"
+  | "platform_multi_agent_phase_view"
+  | "platform_cta_click";
 
 type LandingEventPayload = Record<string, boolean | number | string | undefined>;
 

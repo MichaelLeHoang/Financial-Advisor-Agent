@@ -3,7 +3,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutGroup, motion } from "motion/react";
+import { motion } from "motion/react";
 import { BookOpen, BookOpenText, LogOut, Menu, Moon, Newspaper, Search, Sun, User, X } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,9 +15,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { HighlightPill } from "@/components/ui/highlight-pill";
+import { Highlight, HighlightItem } from "@/components/ui/highlight";
 import { getAvatarColor, getAvatarInitials } from "@/lib/avatar";
 import SearchModal from "@/components/SearchModal";
+import { loginHref } from "@/lib/workspace-routing";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -54,8 +55,11 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
   const [theme, setTheme] = useState<"Deep Space" | "White">(forceTheme ?? "Deep Space");
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [hoveredNavItem, setHoveredNavItem] = useState<string | null>(null);
   const currentTheme = forceTheme ?? theme;
   const navExpanded = staticFull || isScrolled || mobileOpen;
+  const platformActive = pathname.startsWith("/platform");
+  const activeNavItem = platformActive ? "product" : activeSection;
 
   useEffect(() => {
     if (forceTheme) {
@@ -107,7 +111,7 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
 
   const handleOpenApp = () => {
     window.localStorage.setItem("financial-advisor.coverSeen", "true");
-    router.push("/session");
+    router.push(isSignedIn ? "/home" : loginHref("/home"));
   };
 
   const toggleTheme = () => {
@@ -205,24 +209,51 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
         </motion.div>
 
         <nav className="hidden items-center lg:flex" aria-label="Primary navigation">
-          <NavigationMenu viewport={false}>
-            <NavigationMenuList className="gap-2">
-              <LayoutGroup id="landing-nav-highlight">
+          <Highlight
+            controlledItems
+            mode="parent"
+            value={hoveredNavItem ?? activeNavItem}
+            onValueChange={setHoveredNavItem}
+            hover
+            click={false}
+            exitDelay={0.08}
+            className="rounded-full bg-[var(--intro-nav-hover)] ring-1 ring-white/[0.035]"
+            containerClassName="isolate"
+            transition={{ type: "spring", stiffness: 350, damping: 35 }}
+          >
+            <NavigationMenu viewport={false} className="relative z-[1]">
+              <NavigationMenuList className="gap-2">
+                <NavigationMenuItem>
+                  <HighlightItem asChild value="product" activeClassName="text-[var(--intro-nav-primary)]">
+                    <NavigationMenuTrigger className={`hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[state=open]:bg-transparent data-[state=open]:text-[var(--intro-nav-primary)] ${platformActive ? "text-[var(--intro-nav-primary)]" : "text-[var(--intro-nav-muted)]"}`}>
+                      Product
+                    </NavigationMenuTrigger>
+                  </HighlightItem>
+                  <NavigationMenuContent>
+                    <ul className="grid w-[280px] gap-1 p-2">
+                      <ProductLink href="/platform" title="Platform overview" detail="One portfolio, risk system, and AI layer" current={platformActive} />
+                      <ProductLink href={isSignedIn ? "/invest" : loginHref("/invest")} title="Investment OS" detail="Theses, allocation, policy, and review" />
+                      <ProductLink href={isSignedIn ? "/trade" : loginHref("/trade")} title="Trading OS" detail="Plans, sizing, paper execution, and journal" />
+                    </ul>
+                  </NavigationMenuContent>
+                </NavigationMenuItem>
                 {NAV_LINKS.slice(0, 2).map((item) => (
                   <NavigationMenuItem key={item.href}>
                     <LandingNavItem item={item} activeSection={activeSection} />
                   </NavigationMenuItem>
                 ))}
                 <NavigationMenuItem>
-                  <NavigationMenuTrigger className="text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[state=open]:bg-transparent data-[state=open]:text-[var(--intro-nav-primary)]">
-                    Resources
-                  </NavigationMenuTrigger>
+                  <HighlightItem asChild value="resources" activeClassName="text-[var(--intro-nav-primary)]">
+                    <NavigationMenuTrigger className="text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[state=open]:bg-transparent data-[state=open]:text-[var(--intro-nav-primary)]">
+                      Resources
+                    </NavigationMenuTrigger>
+                  </HighlightItem>
                   <NavigationMenuContent>
                     <ul className="grid w-[220px] gap-1 p-2">
                       {isSignedIn && (
                         <li>
                           <NavigationMenuLink asChild>
-                            <Link href="/news" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
+                            <Link href="/discover/news" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
                               <div className="intro-resource-icon flex size-8 items-center justify-center rounded-md bg-white/5 text-white/70 transition-colors">
                                 <Newspaper className="size-4" />
                               </div>
@@ -270,17 +301,19 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
                 ))}
                 {isSignedIn && (
                   <NavigationMenuItem>
-                    <NavigationMenuLink
-                      asChild
-                      className={`${navigationMenuTriggerStyle()} text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[active=true]:bg-transparent`}
-                    >
-                      <Link href="/contact-sales">Contact</Link>
-                    </NavigationMenuLink>
+                    <HighlightItem asChild value="contact" activeClassName="text-[var(--intro-nav-primary)]">
+                      <NavigationMenuLink
+                        asChild
+                        className={`${navigationMenuTriggerStyle()} text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[active=true]:bg-transparent`}
+                      >
+                        <Link href="/contact-sales">Contact</Link>
+                      </NavigationMenuLink>
+                    </HighlightItem>
                   </NavigationMenuItem>
                 )}
-              </LayoutGroup>
-            </NavigationMenuList>
-          </NavigationMenu>
+              </NavigationMenuList>
+            </NavigationMenu>
+          </Highlight>
         </nav>
 
         <div className="flex items-center gap-2">
@@ -369,7 +402,7 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
                 className="hidden sm:block"
               >
                 <Link
-                  href="/login"
+                  href={loginHref("/home")}
                   className="flex h-9 items-center rounded-full bg-[var(--intro-nav-action-bg)] px-4 text-sm font-semibold text-[var(--intro-nav-action-text)] transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                 >
                   Sign in
@@ -398,6 +431,12 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
           }`}
         >
           <nav className="grid gap-1" aria-label="Mobile navigation">
+            <div className={`mb-2 border-b pb-2 ${currentTheme === "White" ? "border-black/[0.08]" : "border-white/[0.08]"}`}>
+              <div className={`px-3 pb-1 text-[11px] font-semibold uppercase ${currentTheme === "White" ? "text-[#98a2b3]" : "text-white/40"}`}>Product</div>
+              <MobileProductLink href="/platform" label="Platform overview" onClick={() => setMobileOpen(false)} current={platformActive} />
+              <MobileProductLink href={isSignedIn ? "/invest" : loginHref("/invest")} label="Investment OS" onClick={() => setMobileOpen(false)} />
+              <MobileProductLink href={isSignedIn ? "/trade" : loginHref("/trade")} label="Trading OS" onClick={() => setMobileOpen(false)} />
+            </div>
             {NAV_LINKS.slice(0, 2).map((item) => (
               <Link
                 key={item.href}
@@ -418,7 +457,7 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
               </div>
               {isSignedIn && (
                 <Link
-                  href="/news"
+                  href="/discover/news"
                   onClick={() => setMobileOpen(false)}
                   className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                     currentTheme === "White"
@@ -497,7 +536,7 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
                   Contact Sales
                 </Link>
                 <Link
-                  href="/login"
+                  href={loginHref("/home")}
                   onClick={() => setMobileOpen(false)}
                   className={`inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 ${
                     currentTheme === "White"
@@ -517,6 +556,23 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
   );
 }
 
+function ProductLink({ href, title, detail, current = false }: { href: string; title: string; detail: string; current?: boolean }) {
+  return (
+    <li>
+      <NavigationMenuLink asChild>
+        <Link href={href} aria-current={current ? "page" : undefined} className={`intro-resource-link block rounded-xl p-3 transition-colors ${current ? "bg-white/[0.055]" : ""}`}>
+          <span className="intro-resource-title block text-sm font-medium text-white/90">{title}</span>
+          <span className="intro-resource-subtitle mt-1 block text-xs leading-5 text-white/40">{detail}</span>
+        </Link>
+      </NavigationMenuLink>
+    </li>
+  );
+}
+
+function MobileProductLink({ href, label, onClick, current = false }: { href: string; label: string; onClick: () => void; current?: boolean }) {
+  return <Link href={href} onClick={onClick} aria-current={current ? "page" : undefined} className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] ${current ? "bg-[var(--intro-nav-hover)] text-[var(--intro-nav-primary)]" : "text-[var(--intro-nav-muted)]"}`}>{label}</Link>;
+}
+
 function LandingNavItem({
   item,
   activeSection,
@@ -530,17 +586,14 @@ function LandingNavItem({
     || (item.href === "/help" && activeSection === "help");
 
   return (
-    <div className="relative">
-      {isActive ? (
-        <HighlightPill layoutId="landing-nav-pill" className="absolute inset-0 rounded-full bg-white/[0.08]" />
-      ) : null}
+    <HighlightItem asChild value={item.label.toLowerCase()} activeClassName="text-[var(--intro-nav-primary)]">
       <NavigationMenuLink
         asChild
         className={`${navigationMenuTriggerStyle()} relative z-10 rounded-full bg-transparent text-[var(--intro-nav-muted)] hover:bg-transparent hover:text-[var(--intro-nav-primary)] focus:bg-transparent focus:text-[var(--intro-nav-primary)] data-[active=true]:bg-transparent`}
       >
-        <Link href={item.href}>{item.label}</Link>
+        <Link href={item.href} aria-current={isActive ? "page" : undefined}>{item.label}</Link>
       </NavigationMenuLink>
-    </div>
+    </HighlightItem>
   );
 }
 

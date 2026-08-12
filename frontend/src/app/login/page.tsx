@@ -9,6 +9,7 @@ import { ChevronDown, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { HighlightPill } from "@/components/ui/highlight-pill";
 import { cn } from "@/lib/utils";
+import { normalizeAppPath, onboardingHref } from "@/lib/workspace-routing";
 
 const QUOTES = [
   {
@@ -30,15 +31,15 @@ const QUOTES = [
 ];
 
 function getSafeNextTarget() {
-  if (typeof window === "undefined") return "/session";
+  if (typeof window === "undefined") return "/home";
   const next = new URLSearchParams(window.location.search).get("next");
-  if (!next?.startsWith("/") || next.startsWith("//")) return "/session";
-  const target = new URL(next, window.location.origin);
+  if (!next) return "/home";
+  const target = new URL(normalizeAppPath(next), window.location.origin);
   if (target.pathname === "/" && target.searchParams.has("session")) {
     const sessionId = target.searchParams.get("session");
-    return sessionId ? `/session/${encodeURIComponent(sessionId)}` : "/session";
+    return sessionId ? `/ai/${encodeURIComponent(sessionId)}` : "/ai";
   }
-  return `${target.pathname}${target.search}${target.hash}`;
+  return normalizeAppPath(`${target.pathname}${target.search}${target.hash}`);
 }
 
 export default function LoginPage() {
@@ -77,8 +78,21 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
+    const callbackError = new URLSearchParams(window.location.search).get("error");
+    if (callbackError) setFormError(callbackError.slice(0, 300));
+  }, []);
+
+  useEffect(() => {
     if (!loading && !user.is_guest) {
-      router.replace(getSafeNextTarget());
+      window.localStorage.setItem("financial-advisor.coverSeen", "true");
+      const next = getSafeNextTarget();
+      const onboardingIntent = window.sessionStorage.getItem("quanfora.onboarding.intent") === "signup";
+      if (onboardingIntent) {
+        window.sessionStorage.removeItem("quanfora.onboarding.intent");
+        router.replace(onboardingHref(next));
+      } else {
+        router.replace(next);
+      }
     }
   }, [loading, router, user.is_guest]);
 
@@ -112,9 +126,10 @@ export default function LoginPage() {
       if (authMode === "signin") {
         await signIn(email, password);
       } else {
-        await signUp(email, password);
+        window.sessionStorage.setItem("quanfora.onboarding.intent", "signup");
+        await signUp(email, password, getSafeNextTarget());
       }
-      router.replace(getSafeNextTarget());
+      router.replace(authMode === "signup" ? onboardingHref(getSafeNextTarget()) : getSafeNextTarget());
     } finally {
       setSubmitting(false);
     }
@@ -124,6 +139,7 @@ export default function LoginPage() {
     setFormError(null);
     setOauthLoading(provider);
     try {
+      if (authMode === "signup") window.sessionStorage.setItem("quanfora.onboarding.intent", "signup");
       await signInWithOAuth(provider, getSafeNextTarget());
     } catch {
       setOauthLoading(null);
@@ -228,10 +244,10 @@ export default function LoginPage() {
               type="button"
               aria-expanded={otherOptionsOpen}
               onClick={() => setOtherOptionsOpen((open) => !open)}
-              className="flex h-14 w-full items-center justify-center gap-2 border border-white/[0.08] bg-white/[0.045] px-5 text-sm font-medium text-white/82 transition-colors hover:bg-white/[0.075] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.045] px-5 text-sm font-medium text-white/82 transition-colors hover:bg-white/[0.075] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
             >
               Show other options
-              <ChevronDown className={cn("size-4 text-white/45 transition-transform", otherOptionsOpen && "rotate-180")} />
+              <ChevronDown className={cn("size-4 text-white/45 transition-transform duration-150 motion-reduce:transition-none", otherOptionsOpen && "rotate-180")} />
             </button>
 
             <AnimatePresence initial={false}>
@@ -244,14 +260,14 @@ export default function LoginPage() {
                   className="overflow-hidden"
                 >
                   <div className="pt-5">
-                    <div className="mb-4 grid grid-cols-2 border border-white/[0.08] bg-white/[0.035] p-1" role="tablist" aria-label="Authentication mode">
+                    <div className="mb-4 grid grid-cols-2 rounded-full border border-white/[0.08] bg-white/[0.035] p-1" role="tablist" aria-label="Authentication mode">
                       {(["signin", "signup"] as const).map((mode) => {
                         const isActive = authMode === mode;
 
                         return (
                           <div key={mode} className="relative">
                             {isActive && (
-                              <HighlightPill layoutId="login-auth-mode-pill" className="absolute inset-0 bg-white" />
+                              <HighlightPill layoutId="login-auth-mode-pill" className="absolute inset-0 rounded-full bg-white" />
                             )}
                             <button
                               type="button"
@@ -283,7 +299,7 @@ export default function LoginPage() {
                           onChange={(event) => setEmail(event.target.value)}
                           placeholder="Email"
                           autoComplete="email"
-                          className="h-14 w-full border border-white/[0.10] bg-transparent pl-12 pr-4 text-base text-white outline-none transition-colors placeholder:text-white/30 hover:border-white/18 focus:border-white/30"
+                          className="h-14 w-full rounded-full border border-white/[0.10] bg-transparent pl-12 pr-4 text-base text-white outline-none transition-colors placeholder:text-white/30 hover:border-white/18 focus:border-white/30"
                         />
                       </label>
 
@@ -296,7 +312,7 @@ export default function LoginPage() {
                           onChange={(event) => setPassword(event.target.value)}
                           placeholder="Password"
                           autoComplete={authMode === "signin" ? "current-password" : "new-password"}
-                          className="h-14 w-full border border-white/[0.10] bg-transparent pl-12 pr-12 text-base text-white outline-none transition-colors placeholder:text-white/30 hover:border-white/18 focus:border-white/30"
+                          className="h-14 w-full rounded-full border border-white/[0.10] bg-transparent pl-12 pr-12 text-base text-white outline-none transition-colors placeholder:text-white/30 hover:border-white/18 focus:border-white/30"
                         />
                         <button
                           type="button"
@@ -362,7 +378,7 @@ export default function LoginPage() {
                       <button
                         type="submit"
                         disabled={submitting || (authMode === "signup" && !policyAccepted)}
-                        className="h-12 w-full border border-white bg-white text-sm font-semibold text-black transition-colors hover:bg-white/86 disabled:cursor-not-allowed disabled:opacity-45"
+                        className="h-12 w-full rounded-full border border-white bg-white text-sm font-semibold text-black transition-colors hover:bg-white/86 disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         {submitting ? "Working..." : authMode === "signin" ? "Sign in" : "Create account"}
                       </button>
@@ -408,7 +424,7 @@ function OAuthButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex h-14 w-full items-center justify-center gap-3 border border-white/[0.08] bg-transparent text-sm font-medium text-white/82 transition-colors hover:bg-white/[0.055] disabled:cursor-not-allowed disabled:opacity-45"
+      className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-white/[0.08] bg-transparent text-sm font-medium text-white/82 transition-colors hover:bg-white/[0.055] disabled:cursor-not-allowed disabled:opacity-45"
     >
       {loading ? <span className="size-4 animate-spin rounded-full border-2 border-white/25 border-t-white" /> : icon}
       {label}

@@ -281,7 +281,7 @@ export default function EditProfileModal({ isOpen, onClose }: EditProfileModalPr
               type="button"
               onClick={handleSave}
               disabled={saving || !hasChanges}
-              className="theme-primary-action flex h-10 items-center gap-2 rounded-full px-6 text-sm font-semibold transition-all active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+              className="theme-primary-action flex h-10 items-center gap-2 rounded-full px-6 text-sm font-semibold transition-[background-color,box-shadow,opacity,transform] duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               Save

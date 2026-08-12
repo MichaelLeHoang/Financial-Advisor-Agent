@@ -78,6 +78,7 @@ class ResearchEventType(str, Enum):
     STATUS = "status"
     FINAL = "final"
     ERROR = "error"
+    SOURCE = "source"
 
 
 AnalystKey = Literal["market", "social", "news", "fundamentals"]
@@ -101,6 +102,7 @@ class EquityResearchRunCreate(BaseModel):
     quick_model: str = "default-fast"
     deep_model: str = "default-research"
     source_surface: SourceSurface = SourceSurface.RESEARCH
+    use_memory: bool = True
 
     @field_validator("ticker")
     @classmethod
@@ -177,6 +179,9 @@ class EquityResearchEvent(BaseModel):
     content: str
     tool_name: str | None = None
     tool_args: dict[str, Any] | None = None
+    source_url: str | None = None
+    source_provider: str | None = None
+    source_published_at: str | None = None
     token_input: int | None = None
     token_output: int | None = None
 
@@ -246,6 +251,8 @@ class EquityResearchRun(BaseModel):
     final_summary: str | None = None
     main_upside: str | None = None
     main_risk: str | None = None
+    personal_context: str | None = Field(default=None, exclude=True)
+    context_memory_ids: list[str] = Field(default_factory=list, exclude=True)
 
 
 class EquityResearchRunDetail(BaseModel):

@@ -14,6 +14,7 @@ import { Field, PLAN_RANK, formatPercent, formatStrategyType } from "@/component
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_FORM = {
@@ -88,7 +89,7 @@ export default function BacktestSessionsPage() {
         end_date: form.end_date,
         initial_balance: form.initial_balance,
       });
-      router.push(`/backtest/replay/${session.id}`);
+      router.push(`/trade/strategies/replay/${session.id}`);
     } catch (err) {
       if (isUpgradeRequiredError(err)) setUpgradeMessage(err.detail.message);
       else setError(err instanceof Error ? err.message : "Unable to create the replay session.");
@@ -131,7 +132,7 @@ export default function BacktestSessionsPage() {
   return (
     <div className="flex-1 overflow-y-auto p-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-6">
-        <Link href="/backtest" className="inline-flex w-fit items-center gap-2 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">
+        <Link href="/trade/strategies/backtest" className="inline-flex w-fit items-center gap-2 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">
           <ArrowLeft className="h-4 w-4" />
           Back to Backtest Lab
         </Link>
@@ -143,7 +144,7 @@ export default function BacktestSessionsPage() {
               Reopen saved strategy runs or practice trading bar-by-bar in manual replay sessions.
             </p>
           </div>
-          <Button onClick={() => setShowCreate((current) => !current)} className="accent-gradient-surface on-accent h-11 rounded-xl text-sm font-semibold">
+          <Button onClick={() => setShowCreate((current) => !current)} className="theme-accent-surface on-accent h-11 rounded-xl text-sm font-semibold">
             <Plus className="mr-2 h-4 w-4" />
             New replay session
           </Button>
@@ -179,17 +180,17 @@ export default function BacktestSessionsPage() {
                   />
                 </Field>
                 <Field label="Start date">
-                  <Input type="date" value={form.start_date} onChange={(event) => setForm((current) => ({ ...current, start_date: event.target.value }))} className="h-11 rounded-xl" />
+                  <DatePicker aria-label="Start date" value={form.start_date} onValueChange={(value) => setForm((current) => ({ ...current, start_date: value }))} />
                 </Field>
                 <Field label="End date">
-                  <Input type="date" value={form.end_date} onChange={(event) => setForm((current) => ({ ...current, end_date: event.target.value }))} className="h-11 rounded-xl" />
+                  <DatePicker aria-label="End date" value={form.end_date} onValueChange={(value) => setForm((current) => ({ ...current, end_date: value }))} min={form.start_date} />
                 </Field>
                 <Field label="Initial balance">
                   <Input type="number" min={100} value={form.initial_balance} onChange={(event) => setForm((current) => ({ ...current, initial_balance: Number(event.target.value) }))} className="h-11 rounded-xl" />
                 </Field>
               </div>
               <div className="flex gap-2">
-                <Button onClick={createSession} disabled={creating} className="accent-gradient-surface on-accent h-11 rounded-xl text-sm font-semibold">
+                <Button onClick={createSession} disabled={creating} className="theme-accent-surface on-accent h-11 rounded-xl text-sm font-semibold">
                   {creating ? "Creating..." : "Create and open"}
                 </Button>
                 <Button variant="outline" onClick={() => setShowCreate(false)} className="h-11 rounded-xl text-sm">
@@ -257,7 +258,7 @@ export default function BacktestSessionsPage() {
                         >
                           {session.status}
                         </span>
-                        <Button render={<Link href={`/backtest/replay/${session.id}`} />} nativeButton={false} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
+                        <Button render={<Link href={`/trade/strategies/replay/${session.id}`} />} nativeButton={false} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
                           {session.status === "completed" ? "Review" : "Resume"}
                         </Button>
                         <button type="button" onClick={() => void deleteSession(session)} aria-label={`Delete ${session.name}`} className="text-[var(--text-muted)] hover:text-red-negative">
@@ -294,7 +295,7 @@ export default function BacktestSessionsPage() {
               {runs.map((run) => (
                 <div key={run.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card-hover)] px-4 py-3">
                   <div className="min-w-0">
-                    <Link href={`/backtest/runs/${run.id}`} className="truncate text-sm font-semibold hover:text-indigo-primary">
+                    <Link href={`/trade/strategies/runs/${run.id}`} className="truncate text-sm font-semibold hover:text-indigo-primary">
                       {run.strategy_name}
                     </Link>
                     <div className="mt-1 text-xs text-[var(--text-muted)]">
@@ -305,10 +306,10 @@ export default function BacktestSessionsPage() {
                     <span className={cn("text-xs font-semibold", run.metrics.total_return >= 0 ? "text-green-positive" : "text-red-negative")}>
                       {formatPercent(run.metrics.total_return)}
                     </span>
-                    <Button render={<Link href={`/backtest/runs/${run.id}`} />} nativeButton={false} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
+                    <Button render={<Link href={`/trade/strategies/runs/${run.id}`} />} nativeButton={false} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
                       Open
                     </Button>
-                    <Button render={<Link href={`/backtest?rerun=${run.id}`} />} nativeButton={false} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
+                    <Button render={<Link href={`/trade/strategies/backtest?rerun=${run.id}`} />} nativeButton={false} variant="outline" size="sm" className="h-8 rounded-lg text-xs">
                       <RefreshCcw className="mr-1 h-3 w-3" />
                       Re-run
                     </Button>

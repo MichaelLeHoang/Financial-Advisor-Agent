@@ -13,7 +13,7 @@ export function SuggestionChips({ onSelect }: { onSelect: (s: string) => void })
         <button
           key={s}
           onClick={() => onSelect(s)}
-          className="glass px-3 py-1.5 rounded-full text-sm transition-all duration-200 hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
+          className="glass px-3 py-1.5 rounded-full text-sm transition-colors duration-150 hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
           style={{ color: "var(--text-secondary)" }}
         >
           {s}

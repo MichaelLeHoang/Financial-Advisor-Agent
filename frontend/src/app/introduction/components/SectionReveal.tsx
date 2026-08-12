@@ -1,6 +1,7 @@
 "use client";
 
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
+import { useHydratedReducedMotion } from "@/hooks/useHydratedReducedMotion";
 import type { ReactNode } from "react";
 
 type SectionRevealProps = {
@@ -10,7 +11,7 @@ type SectionRevealProps = {
 };
 
 export function SectionReveal({ children, className, delay = 0 }: SectionRevealProps) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useHydratedReducedMotion();
 
   if (reduceMotion) {
     return <div className={className}>{children}</div>;

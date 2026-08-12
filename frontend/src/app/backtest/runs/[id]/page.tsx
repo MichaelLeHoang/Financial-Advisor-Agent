@@ -109,7 +109,7 @@ export default function BacktestRunPage({ params }: { params: Promise<{ id: stri
     setDeleting(true);
     try {
       await api.deleteBacktestRun(run.id);
-      router.push("/backtest/sessions");
+      router.push("/trade/strategies/sessions");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to delete this run.");
       setDeleting(false);
@@ -119,7 +119,7 @@ export default function BacktestRunPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="flex-1 overflow-y-auto p-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-6">
-        <Link href="/backtest/sessions" className="inline-flex w-fit items-center gap-2 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">
+        <Link href="/trade/strategies/sessions" className="inline-flex w-fit items-center gap-2 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">
           <ArrowLeft className="h-4 w-4" />
           Back to sessions
         </Link>
@@ -137,7 +137,7 @@ export default function BacktestRunPage({ params }: { params: Promise<{ id: stri
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button render={<Link href={`/backtest?rerun=${run.id}`} />} nativeButton={false} variant="outline" className="h-10 rounded-xl text-sm">
+                <Button render={<Link href={`/trade/strategies/backtest?rerun=${run.id}`} />} nativeButton={false} variant="outline" className="h-10 rounded-xl text-sm">
                   <RefreshCcw className="mr-2 h-4 w-4" />
                   Re-run
                 </Button>

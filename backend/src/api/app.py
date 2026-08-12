@@ -1,15 +1,30 @@
 import asyncio
+import json
+from datetime import date
+from typing import Literal
+from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    WebSocket,
+    WebSocketDisconnect,
+    Query,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
 import inngest.fast_api
 
 from src.jobs.inngest_client import inngest_client
 from src.jobs.functions import (
-    scheduled_new_ingestion,   
+    scheduled_new_ingestion,
     on_demand_news_ingestion,
     scheduled_alert_evaluation,
+    scheduled_news_digest_dispatch,
+    send_daily_news_digest,
 )
 from src.rag.pipeline import ask as rag_ask
 from src.services.ingestion import ingest_news
@@ -39,14 +54,21 @@ from src.quant.routes import router as quant_router
 from src.api.news_routes import router as news_router
 from src.api.routes.intelligence import router as intelligence_router
 from src.api.equity_research import router as equity_research_router
+from src.api.memory import router as memory_router
+from src.api.crypto_market import router as crypto_market_router
+from src.investment_policy.routes import router as investment_policy_router
+from src.investment_workspace.routes import router as investment_workspace_router
+from src.paper_trading.routes import router as paper_trading_router
 from src.llm.routing_policy import LLMMode
 from src.core.redis_client import RedisUnavailable
+from src.models.agent_activity import AgentActivityEvent
 
 from pydantic import BaseModel, Field
 import math
 
 MARKET_QUOTE_TIMEOUT_SECONDS = 12
 MARKET_SEARCH_TIMEOUT_SECONDS = 6
+EARNINGS_CALENDAR_TIMEOUT_SECONDS = 15
 
 app = FastAPI(
     title=settings.app_name,
@@ -58,7 +80,11 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?" if settings.app_env == "development" else None,
+    allow_origin_regex=(
+        r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
+        if settings.app_env == "development"
+        else None
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,16 +100,28 @@ app.include_router(quant_router)
 app.include_router(news_router)
 app.include_router(intelligence_router)
 app.include_router(equity_research_router)
+app.include_router(memory_router)
+app.include_router(crypto_market_router)
+app.include_router(investment_policy_router)
+app.include_router(investment_workspace_router)
+app.include_router(paper_trading_router)
 
 # Register Inngest with FastAPI
 inngest.fast_api.serve(
     app,
     inngest_client,
-    [scheduled_new_ingestion, on_demand_news_ingestion, scheduled_alert_evaluation],
+    [
+        scheduled_new_ingestion,
+        on_demand_news_ingestion,
+        scheduled_alert_evaluation,
+        scheduled_news_digest_dispatch,
+        send_daily_news_digest,
+    ],
 )
 
 # Lazy cache: agent setup is expensive, but model routing can vary by user plan/mode.
 _agents: dict[tuple[str, str, str, str], FinancialAdvisorAgent] = {}
+
 
 def get_agent(
     *,
@@ -104,6 +142,7 @@ def get_agent(
         )
     return _agents[key]
 
+
 # Request/Response Models
 class PredictRequest(BaseModel):
     ticker: str = "AAPL"
@@ -116,8 +155,10 @@ class PredictRequest(BaseModel):
     include_validation: bool = True
     include_backtest: bool = True
 
+
 class SentimentRequest(BaseModel):
     texts: list[str]
+
 
 class OptimizeRequest(BaseModel):
     tickers: list[str] = ["AAPL", "NVDA", "GOOGL", "TSLA", "AMZN"]
@@ -125,24 +166,35 @@ class OptimizeRequest(BaseModel):
     risk_tolerance: float = 1.0
     target_assets: int = 3
 
+
 class AgentChatRequest(BaseModel):
     message: str
     remember: bool = True  # maintain multi-turn conversation history
     session_id: str = "default"
     preferred_mode: LLMMode | None = None
-    mode: str = "single"  # "single" | "consensus" | "auto"
+    mode: Literal["sabi", "single", "consensus", "research", "auto"] = "sabi"
+    use_memory: bool = True
+
 
 class AgentSessionRenameRequest(BaseModel):
     title: str
+
 
 class AgentSessionCreateRequest(BaseModel):
     session_id: str
     title: str = "New chat"
 
+
 class AgentSessionMessageAppendRequest(BaseModel):
     role: str = Field(pattern="^(user|assistant)$")
     content: str = Field(min_length=1)
     metadata: dict | None = None
+    extract_memory: bool = False
+
+
+class AgentSessionMessagesTruncateRequest(BaseModel):
+    keep_count: int = Field(ge=0)
+
 
 class AgentJobCreateResponse(BaseModel):
     job_id: str
@@ -166,6 +218,7 @@ class AgentJobStatusResponse(BaseModel):
     queue_position: int | None = None
     progress: AgentJobProgress | None = None
     progress_events: list[AgentJobProgress] = Field(default_factory=list)
+    activity_events: list[AgentActivityEvent] = Field(default_factory=list)
     result: dict | None = None
     error: dict | None = None
     created_at: float | None = None
@@ -184,26 +237,53 @@ def _ensure_chat_session_available(session_id: str, user: AuthenticatedUser) -> 
     from src.agent.history import session_claimed_by_another_user
 
     if session_claimed_by_another_user(session_id, str(user.id)):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message())
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_chat_session_conflict_message(),
+        )
 
 
 def _ensure_chat_session_owned(session_id: str, user: AuthenticatedUser) -> None:
     """Require an existing saved session owned by the current authenticated user."""
     if user.is_guest:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to use saved chat sessions.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sign in to use saved chat sessions.",
+        )
     from src.agent.history import session_belongs_to_user
 
     if not session_belongs_to_user(session_id, str(user.id)):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message())
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_chat_session_conflict_message(),
+        )
+
 
 class EarningsPoint(BaseModel):
     date: str
+    session: Literal["pre", "post", "unknown"] = "unknown"
     eps_actual: float | None = None
     eps_estimate: float | None = None
     beat_pct: float | None = None
     revenue_actual: float | None = None
     revenue_estimate: float | None = None
     revenue_beat_pct: float | None = None
+
+
+class EarningsCalendarEvent(EarningsPoint):
+    symbol: str
+    name: str
+    country: Literal["US", "CA", "Other"] = "US"
+    market_cap: float | None = None
+    logo_url: str | None = None
+
+
+class EarningsCalendarResponse(BaseModel):
+    from_date: str
+    to_date: str
+    events: list[EarningsCalendarEvent]
+    data_sources: list[str]
+
 
 class QuarterlyFinancial(BaseModel):
     period: str
@@ -216,6 +296,7 @@ class QuarterlyFinancial(BaseModel):
     eps_yoy: float | None = None
     margin_yoy: float | None = None
 
+
 class MarketQuotePoint(BaseModel):
     label: str
     price: float
@@ -224,6 +305,7 @@ class MarketQuotePoint(BaseModel):
     high: float | None = None
     low: float | None = None
 
+
 class MarketSymbolSearchResult(BaseModel):
     ticker: str
     name: str
@@ -231,9 +313,11 @@ class MarketSymbolSearchResult(BaseModel):
     sector: str | None = None
     quote_type: str | None = None
 
+
 class MarketQuoteResponse(BaseModel):
     ticker: str
     name: str
+    logo_url: str | None = None
     exchange: str | None = None
     sector: str | None = None
     price: float
@@ -258,7 +342,9 @@ class MarketQuoteResponse(BaseModel):
     provider_status: list[dict] = []
 
 
-def _service_state(configured: bool, ok: bool | None = None, detail: str | None = None) -> dict:
+def _service_state(
+    configured: bool, ok: bool | None = None, detail: str | None = None
+) -> dict:
     if ok is True:
         status = "ok"
     elif ok is False:
@@ -355,15 +441,20 @@ def _market_data_status() -> dict:
         "yfinance_fallback": True,
     }
     return {
-        "status": "configured" if providers["finnhub"] or providers["alpha_vantage"] else "fallback_only",
+        "status": (
+            "configured"
+            if providers["finnhub"] or providers["alpha_vantage"]
+            else "fallback_only"
+        ),
         "providers": providers,
         "primary_order": ["finnhub", "alpha_vantage", "sec_edgar", "yfinance_fallback"],
     }
 
-# basic api endpoints 
+
+# basic api endpoints
+
 
 @app.get("/health")
-
 async def health_check():
     """Simple health check endpoint"""
     return {"status": "ok", "service": "Financial Advisor API"}
@@ -381,7 +472,10 @@ async def service_status():
     services = {
         "database": _service_state(settings.is_configured("database_url")),
         "supabase": _service_state(
-            bool(settings.supabase_url and settings.is_configured("supabase_service_role_key"))
+            bool(
+                settings.supabase_url
+                and settings.is_configured("supabase_service_role_key")
+            )
         ),
         "qdrant": _check_qdrant(),
         "redis": _check_redis(),
@@ -391,7 +485,8 @@ async def service_status():
             detail=f"cron={settings.news_ingestion_cron}",
         ),
         "billing": _service_state(
-            settings.is_configured("stripe_secret_key") and settings.is_configured("stripe_webhook_secret")
+            settings.is_configured("stripe_secret_key")
+            and settings.is_configured("stripe_webhook_secret")
         ),
         "notifications": _service_state(
             settings.is_configured("resend_api_key")
@@ -409,7 +504,10 @@ async def service_status():
         "services": services,
     }
 
-def _fetch_market_quote_response(normalized: str, period: str, interval: str) -> MarketQuoteResponse:
+
+def _fetch_market_quote_response(
+    normalized: str, period: str, interval: str
+) -> MarketQuoteResponse:
     snapshot = market_data_service.fetch_snapshot(
         normalized,
         period=period,
@@ -419,7 +517,9 @@ def _fetch_market_quote_response(normalized: str, period: str, interval: str) ->
         include_fundamentals=False,
     )
     if snapshot.latest_price is None and not snapshot.history:
-        raise HTTPException(status_code=404, detail=f"No market data found for {normalized}")
+        raise HTTPException(
+            status_code=404, detail=f"No market data found for {normalized}"
+        )
 
     history_points = [
         MarketQuotePoint(
@@ -438,9 +538,16 @@ def _fetch_market_quote_response(normalized: str, period: str, interval: str) ->
     return MarketQuoteResponse(
         ticker=normalized,
         name=snapshot.company_name or normalized,
+        logo_url=snapshot.logo_url,
         exchange=snapshot.exchange,
         sector=snapshot.sector,
-        price=round(float(snapshot.latest_price or (snapshot.history[-1].price if snapshot.history else 0)), 2),
+        price=round(
+            float(
+                snapshot.latest_price
+                or (snapshot.history[-1].price if snapshot.history else 0)
+            ),
+            2,
+        ),
         change=round(float(snapshot.daily_change or 0), 2),
         currency=snapshot.currency,
         open_price=_round_optional(snapshot.open_price),
@@ -453,18 +560,24 @@ def _fetch_market_quote_response(normalized: str, period: str, interval: str) ->
         fifty_two_week_low=_round_optional(snapshot.fifty_two_week_low),
         dividend_yield=_round_optional(snapshot.dividend_yield),
         dividend_rate=_round_optional(snapshot.dividend_rate),
-        quarterly_dividend_amount=_round_optional((snapshot.dividend_rate / 4) if snapshot.dividend_rate else None),
+        quarterly_dividend_amount=_round_optional(
+            (snapshot.dividend_rate / 4) if snapshot.dividend_rate else None
+        ),
         history=history_points,
+        earnings=[EarningsPoint(**point) for point in snapshot.earnings],
         data_sources=snapshot.data_sources,
         source_quality=snapshot.source_quality,
         provider_status=[status.__dict__ for status in snapshot.provider_status],
     )
 
+
 def _fallback_quote_history(snapshot, period: str) -> list[MarketQuotePoint]:
     latest = _round_optional(snapshot.latest_price)
     if latest is None:
         return []
-    baseline = _round_optional(snapshot.open_price if period == "1d" else snapshot.previous_close)
+    baseline = _round_optional(
+        snapshot.open_price if period == "1d" else snapshot.previous_close
+    )
     if baseline is None:
         baseline = _round_optional(snapshot.previous_close) or latest
     volume = int(snapshot.volume or 0)
@@ -490,6 +603,41 @@ def _fallback_quote_history(snapshot, period: str) -> list[MarketQuotePoint]:
     ]
 
 
+@app.get("/api/v1/market/earnings", response_model=EarningsCalendarResponse)
+async def market_earnings_calendar(
+    from_date: date = Query(alias="from"),
+    to_date: date = Query(alias="to"),
+    symbols: str | None = None,
+    limit: int = 100,
+):
+    """Return a provider-backed earnings release calendar for a bounded date range."""
+    if to_date < from_date:
+        raise HTTPException(status_code=400, detail="The earnings calendar end date must be on or after the start date.")
+    if (to_date - from_date).days > 62:
+        raise HTTPException(status_code=400, detail="Earnings calendar ranges cannot exceed 63 days.")
+    symbol_list = [symbol.strip().upper() for symbol in (symbols or "").split(",") if symbol.strip()]
+    safe_limit = max(1, min(limit, 100))
+    try:
+        events, sources = await asyncio.wait_for(
+            asyncio.to_thread(
+                market_data_service.fetch_earnings_calendar,
+                from_date,
+                to_date,
+                symbols=symbol_list,
+                limit=safe_limit,
+            ),
+            timeout=EARNINGS_CALENDAR_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Earnings calendar providers timed out. Try again shortly.") from exc
+    return EarningsCalendarResponse(
+        from_date=from_date.isoformat(),
+        to_date=to_date.isoformat(),
+        events=[EarningsCalendarEvent(**event) for event in events],
+        data_sources=sources,
+    )
+
+
 @app.get("/api/v1/market/quote/{ticker}", response_model=MarketQuoteResponse)
 async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
     """
@@ -501,7 +649,9 @@ async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
 
     try:
         return await asyncio.wait_for(
-            asyncio.to_thread(_fetch_market_quote_response, normalized, period, interval),
+            asyncio.to_thread(
+                _fetch_market_quote_response, normalized, period, interval
+            ),
             timeout=MARKET_QUOTE_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError as exc:
@@ -511,7 +661,9 @@ async def market_quote(ticker: str, period: str = "1mo", interval: str = "1d"):
         ) from exc
 
 
-def _search_market_symbols(query: str, safe_limit: int) -> list[MarketSymbolSearchResult]:
+def _search_market_symbols(
+    query: str, safe_limit: int
+) -> list[MarketSymbolSearchResult]:
     try:
         return [
             MarketSymbolSearchResult(
@@ -524,7 +676,9 @@ def _search_market_symbols(query: str, safe_limit: int) -> list[MarketSymbolSear
             for row in market_data_service.search_symbols(query, safe_limit)
         ]
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Unable to search market symbols: {exc}")
+        raise HTTPException(
+            status_code=502, detail=f"Unable to search market symbols: {exc}"
+        )
 
 
 @app.get("/api/v1/market/search", response_model=list[MarketSymbolSearchResult])
@@ -549,10 +703,12 @@ async def market_search(q: str, limit: int = 12):
             detail=f"Market search provider timed out for {query}. Try again shortly.",
         ) from exc
 
+
 def _round_optional(value: float | int | None, digits: int = 4) -> float | None:
     if value is None:
         return None
     return round(float(value), digits)
+
 
 def _safe_float(val) -> float | None:
     try:
@@ -561,50 +717,60 @@ def _safe_float(val) -> float | None:
     except (TypeError, ValueError):
         return None
 
+
 def _scaled_close_to_price(scaler, close_value: float) -> float:
     n_features = int(getattr(scaler, "n_features_in_", 1) or 1)
     row = [[0.0 for _ in range(n_features)]]
     row[0][0] = float(close_value)
     return float(scaler.inverse_transform(row)[0][0])
 
+
 def _yoy_pct(current: float | None, previous: float | None) -> float | None:
     if current is None or previous is None or previous == 0:
         return None
     return round((current - previous) / abs(previous) * 100, 2)
+
 
 def _get_fin_metric(df, row_key: str, col) -> float | None:
     if row_key in df.index and col in df.columns:
         return _safe_float(df.loc[row_key, col])
     return None
 
+
 # Rag Endpoints
+
 
 @app.post("/api/v1/query")
 async def query(
     question: str = Query(min_length=1, max_length=4_000),
-    ticker: str | None = Query(default=None, min_length=1, max_length=20, pattern=r"^[A-Za-z0-9.^=-]+$"),
+    ticker: str | None = Query(
+        default=None, min_length=1, max_length=20, pattern=r"^[A-Za-z0-9.^=-]+$"
+    ),
     user: AuthenticatedUser = Depends(get_current_or_guest_user),
 ):
     """
-    Ask the financial advisor a question. 
+    Ask the financial advisor a question.
 
     Example: POST /api/v1/query?question=How is Apple doing?&ticker=AAPL
     """
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
-    response = await asyncio.to_thread(rag_ask, question, ticker_filter=ticker.upper() if ticker else None)
+    response = await asyncio.to_thread(
+        rag_ask, question, ticker_filter=ticker.upper() if ticker else None
+    )
     return {
-        "answer": response.answer, 
+        "answer": response.answer,
         "confidence": response.confidence,
         "sources": [
             {
-                "title": s.metadata.title, 
-                "source": s.metadata.source, 
+                "title": s.metadata.title,
+                "source": s.metadata.source,
                 "score": s.score,
             }
             for s in response.sources
         ],
     }
+
 
 @app.post("/api/v1/ingest")
 async def trigger_ingestion(
@@ -612,7 +778,7 @@ async def trigger_ingestion(
     _user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
-    Manually trigger news ingestion for specific tickers. 
+    Manually trigger news ingestion for specific tickers.
     """
 
     if settings.app_env != "development":
@@ -621,7 +787,11 @@ async def trigger_ingestion(
     normalized = []
     for ticker in tickers:
         symbol = ticker.strip().upper()
-        if not symbol or len(symbol) > 20 or not all(char.isalnum() or char in ".^=-" for char in symbol):
+        if (
+            not symbol
+            or len(symbol) > 20
+            or not all(char.isalnum() or char in ".^=-" for char in symbol)
+        ):
             raise HTTPException(status_code=422, detail="Invalid ticker")
         normalized.append(symbol)
 
@@ -631,9 +801,12 @@ async def trigger_ingestion(
         "stats": stats,
     }
 
-# ML endpoints 
+
+# ML endpoints
 @app.post("/api/v1/predict")
-async def predict_stock(req: PredictRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
+async def predict_stock(
+    req: PredictRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)
+):
     """
     Train a model on historical data and predict direction.
     POST /api/v1/predict
@@ -647,7 +820,10 @@ async def predict_stock(req: PredictRequest, user: AuthenticatedUser = Depends(g
         raise HTTPException(status_code=400, detail="Ticker is required")
     if selected_model == "ensemble":
         if req.target != "return":
-            raise HTTPException(status_code=400, detail="Only target='return' is supported for ensemble predictions")
+            raise HTTPException(
+                status_code=400,
+                detail="Only target='return' is supported for ensemble predictions",
+            )
         try:
             service = EnsemblePredictionService()
             return await asyncio.to_thread(
@@ -663,7 +839,10 @@ async def predict_stock(req: PredictRequest, user: AuthenticatedUser = Depends(g
         except PredictionDataError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Unable to run ensemble prediction for {ticker}: {exc}") from exc
+            raise HTTPException(
+                status_code=500,
+                detail=f"Unable to run ensemble prediction for {ticker}: {exc}",
+            ) from exc
 
     try:
         data = prepare_training_data(
@@ -676,18 +855,33 @@ async def predict_stock(req: PredictRequest, user: AuthenticatedUser = Depends(g
         elif selected_model == "lstm":
             model = LSTMPredictor(epochs=20)
         else:
-            raise HTTPException(status_code=400, detail="Invalid model. Must be 'random_forest', 'lstm', or 'ensemble'")
-        
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid model. Must be 'random_forest', 'lstm', or 'ensemble'",
+            )
+
         train_metrics = model.train(data["X_train"], data["y_train"])
-        test_metrics = evaluate_model(model, data["X_test"], data["y_test"], data["scaler"])
+        test_metrics = evaluate_model(
+            model, data["X_test"], data["y_test"], data["scaler"]
+        )
         last_pred = float(model.predict(data["X_test"][-1:])[0])
         last_actual = float(data["y_test"][-1])
         current_price = _scaled_close_to_price(data["scaler"], last_actual)
         predicted_price = _scaled_close_to_price(data["scaler"], last_pred)
-        predicted_return = ((predicted_price - current_price) / current_price) if current_price else 0.0
-        ml_prediction = "UP" if predicted_return > 0.0005 else "DOWN" if predicted_return < -0.0005 else "NEUTRAL"
-        valuation_payload = build_valuation_payload(current_price=current_price, fundamentals={})
-        
+        predicted_return = (
+            ((predicted_price - current_price) / current_price)
+            if current_price
+            else 0.0
+        )
+        ml_prediction = (
+            "UP"
+            if predicted_return > 0.0005
+            else "DOWN" if predicted_return < -0.0005 else "NEUTRAL"
+        )
+        valuation_payload = build_valuation_payload(
+            current_price=current_price, fundamentals={}
+        )
+
         return {
             "ticker": ticker,
             "model_type": selected_model,
@@ -701,7 +895,9 @@ async def predict_stock(req: PredictRequest, user: AuthenticatedUser = Depends(g
             "target_price": valuation_payload["target_price"],
             "implied_upside": valuation_payload["implied_upside"],
             "valuation_signal": valuation_payload["valuation_signal"],
-            "final_signal": combine_ml_and_valuation_signal(ml_prediction, valuation_payload.get("valuation_signal")),
+            "final_signal": combine_ml_and_valuation_signal(
+                ml_prediction, valuation_payload.get("valuation_signal")
+            ),
             "confidence": "low",
             "mae": test_metrics.get("test_mae"),
             "rmse": test_metrics.get("test_rmse"),
@@ -711,8 +907,11 @@ async def predict_stock(req: PredictRequest, user: AuthenticatedUser = Depends(g
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/api/v1/sentiment")
-async def analyze_sentiment(req: SentimentRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
+async def analyze_sentiment(
+    req: SentimentRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)
+):
     """
     Analyze sentiment of financial texts.
     POST /api/v1/sentiment
@@ -728,9 +927,12 @@ async def analyze_sentiment(req: SentimentRequest, user: AuthenticatedUser = Dep
         "market_mood": mood,
     }
 
+
 # Quantum Portfolio Optimization Endpoints
 @app.post("/api/v1/optimize")
-async def optimize(req: OptimizeRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
+async def optimize(
+    req: OptimizeRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)
+):
     """
     Portfolio optimization (classical Markowitz or Quantum QAOA).
     """
@@ -749,13 +951,17 @@ async def optimize(req: OptimizeRequest, user: AuthenticatedUser = Depends(get_c
 
 # Agent Endpoint
 @app.post("/api/v1/agent/chat")
-async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
+async def agent_chat(
+    req: AgentChatRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)
+):
     """
     Chat with the Financial Advisor AI Agent.
 
-    Supports three modes:
-    - "single": Fast single-agent ReAct (default)
+    Supports four user-facing modes plus the legacy auto mode:
+    - "sabi": Select an existing capability from the request (default)
+    - "single": Fast single-agent ReAct
     - "consensus": Quanfora 2.0 multi-agent consensus analysis
+    - "research": Request the existing Equity Research Desk workflow
     - "auto": Auto-detect based on query complexity
 
     POST /api/v1/agent/chat
@@ -763,22 +969,48 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
     """
     from src.agent.history import load_history, append_message
     from src.agent.response_cache import cached_chat_response
+    from src.services.user_memory import UserMemoryService, enqueue_memory_maintenance
+
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
     _ensure_chat_session_available(req.session_id, user)
     try:
-        agent = get_agent(user=user, task_type="chat", preferred_mode=req.preferred_mode)
+        agent = get_agent(
+            user=user, task_type="chat", preferred_mode=req.preferred_mode
+        )
 
         # Guests can chat, but their conversation state must stay client-local.
         history = [] if user.is_guest else load_history(req.session_id, str(user.id))
-        agent._history = [{"role": item["role"], "content": item["content"]} for item in history]
+        memory_service = UserMemoryService()
+        memory_context = memory_service.build_context(
+            str(user.id),
+            req.session_id,
+            history,
+            use_memory=req.use_memory and not user.is_guest,
+        )
+        agent._history = memory_context.recent_messages
+        agent.set_personal_context(memory_context.prompt)
+        from src.agent.activity import ActivityEventCollector
+
+        activity = ActivityEventCollector(str(uuid4()), req.mode)
 
         def compute_result() -> dict:
-            response = agent.chat(req.message, remember=False, mode=req.mode)
+            response = agent.chat(
+                req.message,
+                remember=False,
+                mode=req.mode,
+                progress_callback=activity.consume,
+            )
             metadata = getattr(agent, "last_response_metadata", None)
-            result = {"response": response, "session_id": req.session_id, "mode": req.mode}
+            result = {
+                "response": response,
+                "session_id": req.session_id,
+                "mode": req.mode,
+            }
             if metadata:
                 result.update(metadata)
+            result["memory_status"] = memory_context.status
+            result["memory_used"] = memory_context.usage
             return result
 
         result = cached_chat_response(
@@ -787,19 +1019,45 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
             mode=req.mode,
             preferred_mode=req.preferred_mode,
             message=req.message,
-            history=history,
+            history=(
+                history
+                if history
+                else (
+                    [{"role": "system", "content": "personal context"}]
+                    if memory_context.has_personal_context
+                    else []
+                )
+            ),
             is_guest=user.is_guest,
             compute=compute_result,
         )
+        result["activity_trace"] = activity.trace().model_dump(mode="json")
 
         # Persist both turns
-        metadata = {
-            key: value
-            for key, value in result.items()
-            if key not in {"response", "session_id", "mode"}
-        } or None
         if req.remember and not user.is_guest:
-            append_message(req.session_id, "user", req.message, str(user.id))
+            source_message_id = append_message(
+                req.session_id, "user", req.message, str(user.id)
+            )
+            result["source_message_id"] = str(source_message_id)
+            if memory_context.enabled:
+                result["memory_status"] = enqueue_memory_maintenance(
+                    {
+                        "user_id": str(user.id),
+                        "plan": (
+                            user.plan.value
+                            if hasattr(user.plan, "value")
+                            else str(user.plan)
+                        ),
+                        "session_id": req.session_id,
+                        "source_message_id": str(source_message_id),
+                        "message": req.message,
+                    }
+                )
+            metadata = {
+                key: value
+                for key, value in result.items()
+                if key not in {"response", "session_id", "mode"}
+            } or None
             append_message(
                 req.session_id,
                 "assistant",
@@ -812,13 +1070,20 @@ async def agent_chat(req: AgentChatRequest, user: AuthenticatedUser = Depends(ge
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def _public_agent_job(record: dict, queue_position: int | None = None) -> dict:
+def _public_agent_job(
+    record: dict, queue_position: int | None = None, after: int = 0
+) -> dict:
     return {
         "job_id": record["job_id"],
         "status": record["status"],
         "queue_position": queue_position,
         "progress": record.get("progress"),
         "progress_events": record.get("progress_events") or [],
+        "activity_events": [
+            event
+            for event in (record.get("activity_events") or [])
+            if int(event.get("sequence") or 0) > after
+        ],
         "result": record.get("result"),
         "error": record.get("error"),
         "created_at": record.get("created_at"),
@@ -828,19 +1093,29 @@ def _public_agent_job(record: dict, queue_position: int | None = None) -> dict:
 
 
 @app.post("/api/v1/agent/chat/jobs", response_model=AgentJobCreateResponse)
-async def create_agent_chat_job(req: AgentChatRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
+async def create_agent_chat_job(
+    req: AgentChatRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)
+):
     """
     Enqueue an AI chat job and return immediately with a job id.
     Use GET /api/v1/agent/chat/jobs/{job_id} to poll status/result.
     """
     from src.agent.agent import _is_consensus_query
+    from src.agent.sabi import build_sabi_plan
     from src.agent.llm_queue import get_llm_job_queue
 
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
     _ensure_chat_session_available(req.session_id, user)
 
-    kind = "consensus" if req.mode == "consensus" or (req.mode == "auto" and _is_consensus_query(req.message)) else "single"
+    sabi_plan = build_sabi_plan(req.message) if req.mode == "sabi" else None
+    kind = (
+        "consensus"
+        if req.mode == "consensus"
+        or (req.mode == "auto" and _is_consensus_query(req.message))
+        or (sabi_plan is not None and sabi_plan.queue_kind == "consensus")
+        else "single"
+    )
     payload = {
         "user_id": str(user.id),
         "plan": user.plan.value if hasattr(user.plan, "value") else str(user.plan),
@@ -850,19 +1125,28 @@ async def create_agent_chat_job(req: AgentChatRequest, user: AuthenticatedUser =
         "is_guest": user.is_guest,
         "mode": req.mode,
         "preferred_mode": req.preferred_mode,
+        "use_memory": req.use_memory,
     }
 
     try:
         queue = get_llm_job_queue()
         record = queue.enqueue(payload, kind)
         position = queue.queue_position(record["job_id"], kind)
-        return {"job_id": record["job_id"], "status": record["status"], "queue_position": position}
+        return {
+            "job_id": record["job_id"],
+            "status": record["status"],
+            "queue_position": position,
+        }
     except RedisUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.get("/api/v1/agent/chat/jobs/{job_id}", response_model=AgentJobStatusResponse)
-async def get_agent_chat_job(job_id: str, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
+async def get_agent_chat_job(
+    job_id: str,
+    after: int = Query(default=0, ge=0),
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+):
     """Return queued AI chat job status and result when complete."""
     from src.agent.llm_queue import get_llm_job_queue
 
@@ -874,14 +1158,104 @@ async def get_agent_chat_job(job_id: str, user: AuthenticatedUser = Depends(get_
         payload = record.get("payload", {})
         if str(payload.get("user_id")) != str(user.id):
             raise HTTPException(status_code=404, detail="Chat job not found")
-        position = queue.queue_position(job_id, record["kind"]) if record.get("status") == "queued" else None
-        return _public_agent_job(record, position)
+        position = (
+            queue.queue_position(job_id, record["kind"])
+            if record.get("status") == "queued"
+            else None
+        )
+        return _public_agent_job(record, position, after)
     except RedisUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+@app.get("/api/v1/agent/chat/jobs/{job_id}/events")
+async def stream_agent_chat_job_events(
+    job_id: str,
+    after: int = Query(default=0, ge=0),
+    user: AuthenticatedUser = Depends(get_current_or_guest_user),
+):
+    """Stream owner-scoped, resumable activity events for a queued chat job."""
+    from src.agent.llm_queue import get_llm_job_queue
+
+    queue = get_llm_job_queue()
+    try:
+        record = queue.get(job_id)
+    except RedisUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if record is None or str(record.get("payload", {}).get("user_id")) != str(user.id):
+        raise HTTPException(status_code=404, detail="Chat job not found")
+
+    async def event_stream():
+        cursor = after
+        heartbeat_ticks = 0
+        while True:
+            try:
+                current = queue.get(job_id)
+            except RedisUnavailable as exc:
+                error_event = {
+                    "run_id": job_id,
+                    "sequence": cursor + 1,
+                    "type": "analysis.failed",
+                    "label": "Activity stream interrupted",
+                    "status": "error",
+                    "error": {
+                        "code": "redis_unavailable",
+                        "message": str(exc)[:500],
+                        "retryable": True,
+                    },
+                }
+                yield f"id: {cursor + 1}\nevent: analysis.failed\ndata: {json.dumps(error_event)}\n\n"
+                return
+            if current is None or str(current.get("payload", {}).get("user_id")) != str(
+                user.id
+            ):
+                yield 'event: analysis.failed\ndata: {"error":{"code":"not_found","message":"Chat job not found","retryable":false}}\n\n'
+                return
+
+            events = [
+                event
+                for event in (current.get("activity_events") or [])
+                if int(event.get("sequence") or 0) > cursor
+            ]
+            position = (
+                queue.queue_position(job_id, current["kind"])
+                if current.get("status") == "queued"
+                else None
+            )
+            for event in events:
+                payload = dict(event)
+                if payload.get("type") == "analysis.queued" and position:
+                    payload["queue_position"] = position
+                cursor = int(payload.get("sequence") or cursor)
+                event_name = str(payload.get("type") or "message")
+                yield f"id: {cursor}\nevent: {event_name}\ndata: {json.dumps(payload, default=str)}\n\n"
+            if (
+                current.get("status") in {"succeeded", "failed", "cancelled"}
+                and not events
+            ):
+                return
+
+            heartbeat_ticks += 1
+            if heartbeat_ticks >= 40:
+                heartbeat_ticks = 0
+                yield ": heartbeat\n\n"
+            await asyncio.sleep(0.35)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
 @app.post("/api/v1/agent/consensus")
-async def agent_consensus(req: AgentChatRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)):
+async def agent_consensus(
+    req: AgentChatRequest, user: AuthenticatedUser = Depends(get_current_or_guest_user)
+):
     """
     Quanfora 2.0 — Multi-agent consensus analysis.
 
@@ -893,30 +1267,63 @@ async def agent_consensus(req: AgentChatRequest, user: AuthenticatedUser = Depen
     {"message": "Should I invest in NVDA right now?"}
     """
     from src.agent.orchestrator import QuanforaOrchestrator
-    from src.agent.history import append_message
+    from src.agent.history import append_message, load_history
+    from src.services.user_memory import UserMemoryService, enqueue_memory_maintenance
 
     enforce_feature(user, FeatureKey.AI_RESEARCH)
     usage_tracker.increment(user, FeatureKey.AI_RESEARCH, "ai_messages_per_day")
     _ensure_chat_session_available(req.session_id, user)
     try:
+        memory_service = UserMemoryService()
+        history = [] if user.is_guest else load_history(req.session_id, str(user.id))
+        memory_context = memory_service.build_context(
+            str(user.id), req.session_id, history, use_memory=req.use_memory
+        )
+        analysis_message = req.message
+        if memory_context.prompt:
+            analysis_message = (
+                f"{req.message}\n\nAuthenticated user context "
+                f"(personalization only; not live data):\n{memory_context.prompt}"
+            )
         orchestrator = QuanforaOrchestrator(
             user_id=str(user.id),
             plan=user.plan,
             preferred_mode=req.preferred_mode,
             gateway=get_agent(user=user).gateway,
         )
-        result = orchestrator.analyze(req.message)
-        synthesis = orchestrator._synthesize_response(req.message, result)
+        result = orchestrator.analyze(analysis_message)
+        synthesis = orchestrator._synthesize_response(analysis_message, result)
 
         # Persist
+        source_message_id = None
+        memory_status = memory_context.status
         if req.remember and not user.is_guest:
-            append_message(req.session_id, "user", req.message, str(user.id))
+            source_message_id = append_message(
+                req.session_id, "user", req.message, str(user.id)
+            )
+            if memory_context.enabled:
+                memory_status = enqueue_memory_maintenance(
+                    {
+                        "user_id": str(user.id),
+                        "plan": (
+                            user.plan.value
+                            if hasattr(user.plan, "value")
+                            else str(user.plan)
+                        ),
+                        "session_id": req.session_id,
+                        "source_message_id": str(source_message_id),
+                        "message": req.message,
+                    }
+                )
             append_message(req.session_id, "assistant", synthesis, str(user.id))
 
         return {
             "response": synthesis,
             "session_id": req.session_id,
             "mode": "consensus",
+            "source_message_id": str(source_message_id) if source_message_id else None,
+            "memory_status": memory_status,
+            "memory_used": memory_context.usage,
             "consensus": {
                 "verdict": result.verdict.value,
                 "confidence": result.confidence,
@@ -942,7 +1349,6 @@ async def agent_consensus(req: AgentChatRequest, user: AuthenticatedUser = Depen
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
 @app.post("/api/v1/agent/reset")
 async def agent_reset(
     session_id: str = "default",
@@ -954,10 +1360,14 @@ async def agent_reset(
     from src.agent.history import clear_history
 
     if not clear_history(session_id, str(user.id)):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message())
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_chat_session_conflict_message(),
+        )
     get_agent().reset_history()
 
     return {"status": "ok", "session_id": session_id}
+
 
 @app.get("/api/v1/agent/sessions")
 async def list_agent_sessions(user: AuthenticatedUser = Depends(get_current_user)):
@@ -988,7 +1398,10 @@ async def get_agent_session_messages(
     from src.agent.history import load_history
 
     _ensure_chat_session_available(session_id, user)
-    return {"session_id": session_id, "messages": load_history(session_id, str(user.id))}
+    return {
+        "session_id": session_id,
+        "messages": load_history(session_id, str(user.id)),
+    }
 
 
 @app.post("/api/v1/agent/sessions/{session_id}/messages")
@@ -999,10 +1412,49 @@ async def append_agent_session_message(
 ):
     """Append a generated message to a saved conversation session owned by the current user."""
     from src.agent.history import append_message
+    from src.services.user_memory import UserMemoryService, enqueue_memory_maintenance
 
     _ensure_chat_session_available(session_id, user)
-    append_message(session_id, req.role, req.content, str(user.id), metadata=req.metadata)
-    return {"status": "ok", "session_id": session_id}
+    message_id = append_message(
+        session_id, req.role, req.content, str(user.id), metadata=req.metadata
+    )
+    memory_status = None
+    if req.role == "user" and req.extract_memory:
+        service = UserMemoryService()
+        if service.get_settings(str(user.id)).enabled:
+            memory_status = enqueue_memory_maintenance(
+                {
+                    "user_id": str(user.id),
+                    "plan": (
+                        user.plan.value
+                        if hasattr(user.plan, "value")
+                        else str(user.plan)
+                    ),
+                    "session_id": session_id,
+                    "source_message_id": str(message_id),
+                    "message": req.content,
+                }
+            )
+    return {
+        "status": "ok",
+        "session_id": session_id,
+        "source_message_id": str(message_id),
+        "memory_status": memory_status,
+    }
+
+
+@app.patch("/api/v1/agent/sessions/{session_id}/messages")
+async def truncate_agent_session_messages(
+    session_id: str,
+    req: AgentSessionMessagesTruncateRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Remove a selected turn and all later messages before regeneration."""
+    from src.agent.history import truncate_history
+
+    _ensure_chat_session_owned(session_id, user)
+    removed_count = truncate_history(session_id, req.keep_count, str(user.id))
+    return {"status": "ok", "session_id": session_id, "removed_count": removed_count}
 
 
 @app.patch("/api/v1/agent/sessions/{session_id}")
@@ -1018,7 +1470,10 @@ async def rename_agent_session(
     try:
         return rename_session(session_id, req.title, str(user.id))
     except KeyError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message()) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_chat_session_conflict_message(),
+        ) from exc
 
 
 @app.delete("/api/v1/agent/sessions/{session_id}")
@@ -1030,15 +1485,20 @@ async def delete_agent_session(
     from src.agent.history import clear_history
 
     if not clear_history(session_id, str(user.id)):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_chat_session_conflict_message())
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_chat_session_conflict_message(),
+        )
     return {"status": "ok", "session_id": session_id}
 
 
 @app.websocket("/ws/agent/chat/{session_id}")
-async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Query(default=None)):
+async def agent_ws(
+    websocket: WebSocket, session_id: str, token: str | None = Query(default=None)
+):
     """
     WebSocket endpoint for streaming agent responses token by token.
-    
+
     Client sends:  {"message": "Should I buy NVDA?", "remember": true}
     Server pushes: {"type": "token", "content": "Based on..."} (repeated)
                    {"type": "tool_start", "tool": "get_stock_info"}
@@ -1047,89 +1507,144 @@ async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Qu
     """
     from src.auth.supabase import get_guest_user
     from src.agent.history import load_history, append_message, rename_session
-    
+    from src.services.user_memory import UserMemoryService, enqueue_memory_maintenance
+
     await websocket.accept()
-    
+
     # Resolve user
     user = get_guest_user()
     if token:
         try:
-            user = await get_current_or_guest_user(HTTPAuthorizationCredentials(scheme="Bearer", credentials=token))
+            user = await get_current_or_guest_user(
+                HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+            )
         except Exception:
             pass
     _ensure_chat_session_available(session_id, user)
-            
-    try: 
-        while True: 
+
+    try:
+        while True:
             data = await websocket.receive_json()
             message = data.get("message", "")
+            use_memory = bool(data.get("use_memory", True))
 
             agent = get_agent(user=user)
-            
+
             # Load DB history and prepare for LangGraph
             db_history = [] if user.is_guest else load_history(session_id, str(user.id))
             is_new_session = len(db_history) == 0
-            
+            memory_service = UserMemoryService()
+            memory_context = memory_service.build_context(
+                str(user.id),
+                session_id,
+                db_history,
+                use_memory=use_memory and not user.is_guest,
+            )
+            agent._history = memory_context.recent_messages
+            agent.set_personal_context(memory_context.prompt)
+
             # Format history for LangChain
-            messages = [{"role": m["role"], "content": m["content"]} for m in db_history]
+            messages = agent._context_messages() + memory_context.recent_messages
             messages.append({"role": "user", "content": message})
-            
+
             # Save user message
+            source_message_id = None
             if not user.is_guest:
-                append_message(session_id, "user", message, str(user.id))
+                source_message_id = append_message(
+                    session_id, "user", message, str(user.id)
+                )
 
             assistant_full_content = ""
 
             # Stream events from LangGraph
             async for event in agent._agent.astream_events(
-                {"messages": messages}, version="v2"):
-                    kind = event["event"]
+                {"messages": messages}, version="v2"
+            ):
+                kind = event["event"]
 
-                    # LLM token streaming
-                    if kind == "on_chat_model_stream": 
-                        chunk = event["data"]["chunk"]
+                # LLM token streaming
+                if kind == "on_chat_model_stream":
+                    chunk = event["data"]["chunk"]
 
-                        if chunk.content:
-                            if isinstance(chunk.content, str):
-                                assistant_full_content += chunk.content
-                                await websocket.send_json({
+                    if chunk.content:
+                        if isinstance(chunk.content, str):
+                            assistant_full_content += chunk.content
+                            await websocket.send_json(
+                                {
                                     "type": "token",
                                     "content": chunk.content,
-                                })
-                            elif isinstance(chunk.content, list):
-                                for block in chunk.content:
-                                    if isinstance(block, dict) and block.get("type") == "text":
-                                        assistant_full_content += block.get("text", "")
-                                        await websocket.send_json({
+                                }
+                            )
+                        elif isinstance(chunk.content, list):
+                            for block in chunk.content:
+                                if (
+                                    isinstance(block, dict)
+                                    and block.get("type") == "text"
+                                ):
+                                    assistant_full_content += block.get("text", "")
+                                    await websocket.send_json(
+                                        {
                                             "type": "token",
                                             "content": block.get("text", ""),
-                                        })
-                                    elif isinstance(block, str):
-                                        assistant_full_content += block
-                                        await websocket.send_json({
+                                        }
+                                    )
+                                elif isinstance(block, str):
+                                    assistant_full_content += block
+                                    await websocket.send_json(
+                                        {
                                             "type": "token",
                                             "content": block,
-                                        })
+                                        }
+                                    )
 
-                    # Tool call started
-                    elif kind == "on_tool_start":
-                        await websocket.send_json({
+                # Tool call started
+                elif kind == "on_tool_start":
+                    await websocket.send_json(
+                        {
                             "type": "tool_start",
                             "tool": event["name"],
                             "input": str(event["data"].get("input", "")),
-                        })
-                    
-                    # Tool call finished
-                    elif kind == "on_tool_end":
-                        await websocket.send_json({
+                        }
+                    )
+
+                # Tool call finished
+                elif kind == "on_tool_end":
+                    await websocket.send_json(
+                        {
                             "type": "tool_end",
                             "tool": event["name"],
                             "result": str(event["data"].get("output", "")),
-                        })
+                        }
+                    )
 
             # Save the final assistant response to DB
+            memory_status = memory_context.status
             if not user.is_guest:
-                append_message(session_id, "assistant", assistant_full_content, str(user.id))
+                if memory_context.enabled:
+                    memory_status = enqueue_memory_maintenance(
+                        {
+                            "user_id": str(user.id),
+                            "plan": (
+                                user.plan.value
+                                if hasattr(user.plan, "value")
+                                else str(user.plan)
+                            ),
+                            "session_id": session_id,
+                            "source_message_id": str(source_message_id),
+                            "message": message,
+                        }
+                    )
+                append_message(
+                    session_id,
+                    "assistant",
+                    assistant_full_content,
+                    str(user.id),
+                    metadata={
+                        "source_message_id": str(source_message_id),
+                        "memory_status": memory_status,
+                        "memory_used": memory_context.usage,
+                    },
+                )
 
             # Generate smart AI title if it's the very first message
             if is_new_session and not user.is_guest:
@@ -1140,14 +1655,23 @@ async def agent_ws(websocket: WebSocket, session_id: str, token: str | None = Qu
                         f"User Prompt: {message}"
                     )
                     ai_response = agent._llm.invoke(title_prompt)
-                    new_title = str(ai_response.content).strip(' ".\'')
+                    new_title = str(ai_response.content).strip(" \".'")
                     if len(new_title) > 0 and len(new_title) < 60:
                         rename_session(session_id, new_title, str(user.id))
                 except Exception as e:
                     print(f"Failed to generate title: {e}")
 
             # Signal end of stream
-            await websocket.send_json({"type": "done"})
+            await websocket.send_json(
+                {
+                    "type": "done",
+                    "source_message_id": (
+                        str(source_message_id) if source_message_id else None
+                    ),
+                    "memory_status": memory_status,
+                    "memory_used": memory_context.usage,
+                }
+            )
 
     except WebSocketDisconnect:
         pass

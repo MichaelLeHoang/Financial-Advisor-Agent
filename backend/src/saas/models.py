@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from enum import Enum
 from typing import Any, Literal
 from uuid import UUID, uuid4
@@ -47,6 +47,19 @@ class PortfolioRead(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class PositionBook(str, Enum):
+    INVESTMENT = "investment"
+    TRADING = "trading"
+    UNCLASSIFIED = "unclassified"
+
+
+class ClassificationSource(str, Enum):
+    USER = "user"
+    IMPORT = "import"
+    AGENT_SUGGESTION = "agent_suggestion"
+    STRATEGY = "strategy"
+
+
 class HoldingCreate(BaseModel):
     symbol: str = Field(min_length=1, max_length=20)
     asset_type: str = Field(default="equity", min_length=1, max_length=40)
@@ -79,12 +92,60 @@ class HoldingRead(BaseModel):
     quantity: float
     average_cost: float
     cost_currency: str = "USD"
+    book_type: PositionBook = PositionBook.UNCLASSIFIED
+    classification_source: ClassificationSource = ClassificationSource.IMPORT
+    classified_at: datetime | None = None
+    classified_by: UUID | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @field_validator("cost_currency", mode="before")
     @classmethod
     def normalize_cost_currency(cls, value: Any) -> str:
         return str(value or "USD").strip().upper()
+
+
+class HoldingClassificationUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    book_type: PositionBook
+
+
+class PortfolioBookTotal(BaseModel):
+    book_type: PositionBook
+    holding_count: int = Field(ge=0)
+    cost_basis: float = Field(ge=0)
+    portfolio_weight: float = Field(ge=0, le=100)
+
+
+class PortfolioRiskContext(BaseModel):
+    gross_exposure: float = Field(ge=0)
+    largest_position_weight: float = Field(ge=0, le=100)
+    investment_weight: float = Field(ge=0, le=100)
+    trading_weight: float = Field(ge=0, le=100)
+    unclassified_weight: float = Field(ge=0, le=100)
+    unclassified_count: int = Field(ge=0)
+
+
+class PortfolioBooksRead(BaseModel):
+    portfolio_id: UUID
+    base_currency: str
+    as_of: datetime
+    total_cost_basis: float = Field(ge=0)
+    books: list[PortfolioBookTotal]
+    risk: PortfolioRiskContext
+
+
+class PortfolioBookEventRead(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    user_id: UUID
+    portfolio_id: UUID
+    holding_id: UUID | None = None
+    symbol: str
+    previous_book_type: PositionBook
+    new_book_type: PositionBook
+    classification_source: ClassificationSource
+    actor_id: UUID
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class RecurringBuyCreate(BaseModel):
@@ -380,6 +441,20 @@ class AlertCreate(BaseModel):
     is_active: bool = True
 
 
+class AlertUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    alert_type: str | None = Field(default=None, min_length=1, max_length=60)
+    symbol: str | None = Field(default=None, max_length=20)
+    condition: dict | None = None
+    channels: list[UUID] | None = None
+    is_active: bool | None = None
+
+    @field_validator("symbol", mode="before")
+    @classmethod
+    def normalize_symbol(cls, value: Any) -> str | None:
+        return str(value).strip().upper() if value else value
+
+
 class AlertRead(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     user_id: UUID
@@ -407,6 +482,58 @@ class AlertEventCreate(BaseModel):
 class AlertEventRead(AlertEventCreate):
     id: UUID = Field(default_factory=uuid4)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class NewsDigestPreferenceUpsert(BaseModel):
+    is_enabled: bool = False
+    timezone: str = Field(default="UTC", min_length=1, max_length=80)
+    local_time: str = Field(default="08:00")
+    max_symbols: int = Field(default=20, ge=1, le=20)
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        normalized = value.strip()
+        try:
+            ZoneInfo(normalized)
+        except ZoneInfoNotFoundError as error:
+            raise ValueError("timezone must be a valid IANA timezone") from error
+        return normalized
+
+    @field_validator("local_time", mode="before")
+    @classmethod
+    def normalize_local_time(cls, value: Any) -> str:
+        normalized = str(value).strip()
+        try:
+            parsed = time.fromisoformat(normalized)
+        except ValueError as error:
+            raise ValueError("local_time must use HH:MM") from error
+        return parsed.strftime("%H:%M")
+
+
+class NewsDigestPreferenceRead(NewsDigestPreferenceUpsert):
+    user_id: UUID
+    email: str | None = None
+    next_run_at: datetime | None = None
+    last_sent_at: datetime | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class NewsDigestDeliveryRead(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    user_id: UUID
+    digest_date: date
+    status: Literal["processing", "sent", "failed"] = "processing"
+    source_symbols: list[str] = Field(default_factory=list)
+    article_count: int = Field(default=0, ge=0)
+    subject: str | None = None
+    provider_message_id: str | None = None
+    error: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class RiskSnapshotCreate(BaseModel):

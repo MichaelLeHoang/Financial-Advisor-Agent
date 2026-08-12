@@ -23,6 +23,7 @@ import { Field, Metric, PLAN_RANK, formatCurrency, formatPercent, formatStrategy
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 
 const STRATEGIES: StrategyOption[] = [
@@ -76,6 +77,22 @@ export default function BacktestPage() {
     [result]
   );
   const positionProgress = `${positionSize * 100}%`;
+
+  useEffect(() => {
+    if (rerunId) return;
+    const template = searchParams.get("template");
+    const supported = STRATEGIES.find((item) => item.type === template);
+    if (!supported) return;
+    const requestedSymbols = (searchParams.get("symbols") ?? "").split(",").map((symbol) => symbol.trim().toUpperCase()).filter(Boolean);
+    const numericParameters = Object.fromEntries(Object.keys(supported.default_parameters).flatMap((key) => {
+      const value = searchParams.get(key);
+      return value !== null && Number.isFinite(Number(value)) ? [[key, Number(value)]] : [];
+    }));
+    setStrategy(supported.type);
+    setStrategyName(searchParams.get("name")?.slice(0, 120) || supported.name);
+    if (requestedSymbols.length > 0) setSymbols([...new Set(requestedSymbols)].slice(0, 10));
+    setParameters({ ...supported.default_parameters, ...numericParameters } as Record<string, number>);
+  }, [rerunId, searchParams]);
 
   useEffect(() => {
     if (!canUseBacktesting) return;
@@ -188,7 +205,7 @@ export default function BacktestPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button render={<Link href="/backtest/sessions" />} nativeButton={false} variant="outline" className="h-10 rounded-xl text-sm">
+            <Button render={<Link href="/trade/strategies/sessions" />} nativeButton={false} variant="outline" className="h-10 rounded-xl text-sm">
               <History className="mr-2 h-4 w-4" />
               Sessions & history
             </Button>
@@ -234,10 +251,10 @@ export default function BacktestPage() {
                   <Input type="number" value={initialCapital} min={100} onChange={(event) => setInitialCapital(Number(event.target.value))} className="h-11 rounded-xl" />
                 </Field>
                 <Field label="Start date">
-                  <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-11 rounded-xl" />
+                  <DatePicker aria-label="Start date" value={startDate} onValueChange={setStartDate} />
                 </Field>
                 <Field label="End date">
-                  <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-11 rounded-xl" />
+                  <DatePicker aria-label="End date" value={endDate} onValueChange={setEndDate} min={startDate} />
                 </Field>
               </div>
 
@@ -303,7 +320,7 @@ export default function BacktestPage() {
 
               {error && <div className="text-sm text-red-negative">{error}</div>}
 
-              <Button onClick={run} disabled={loading} className="accent-gradient-surface on-accent h-12 w-full rounded-xl text-sm font-semibold">
+              <Button onClick={run} disabled={loading} className="theme-accent-surface on-accent h-12 w-full rounded-xl text-sm font-semibold">
                 {loading ? "Running simulation..." : "Run backtest"}
               </Button>
             </CardContent>
@@ -355,7 +372,7 @@ export default function BacktestPage() {
                         {recentRuns.slice(0, 3).map((run) => (
                           <Link
                             key={run.id}
-                            href={`/backtest/runs/${run.id}`}
+                            href={`/trade/strategies/runs/${run.id}`}
                             className="block rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card-hover)] px-3 py-2 text-sm transition-colors hover:bg-[var(--surface-control-hover)]"
                           >
                             <div className="flex items-center justify-between gap-3">
@@ -377,7 +394,7 @@ export default function BacktestPage() {
             {result ? (
               <>
                 <Link
-                  href={`/backtest/runs/${result.run.id}`}
+                  href={`/trade/strategies/runs/${result.run.id}`}
                   className="inline-flex items-center gap-2 rounded-xl border border-indigo-primary/30 bg-indigo-primary/10 px-4 py-3 text-sm font-semibold text-indigo-primary transition-colors hover:bg-indigo-primary/15"
                 >
                   View full results with price chart

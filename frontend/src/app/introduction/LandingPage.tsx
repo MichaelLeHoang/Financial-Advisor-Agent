@@ -149,7 +149,7 @@ function sampleMarkdown(content: string) {
 
 export default function IntroductionPage() {
   return (
-    <div className="relative min-h-screen">
+    <main className="relative min-h-screen">
       <IntroductionNav />
       <HeroSection />
       <ProductPreview />
@@ -160,7 +160,7 @@ export default function IntroductionPage() {
       <TestimonialsMinimal />
       <FeaturesSection />
       <IntroductionFooter />
-    </div>
+    </main>
   );
 }
 
@@ -285,7 +285,7 @@ function FeaturesSection() {
               key={feature.title}
               type="button"
               onClick={() => setSelectedFeature(feature)}
-              className="landing-feature-card group relative min-h-[230px] rounded-lg border border-indigo-primary/16 bg-white/[0.02] p-8 text-left transition-all duration-300 hover:-translate-y-1 hover:border-indigo-primary/40 hover:bg-indigo-primary/[0.035] hover:shadow-[0_22px_70px_rgba(99,102,241,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/60"
+              className="landing-feature-card group relative min-h-[230px] rounded-lg border border-indigo-primary/16 bg-white/[0.02] p-8 text-left transition-[background-color,border-color,transform] duration-300 hover:-translate-y-1 hover:border-indigo-primary/40 hover:bg-indigo-primary/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/60"
             >
               <div className="landing-feature-icon mb-8 flex h-12 w-12 items-center justify-center rounded-full border border-indigo-primary/18 bg-indigo-primary/[0.12] text-indigo-primary transition-colors group-hover:bg-indigo-primary/[0.18] group-hover:text-indigo-200">
                 <feature.icon className="h-5 w-5" />
@@ -307,7 +307,7 @@ function FeaturesSection() {
             onClick={() => setSelectedFeature(null)}
           >
             <motion.div
-              className="feature-dialog relative max-h-[90vh] w-full max-w-[520px] overflow-hidden rounded-xl border border-indigo-primary/22 bg-[#0b0c10] text-white shadow-[0_30px_90px_rgba(0,0,0,0.58),0_0_0_1px_rgba(99,102,241,0.10)]"
+              className="feature-dialog relative max-h-[90vh] w-full max-w-[520px] overflow-hidden rounded-xl border border-indigo-primary/22 bg-[#0b0c10] text-white shadow-[0_30px_90px_rgba(0,0,0,0.58)]"
               initial={{ opacity: 0, y: 16, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.98 }}

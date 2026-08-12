@@ -69,3 +69,46 @@ def test_follow_up_context_does_not_override_explicit_ticker():
         _contextualize_follow_up("Should I buy more NVDA?", history)
         == "Should I buy more NVDA?"
     )
+
+
+def test_sabi_resolves_this_stock_before_planning_and_market_context():
+    from types import MethodType
+
+    from src.agent.agent import FinancialAdvisorAgent
+    from src.agent.current_market_context import CurrentMarketContext
+    from src.agent.sabi import SabiOrchestrator
+
+    agent = FinancialAdvisorAgent.__new__(FinancialAdvisorAgent)
+    agent.last_response_metadata = None
+    agent._sabi = SabiOrchestrator()
+    agent._history = [
+        {"role": "user", "content": "SPCX"},
+        {
+            "role": "assistant",
+            "content": "Space Exploration Technologies Corp. (SPCX) last traded at $123.54.",
+        },
+    ]
+    captured: dict[str, str] = {}
+
+    def build_context(self, message):
+        captured["grounding"] = message
+        return CurrentMarketContext.not_required()
+
+    def chat_single(self, message, remember, **_kwargs):
+        captured["single"] = message
+        return "resolved"
+
+    agent._build_current_market_context = MethodType(build_context, agent)
+    agent._chat_single = MethodType(chat_single, agent)
+    agent._attach_grounding_metadata = MethodType(lambda self, context: None, agent)
+
+    response = agent.chat(
+        "Could you make a prediction on this stock for a 6 month horizon?",
+        remember=False,
+        mode="sabi",
+    )
+
+    assert response == "resolved"
+    assert "the stock refers to SPCX" in captured["grounding"]
+    assert "the stock refers to SPCX" in captured["single"]
+    assert agent.last_response_metadata["selected_capability"] == "quick"

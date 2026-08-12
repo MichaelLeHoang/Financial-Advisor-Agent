@@ -72,7 +72,7 @@ export default function ExportPage() {
               <option value="python">Python</option>
               <option value="pine">Pine Script</option>
             </select>
-            <Button onClick={run} disabled={loading} className="accent-gradient-surface on-accent h-11 rounded-xl">{loading ? "Exporting..." : "Generate"}</Button>
+            <Button onClick={run} disabled={loading} className="theme-accent-surface on-accent h-11 rounded-xl">{loading ? "Exporting..." : "Generate"}</Button>
           </CardContent>
         </Card>
 

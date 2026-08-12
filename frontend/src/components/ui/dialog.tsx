@@ -51,12 +51,12 @@ function DialogContent({
     <DialogPortal>
       <DialogPrimitive.Backdrop
         data-slot="dialog-backdrop"
-        className="fixed inset-0 z-[220] bg-[var(--surface-backdrop)] backdrop-blur-md"
+        className="fixed inset-0 z-[220] bg-[var(--surface-backdrop)] opacity-100 backdrop-blur-md transition-opacity duration-200 ease-out data-[ending-style]:opacity-0 data-[starting-style]:opacity-0"
       />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed left-1/2 top-1/2 z-[230] flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--surface-dialog)] text-[var(--text-primary)] shadow-[var(--shadow-dialog)] outline-none sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)]",
+          "fixed left-1/2 top-1/2 z-[230] flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-6xl -translate-x-1/2 -translate-y-1/2 scale-100 flex-col overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--surface-dialog)] text-[var(--text-primary)] opacity-100 shadow-[var(--shadow-dialog)] outline-none transition-[opacity,scale] duration-200 ease-out data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)]",
           className
         )}
         {...props}
@@ -69,7 +69,7 @@ function DialogContent({
               alt=""
               aria-hidden="true"
               data-icon="inline-start"
-              className="size-5 opacity-65 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.68)]"
+              className="size-5 opacity-65 transition-opacity duration-200 group-hover:opacity-100"
             />
             <span className="sr-only">Close</span>
           </DialogClose>

@@ -25,7 +25,6 @@ import {
     Trash2Icon,
     X,
 } from "lucide-react";
-import { motion } from "motion/react";
 import {
     Area,
     AreaChart,
@@ -47,6 +46,7 @@ import {
     type MarketSymbol,
 } from "@/lib/market-data";
 import InteractiveMarketChart from "@/components/market/InteractiveMarketChart";
+import MarketDiscoveryWidgets from "@/components/market/MarketDiscoveryWidgets";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -67,6 +67,7 @@ import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { showToast } from "@/components/ui/toast";
+import { LoadingRegion, SkeletonBlock } from "@/components/ui/DataLoading";
 import { ResearchDepthSelector, ResearchReportTypeSelector, canUseTradingReports } from "@/components/equity-research/ResearchComponents";
 
 interface StockInfo extends MarketSymbol {
@@ -422,7 +423,7 @@ export default function MarketPage() {
 
     useEffect(() => {
         const focusSearch = () => {
-            marketTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+            marketTopRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
             window.requestAnimationFrame(() => {
                 searchInputRef.current?.focus();
                 setSearchOpen(true);
@@ -515,19 +516,10 @@ export default function MarketPage() {
 
     const openChartForTicker = (ticker: string) => {
         const normalized = normalizeTicker(ticker);
-        const existing = stocks.find((stock) => stock.ticker === normalized);
-        const next = existing ?? createPendingStock(normalized);
-        setSelectedStock(next);
-        setSelectedRange(DEFAULT_MARKET_RANGE);
-        setChartStyle("area");
-        setComparisonSymbols([]);
-
-        fetchQuote(normalized, next)
-            .then((fresh) => {
-                setSelectedStock((current) => current?.ticker === fresh.ticker ? fresh : current);
-                setStocks((current) => current.map((stock) => stock.ticker === fresh.ticker ? fresh : stock));
-            })
-            .catch(() => undefined);
+        const exchange = stocks.find((stock) => stock.ticker === normalized)?.exchange;
+        const query = exchange ? `?exchange=${encodeURIComponent(exchange)}` : "";
+        const detailRoute = /^(BTC|ETH|LTC|DOGE|ADA)-(CAD|USD|USDT)$/i.test(normalized) ? "crypto" : "stocks";
+        router.push(`/discover/markets/${detailRoute}/${encodeURIComponent(normalized)}${query}`);
     };
 
     const changeChartRange = (range: MarketChartRange) => {
@@ -679,6 +671,8 @@ export default function MarketPage() {
                 </div>
             </div>
 
+            <MarketDiscoveryWidgets />
+
             {stocks.length === 0 ? (
                 <Empty className="min-h-[24rem]">
                     <EmptyTitle>No tickers selected</EmptyTitle>
@@ -699,21 +693,6 @@ export default function MarketPage() {
                     ))}
                 </div>
             )}
-
-            <MarketChartDialog
-                stock={selectedStock}
-                mounted={mounted}
-                range={selectedRange}
-                chartStyle={chartStyle}
-                comparisonSymbols={comparisonSymbols}
-                onRangeChange={changeChartRange}
-                onStyleChange={setChartStyle}
-                onComparisonChange={setComparisonSymbols}
-                onStockLoaded={handleStockLoaded}
-                onOpenChange={(open) => {
-                    if (!open) setSelectedStock(null);
-                }}
-            />
 
             <RemoveTickerDialog
                 stock={pendingRemoval}
@@ -798,28 +777,20 @@ function MarketSearch({
                         src="/close-svgrepo-com.svg"
                         alt=""
                         aria-hidden="true"
-                        className="size-4 opacity-55 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_7px_rgba(255,255,255,0.65)]"
+                        className="size-4 opacity-55 transition-opacity duration-200 group-hover:opacity-100"
                     />
                 </button>
             )}
 
             {open && query && (
-                <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
-                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                    className="absolute left-0 right-0 top-13 z-30"
-                >
+                <div className="absolute left-0 right-0 top-13 z-30">
                     <Card className="rounded-2xl border-[var(--theme-border)] bg-[var(--surface-panel)] py-2 shadow-[var(--shadow-popover)]">
                         <CardContent className="flex max-h-80 flex-col gap-1 overflow-y-auto px-2 py-0">
                             {matches.map((match, index) => (
-                                <motion.div
+                                <div
                                     key={`${match.ticker}-${match.exchange}-${index}`}
-                                    initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
-                                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-                                    transition={{ duration: 0.24, delay: Math.min(index * 0.035, 0.18), ease: [0.16, 1, 0.3, 1] }}
                                     onMouseDown={(event) => event.preventDefault()}
-                                    className="group/search-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-white/[0.11] hover:shadow-[var(--shadow-row-hover)]"
+                                    className="group/search-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-white/[0.11] hover:shadow-[var(--shadow-row-hover)]"
                                 >
                                     <button
                                         type="button"
@@ -860,7 +831,7 @@ function MarketSearch({
                                             <Plus className="size-4" />
                                         </button>
                                     </div>
-                                </motion.div>
+                                </div>
                             ))}
 
                             {searching && matches.length === 0 && (
@@ -872,11 +843,8 @@ function MarketSearch({
                             )}
 
                             {canAddCustom && !searching && (
-                                <motion.button
+                                <button
                                     type="button"
-                                    initial={{ opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)" }}
-                                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-                                    transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
                                     onMouseDown={(event) => event.preventDefault()}
                                     onClick={() => onSelect(query)}
                                     className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-white/[0.06]"
@@ -888,11 +856,11 @@ function MarketSearch({
                                         <div className="text-sm font-semibold text-white">Add {normalizeTicker(query)}</div>
                                         <div className="text-xs text-white/42">Create a custom market tile</div>
                                     </div>
-                                </motion.button>
+                                </button>
                             )}
                         </CardContent>
                     </Card>
-                </motion.div>
+                </div>
             )}
         </div>
     );
@@ -916,15 +884,17 @@ function MarketCard({
     const hasQuote = Boolean(stock.hasQuote);
 
     return (
-        <motion.div whileHover={{ y: -5 }} className="group">
+        <div className="group">
             <Card
+                data-market-chart-card
+                data-interactive="true"
                 role="button"
                 tabIndex={0}
                 onClick={onOpen}
                 onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") onOpen();
                 }}
-                className="rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[var(--shadow-accent-card)] transition-all duration-300 group-hover:border-white/[0.12] group-hover:bg-white/[0.07] focus:outline-none focus-visible:border-white/[0.12] focus-visible:ring-0"
+                className="market-chart-surface rounded-2xl border border-white/[0.06] bg-white/[0.045] py-0 text-white shadow-[var(--shadow-accent-card)] transition-colors duration-150 group-hover:border-white/[0.12] group-hover:bg-white/[0.07] focus:outline-none focus-visible:border-white/[0.12] focus-visible:ring-0"
             >
                 <CardContent className="p-6">
                     <div className="mb-4 flex items-start justify-between gap-4">
@@ -944,9 +914,11 @@ function MarketCard({
                                     {up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
                                     {formatChange(stock.change)}
                                 </Badge>
+                            ) : stock.loading ? (
+                                <SkeletonBlock className="h-6 w-16 rounded-lg" />
                             ) : (
                                 <Badge variant="outline" className="h-6 rounded-lg border-white/[0.08] bg-white/[0.04] text-white/38">
-                                    {stock.loading ? "Loading" : "No quote"}
+                                    No quote
                                 </Badge>
                             )}
                             <button
@@ -963,31 +935,48 @@ function MarketCard({
                                     alt=""
                                     aria-hidden="true"
                                     data-icon="inline-start"
-                                    className="size-4 opacity-55 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_7px_rgba(255,255,255,0.65)]"
+                                    className="size-4 opacity-55 transition-opacity duration-200 group-hover:opacity-100"
                                 />
                             </button>
                         </div>
                     </div>
 
-                    <div className="mb-6 flex items-end justify-between gap-3">
-                        <div>
-                            <div className="text-3xl font-bold">{hasQuote ? formatCurrency(stock.price) : "—"}</div>
-                            <div className="mt-1 text-xs text-white/35">
-                                {stock.loading ? "Loading live quote..." : hasQuote ? `${stock.exchange} · ${stock.sector}` : "Live quote unavailable"}
-                            </div>
-                        </div>
-                        <Maximize2 className="size-4 text-white/30 transition-colors group-hover:text-white/70" />
-                    </div>
-
-                    <div className="h-24 min-h-24 w-full min-w-0">
-                        {mounted && hasQuote && stock.data.length > 0 ? (
-                            <MiniChart stock={stock} />
-                        ) : (
-                            <div className="flex h-full w-full items-center justify-center rounded-xl bg-white/[0.035] text-xs text-white/30">
-                                {stock.loading ? "Loading chart..." : "No live chart"}
+                    <LoadingRegion
+                        loading={Boolean(stock.loading)}
+                        label={`Loading ${stock.ticker} market data`}
+                        skeleton={(
+                            <div>
+                                <div className="mb-6 flex items-end justify-between gap-3">
+                                    <div>
+                                        <SkeletonBlock className="h-8 w-28 rounded-sm" />
+                                        <SkeletonBlock className="mt-2 h-2.5 w-32 rounded-sm" />
+                                    </div>
+                                    <SkeletonBlock className="size-4 rounded-sm" />
+                                </div>
+                                <SkeletonBlock className="h-24 w-full rounded-xl" />
                             </div>
                         )}
-                    </div>
+                    >
+                        <div className="mb-6 flex items-end justify-between gap-3">
+                            <div>
+                                <div className="text-3xl font-bold">{hasQuote ? formatCurrency(stock.price) : "—"}</div>
+                                <div className="mt-1 text-xs text-white/35">
+                                    {hasQuote ? `${stock.exchange} · ${stock.sector}` : "Live quote unavailable"}
+                                </div>
+                            </div>
+                            <Maximize2 className="size-4 text-white/30 transition-colors group-hover:text-white/70" />
+                        </div>
+
+                        <div className="h-24 min-h-24 w-full min-w-0">
+                            {mounted && hasQuote && stock.data.length > 0 ? (
+                                <MiniChart stock={stock} />
+                            ) : (
+                                <div className="flex h-full w-full items-center justify-center rounded-xl bg-white/[0.035] text-xs text-white/30">
+                                    No live chart
+                                </div>
+                            )}
+                        </div>
+                    </LoadingRegion>
                     <button
                         type="button"
                         onClick={(event) => {
@@ -1001,7 +990,7 @@ function MarketCard({
                     </button>
                 </CardContent>
             </Card>
-        </motion.div>
+        </div>
     );
 }
 
@@ -1071,7 +1060,7 @@ function MarketResearchDrawer({
                         </p>
                     </div>
                     {error && <p className="text-sm text-red-negative">{error}</p>}
-                    <Button onClick={onStart} disabled={starting} className="on-accent accent-gradient-surface w-full rounded-xl">
+                    <Button onClick={onStart} disabled={starting} className="on-accent theme-accent-surface w-full rounded-xl">
                         {starting ? (
                             <>
                                 <Loader2 className="size-4 animate-spin" />
@@ -1379,7 +1368,7 @@ function MarketChartDialog({
                                             <span className="text-white/42">({activeAbsoluteChange >= 0 ? "+" : "-"}{formatCurrency(Math.abs(activeAbsoluteChange))})</span>
                                         </div>
                                     ) : (
-                                        <div className="mt-1 text-sm text-white/42">Loading live quote...</div>
+                                        <div className="mt-1 text-sm text-white/42">Loading live quote…</div>
                                     )}
                                 </div>
                             </div>
@@ -1493,7 +1482,7 @@ function MarketChartDialog({
                                 </div>
                             )}
                             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-                                <Card className="rounded-2xl border-white/[0.06] bg-white/[0.025] py-0">
+                                <Card data-market-detail-chart className="market-chart-surface rounded-2xl border-white/[0.06] bg-white/[0.025] py-0">
                                     <CardContent className="flex flex-col gap-3 p-4">
                                         <div className="flex items-center justify-between gap-4 px-1">
                                             <div>

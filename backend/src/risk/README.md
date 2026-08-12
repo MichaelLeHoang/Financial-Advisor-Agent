@@ -7,6 +7,7 @@ Calculates and exposes portfolio risk snapshots.
 - Fetch price histories through a risk-market-data protocol.
 - Calculate concentration, volatility, drawdown, VaR, and risk scores.
 - Enforce plan access and persist user-scoped snapshots.
+- Scope on-demand snapshots to an Investment or Trading position book when requested.
 
 ## Key Files
 - `calculations.py`: deterministic portfolio risk metrics.
@@ -20,4 +21,4 @@ Portfolio records and entitlements reuse `saas/`. Risk calculations should remai
 Use fixed holdings and price frames. Cover empty portfolios, missing prices, concentration, drawdown, VaR, plan restrictions, and persistence.
 
 ## Latest Change
-- Established the current risk dashboard package with adapter-backed market data and SaaS entitlement enforcement.
+- Added position-book filtering so centralized Portfolio risk snapshots analyze only the selected Investment or Trading holdings.

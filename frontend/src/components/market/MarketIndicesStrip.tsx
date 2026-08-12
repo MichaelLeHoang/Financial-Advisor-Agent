@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { fetchQuotes } from "@/lib/quote-cache";
 import type { MarketQuote } from "@/lib/api";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
+import { LoadingRegion, SkeletonBlock } from "@/components/ui/DataLoading";
 
 /* Google-Finance-style market summary strip: a row of index cards with
    value, percent change and a mini sparkline. yfinance index symbols. */
@@ -79,6 +80,24 @@ export default function MarketIndicesStrip() {
   }, []);
 
   return (
+    <LoadingRegion
+      loading={indices.some((index) => index.loading)}
+      label="Loading market indices"
+      skeleton={(
+        <HorizontalScroll className="-mx-1 flex gap-3 px-1 pb-1">
+          {indices.map((index, itemIndex) => (
+            <div key={index.ticker} className="market-chart-surface flex min-w-[180px] flex-1 items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <SkeletonBlock className="h-2.5 w-20 rounded-sm" />
+                <SkeletonBlock className="mt-2 h-5 w-24 rounded-sm" />
+                <SkeletonBlock className="mt-2 h-2.5 w-14 rounded-sm" />
+              </div>
+              <SkeletonBlock className="h-12 w-20 rounded-lg" style={{ opacity: 0.62 + itemIndex * 0.03 }} />
+            </div>
+          ))}
+        </HorizontalScroll>
+      )}
+    >
     <HorizontalScroll className="-mx-1 flex gap-3 px-1 pb-1">
       {indices.map((index) => {
         const q = index.quote;
@@ -88,13 +107,11 @@ export default function MarketIndicesStrip() {
         return (
           <div
             key={index.ticker}
-            className="flex min-w-[180px] flex-1 items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] px-4 py-3"
+            className="market-chart-surface flex min-w-[180px] flex-1 items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] px-4 py-3"
           >
             <div className="min-w-0">
               <p className="truncate text-xs font-medium text-white/45">{index.label}</p>
-              {index.loading ? (
-                <div className="mt-1.5 h-5 w-20 animate-pulse rounded bg-white/[0.07]" />
-              ) : q ? (
+              {q ? (
                 <>
                   <p className="mt-0.5 text-base font-semibold tabular-nums text-white">{fmt(q.price)}</p>
                   <span
@@ -118,5 +135,6 @@ export default function MarketIndicesStrip() {
         );
       })}
     </HorizontalScroll>
+    </LoadingRegion>
   );
 }

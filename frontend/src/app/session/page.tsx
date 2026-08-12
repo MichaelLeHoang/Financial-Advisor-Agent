@@ -1,27 +1,30 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
-import type { ChangeEvent, ComponentType } from "react";
+import { useRef, useEffect, useId, useMemo, useState } from "react";
+import type { ChangeEvent, ComponentType, ReactNode } from "react";
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Brain, Check, ChevronDown, ClipboardList, FileText, Image, Loader2, Paperclip, PieChart, Send, SlidersHorizontal, TableProperties, TrendingUp } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ArrowRight, Brain, Check, ChevronDown, Clipboard, ClipboardList, FileText, Image, Loader2, Paperclip, Pencil, PieChart, RotateCcw, Send, SlidersHorizontal, ThumbsDown, ThumbsUp, TableProperties, TrendingUp } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion, type Variants } from "motion/react";
 import { api, isRedisUnavailableError, isUpgradeRequiredError } from "@/lib/api";
-import type { ChatJobProgress, ChatJobStatusResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, Overview, ResearchDepth, ResearchReportType } from "@/lib/api";
+import type { AgentActivitySource, AgentActivityTrace, AiDeskMode, ChatJobProgress, ChatJobStatusResponse, ChatResponse, ConsensusOpinion, EquityResearchEvent, EquityResearchReport, EquityResearchRunDetail, GroundingMetadata, MemoryContextUsage, Overview, ResearchDepth, ResearchReportType, SabiCapability, UserMemory } from "@/lib/api";
 import { notifyCompletion, requestCompletionNotification } from "@/lib/completion-notifications";
 import { loadLocalChatMessages, saveLocalChatMessages } from "@/lib/local-chat-history";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
 import ModelSelector, { useModel, apiModeFromVersion } from "@/components/ModelSelector";
+import AgentMemoryDialog, { MemoryCandidateCard } from "@/components/AgentMemoryDialog";
 import UpgradePrompt from "@/components/common/UpgradePrompt";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { LoadingRegion, SkeletonBlock, SkeletonText } from "@/components/ui/DataLoading";
 import { Textarea } from "@/components/ui/textarea";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { OverviewCard } from "@/components/ui/overview-card";
-import Plan from "@/components/ui/agent-plan";
 import Markdown from "@/components/ui/markdown";
 import { showToast } from "@/components/ui/toast";
+import { PromptNavigator, promptAnchorId } from "@/components/chat/PromptNavigator";
+import { AgentActivityDrawer, AgentActivitySummary, AgentSources } from "@/components/chat/AgentActivityTrace";
+import { activityFromTrace, emptyActivity, mergeSources, reduceActivity, researchActivityEvents, type LiveAgentActivity } from "@/lib/agent-activity";
 
 interface Message {
   id: string;
@@ -33,6 +36,55 @@ interface Message {
   researchReports?: EquityResearchReport[];
   consensusOpinions?: ConsensusOpinion[];
   overview?: Overview | null;
+  selectedCapability?: SabiCapability;
+  grounding?: GroundingMetadata;
+  sourceMessageId?: string | null;
+  memoryUsed?: MemoryContextUsage[];
+  memoryCandidates?: UserMemory[];
+  activity?: LiveAgentActivity;
+}
+
+type MessageFeedback = "up" | "down" | null;
+
+function MessageActionButton({
+  label,
+  children,
+  onClick,
+  disabled = false,
+  active = false,
+}: {
+  label: string;
+  children: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+}) {
+  const tooltipId = useId();
+
+  return (
+    <span className="group/message-action relative inline-flex">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onClick}
+        aria-label={label}
+        aria-describedby={tooltipId}
+        className={cn(
+          "grid size-8 place-items-center rounded-lg transition-colors duration-150 hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none",
+          active && "bg-white/[0.12] text-white"
+        )}
+      >
+        {children}
+      </button>
+      <span
+        id={tooltipId}
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 top-full z-40 mt-1.5 -translate-x-1/2 -translate-y-1 whitespace-nowrap rounded-lg border border-white/[0.08] bg-[#242529] px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-[0_8px_24px_rgba(0,0,0,0.36)] transition-[opacity,transform] duration-150 group-hover/message-action:translate-y-0 group-hover/message-action:opacity-100 group-focus-within/message-action:translate-y-0 group-focus-within/message-action:opacity-100 motion-reduce:transition-none"
+      >
+        {label}
+      </span>
+    </span>
+  );
 }
 
 const GREETING: Message = {
@@ -45,10 +97,15 @@ function messageFromChatHistory(message: {
   id: number | string;
   role: "user" | "assistant";
   content: string;
-  metadata?: { consensus?: { opinions?: ConsensusOpinion[] }; researchReports?: EquityResearchReport[]; overview?: Overview | null } | null;
+  metadata?: { consensus?: { opinions?: ConsensusOpinion[] }; researchReports?: EquityResearchReport[]; overview?: Overview | null; selected_capability?: SabiCapability; grounding?: GroundingMetadata; source_message_id?: string | null; memory_used?: MemoryContextUsage[]; activity_trace?: AgentActivityTrace } | null;
   consensusOpinions?: ConsensusOpinion[];
   researchReports?: EquityResearchReport[];
   overview?: Overview | null;
+  selectedCapability?: SabiCapability;
+  grounding?: GroundingMetadata;
+  sourceMessageId?: string | null;
+  memoryUsed?: MemoryContextUsage[];
+  activity?: AgentActivityTrace;
 }): Message {
   return {
     id: String(message.id),
@@ -57,7 +114,36 @@ function messageFromChatHistory(message: {
     consensusOpinions: message.consensusOpinions ?? message.metadata?.consensus?.opinions,
     researchReports: message.researchReports ?? message.metadata?.researchReports,
     overview: message.overview ?? message.metadata?.overview,
+    selectedCapability: message.selectedCapability ?? message.metadata?.selected_capability,
+    grounding: message.grounding ?? message.metadata?.grounding,
+    sourceMessageId: message.sourceMessageId ?? message.metadata?.source_message_id,
+    memoryUsed: message.memoryUsed ?? message.metadata?.memory_used,
+    activity: activityFromTrace(message.activity ?? message.metadata?.activity_trace),
   };
+}
+
+function messageActivitySources(message: Message): AgentActivitySource[] {
+  const grounding = message.grounding?.sources.map((source, index) => ({
+    source_id: source.url || `grounding-${index}-${source.source}`,
+    title: source.label,
+    provider: source.source,
+    url: source.url,
+    published_at: source.published_at,
+  })) ?? [];
+  const overview = message.overview?.sources.map((source, index) => ({
+    source_id: source.url || `overview-${index}-${source.source}`,
+    title: source.label,
+    provider: source.source,
+    url: source.url,
+  })) ?? [];
+  const research = message.researchReports?.flatMap((report) => report.evidence).map((source, index) => ({
+    source_id: source.url || `research-${index}-${source.source}`,
+    title: source.label,
+    provider: source.source,
+    url: source.url,
+    preview: source.detail,
+  })) ?? [];
+  return mergeSources(message.activity?.sources, grounding, overview, research);
 }
 
 const SUGGESTIONS = [
@@ -91,6 +177,14 @@ function extractResearchCommand(message: string) {
     depth: depth as "shallow" | "medium" | "deep",
     reportType: detectResearchReportType(message),
   };
+}
+
+function isSabiResearchRequest(message: string) {
+  return [
+    /^\/(?:research|analyze)\b/i,
+    /\b(?:create|generate|prepare|write|build|run)\s+(?:a\s+)?(?:(?:full|complete|deep|comprehensive)\s+)?(?:(?:investment|trading|equity|stock)\s+)?(?:research\s+)?report\b/i,
+    /\b(?:full|complete|deep|comprehensive)\s+(?:investment\s+|trading\s+|equity\s+)?research\b/i,
+  ].some((pattern) => pattern.test(message));
 }
 
 function detectResearchReportType(message: string): ResearchReportType {
@@ -352,8 +446,34 @@ const PLACEHOLDERS = [
   "What are the risks of holding SMCI right now?",
 ];
 
-function firstChatProgressTool(mode: "single" | "consensus") {
-  return mode === "consensus" ? "quant_researcher" : "single_scope";
+const PLACEHOLDER_CONTAINER_VARIANTS: Variants = {
+  initial: {},
+  animate: { transition: { staggerChildren: 0.006 } },
+  exit: {
+    transition: { staggerChildren: 0.003, staggerDirection: -1 },
+  },
+};
+
+const PLACEHOLDER_LETTER_VARIANTS: Variants = {
+  initial: { opacity: 0, filter: "blur(8px)", y: 6 },
+  animate: {
+    opacity: 1,
+    filter: "blur(0px)",
+    y: 0,
+    transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
+  },
+  exit: {
+    opacity: 0,
+    filter: "blur(8px)",
+    y: -6,
+    transition: { duration: 0.14, ease: [0.4, 0, 1, 1] },
+  },
+};
+
+function sabiCapabilityLabel(capability: SabiCapability) {
+  return capability === "trade_proposal"
+    ? "Trade Proposal"
+    : capability.charAt(0).toUpperCase() + capability.slice(1);
 }
 
 const RESEARCH_MODES: {
@@ -400,28 +520,12 @@ function bestResearchModeForPlan(plan: keyof typeof PLAN_RANK, requested: Resear
   return [...RESEARCH_MODES].reverse().find((mode) => canUseResearchMode(plan, mode.depth))?.depth ?? "shallow";
 }
 
-const placeholderContainerVariants = {
-  initial: {},
-  animate: { transition: { staggerChildren: 0.015 } },
-  exit: { transition: { staggerChildren: 0.01, staggerDirection: -1 } },
-};
-
-const letterVariants = {
-  initial: { opacity: 0, filter: "blur(12px)", y: 10 },
-  animate: {
-    opacity: 1, filter: "blur(0px)", y: 0,
-    transition: { opacity: { duration: 0.25 }, filter: { duration: 0.4 }, y: { type: "spring" as const, stiffness: 80, damping: 20 } },
-  },
-  exit: {
-    opacity: 0, filter: "blur(12px)", y: -10,
-    transition: { opacity: { duration: 0.2 }, filter: { duration: 0.3 }, y: { type: "spring" as const, stiffness: 80, damping: 20 } },
-  },
-};
-
 export default function ChatPage() {
   const { user, loading: authLoading } = useAuth();
   const { version } = useModel();
+  const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
+  const pathname = usePathname();
   const params = useParams<{ sessionId?: string | string[] }>();
   const searchParams = useSearchParams();
   const routeSessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
@@ -430,23 +534,33 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>(() =>
     activeSessionId === "default" ? [GREETING] : []
   );
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Record<string, MessageFeedback>>({});
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState("");
+  const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
+  const [memoryDialogOpen, setMemoryDialogOpen] = useState(false);
+  const [activityDrawerRunId, setActivityDrawerRunId] = useState<string | null>(null);
+  const [memoryAnnouncement, setMemoryAnnouncement] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const uploadMenuRef = useRef<HTMLDivElement>(null);
+  const uploadTriggerRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const appliedPromptRef = useRef<string | null>(null);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [showPlaceholder, setShowPlaceholder] = useState(true);
   const [isActive, setIsActive] = useState(false);
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
-  const [activeTool, setActiveTool] = useState<string | null>(null);
-  const [completedTools, setCompletedTools] = useState<string[]>([]);
   const [agentRunState, setAgentRunState] = useState<"queued" | "running">("running");
-  const [agentRunStartedAt, setAgentRunStartedAt] = useState<number | null>(null);
-  const [useAgentSyntheticProgress, setUseAgentSyntheticProgress] = useState(false);
+  const [activePlanMode, setActivePlanMode] = useState<"single" | "consensus" | "research">("single");
+  const [liveActivity, setLiveActivity] = useState<LiveAgentActivity | null>(null);
+  const liveActivityRef = useRef<LiveAgentActivity | null>(null);
+  const lastActivitySequenceRef = useRef(0);
   const [researchDepth, setResearchDepth] = useState<ResearchDepth>("shallow");
   const lastJobProgressSequenceRef = useRef(0);
   const progressEventQueueRef = useRef<ChatJobProgress[]>([]);
@@ -454,6 +568,7 @@ export default function ChatPage() {
   const progressDrainPromiseRef = useRef<Promise<void> | null>(null);
   const notifyWhenCompleteRef = useRef(false);
   const activeRequestControllerRef = useRef<AbortController | null>(null);
+  const pendingSessionIdRef = useRef<string | null>(null);
   const firstName = getFirstName(user?.display_name || user?.email || "");
   const [welcomeGreeting] = useState(() => (Math.random() > 0.5 ? "Hello" : "Hi"));
 
@@ -509,11 +624,11 @@ export default function ChatPage() {
       setIsLoading(false);
       setIsHistoryLoading(false);
       setUpgradeMessage(null);
-      setActiveTool(null);
-      setCompletedTools([]);
       setAgentRunState("running");
-      setAgentRunStartedAt(null);
-      setUseAgentSyntheticProgress(false);
+      setActivePlanMode("single");
+      setMemoryDialogOpen(false);
+      setActivityDrawerRunId(null);
+      setMemoryAnnouncement("");
       lastJobProgressSequenceRef.current = 0;
       progressEventQueueRef.current = [];
       progressDrainActiveRef.current = false;
@@ -552,21 +667,27 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (isActive || input) return;
-    const interval = setInterval(() => {
+    let revealTimer: number | undefined;
+    const interval = window.setInterval(() => {
       setShowPlaceholder(false);
-      setTimeout(() => {
+      revealTimer = window.setTimeout(() => {
         setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDERS.length);
         setShowPlaceholder(true);
-      }, 400);
+      }, prefersReducedMotion ? 0 : 400);
     }, 4000);
-    return () => clearInterval(interval);
-  }, [isActive, input]);
+    return () => {
+      window.clearInterval(interval);
+      if (revealTimer !== undefined) window.clearTimeout(revealTimer);
+    };
+  }, [isActive, input, prefersReducedMotion]);
 
   useEffect(() => {
     const handleClickOutside = (event: globalThis.MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-        if (!input) setIsActive(false);
-        setUploadMenuOpen(false);
+        if (!input) {
+          setIsActive(false);
+          setShowPlaceholder(true);
+        }
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -574,8 +695,38 @@ export default function ChatPage() {
   }, [input]);
 
   useEffect(() => {
-    if (authLoading || isStreamingRef.current) return;
+    if (!uploadMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!uploadMenuRef.current?.contains(target) && !uploadTriggerRef.current?.contains(target)) {
+        setUploadMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setUploadMenuOpen(false);
+        uploadTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [uploadMenuOpen]);
+
+  useEffect(() => {
+    if (authLoading) return;
     let cancelled = false;
+
+    // The first prompt creates the real session id before the request completes.
+    // Keep the optimistic messages instead of replacing them with a history load.
+    if (pendingSessionIdRef.current === activeSessionId) {
+      pendingSessionIdRef.current = null;
+      setIsHistoryLoading(false);
+      return;
+    }
 
     async function loadSession() {
       setIsHistoryLoading(true);
@@ -593,10 +744,26 @@ export default function ChatPage() {
           return;
         }
 
-        const res = await api.chatSessionMessages(activeSessionId);
+        const [res, pendingMemories] = await Promise.all([
+          api.chatSessionMessages(activeSessionId),
+          api.memories("candidate", activeSessionId).catch(() => null),
+        ]);
         if (cancelled) return;
 
-        const loadedMessages = res.messages.map(messageFromChatHistory);
+        const candidatesBySource = new Map<string, UserMemory[]>();
+        for (const candidate of pendingMemories?.memories ?? []) {
+          if (!candidate.source_message_id) continue;
+          candidatesBySource.set(candidate.source_message_id, [
+            ...(candidatesBySource.get(candidate.source_message_id) ?? []),
+            candidate,
+          ]);
+        }
+        const loadedMessages = res.messages.map(messageFromChatHistory).map((message) => ({
+          ...message,
+          memoryCandidates: message.sourceMessageId
+            ? candidatesBySource.get(message.sourceMessageId)
+            : undefined,
+        }));
         setMessages(loadedMessages.length > 0 ? loadedMessages : [GREETING]);
       } catch (err: any) {
         if (cancelled) return;
@@ -651,12 +818,33 @@ export default function ChatPage() {
 
   const isStreamingRef = useRef(false);
 
-  const applyProgressEvent = (progress: ChatJobProgress, job: ChatJobStatusResponse, fallbackLabel: string) => {
-    setAgentRunState(job.status === "queued" ? "queued" : "running");
-    setAgentRunStartedAt((current) => current ?? (job.started_at ? job.started_at * 1000 : Date.now()));
-    setActiveTool(progress.active_tool ?? null);
-    setCompletedTools(progress.completed_tools ?? []);
+  const resetLiveActivity = (runId: string, mode: string, status: "queued" | "running" = "queued") => {
+    const next = {
+      ...emptyActivity(runId, mode),
+      status,
+      started_at: status === "running" ? new Date().toISOString() : undefined,
+    } as LiveAgentActivity;
+    lastActivitySequenceRef.current = 0;
+    liveActivityRef.current = next;
+    setLiveActivity(next);
+  };
 
+  const applyActivityEvent = (
+    event: import("@/lib/api").AgentActivityEvent,
+    deduplicateBySequence = true,
+  ) => {
+    if (deduplicateBySequence && event.sequence && event.sequence <= lastActivitySequenceRef.current) return;
+    if (deduplicateBySequence) {
+      lastActivitySequenceRef.current = Math.max(lastActivitySequenceRef.current, event.sequence || 0);
+    }
+    const next = reduceActivity(liveActivityRef.current, event);
+    liveActivityRef.current = next;
+    setLiveActivity(next);
+  };
+
+  const applyProgressEvent = (progress: ChatJobProgress, job: ChatJobStatusResponse, fallbackLabel: string) => {
+    setActivePlanMode(progress.mode);
+    setAgentRunState(job.status === "queued" ? "queued" : "running");
     const content = progress.message || progress.active_label || fallbackLabel;
     setMessages((prev) =>
       prev.map((m) =>
@@ -676,7 +864,7 @@ export default function ChatPage() {
         const event = progressEventQueueRef.current.shift();
         if (event) {
           applyProgressEvent(event, job, fallbackLabel);
-          await delay(420);
+          await delay(160);
         }
       }
       progressDrainActiveRef.current = false;
@@ -697,25 +885,43 @@ export default function ChatPage() {
     return true;
   };
 
-  const waitForProgressEvents = async (signal?: AbortSignal) => {
-    while (progressDrainPromiseRef.current || progressEventQueueRef.current.length > 0) {
-      signal?.throwIfAborted();
-      if (progressDrainPromiseRef.current) {
-        await progressDrainPromiseRef.current;
-      } else {
-        await delay(80, signal);
+  const pollMemoryCandidates = async (
+    sessionId: string,
+    sourceMessageId: string,
+    assistantMessageId: string,
+  ) => {
+    for (const waitMs of [900, 1800, 3200]) {
+      await delay(waitMs).catch(() => undefined);
+      try {
+        const response = await api.memories("candidate", sessionId);
+        const candidates = response.memories.filter(
+          (memory) => memory.source_message_id === sourceMessageId,
+        );
+        if (candidates.length === 0) continue;
+        setMessages((current) => current.map((message) =>
+          message.id === assistantMessageId
+            ? { ...message, memoryCandidates: candidates }
+            : message
+        ));
+        setMemoryAnnouncement(
+          `${candidates.length} memory suggestion${candidates.length === 1 ? " is" : "s are"} ready for review.`,
+        );
+        return;
+      } catch {
+        // Memory extraction is optional and must never interrupt the answer.
       }
     }
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (prompt?: string, options: { useMemory?: boolean } = {}) => {
+    const text = (prompt ?? input).trim();
+    if (!text || isLoading) return;
+    const useMemory = options.useMemory ?? true;
     const requestController = new AbortController();
     activeRequestControllerRef.current?.abort();
     activeRequestControllerRef.current = requestController;
     const { signal } = requestController;
-    const text = input.trim();
-    setInput("");
+    if (!prompt) setInput("");
 
     // Guard the session-load effect before router.replace fires
     isStreamingRef.current = true;
@@ -725,7 +931,9 @@ export default function ChatPage() {
       targetSessionId = typeof crypto !== "undefined" && "randomUUID" in crypto 
         ? crypto.randomUUID() 
         : `session-${Date.now()}`;
-      router.replace(`/session/${encodeURIComponent(targetSessionId)}`);
+      pendingSessionIdRef.current = targetSessionId;
+      const chatBasePath = pathname.startsWith("/ai") ? "/ai" : "/session";
+      window.history.replaceState(null, "", `${chatBasePath}/${encodeURIComponent(targetSessionId)}`);
     }
 
     const getUniqueId = () => typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `msg-${Date.now()}-${Math.random()}`;
@@ -734,7 +942,7 @@ export default function ChatPage() {
     const researchCommand = extractResearchCommand(text);
     const investmentTicker = researchCommand?.ticker ?? extractInvestmentTicker(text);
 
-    if (researchCommand || version === "2.1") {
+    if (researchCommand || version === "2.1" || (version === "sabi" && isSabiResearchRequest(text))) {
       const seedTicker = researchCommand?.ticker ?? extractTickerForResearch(text);
       let ticker = await resolveResearchTicker(seedTicker ?? text);
       if (signal.aborted) return;
@@ -756,12 +964,8 @@ export default function ChatPage() {
       setIsLoading(true);
       setUpgradeMessage(null);
       setAgentRunState("running");
-      setAgentRunStartedAt(Date.now());
-      setUseAgentSyntheticProgress(false);
-      setActiveTool("equity_snapshot");
-      setCompletedTools([]);
+      setActivePlanMode("research");
       showLongRunningToast("Quanfora 2.1 research may take a little while.");
-      const loadingStartedAt = Date.now();
       try {
         const reportType = researchCommand?.reportType ?? detectResearchReportType(text);
         const run = await api.createEquityResearchRun({
@@ -769,49 +973,52 @@ export default function ChatPage() {
           report_type: reportType,
           research_depth: researchCommand?.depth ?? bestResearchModeForPlan(user.plan, researchDepth),
           source_surface: "ai_advisor",
+          use_memory: useMemory,
         }, signal);
+        resetLiveActivity(run.run_id, "research", "running");
         let cursor = 0;
         let latestDetail: EquityResearchRunDetail | null = null;
-        const completed = new Set<string>();
+        let streamAttempts = 0;
+        while (streamAttempts < 3) {
+          try {
+            const streamedCursor = await api.streamEquityResearchEvents(
+              run.run_id,
+              cursor,
+              (event, sequence) => {
+                cursor = Math.max(cursor, sequence);
+                for (const activityEvent of researchActivityEvents(event, sequence)) {
+                  applyActivityEvent(activityEvent, false);
+                }
+                if (event.agent_name && event.event_type === "reasoning") {
+                  setMessages((prev) => prev.map((message) => message.status === "fetching" ? { ...message, content: `${event.agent_name} is working...` } : message));
+                }
+              },
+              signal,
+            );
+            cursor = Math.max(cursor, streamedCursor);
+          } catch (error) {
+            if (signal.aborted) throw error;
+          }
+          latestDetail = await api.equityResearchRun(run.run_id, signal);
+          if (["completed", "failed", "cancelled"].includes(latestDetail.run.status)) break;
+          streamAttempts += 1;
+          await delay(400 * 2 ** streamAttempts, signal);
+        }
 
-        while (true) {
+        while (latestDetail && !["completed", "failed", "cancelled"].includes(latestDetail.run.status)) {
           const [detail, eventList] = await Promise.all([
             api.equityResearchRun(run.run_id, signal),
             api.equityResearchEvents(run.run_id, cursor, signal),
           ]);
           latestDetail = detail;
-          cursor = eventList.cursor;
-
-          const newestReasoning = [...eventList.events].reverse().find((event) => event.event_type === "reasoning" && event.agent_name);
           for (const event of eventList.events) {
-            const toolKey = toolKeyFromResearchEvent(event);
-            if (!toolKey) continue;
-
-            if (isResearchStepStarting(event)) {
-              setActiveTool(toolKey);
-            }
-            if (isResearchStepComplete(event)) {
-              completed.add(toolKey);
-              setCompletedTools(Array.from(completed));
-              setActiveTool(null);
+            cursor += 1;
+            for (const activityEvent of researchActivityEvents(event, cursor)) {
+              applyActivityEvent(activityEvent, false);
             }
           }
-
-          if (newestReasoning?.agent_name) {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.status === "fetching"
-                  ? { ...m, content: `${newestReasoning.agent_name} is working...` }
-                  : m
-              )
-            );
-          }
-
-          if (["completed", "failed", "cancelled"].includes(detail.run.status)) {
-            break;
-          }
-
-          await delay(900, signal);
+          cursor = Math.max(cursor, eventList.cursor);
+          if (!["completed", "failed", "cancelled"].includes(detail.run.status)) await delay(750, signal);
         }
 
         if (!latestDetail || latestDetail.run.status !== "completed") {
@@ -823,26 +1030,48 @@ export default function ChatPage() {
           throw new Error("The research run completed but the final decision report was unavailable.");
         }
 
-        const elapsedBeforeAnswer = Date.now() - loadingStartedAt;
-        if (elapsedBeforeAnswer < 2200) {
-          await delay(2200 - elapsedBeforeAnswer, signal);
-        }
-
+        const finalAssistantId = getUniqueId();
+        let researchSourceMessageId: string | null = null;
+        let researchMemoryStatus: ChatResponse["memory_status"] | null = null;
         if (!user.is_guest) {
-          await api.appendChatSessionMessage(targetSessionId, "user", text);
-          await api.appendChatSessionMessage(targetSessionId, "assistant", finalMarkdown, { researchReports: latestDetail.reports, overview: latestDetail.overview });
+          const savedUserMessage = await api.appendChatSessionMessage(
+            targetSessionId,
+            "user",
+            text,
+            undefined,
+            useMemory,
+          );
+          researchSourceMessageId = savedUserMessage.source_message_id;
+          researchMemoryStatus = savedUserMessage.memory_status ?? null;
+          await api.appendChatSessionMessage(targetSessionId, "assistant", finalMarkdown, {
+            researchReports: latestDetail.reports,
+            overview: latestDetail.overview,
+            source_message_id: researchSourceMessageId,
+            activity_trace: liveActivityRef.current ?? undefined,
+            ...(version === "sabi" ? {
+              selected_mode: "sabi" as const,
+              selected_capability: "research" as const,
+              action_status: "analysis_only" as const,
+            } : {}),
+          });
         }
         setMessages((prev) =>
           prev.filter((m) => m.status !== "fetching").concat({
-            id: getUniqueId(),
+            id: finalAssistantId,
             role: "assistant",
             content: finalMarkdown,
             researchTicker: latestDetail.run.ticker,
             researchRunId: latestDetail.run.run_id,
             researchReports: latestDetail.reports,
             overview: latestDetail.overview,
+            selectedCapability: version === "sabi" ? "research" : undefined,
+            sourceMessageId: researchSourceMessageId,
+            activity: liveActivityRef.current ?? undefined,
           })
         );
+        if (researchSourceMessageId && researchMemoryStatus === "maintenance_queued") {
+          void pollMemoryCandidates(targetSessionId, researchSourceMessageId, finalAssistantId);
+        }
         finishLongRunningToast(
           true,
           "Analysis complete",
@@ -868,32 +1097,26 @@ export default function ChatPage() {
           activeRequestControllerRef.current = null;
           setIsLoading(false);
           isStreamingRef.current = false;
-          setActiveTool(null);
-          setCompletedTools([]);
           setAgentRunState("running");
-          setAgentRunStartedAt(null);
-          setUseAgentSyntheticProgress(false);
         }
       }
       return;
     }
 
-    const fetchingLabel = version === "2.0"
-      ? "Running multi-agent consensus analysis..."
-      : "Analyzing market context...";
+    const fetchingLabel = version === "sabi"
+      ? "Sabi is choosing the right analysis..."
+      : version === "2.0"
+        ? "Running multi-agent consensus analysis..."
+        : "Analyzing market context...";
     const mode = apiModeFromVersion(version);
     const shouldNotifyLongRun = mode === "consensus";
     const fetchingMsg: Message = { id: getUniqueId(), role: "assistant", content: fetchingLabel, status: "fetching" };
 
     setMessages((prev) => [...prev, userMsg, fetchingMsg]);
     setIsLoading(true);
-    const loadingStartedAt = Date.now();
     setUpgradeMessage(null);
-    setActiveTool(firstChatProgressTool(mode));
-    setCompletedTools([]);
     setAgentRunState("queued");
-    setAgentRunStartedAt(null);
-    setUseAgentSyntheticProgress(false);
+    setActivePlanMode(mode === "consensus" ? "consensus" : "single");
     lastJobProgressSequenceRef.current = 0;
     progressEventQueueRef.current = [];
     progressDrainActiveRef.current = false;
@@ -908,39 +1131,72 @@ export default function ChatPage() {
 
     try {
       const remember = !user.is_guest;
-      let res;
+      let res: ChatResponse;
       try {
-        const queued = await api.chatJob(text, targetSessionId, remember, mode, signal);
+        const queued = await api.chatJob(text, targetSessionId, remember, mode, signal, useMemory);
+        resetLiveActivity(queued.job_id, mode, "queued");
+        let cursor = 0;
+        let job: ChatJobStatusResponse | null = null;
+        let streamAttempts = 0;
 
-        res = await api.waitForChatJob(queued.job_id, (job) => {
-          const appliedProgress = enqueueJobProgress(job, fetchingLabel);
-          if (job.status === "queued") {
+        const applyJobStatus = (status: ChatJobStatusResponse) => {
+          for (const event of status.activity_events ?? []) applyActivityEvent(event);
+          const appliedProgress = enqueueJobProgress(status, fetchingLabel);
+          if (status.status === "queued") {
             setAgentRunState((current) => current === "running" ? "running" : "queued");
-            const positionText = job.queue_position ? ` Position ${job.queue_position}.` : "";
+            const positionText = status.queue_position ? ` Position ${status.queue_position}.` : "";
             setMessages((prev) =>
               prev.map((m) =>
                 m.status === "fetching"
                   ? { ...m, content: `Queued for analysis.${positionText}` }
                   : m
-              )
+                )
             );
-          } else if (job.status === "running" && !appliedProgress) {
+          } else if (status.status === "running" && !appliedProgress) {
             setAgentRunState("running");
-            setAgentRunStartedAt((current) => current ?? Date.now());
             setMessages((prev) =>
               prev.map((m) =>
                 m.status === "fetching"
                   ? { ...m, content: fetchingLabel }
                   : m
-              )
+                )
             );
           }
-        }, 1500, signal);
+        };
+
+        while (streamAttempts < 3) {
+          try {
+            const streamedCursor = await api.streamChatJobEvents(
+              queued.job_id,
+              cursor,
+              (event, sequence) => {
+                cursor = Math.max(cursor, sequence);
+                applyActivityEvent(event);
+              },
+              signal,
+            );
+            cursor = Math.max(cursor, streamedCursor);
+          } catch (error) {
+            if (signal.aborted) throw error;
+          }
+          job = await api.chatJobStatus(queued.job_id, signal, cursor);
+          applyJobStatus(job);
+          if (["succeeded", "failed", "cancelled"].includes(job.status)) break;
+          streamAttempts += 1;
+          await delay(400 * 2 ** streamAttempts, signal);
+        }
+
+        if (!job || !["succeeded", "failed", "cancelled"].includes(job.status)) {
+          res = await api.waitForChatJob(queued.job_id, applyJobStatus, 750, signal);
+        } else if (job.status === "succeeded") {
+          res = job.result ?? { response: "", session_id: targetSessionId };
+        } else {
+          throw new Error(job.error?.message ?? `Chat job ${job.status}`);
+        }
       } catch (queueError) {
         if (!isRedisUnavailableError(queueError)) throw queueError;
         setAgentRunState("running");
-        setAgentRunStartedAt(Date.now());
-        setUseAgentSyntheticProgress(true);
+        resetLiveActivity(`direct-${assistantMsgId}`, mode, "running");
         setMessages((prev) =>
           prev.map((m) =>
             m.status === "fetching"
@@ -948,17 +1204,21 @@ export default function ChatPage() {
               : m
           )
         );
-        res = await api.chat(text, targetSessionId, remember, mode, signal);
+        res = await api.chat(text, targetSessionId, remember, mode, signal, useMemory);
+        const directActivity = activityFromTrace(res.activity_trace);
+        if (directActivity) {
+          liveActivityRef.current = directActivity;
+          setLiveActivity(directActivity);
+        }
       }
       const consensusOpinions = res.consensus?.opinions;
       const overview = res.overview;
+      const selectedCapability = version === "sabi" ? res.selected_capability : undefined;
+      const completedActivity = activityFromTrace(res.activity_trace)
+        ?? activityFromTrace(liveActivityRef.current ? { ...liveActivityRef.current, status: "completed" as const } : undefined);
 
-      const minimumPlanDuration = mode === "consensus" ? 3200 : 1800;
-      const elapsedBeforeAnswer = Date.now() - loadingStartedAt;
-      if (elapsedBeforeAnswer < minimumPlanDuration) {
-        await delay(minimumPlanDuration - elapsedBeforeAnswer, signal);
-      }
-      await waitForProgressEvents(signal);
+      // Never hold a completed answer open solely to finish decorative progress steps.
+      progressEventQueueRef.current = [];
 
       setMessages((prev) =>
         prev.filter((m) => m.status !== "fetching").concat({
@@ -967,6 +1227,11 @@ export default function ChatPage() {
           content: res.response || "I'm sorry, I couldn't process that request.",
           consensusOpinions,
           overview,
+          selectedCapability,
+          grounding: res.grounding,
+          sourceMessageId: res.source_message_id,
+          memoryUsed: res.memory_used,
+          activity: completedActivity,
         }).concat(investmentTicker ? [{
           id: getUniqueId(),
           role: "assistant",
@@ -974,6 +1239,9 @@ export default function ChatPage() {
           researchTicker: investmentTicker,
         }] : [])
       );
+      if (res.source_message_id && res.memory_status === "maintenance_queued") {
+        void pollMemoryCandidates(targetSessionId, res.source_message_id, assistantMsgId);
+      }
       if (shouldNotifyLongRun) {
         finishLongRunningToast(true, "Analysis complete", "Quanfora 2.0 consensus response is ready.");
       }
@@ -1002,11 +1270,7 @@ export default function ChatPage() {
         activeRequestControllerRef.current = null;
         setIsLoading(false);
         isStreamingRef.current = false;
-        setActiveTool(null);
-        setCompletedTools([]);
         setAgentRunState("running");
-        setAgentRunStartedAt(null);
-        setUseAgentSyntheticProgress(false);
       }
     }
   };
@@ -1036,8 +1300,94 @@ export default function ChatPage() {
     event.target.value = "";
   };
 
+  const fillComposer = (prompt: string) => {
+    setInput(prompt);
+    setIsActive(true);
+    window.requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.style.height = "auto";
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
+      textarea.scrollIntoView({ block: "nearest", behavior: prefersReducedMotion ? "auto" : "smooth" });
+    });
+  };
+
   const hasConversation = messages.some((message) => message.id !== "welcome");
   const isStarterState = !hasConversation && !isHistoryLoading;
+  const selectedDrawerActivity = useMemo(() => {
+    if (!activityDrawerRunId) return null;
+    if (liveActivity && (liveActivity.run_id === activityDrawerRunId || activityDrawerRunId === "preparing")) return liveActivity;
+    return messages.find((message) => message.activity?.run_id === activityDrawerRunId)?.activity ?? null;
+  }, [activityDrawerRunId, liveActivity, messages]);
+  const promptNavigationItems = useMemo(
+    () => messages
+      .filter((message) => message.role === "user")
+      .map((message) => ({ id: message.id, content: message.content })),
+    [messages]
+  );
+
+  const copyResponse = async (message: Message) => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopiedMessageId(message.id);
+      window.setTimeout(() => setCopiedMessageId((current) => current === message.id ? null : current), 1500);
+    } catch {
+      showToast({ title: "Copy failed", message: "Your browser could not access the clipboard.", variant: "error" });
+    }
+  };
+
+  const editMessage = (message: Message) => {
+    setEditingMessageId(message.id);
+    setEditingDraft(message.content);
+  };
+
+  const regenerateTurn = async (
+    userMessage: Message,
+    prompt: string,
+    responseMessageId?: string,
+    useMemory = true,
+  ) => {
+    const nextPrompt = prompt.trim();
+    const messageIndex = messages.findIndex((item) => item.id === userMessage.id);
+    if (!nextPrompt || messageIndex < 0 || isLoading || regeneratingMessageId) return;
+
+    const keepMessages = messages.slice(0, messageIndex);
+    const keepCount = keepMessages.filter((item) => item.id !== "welcome").length;
+    setRegeneratingMessageId(responseMessageId ?? userMessage.id);
+
+    try {
+      if (!user.is_guest && activeSessionId !== "default") {
+        await api.truncateChatSessionMessages(activeSessionId, keepCount);
+      }
+      setMessages(keepMessages);
+      setEditingMessageId(null);
+      setEditingDraft("");
+      await handleSend(nextPrompt, { useMemory });
+    } catch (error) {
+      showToast({
+        title: "Unable to regenerate",
+        message: error instanceof Error ? error.message : "The conversation could not be updated.",
+        variant: "error",
+      });
+    } finally {
+      setRegeneratingMessageId(null);
+    }
+  };
+
+  const retryMessage = (message: Message) => {
+    const messageIndex = messages.findIndex((item) => item.id === message.id);
+    const prompt = messageIndex > 0 ? messages[messageIndex - 1] : null;
+    if (prompt?.role === "user") void regenerateTurn(prompt, prompt.content, message.id);
+  };
+
+  const retryMessageWithoutMemory = (message: Message) => {
+    const messageIndex = messages.findIndex((item) => item.id === message.id);
+    const prompt = messageIndex > 0 ? messages[messageIndex - 1] : null;
+    if (prompt?.role === "user") {
+      void regenerateTurn(prompt, prompt.content, message.id, false);
+    }
+  };
 
   const renderComposer = (placement: "center" | "dock") => {
     const composerExpanded = Boolean(input);
@@ -1075,10 +1425,9 @@ export default function ChatPage() {
               setIsActive(true);
               textareaRef.current?.focus();
             }}
-            className="relative mx-auto w-full overflow-visible border border-white/[0.06] bg-white/[0.045] text-white transition-colors cursor-text"
+            className="relative mx-auto w-full overflow-visible border border-transparent bg-white/[0.045] text-white cursor-text"
             animate={{
               borderRadius: composerExpanded ? 28 : 999,
-              borderColor: isActive || input ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)",
               backgroundColor: isActive || input ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.04)",
               boxShadow: isActive || input ? "0 14px 42px rgba(0,0,0,0.24)" : "var(--shadow-accent-composer)",
               minHeight: composerExpanded ? 64 : 52,
@@ -1088,6 +1437,7 @@ export default function ChatPage() {
           >
             <div className="relative flex items-center gap-2">
               <button
+                ref={uploadTriggerRef}
                 type="button"
                 aria-label="Add files"
                 aria-expanded={uploadMenuOpen}
@@ -1119,22 +1469,35 @@ export default function ChatPage() {
                   )}
                 />
                 <div className="absolute inset-0 pointer-events-none flex items-center px-3">
-                  <AnimatePresence mode="wait">
+                  <AnimatePresence mode="wait" initial={false}>
                     {showPlaceholder && !isActive && !input && (
-                      <motion.span
-                        key={placeholderIndex}
-                        className="max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-5 text-white/24"
-                        variants={placeholderContainerVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                      >
-                        {PLACEHOLDERS[placeholderIndex].split("").map((char, i) => (
-                          <motion.span key={i} variants={letterVariants} style={{ display: "inline-block" }}>
-                            {char === " " ? "\u00A0" : char}
-                          </motion.span>
-                        ))}
-                      </motion.span>
+                      prefersReducedMotion ? (
+                        <span
+                          key={placeholderIndex}
+                          className="block max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-5 text-white/24"
+                        >
+                          {PLACEHOLDERS[placeholderIndex]}
+                        </span>
+                      ) : (
+                        <motion.span
+                          key={placeholderIndex}
+                          className="block max-w-full select-none overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-5 text-white/24"
+                          variants={PLACEHOLDER_CONTAINER_VARIANTS}
+                          initial="initial"
+                          animate="animate"
+                          exit="exit"
+                        >
+                          {Array.from(PLACEHOLDERS[placeholderIndex]).map((character, index) => (
+                            <motion.span
+                              key={`${character}-${index}`}
+                              className="inline-block"
+                              variants={PLACEHOLDER_LETTER_VARIANTS}
+                            >
+                              {character === " " ? "\u00a0" : character}
+                            </motion.span>
+                          ))}
+                        </motion.span>
+                      )
                     )}
                   </AnimatePresence>
                 </div>
@@ -1148,11 +1511,20 @@ export default function ChatPage() {
                   visible={version === "2.1"}
                 />
                 <ModelSelector placement={placement === "dock" ? "top" : "bottom"} compact />
+                {!user.is_guest && (
+                  <MessageActionButton
+                    label="Manage AI memory"
+                    onClick={() => setMemoryDialogOpen(true)}
+                    active={memoryDialogOpen}
+                  >
+                    <Brain className="size-4" />
+                  </MessageActionButton>
+                )}
                 <Button
-                  onClick={handleSend}
+                  onClick={() => void handleSend()}
                   disabled={isLoading || !input.trim()}
                   size="icon"
-                  className="on-accent accent-gradient-surface h-10 w-10 shrink-0 rounded-full shadow-[var(--shadow-primary-action)] hover:shadow-[var(--shadow-primary-action-hover)] disabled:opacity-45"
+                  className="on-accent theme-accent-surface h-10 w-10 shrink-0 rounded-full disabled:opacity-45"
                   aria-label="Send message"
                 >
                   <Send className="w-4 h-4" />
@@ -1162,12 +1534,15 @@ export default function ChatPage() {
             <AnimatePresence>
               {uploadMenuOpen && (
                 <motion.div
-                  initial={{ opacity: 0, y: -8, scale: 0.98, filter: "blur(8px)" }}
-                  animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-                  exit={{ opacity: 0, y: -8, scale: 0.98, filter: "blur(8px)" }}
-                  transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                  ref={uploadMenuRef}
+                  role="group"
+                  aria-label="Attach files"
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: placement === "dock" ? 8 : -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: placement === "dock" ? 8 : -8, scale: 0.98 }}
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.18, ease: [0.16, 1, 0.3, 1] }}
                   className={cn(
-                    "absolute left-0 right-0 z-40 rounded-[1.45rem] border border-white/[0.08] bg-[#202124]/95 p-2 shadow-[0_24px_70px_rgba(0,0,0,0.46)] backdrop-blur-xl",
+                    "absolute left-0 z-40 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-popover-strong)] p-2 shadow-[var(--shadow-popover)]",
                     placement === "dock" ? "bottom-[calc(100%+0.75rem)]" : "top-[calc(100%+0.75rem)]"
                   )}
                   onClick={(event) => event.stopPropagation()}
@@ -1213,26 +1588,39 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden">
+      <p className="sr-only" aria-live="polite">{memoryAnnouncement}</p>
       {/* Messages */}
-      <div ref={scrollRef} className="relative flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-4 sm:px-8 sm:pb-4 sm:pt-6">
+      <div ref={scrollRef} data-testid="chat-scroll-container" className="relative flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-4 sm:px-8 sm:pb-4 sm:pt-6">
         {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
-        {isHistoryLoading && (
-          <Card className="mx-auto max-w-fit rounded-xl border-indigo-primary/30 bg-indigo-primary/10 px-4 py-2 text-sm text-indigo-primary shadow-none">
-            <CardContent className="flex items-center gap-3 p-0">
-              <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-              <span>Loading chat history...</span>
-            </CardContent>
-          </Card>
-        )}
-
+        <LoadingRegion
+          loading={isHistoryLoading}
+          label="Loading chat history"
+          skeleton={(
+            <div className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-5xl flex-col gap-5 py-4">
+              <div className="ml-auto w-[min(72%,28rem)] rounded-2xl bg-indigo-primary/10 px-4 py-4">
+                <SkeletonText lines={2} widths={["92%", "56%"]} />
+              </div>
+              <div className="w-[min(86%,42rem)] rounded-2xl bg-[var(--surface-card)] px-5 py-5">
+                <SkeletonBlock className="mb-4 h-2.5 w-24 rounded-sm" />
+                <SkeletonText lines={5} widths={["96%", "88%", "100%", "74%", "52%"]} />
+                <div className="mt-5 flex gap-2">
+                  {Array.from({ length: 4 }, (_, index) => <SkeletonBlock key={index} className="size-8 rounded-lg" />)}
+                </div>
+              </div>
+              <div className="ml-auto w-[min(58%,22rem)] rounded-2xl bg-indigo-primary/10 px-4 py-4">
+                <SkeletonText lines={1} widths={["78%"]} />
+              </div>
+            </div>
+          )}
+        >
         <AnimatePresence mode="wait">
           {isStarterState ? (
             <motion.div
               key="starter"
-              initial={{ opacity: 0, y: 16, filter: "blur(8px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: -12, filter: "blur(8px)" }}
-              transition={{ duration: 0.22 }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
               className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-5xl flex-col items-center justify-center gap-7 py-8 sm:gap-8 lg:min-h-[calc(100vh-12rem)]"
             >
               <motion.div
@@ -1268,78 +1656,181 @@ export default function ChatPage() {
           ) : (
             <motion.div
               key="conversation"
-              initial={{ opacity: 0, y: 12, filter: "blur(6px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: 8, filter: "blur(6px)" }}
-              transition={{ duration: 0.2 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.16 }}
               className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-5xl flex-col gap-4"
             >
               <AnimatePresence>
                 {messages.filter((msg) => msg.id !== "welcome").map((msg) => (
                   <motion.div
                     key={msg.id}
+                    id={msg.role === "user" ? promptAnchorId(msg.id) : undefined}
+                    data-chat-prompt={msg.role === "user" ? msg.id : undefined}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     className={cn("flex w-full min-w-0", msg.role === "user" ? "justify-end" : "justify-start")}
                   >
                     {msg.status === "fetching" ? (
                       <div className="w-full max-w-[92%] sm:max-w-[75%]">
-                        <Plan
-                          mode={version === "2.1" ? "research" : version === "2.0" ? "consensus" : "single"}
-                          isActive={true}
-                          activeTool={activeTool}
-                          completedTools={completedTools}
-                          runState={version === "2.1" ? "running" : agentRunState}
-                          runStartedAt={version === "2.1" ? null : agentRunStartedAt}
-                          useSyntheticFallback={useAgentSyntheticProgress}
-                        />
+                        {liveActivity ? <AgentActivitySummary activity={liveActivity} onOpen={() => setActivityDrawerRunId(liveActivity.run_id)} /> : (
+                          <AgentActivitySummary
+                            activity={{ ...emptyActivity("preparing", activePlanMode), status: agentRunState }}
+                            onOpen={() => setActivityDrawerRunId("preparing")}
+                          />
+                        )}
                       </div>
                     ) : (
                       <div
                         className={cn(
-                          "min-w-0 max-w-[92%] break-words rounded-2xl px-4 py-3 text-[15px] leading-relaxed sm:max-w-[75%] sm:px-5 sm:py-4",
-                          msg.role === "user"
-                            ? "on-accent accent-gradient-surface glow-indigo whitespace-pre-wrap"
-                            : "glass text-white/90"
+                          "min-w-0 max-w-[92%] break-words text-[15px] leading-relaxed sm:max-w-[75%]",
+                          msg.role === "user" ? "whitespace-pre-wrap" : "text-white/90",
+                          editingMessageId === msg.id && "w-full"
                         )}
                       >
                         {msg.role === "assistant" ? (
-                          msg.researchTicker ? (
-                            <div className="space-y-3">
-                              <ResearchMessageTabs content={msg.content} reports={msg.researchReports} overview={msg.overview} />
-                              <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
-                                <p className="text-sm font-semibold text-white">
-                                  {msg.researchRunId ? "Quanfora 2.1 Agent Reports" : "Generate a full Quanfora 2.1 Research Report?"}
-                                </p>
-                                <p className="mt-1 text-xs leading-5 text-white/55">
-                                  {msg.researchRunId
-                                    ? `Open the full workspace to review each analyst report, tool event, and the shared data snapshot for ${msg.researchTicker}.`
-                                    : `Run market, news, sentiment, fundamentals, trading, and risk-management agents for ${msg.researchTicker}.`}
-                                </p>
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  <Link
-                                    href={msg.researchRunId ? `/research/${msg.researchRunId}?from=ai_advisor` : `/research?ticker=${encodeURIComponent(msg.researchTicker)}&source=ai_advisor&report_type=investment`}
-                                    className="inline-flex h-9 items-center rounded-lg bg-indigo-primary px-3 text-xs font-semibold text-white hover:bg-indigo-primary/90"
+                          <div className="space-y-2">
+                            {msg.activity && <AgentActivitySummary activity={msg.activity} onOpen={() => setActivityDrawerRunId(msg.activity?.run_id ?? null)} />}
+                            <div className="space-y-2 py-1 text-[var(--text-primary)]" data-testid="assistant-response">
+                                {msg.selectedCapability && (
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-subtle)]">
+                                    Sabi used {sabiCapabilityLabel(msg.selectedCapability)}
+                                  </p>
+                                )}
+                                {Boolean(msg.memoryUsed?.length) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setMemoryDialogOpen(true)}
+                                    className="inline-flex items-center gap-1.5 rounded-md text-[11px] text-indigo-300 transition-colors duration-150 hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 motion-reduce:transition-none"
                                   >
-                                    {msg.researchRunId ? "View full agent reports" : "Generate Full Report"}
-                                  </Link>
-                                  {!msg.researchRunId && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setInput(`Give me a quick answer on ${msg.researchTicker}.`)}
-                                      className="inline-flex h-9 items-center rounded-lg border border-white/[0.10] px-3 text-xs font-semibold text-white/60 hover:text-white"
-                                    >
-                                      Quick Answer
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
+                                    <Brain className="size-3.5" aria-hidden="true" />
+                                    Used {msg.memoryUsed?.length} saved preference{msg.memoryUsed?.length === 1 ? "" : "s"}
+                                  </button>
+                                )}
+                                <AgentSources sources={messageActivitySources(msg)} />
+                                {msg.researchTicker ? (
+                                  <div className="space-y-3">
+                                    <ResearchMessageTabs content={msg.content} reports={msg.researchReports} overview={msg.overview} onQuestionSelect={fillComposer} />
+                                    <div className="rounded-xl border border-indigo-primary/25 bg-indigo-primary/10 p-3">
+                                      <p className="text-sm font-semibold text-white">
+                                        {msg.researchRunId ? "Quanfora 2.1 Agent Reports" : "Generate a full Quanfora 2.1 Research Report?"}
+                                      </p>
+                                      <p className="mt-1 text-xs leading-5 text-white/55">
+                                        {msg.researchRunId
+                                          ? `Open the full workspace to review each analyst report, tool event, and the shared data snapshot for ${msg.researchTicker}.`
+                                          : `Run market, news, sentiment, fundamentals, trading, and risk-management agents for ${msg.researchTicker}.`}
+                                      </p>
+                                      <div className="mt-3 flex flex-wrap gap-2">
+                                        <Link
+                                          href={msg.researchRunId ? `/research/${msg.researchRunId}?from=ai_advisor` : `/research?ticker=${encodeURIComponent(msg.researchTicker)}&source=ai_advisor&report_type=investment`}
+                                          className="inline-flex h-9 items-center rounded-lg bg-indigo-primary px-3 text-xs font-semibold text-white hover:bg-indigo-primary/90"
+                                        >
+                                          {msg.researchRunId ? "View full agent reports" : "Generate Full Report"}
+                                        </Link>
+                                        {!msg.researchRunId && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setInput(`Give me a quick answer on ${msg.researchTicker}.`)}
+                                            className="inline-flex h-9 items-center rounded-lg border border-white/[0.10] px-3 text-xs font-semibold text-white/60 hover:text-white"
+                                          >
+                                            Quick Answer
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <AssistantMessageContent content={msg.content} consensusOpinions={msg.consensusOpinions} overview={msg.overview} onQuestionSelect={fillComposer} />
+                                )}
                             </div>
-                          ) : (
-                            <AssistantMessageContent content={msg.content} consensusOpinions={msg.consensusOpinions} overview={msg.overview} />
-                          )
+                            {msg.memoryCandidates?.map((memory) => (
+                              <MemoryCandidateCard
+                                key={memory.id}
+                                memory={memory}
+                                onResolved={(memoryId) => {
+                                  setMessages((current) => current.map((message) =>
+                                    message.id === msg.id
+                                      ? {
+                                          ...message,
+                                          memoryCandidates: message.memoryCandidates?.filter((item) => item.id !== memoryId),
+                                        }
+                                      : message
+                                  ));
+                                }}
+                              />
+                            ))}
+                            {msg.content && !isLoading && (
+                              <div className="flex items-center gap-1 px-1 text-white/45" aria-label="Response actions">
+                                <MessageActionButton label={copiedMessageId === msg.id ? "Copied" : "Copy response"} onClick={() => copyResponse(msg)}>
+                                  <AnimatePresence mode="wait" initial={false}>
+                                    <motion.span key={copiedMessageId === msg.id ? "copied" : "copy"} initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.72, rotate: -12 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.72, rotate: 12 }} transition={{ duration: prefersReducedMotion ? 0 : 0.14 }}>
+                                      {copiedMessageId === msg.id ? <Check className="size-4 text-emerald-300" /> : <Clipboard className="size-4" />}
+                                    </motion.span>
+                                  </AnimatePresence>
+                                </MessageActionButton>
+                                <MessageActionButton label="Good response" active={feedback[msg.id] === "up"} onClick={() => setFeedback((current) => ({ ...current, [msg.id]: current[msg.id] === "up" ? null : "up" }))}>
+                                  <ThumbsUp className="size-4" />
+                                </MessageActionButton>
+                                <MessageActionButton label="Bad response" active={feedback[msg.id] === "down"} onClick={() => setFeedback((current) => ({ ...current, [msg.id]: current[msg.id] === "down" ? null : "down" }))}>
+                                  <ThumbsDown className="size-4" />
+                                </MessageActionButton>
+                                <MessageActionButton label="Try again" disabled={Boolean(regeneratingMessageId)} onClick={() => retryMessage(msg)}>
+                                  <RotateCcw className={cn("size-4", regeneratingMessageId === msg.id && "animate-spin motion-reduce:animate-none")} />
+                                </MessageActionButton>
+                                {Boolean(msg.memoryUsed?.length) && (
+                                  <MessageActionButton label="Try again without saved memory" disabled={Boolean(regeneratingMessageId)} onClick={() => retryMessageWithoutMemory(msg)}>
+                                    <Brain className="size-4" />
+                                  </MessageActionButton>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         ) : (
-                          msg.content
+                          <div className="space-y-1.5">
+                            <div className="on-accent theme-accent-surface rounded-2xl px-4 py-3 sm:px-5 sm:py-4">
+                              {editingMessageId === msg.id ? (
+                                <div className="space-y-4">
+                                  <textarea
+                                    autoFocus
+                                    value={editingDraft}
+                                    onChange={(event) => setEditingDraft(event.target.value)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Escape") {
+                                        setEditingMessageId(null);
+                                        setEditingDraft("");
+                                      }
+                                      if (event.key === "Enter" && !event.shiftKey) {
+                                        event.preventDefault();
+                                        void regenerateTurn(msg, editingDraft);
+                                      }
+                                    }}
+                                    aria-label="Edit message text"
+                                    rows={Math.min(8, Math.max(2, editingDraft.split("\n").length))}
+                                    className="block min-h-12 max-h-64 w-full resize-y overflow-y-auto border-0 bg-transparent p-0 text-[15px] leading-relaxed text-white outline-none placeholder:text-white/45 focus:ring-0"
+                                  />
+                                  <div className="flex justify-end gap-2">
+                                    <Button type="button" variant="ghost" size="sm" onClick={() => { setEditingMessageId(null); setEditingDraft(""); }} className="rounded-full text-white/75 hover:bg-white/10 hover:text-white">Cancel</Button>
+                                    <Button type="button" size="sm" disabled={!editingDraft.trim() || Boolean(regeneratingMessageId)} onClick={() => void regenerateTurn(msg, editingDraft)} className="rounded-full bg-white text-black hover:bg-white/90">Send</Button>
+                                  </div>
+                                </div>
+                              ) : msg.content}
+                            </div>
+                            {editingMessageId !== msg.id && !isLoading && (
+                              <div className="flex justify-end gap-1 text-white/45" aria-label="Message actions">
+                                <MessageActionButton label={copiedMessageId === msg.id ? "Copied" : "Copy message"} onClick={() => copyResponse(msg)}>
+                                  <AnimatePresence mode="wait" initial={false}>
+                                    <motion.span key={copiedMessageId === msg.id ? "copied" : "copy"} initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.72, rotate: -12 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.72, rotate: 12 }} transition={{ duration: prefersReducedMotion ? 0 : 0.14 }}>
+                                      {copiedMessageId === msg.id ? <Check className="size-4 text-emerald-300" /> : <Clipboard className="size-4" />}
+                                    </motion.span>
+                                  </AnimatePresence>
+                                </MessageActionButton>
+                                <MessageActionButton label="Edit message" onClick={() => editMessage(msg)}>
+                                  <Pencil className="size-4" />
+                                </MessageActionButton>
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
@@ -1349,11 +1840,26 @@ export default function ChatPage() {
             </motion.div>
           )}
         </AnimatePresence>
+        </LoadingRegion>
       </div>
+      <PromptNavigator prompts={promptNavigationItems} scrollContainerRef={scrollRef} />
       {!isStarterState && (
-        <div className="sticky bottom-0 z-20 shrink-0 border-t border-white/[0.04] bg-[#050608]/95 pt-2 shadow-[0_-24px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+        <div className="sticky bottom-0 z-20 shrink-0 border-t border-transparent bg-[#050608]/95 pt-2 shadow-[0_-24px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl">
           {renderComposer("dock")}
         </div>
+      )}
+      <AgentActivityDrawer
+        activity={selectedDrawerActivity}
+        open={Boolean(activityDrawerRunId && selectedDrawerActivity)}
+        onOpenChange={(open) => {
+          if (!open) setActivityDrawerRunId(null);
+        }}
+      />
+      {!user.is_guest && (
+        <AgentMemoryDialog
+          open={memoryDialogOpen}
+          onOpenChange={setMemoryDialogOpen}
+        />
       )}
     </div>
   );
@@ -1401,7 +1907,7 @@ function ResearchModeSelector({
         <SlidersHorizontal className="size-4 text-cyan-300" />
         <span className="hidden md:inline">Research</span>
         <span className="hidden sm:inline text-[var(--text-subtle)]">{active.label}</span>
-        <ChevronDown className="size-4 text-[var(--text-subtle)]" />
+        <ChevronDown className={cn("size-4 text-[var(--text-subtle)] transition-transform duration-150 motion-reduce:transition-none", open && "rotate-180")} />
       </button>
 
       <AnimatePresence>
@@ -1432,7 +1938,7 @@ function ResearchModeSelector({
                     setOpen(false);
                   }}
                   className={cn(
-                    "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all",
+                    "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left",
                     isActive
                       ? "bg-[var(--surface-selected)] text-[var(--text-primary)] shadow-[var(--shadow-control)]"
                       : "text-[var(--text-secondary)] hover:bg-[var(--surface-selected)]/50",
@@ -1464,13 +1970,13 @@ function ResearchModeSelector({
   );
 }
 
-function ResearchMessageTabs({ content, reports, overview }: { content: string; reports?: EquityResearchReport[]; overview?: Overview | null }) {
+function ResearchMessageTabs({ content, reports, overview, onQuestionSelect }: { content: string; reports?: EquityResearchReport[]; overview?: Overview | null; onQuestionSelect: (question: string) => void }) {
   const [active, setActive] = useState("final");
   const reportTabs = (reports ?? []).filter((report) => report.markdown && report.markdown.trim());
   if (reportTabs.length === 0) {
     return (
       <div className="space-y-3">
-        {overview && <OverviewCard overview={overview} />}
+        {overview && <OverviewCard overview={overview} onQuestionSelect={onQuestionSelect} />}
         <Markdown content={content} />
       </div>
     );
@@ -1479,7 +1985,7 @@ function ResearchMessageTabs({ content, reports, overview }: { content: string; 
 
   return (
     <div className="space-y-3">
-      {overview && <OverviewCard overview={overview} />}
+      {overview && <OverviewCard overview={overview} onQuestionSelect={onQuestionSelect} />}
       <ResponseTabs
         tabs={[{ id: "final", label: "Report" }, ...reportTabs.map((report) => ({ id: report.report_id, label: report.agent_name }))]}
         active={active}
@@ -1539,13 +2045,13 @@ function ResponseTabs({ tabs, active, onChange }: { tabs: Array<{ id: string; la
   );
 }
 
-function AssistantMessageContent({ content, consensusOpinions, overview }: { content: string; consensusOpinions?: ConsensusOpinion[]; overview?: Overview | null }) {
+function AssistantMessageContent({ content, consensusOpinions, overview, onQuestionSelect }: { content: string; consensusOpinions?: ConsensusOpinion[]; overview?: Overview | null; onQuestionSelect: (question: string) => void }) {
   const prediction = parsePredictionSummary(content);
 
   if (consensusOpinions?.length) {
     return (
       <div className="space-y-3">
-        {overview && <OverviewCard overview={overview} />}
+        {overview && <OverviewCard overview={overview} onQuestionSelect={onQuestionSelect} />}
         <ConsensusMessageTabs content={content} opinions={consensusOpinions} />
       </div>
     );
@@ -1554,7 +2060,7 @@ function AssistantMessageContent({ content, consensusOpinions, overview }: { con
   if (!prediction) {
     return (
       <div className="space-y-3">
-        {overview && <OverviewCard overview={overview} />}
+        {overview && <OverviewCard overview={overview} onQuestionSelect={onQuestionSelect} />}
         <Markdown content={content} />
       </div>
     );
@@ -1570,7 +2076,7 @@ function AssistantMessageContent({ content, consensusOpinions, overview }: { con
 
   return (
     <div className="space-y-3">
-      {overview && <OverviewCard overview={overview} />}
+      {overview && <OverviewCard overview={overview} onQuestionSelect={onQuestionSelect} />}
       <div className="rounded-xl border border-white/[0.10] bg-white/[0.04] p-3">
         <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
           {rows.map(([label, value]) => (
@@ -1607,7 +2113,7 @@ function SuggestionBubble({
     <button
       type="button"
       onClick={onClick}
-      className="group inline-flex max-w-[16rem] items-center gap-2 rounded-full border border-white/[0.08] bg-[#17181d]/95 px-3 py-2 text-left text-xs text-white/72 shadow-[0_14px_44px_rgba(0,0,0,0.34)] backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:border-indigo-primary/35 hover:bg-[#1e2028] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+      className="group inline-flex max-w-[16rem] items-center gap-2 rounded-full border border-white/[0.08] bg-[#17181d]/95 px-3 py-2 text-left text-xs text-white/72 shadow-[0_14px_44px_rgba(0,0,0,0.34)] backdrop-blur-xl transition-colors duration-150 hover:border-indigo-primary/35 hover:bg-[#1e2028] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
     >
       <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-indigo-primary/14 text-indigo-primary ring-1 ring-indigo-primary/20">
         <Icon className="size-3.5" />

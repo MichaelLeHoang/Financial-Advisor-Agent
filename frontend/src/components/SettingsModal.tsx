@@ -1,16 +1,21 @@
 "use client";
 
-import { useEffect, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { api, type NewsDigestPreferenceRequest } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { APP_APPEARANCE_OPTIONS, type AppAppearancePreference } from "@/lib/app-theme";
 
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
-    settings: { model: string; theme: string; risk: string; quantum: string };
-    setSettings: (s: { model: string; theme: string; risk: string; quantum: string }) => void;
+    settings: { model: string; theme: string; appearance: AppAppearancePreference; risk: string; quantum: string };
+    setSettings: (s: { model: string; theme: string; appearance: AppAppearancePreference; risk: string; quantum: string }) => void;
 }
 
 const THEMES = [
@@ -50,9 +55,30 @@ const THEMES = [
         ring: "rgba(239, 68, 68, 0.32)",
         shadow: "0 0 0 1px rgba(239, 68, 68, 0.2), 0 12px 30px rgba(239, 68, 68, 0.22), inset 0 1px 0 rgba(255, 230, 232, 0.11)",
     },
+    {
+        name: "System",
+        primary: "#a3a3a3",
+        secondary: "#fafafa",
+        label: "System",
+        surface: "var(--surface-card)",
+        hover: "var(--surface-card-hover)",
+        selected: "var(--surface-selected)",
+        border: "var(--theme-border-strong)",
+        ring: "rgba(99, 102, 241, 0.32)",
+        shadow: "var(--shadow-control)",
+    },
 ];
 
+const APPEARANCE_DESCRIPTIONS: Record<AppAppearancePreference, string> = {
+    Solid: "Crisp opaque surfaces",
+    Glass: "Translucent, softly blurred panels",
+};
+
 export default function SettingsModal({ isOpen, onClose, settings, setSettings }: SettingsModalProps) {
+    const { user } = useAuth();
+    const [digest, setDigest] = useState<NewsDigestPreferenceRequest>({ is_enabled: false, timezone: "UTC", local_time: "08:00", max_symbols: 20 });
+    const [digestLoading, setDigestLoading] = useState(false);
+    const [digestSaving, setDigestSaving] = useState(false);
     useEffect(() => {
         if (!isOpen) return;
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -61,6 +87,36 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [isOpen, onClose]);
+
+    useEffect(() => {
+        if (!isOpen || user.is_guest) return;
+        let canceled = false;
+        setDigestLoading(true);
+        api.newsDigestPreferences()
+            .then((preference) => {
+                if (!canceled) setDigest({ is_enabled: preference.is_enabled, timezone: preference.timezone, local_time: preference.local_time, max_symbols: preference.max_symbols });
+            })
+            .catch(() => {
+                if (!canceled) setDigest((current) => ({ ...current, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" }));
+            })
+            .finally(() => { if (!canceled) setDigestLoading(false); });
+        return () => { canceled = true; };
+    }, [isOpen, user.is_guest]);
+
+    const saveAndClose = async () => {
+        if (!user.is_guest) {
+            setDigestSaving(true);
+            try {
+                await api.updateNewsDigestPreferences(digest);
+            } catch (error) {
+                toast.error("Could not save news digest preferences", { description: error instanceof Error ? error.message : "Try again shortly." });
+                setDigestSaving(false);
+                return;
+            }
+            setDigestSaving(false);
+        }
+        onClose();
+    };
 
     if (!isOpen) return null;
 
@@ -91,7 +147,7 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                             aria-label="Close settings"
                             className="group inline-flex size-9 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                         >
-                            <img src="/close-svgrepo-com.svg" alt="" aria-hidden="true" className="size-5 opacity-70 transition-[opacity,filter] duration-200 group-hover:opacity-100 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" />
+                            <img src="/close-svgrepo-com.svg" alt="" aria-hidden="true" className="size-5 opacity-70 transition-opacity duration-200 group-hover:opacity-100" />
                         </button>
                     </CardHeader>
 
@@ -99,14 +155,15 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                         <div className="min-h-0 flex-1 space-y-7 overflow-y-auto pr-1 sm:space-y-8 sm:pr-2">
                     {/* Theme */}
                     <div className="space-y-4">
-                        <label className="text-sm font-bold text-white/40 uppercase tracking-widest">Visual Theme</label>
-                        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+                        <h2 className="text-sm font-bold text-white/40 uppercase tracking-widest">Visual Theme</h2>
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
                             {THEMES.map((t) => (
                                 <Button
                                     key={t.name}
                                     type="button"
                                     variant="outline"
                                     data-selected={settings.theme === t.name}
+                                    aria-pressed={settings.theme === t.name}
                                     onClick={() => setSettings({ ...settings, theme: t.name })}
                                     style={{
                                         "--theme-option-surface": t.surface,
@@ -133,14 +190,74 @@ export default function SettingsModal({ isOpen, onClose, settings, setSettings }
                         </div>
                     </div>
 
+                    <div className="space-y-4">
+                        <div>
+                            <h2 className="text-sm font-bold uppercase tracking-widest text-white/40">Daily market brief</h2>
+                            <p className="mt-1 text-sm text-[var(--text-muted)]">A concise news email personalized from up to 20 symbols across your watchlists.</p>
+                        </div>
+                        {user.is_guest ? (
+                            <p className="rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-4 text-sm text-[var(--text-muted)]">Sign in to schedule a daily market brief.</p>
+                        ) : digestLoading ? (
+                            <div className="flex h-24 items-center justify-center text-sm text-[var(--text-muted)]"><Loader2 className="mr-2 size-4 animate-spin" /> Loading email preferences</div>
+                        ) : (
+                            <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-4">
+                                <label className="flex cursor-pointer items-start justify-between gap-4">
+                                    <span><span className="block text-sm font-semibold">Send my daily brief</span><span className="mt-1 block text-xs text-[var(--text-muted)]">When no watchlist symbols exist, Quanfora sends a general-market edition.</span></span>
+                                    <input type="checkbox" checked={digest.is_enabled} onChange={(event) => setDigest((current) => ({ ...current, is_enabled: event.target.checked }))} className="mt-1 size-4 accent-indigo-500" />
+                                </label>
+                                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                    <label className="text-xs font-medium text-[var(--text-muted)]">Delivery time<input type="time" value={digest.local_time} onChange={(event) => setDigest((current) => ({ ...current, local_time: event.target.value }))} disabled={!digest.is_enabled} className="mt-1 h-10 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--surface-panel)] px-3 text-sm text-[var(--text-primary)] disabled:opacity-50" /></label>
+                                    <label className="text-xs font-medium text-[var(--text-muted)]">Time zone<input value={digest.timezone} onChange={(event) => setDigest((current) => ({ ...current, timezone: event.target.value }))} disabled={!digest.is_enabled} placeholder="America/Toronto" className="mt-1 h-10 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--surface-panel)] px-3 text-sm text-[var(--text-primary)] disabled:opacity-50" /></label>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-4">
+                        <h2 className="text-sm font-bold text-white/40 uppercase tracking-widest">Surface Style</h2>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            {APP_APPEARANCE_OPTIONS.map((appearance) => {
+                                const selected = settings.appearance === appearance.name;
+                                return (
+                                    <Button
+                                        key={appearance.name}
+                                        type="button"
+                                        variant="outline"
+                                        data-selected={selected}
+                                        aria-pressed={selected}
+                                        onClick={() => setSettings({ ...settings, appearance: appearance.name })}
+                                        className={cn(
+                                            "theme-section-button h-auto justify-start rounded-2xl border px-4 py-3 text-left",
+                                            selected
+                                                ? "border-indigo-primary/55 bg-indigo-primary/14 text-[var(--text-primary)] shadow-[var(--shadow-control)]"
+                                                : "border-[var(--theme-border)] bg-[var(--surface-card)] text-[var(--text-secondary)] hover:border-[var(--theme-border-strong)] hover:bg-[var(--surface-card-hover)]",
+                                        )}
+                                    >
+                                        <span aria-hidden="true" className={cn(
+                                            "mr-3 block size-10 shrink-0 rounded-xl border",
+                                            appearance.name === "Glass"
+                                                ? "border-white/25 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] backdrop-blur-md"
+                                                : "border-[var(--theme-border-strong)] bg-[var(--surface-panel)]",
+                                        )} />
+                                        <span>
+                                            <span className="block text-sm font-bold">{appearance.label}</span>
+                                            <span className="mt-0.5 block text-xs font-normal text-[var(--text-muted)]">{APPEARANCE_DESCRIPTIONS[appearance.name]}</span>
+                                        </span>
+                                    </Button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                 </div>
 
                         <div className="mt-5 flex shrink-0 gap-4 sm:mt-8">
                             <Button
-                                onClick={onClose}
-                                className="on-accent accent-gradient-surface h-12 flex-1 rounded-2xl font-bold glow-indigo hover:shadow-[var(--shadow-primary-action-hover)]"
+                                onClick={() => void saveAndClose()}
+                                disabled={digestSaving}
+                                className="on-accent theme-accent-surface h-12 flex-1 rounded-2xl font-bold"
                             >
-                                Save Changes
+                                {digestSaving && <Loader2 className="size-4 animate-spin" />} Save Changes
                             </Button>
                         </div>
                     </CardContent>

@@ -65,7 +65,15 @@ function SourceChip({ source }: { source: Overview["sources"][number] }) {
   );
 }
 
-export function OverviewCard({ overview, className }: { overview: Overview; className?: string }) {
+export function OverviewCard({
+  overview,
+  className,
+  onQuestionSelect,
+}: {
+  overview: Overview;
+  className?: string;
+  onQuestionSelect?: (question: string) => void;
+}) {
   return (
     <article className={cn("rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5", className)}>
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -109,10 +117,22 @@ export function OverviewCard({ overview, className }: { overview: Overview; clas
           {overview.next_questions.length > 0 && (
             <div className="mt-4 space-y-2">
               {overview.next_questions.slice(0, 4).map((question) => (
-                <div key={question} className="flex gap-2 text-sm leading-6 text-white/56">
-                  <ArrowRight className="mt-1 size-4 shrink-0 text-indigo-primary" />
-                  <span>{question}</span>
-                </div>
+                onQuestionSelect ? (
+                  <button
+                    key={question}
+                    type="button"
+                    onClick={() => onQuestionSelect(question)}
+                    className="group/question -mx-2 flex w-[calc(100%+1rem)] items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm leading-6 text-white/56 transition-colors duration-150 hover:bg-white/[0.04] hover:text-white/86 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 motion-reduce:transition-none"
+                  >
+                    <ArrowRight className="mt-1 size-4 shrink-0 text-indigo-primary transition-transform duration-150 group-hover/question:translate-x-0.5 motion-reduce:transition-none" aria-hidden="true" />
+                    <span>{question}</span>
+                  </button>
+                ) : (
+                  <div key={question} className="flex gap-2 text-sm leading-6 text-white/56">
+                    <ArrowRight className="mt-1 size-4 shrink-0 text-indigo-primary" aria-hidden="true" />
+                    <span>{question}</span>
+                  </div>
+                )
               ))}
             </div>
           )}

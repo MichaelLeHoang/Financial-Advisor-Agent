@@ -111,3 +111,37 @@ def test_chat_history_persists_structured_message_metadata(tmp_path, monkeypatch
 
     assert messages[0].get("metadata") is None
     assert messages[1]["metadata"] == metadata
+
+
+def test_chat_history_truncates_selected_turn_and_later_messages(tmp_path, monkeypatch):
+    monkeypatch.setattr(history, "DB_PATH", tmp_path / "conversations.db")
+
+    for role, content in [
+        ("user", "First question"),
+        ("assistant", "First answer"),
+        ("user", "Question to edit"),
+        ("assistant", "Answer to replace"),
+        ("user", "Later follow-up"),
+    ]:
+        history.append_message("edit-session", role, content, "user-1")
+
+    removed = history.truncate_history("edit-session", 2, "user-1")
+
+    assert removed == 3
+    assert [message["content"] for message in history.load_history("edit-session", "user-1")] == [
+        "First question",
+        "First answer",
+    ]
+    assert history.truncate_history("edit-session", 0, "user-2") == 0
+
+
+def test_chat_history_truncating_first_turn_allows_title_regeneration(tmp_path, monkeypatch):
+    monkeypatch.setattr(history, "DB_PATH", tmp_path / "conversations.db")
+
+    history.append_message("first-turn", "user", "Analyze the old ticker", "user-1")
+    history.append_message("first-turn", "assistant", "Old answer", "user-1")
+
+    assert history.truncate_history("first-turn", 0, "user-1") == 2
+    history.append_message("first-turn", "user", "Review NVDA earnings risk", "user-1")
+
+    assert history.list_sessions("user-1")[0]["title"] == "Review NVDA earnings risk"

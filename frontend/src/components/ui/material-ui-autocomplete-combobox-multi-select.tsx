@@ -90,7 +90,6 @@ const CustomPlusIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const MINIMUM_PRESS_MS = 300;
 const INITIAL_ORIGIN_SCALE = 0.2;
 const PADDING = 10;
 const SOFT_EDGE_MINIMUM_SIZE = 75;
@@ -115,7 +114,7 @@ const useInternalRipple = <T extends HTMLElement = HTMLElement>(disabled = false
     const initialSize = Math.floor(maxDim * INITIAL_ORIGIN_SCALE);
     const hypotenuse = Math.sqrt(rect.width ** 2 + rect.height ** 2);
     const maxRadius = hypotenuse + PADDING;
-    const duration = Math.min(Math.max(400, hypotenuse * 1.5), 1000);
+    const duration = 180;
     const scale = (maxRadius + softEdgeSize) / initialSize;
 
     const endPoint = { x: (rect.width - initialSize) / 2, y: (rect.height - initialSize) / 2 };
@@ -139,11 +138,7 @@ const useInternalRipple = <T extends HTMLElement = HTMLElement>(disabled = false
     );
   };
 
-  const endPressAnimation = async () => {
-    const animation = growAnimationRef.current;
-    if (animation && typeof animation.currentTime === "number" && animation.currentTime < MINIMUM_PRESS_MS) {
-      await new Promise((r) => setTimeout(r, MINIMUM_PRESS_MS - (animation.currentTime as number)));
-    }
+  const endPressAnimation = () => {
     setPressed(false);
   };
 
@@ -173,9 +168,9 @@ const RippleLayer = React.forwardRef<
       className="absolute rounded-full opacity-0 bg-current"
       style={{
         background: "radial-gradient(closest-side, currentColor max(calc(100% - 70px), 65%), transparent 100%)",
-        transition: "opacity 375ms linear",
+        transition: "opacity 160ms linear",
         opacity: pressed ? "0.12" : "0",
-        transitionDuration: pressed ? "100ms" : "375ms",
+        transitionDuration: pressed ? "80ms" : "160ms",
       }}
     />
   </div>
@@ -280,7 +275,7 @@ const CustomFloatingScrollArea = React.forwardRef<
     >
       <div
         ref={topFadeRef}
-        className="absolute top-0 left-0 right-0 h-6 bg-gradient-to-b from-card to-transparent pointer-events-none z-20 transition-opacity duration-300 opacity-0"
+        className="absolute top-0 left-0 right-0 h-6 bg-gradient-to-b from-card to-transparent pointer-events-none z-20 transition-opacity duration-150 opacity-0"
       />
 
       <div
@@ -294,13 +289,13 @@ const CustomFloatingScrollArea = React.forwardRef<
 
       <div
         ref={bottomFadeRef}
-        className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-card to-transparent pointer-events-none z-20 transition-opacity duration-300 opacity-0"
+        className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-card to-transparent pointer-events-none z-20 transition-opacity duration-150 opacity-0"
       />
 
       {thumbHeight > 0 && (
         <div
           className={cn(
-            "absolute inset-y-0 right-0 z-50 flex items-start justify-end py-0.5 px-0.5 w-4 transition-opacity duration-300 cursor-default",
+            "absolute inset-y-0 right-0 z-50 flex items-start justify-end py-0.5 px-0.5 w-4 transition-opacity duration-150 cursor-default",
             "opacity-0 pointer-events-none",
             "group-hover/scroll:opacity-100 group-hover/scroll:pointer-events-auto",
             "group-data-[dragging=true]/scroll:opacity-100 group-data-[dragging=true]/scroll:pointer-events-auto"
@@ -308,7 +303,7 @@ const CustomFloatingScrollArea = React.forwardRef<
         >
           <div
             className={cn(
-              "bg-border rounded-full transition-all duration-200 cursor-default touch-none shadow-sm",
+              "bg-border rounded-full transition-[width,background-color] duration-150 cursor-default touch-none shadow-sm",
               "w-1 hover:w-1.5 hover:bg-muted-foreground",
               "group-data-[dragging=true]/scroll:w-1.5 group-data-[dragging=true]/scroll:bg-muted-foreground"
             )}
@@ -326,30 +321,14 @@ const M3AutocompleteStyles = () => (
   <style
     dangerouslySetInnerHTML={{
       __html: `
-    @keyframes m3-auto-item-cinematic {
-      0% { opacity: 0; transform: translateY(8px) scale(0.98); filter: blur(4px); }
-      100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
-    }
-
     @keyframes m3-chip-enter {
       0% { opacity: 0; transform: scale(0.8) translate3d(8px, 0, 0); }
       100% { opacity: 1; transform: scale(1) translate3d(0, 0, 0); }
     }
 
     .m3-chip-animate {
-      animation: m3-chip-enter 200ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+      animation: m3-chip-enter 160ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
     }
-
-    .m3-auto-container[data-state="open"] .m3-auto-item {
-      opacity: 0;
-      animation: m3-auto-item-cinematic 350ms cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
-    }
-
-    .m3-auto-container[data-state="open"] .m3-auto-item:nth-child(1) { animation-delay: 50ms; }
-    .m3-auto-container[data-state="open"] .m3-auto-item:nth-child(2) { animation-delay: 100ms; }
-    .m3-auto-container[data-state="open"] .m3-auto-item:nth-child(3) { animation-delay: 150ms; }
-    .m3-auto-container[data-state="open"] .m3-auto-item:nth-child(4) { animation-delay: 200ms; }
-    .m3-auto-container[data-state="open"] .m3-auto-item:nth-child(n+5) { animation-delay: 250ms; }
 
     .m3-hide-scroll {
       scrollbar-width: none;
@@ -859,7 +838,7 @@ export function Autocomplete({
     <div
       ref={containerRef}
       className={cn(
-        "relative w-full transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+        "relative w-full",
         parentHeightClass,
         className
       )}
@@ -883,7 +862,7 @@ export function Autocomplete({
       <div
         data-state={renderState}
         className={cn(
-          "m3-auto-container absolute inset-x-0 flex bg-card overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+          "m3-auto-container absolute inset-x-0 flex bg-card overflow-hidden transition-[border-color,border-radius,box-shadow] duration-150 ease-out",
           placement === "top" ? "bottom-0 flex-col-reverse" : "top-0 flex-col",
           isExpanded
             ? "z-50 rounded-[1.25rem] border border-border shadow-[0px_16px_32px_rgba(0,0,0,0.14)]"
@@ -922,7 +901,7 @@ export function Autocomplete({
             ref={btnSurfaceRef}
             type="button"
             tabIndex={-1}
-            className="p-1.5 rounded-full z-20 hover:bg-muted/50 transition-all relative overflow-hidden h-8 w-8 flex items-center justify-center flex-shrink-0"
+            className="p-1.5 rounded-full z-20 hover:bg-muted/50 transition-colors duration-150 relative overflow-hidden h-8 w-8 flex items-center justify-center flex-shrink-0"
             onClick={handleIconClick}
             disabled={disabled}
             aria-label="Toggle options"
@@ -956,7 +935,7 @@ export function Autocomplete({
                   <button
                     key={val}
                     type="button"
-                    className="m3-chip-animate group/chip relative flex items-center h-6 px-3 bg-secondary text-secondary-foreground text-xs font-medium rounded-full flex-shrink-0 transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] overflow-hidden cursor-default select-none"
+                    className="m3-chip-animate group/chip relative flex items-center h-6 px-3 bg-secondary text-secondary-foreground text-xs font-medium rounded-full flex-shrink-0 transition-colors duration-150 overflow-hidden cursor-default select-none"
                     onClick={() => {
                       const currentValues = (value as string[]) || [];
                       if (typeof minOptions === "number" && currentValues.length <= minOptions) return;
@@ -965,7 +944,7 @@ export function Autocomplete({
                     }}
                   >
                     <span className="truncate max-w-[120px]">{item.label}</span>
-                    <div className="absolute inset-y-0 right-0 w-8 flex items-center justify-end pr-2 bg-gradient-to-l from-secondary via-secondary/90 to-transparent opacity-0 translate-x-2 group-hover/chip:opacity-100 group-hover/chip:translate-x-0 transition-all duration-150 pointer-events-none">
+                    <div className="absolute inset-y-0 right-0 w-8 flex items-center justify-end pr-2 bg-gradient-to-l from-secondary via-secondary/90 to-transparent opacity-0 translate-x-2 group-hover/chip:opacity-100 group-hover/chip:translate-x-0 transition-[opacity,transform] duration-150 pointer-events-none">
                       <svg
                         viewBox="0 0 24 24"
                         className="w-3 h-3 stroke-current text-muted-foreground"
@@ -996,7 +975,7 @@ export function Autocomplete({
                   onValueChange?.([]);
                   inputRef.current?.focus();
                 }}
-                className="px-3 h-8 rounded-full text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:bg-muted/50 transition-all relative overflow-hidden flex-shrink-0 flex items-center justify-center mr-1.5 cursor-default z-30"
+                className="px-3 h-8 rounded-full text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:bg-muted/50 transition-colors duration-150 relative overflow-hidden flex-shrink-0 flex items-center justify-center mr-1.5 cursor-default z-30"
                 {...clearEvents}
               >
                 <RippleLayer rippleRef={clearRippleRef} pressed={clearPressed} />
@@ -1008,7 +987,7 @@ export function Autocomplete({
 
         <div
           className={cn(
-            "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] relative z-10",
+            "grid transition-[grid-template-rows,opacity] duration-[180ms] ease-out relative z-10",
             isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
           )}
           onMouseDown={(e) => {
