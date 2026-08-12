@@ -62,15 +62,20 @@ test.beforeEach(async ({ page }) => {
 
 test("earnings agenda opens day detail and switches to a filtered month", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Desktop covers the complete earnings workspace composition.");
+  await page.clock.setFixedTime(new Date("2026-08-12T12:00:00"));
   await page.goto("/discover/earnings?view=list&date=2026-08-11");
   await expect.poll(() => page.evaluate(() => document.body.dataset.workspaceReady)).toBe("true");
 
   await expect(page.getByRole("heading", { name: "Earnings", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Earnings", exact: true })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("heading", { name: "August 11, 2026" }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Yesterday", exact: true })).toHaveCount(1);
+  await expect(page.getByText("Oracle Corp.")).toHaveCount(0);
   await page.getByRole("button", { name: /Apple Inc\./ }).click();
-  await expect(page.getByText("Earnings history")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Research AAPL" })).toBeVisible();
+  const detailTabs = page.locator('[role="tablist"][aria-label="AAPL reporting metric"]');
+  await expect(detailTabs.getByRole("tab", { name: "Earnings" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("link", { name: "Trade AAPL" })).toBeVisible();
+  await detailTabs.getByRole("tab", { name: "Revenue" }).click();
+  await expect(detailTabs.getByRole("tab", { name: "Revenue" })).toHaveAttribute("aria-selected", "true");
 
   await page.getByRole("tab", { name: "Month" }).click();
   await expect(page).toHaveURL(/view=month/);
@@ -79,4 +84,16 @@ test("earnings agenda opens day detail and switches to a filtered month", async 
   await expect(page.getByRole("heading", { name: "Filters", exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Country/ }).click();
   await expect(page.getByRole("radio", { name: "U.S." })).toBeVisible();
+});
+
+test("earnings agenda defaults to today and shows only the selected date", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Desktop covers the complete earnings workspace composition.");
+  await page.clock.setFixedTime(new Date("2026-08-12T12:00:00"));
+  await page.goto("/discover/earnings");
+  await expect.poll(() => page.evaluate(() => document.body.dataset.workspaceReady)).toBe("true");
+
+  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByText("Oracle Corp.")).toBeVisible();
+  await expect(page.getByText("Apple Inc.")).toHaveCount(0);
+  await expect(page.getByText("Walmart Inc.")).toHaveCount(0);
 });

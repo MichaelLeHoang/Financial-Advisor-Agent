@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, CalendarDays, ChevronRight } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { api, type EarningsCalendarEvent, type MarketQuote } from "@/lib/api";
-import { addCalendarDays, buildCalendarDays, buildEarningsEvents, buildEarningsEventsFromCalendar, toDateKey } from "@/lib/earnings-calendar";
+import { addCalendarDays, buildCalendarDays, buildEarningsEvents, buildEarningsEventsFromCalendar, mergeEarningsEvents, toDateKey } from "@/lib/earnings-calendar";
 import { APP_RADIUS } from "@/lib/ui-design";
 import { cn } from "@/lib/utils";
 
@@ -46,9 +46,11 @@ export default function EarningsRail({ quotes }: { quotes: MarketQuote[] }) {
       .catch(() => { if (!canceled) setCalendarEvents([]); });
     return () => { canceled = true; };
   }, [symbols, today]);
-  const events = useMemo(() => calendarEvents.length
-    ? buildEarningsEventsFromCalendar(calendarEvents, [], symbols, quotes)
-    : buildEarningsEvents(quotes, [], symbols), [calendarEvents, quotes, symbols]);
+  const events = useMemo(() => {
+    const quoteEvents = buildEarningsEvents(quotes, [], symbols);
+    if (!calendarEvents.length) return quoteEvents;
+    return mergeEarningsEvents(quoteEvents, buildEarningsEventsFromCalendar(calendarEvents, [], symbols, quotes));
+  }, [calendarEvents, quotes, symbols]);
   const days = useMemo(() => buildCalendarDays(today, 21, events), [events, today]);
 
   const pageRail = (direction: -1 | 1) => {

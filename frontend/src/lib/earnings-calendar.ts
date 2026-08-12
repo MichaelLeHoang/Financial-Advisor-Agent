@@ -44,6 +44,13 @@ export function addCalendarDays(date: Date, amount: number): Date {
   return next;
 }
 
+export function earningsDateLabel(dateKey: string, todayKey: string): string {
+  if (dateKey === todayKey) return "Today";
+  if (dateKey === toDateKey(addCalendarDays(parseDateKey(todayKey), 1))) return "Tomorrow";
+  if (dateKey === toDateKey(addCalendarDays(parseDateKey(todayKey), -1))) return "Yesterday";
+  return parseDateKey(dateKey).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+}
+
 export function startOfCalendarWeek(date: Date): Date {
   return addCalendarDays(date, -date.getDay());
 }
@@ -171,6 +178,14 @@ export function buildEarningsEventsFromCalendar(
       isWatchlist: watchlist.has(symbol),
     };
   }).sort((left, right) => left.date.localeCompare(right.date) || left.symbol.localeCompare(right.symbol));
+}
+
+export function mergeEarningsEvents(...groups: Iterable<EarningsEvent>[]): EarningsEvent[] {
+  const merged = new Map<string, EarningsEvent>();
+  groups.forEach((group) => {
+    for (const event of group) merged.set(event.id, event);
+  });
+  return Array.from(merged.values()).sort((left, right) => left.date.localeCompare(right.date) || left.symbol.localeCompare(right.symbol));
 }
 
 export function filterEarningsEvents(events: EarningsEvent[], options: {

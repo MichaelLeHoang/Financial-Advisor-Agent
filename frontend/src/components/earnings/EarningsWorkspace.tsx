@@ -35,7 +35,9 @@ import {
   buildEarningsEvents,
   buildEarningsEventsFromCalendar,
   buildMonthGrid,
+  earningsDateLabel,
   filterEarningsEvents,
+  mergeEarningsEvents,
   parseDateKey,
   startOfCalendarWeek,
   toDateKey,
@@ -43,7 +45,6 @@ import {
   type EarningsEvent,
   type EarningsMarketCap,
 } from "@/lib/earnings-calendar";
-import { marketDetailsHref } from "@/lib/market-routes";
 import { APP_RADIUS } from "@/lib/ui-design";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -129,9 +130,11 @@ export default function EarningsWorkspace() {
   }, [requestedDate, requestedView]);
 
   const quotes = useMemo(() => Array.from(workspace.quotes.values()), [workspace.quotes]);
-  const allEvents = useMemo(() => calendarEvents.length
-    ? buildEarningsEventsFromCalendar(calendarEvents, holdingSymbols, watchlistSymbols, quotes)
-    : buildEarningsEvents(quotes, holdingSymbols, watchlistSymbols), [calendarEvents, holdingSymbols, quotes, watchlistSymbols]);
+  const allEvents = useMemo(() => {
+    const quoteEvents = buildEarningsEvents(quotes, holdingSymbols, watchlistSymbols);
+    if (!calendarEvents.length) return quoteEvents;
+    return mergeEarningsEvents(quoteEvents, buildEarningsEventsFromCalendar(calendarEvents, holdingSymbols, watchlistSymbols, quotes));
+  }, [calendarEvents, holdingSymbols, quotes, watchlistSymbols]);
   const events = useMemo(() => {
     const filtered = filterEarningsEvents(allEvents, filters);
     const selected = new Set([...filters.holdingSymbols, ...filters.watchlistSymbols]);
@@ -157,9 +160,7 @@ export default function EarningsWorkspace() {
     setExpandedEvent(null);
   };
 
-  const selectedLabel = view === "month"
-    ? anchorDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })
-    : anchorDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const selectedLabel = anchorDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const activeFilterCount = [
     filters.country !== "All",
     filters.minimumMarketCap !== "all",
@@ -186,12 +187,12 @@ export default function EarningsWorkspace() {
 
         <div className="relative mt-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
+            {view === "month" && <div className="flex items-center gap-2">
               <button type="button" aria-label={view === "month" ? "Previous month" : "Previous week"} onClick={() => shiftPeriod(-1)} className="inline-flex size-10 items-center justify-center rounded-lg bg-[var(--surface-control)] text-[var(--text-muted)] transition-colors duration-150 hover:bg-[var(--surface-control-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"><ArrowLeft className="size-4" /></button>
               <button type="button" aria-label={view === "month" ? "Next month" : "Next week"} onClick={() => shiftPeriod(1)} className="inline-flex size-10 items-center justify-center rounded-lg bg-[var(--surface-control)] text-[var(--text-muted)] transition-colors duration-150 hover:bg-[var(--surface-control-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"><ArrowRight className="size-4" /></button>
-            </div>
-            <h2 className="font-heading text-xl font-semibold sm:text-2xl">{selectedLabel}</h2>
-            <button type="button" onClick={() => void loadCalendar()} disabled={loadingCalendar} className="inline-flex h-10 items-center gap-2 rounded-lg border border-[var(--theme-border)] px-3 text-sm font-semibold text-[var(--text-muted)] transition-colors duration-150 hover:bg-[var(--surface-control)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 disabled:cursor-wait disabled:opacity-60"><RefreshCw className={cn("size-4", loadingCalendar && "animate-spin motion-reduce:animate-none")} />Refresh</button>
+            </div>}
+            {view === "month" && <h2 className="font-heading text-xl font-semibold sm:text-2xl">{selectedLabel}</h2>}
+            <button type="button" onClick={() => void loadCalendar()} disabled={loadingCalendar} className={cn("inline-flex h-10 items-center gap-2 rounded-lg border border-[var(--theme-border)] px-3 text-sm font-semibold text-[var(--text-muted)] transition-colors duration-150 hover:bg-[var(--surface-control)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 disabled:cursor-wait disabled:opacity-60", view === "list" && "ml-auto")}><RefreshCw className={cn("size-4", loadingCalendar && "animate-spin motion-reduce:animate-none")} />Refresh</button>
           </div>
 
           {calendarLoadState?.kind === "error" && !loadingCalendar && (
@@ -205,6 +206,7 @@ export default function EarningsWorkspace() {
           {view === "list" ? (
             <ListView
               anchorDate={anchorDate}
+              today={todayKey}
               events={events}
               loading={loadingCalendar || workspace.loading}
               expandedEvent={expandedEvent}
@@ -214,6 +216,7 @@ export default function EarningsWorkspace() {
               holdings={holdingSymbols}
               watchlist={watchlistSymbols}
               onSelectDate={(date) => setLocation("list", parseDateKey(date))}
+              onShiftWeek={shiftPeriod}
             />
           ) : (
             <MonthView
@@ -257,8 +260,9 @@ function ScopeToggles({ filters, setFilters }: { filters: Filters; setFilters: R
   );
 }
 
-function ListView({ anchorDate, events, loading, expandedEvent, onExpand, filters, setFilters, holdings, watchlist, onSelectDate }: {
+function ListView({ anchorDate, today, events, loading, expandedEvent, onExpand, filters, setFilters, holdings, watchlist, onSelectDate, onShiftWeek }: {
   anchorDate: Date;
+  today: string;
   events: EarningsEvent[];
   loading: boolean;
   expandedEvent: string | null;
@@ -268,44 +272,47 @@ function ListView({ anchorDate, events, loading, expandedEvent, onExpand, filter
   holdings: string[];
   watchlist: string[];
   onSelectDate: (date: string) => void;
+  onShiftWeek: (direction: -1 | 1) => void;
 }) {
   const weekStart = startOfCalendarWeek(anchorDate);
   const week = buildCalendarDays(weekStart, 7, events);
-  const range = buildCalendarDays(weekStart, 14, events);
-  const visibleDays = range.filter((day) => day.events.length > 0 || day.date === toDateKey(anchorDate));
+  const selectedDay = buildCalendarDays(anchorDate, 1, events)[0];
 
   return (
-    <div className="mt-5 grid items-start gap-7 xl:grid-cols-[340px_minmax(0,1fr)]">
-      <aside className="sticky top-5 hidden xl:block">
-        <WeekStrip days={week} selected={toDateKey(anchorDate)} onSelect={onSelectDate} />
+    <div className="mt-5 grid items-start gap-7 xl:h-[calc(100dvh-230px)] xl:grid-cols-[340px_minmax(0,1fr)] xl:overflow-hidden">
+      <aside className="hidden xl:block xl:h-full xl:overflow-y-auto xl:overscroll-contain xl:pr-3 [scrollbar-gutter:stable]">
+        <WeekStrip days={week} selected={toDateKey(anchorDate)} today={today} onSelect={onSelectDate} onShift={onShiftWeek} />
         <div className="mt-7 border-t border-[var(--theme-border)] pt-6"><FilterPanel filters={filters} setFilters={setFilters} holdings={holdings} watchlist={watchlist} /></div>
       </aside>
-      <section aria-label="Earnings agenda" className="min-w-0">
-        {loading && !events.length ? <LoadingAgenda /> : visibleDays.length ? visibleDays.map((day) => (
-          <DayAgenda key={day.date} day={day} expandedEvent={expandedEvent} onExpand={onExpand} />
-        )) : <EarningsEmpty />}
+      <section aria-label="Earnings agenda" className="min-w-0 xl:h-full xl:overflow-y-auto xl:overscroll-contain xl:pr-3 [scrollbar-gutter:stable]">
+        {loading && !events.length ? <LoadingAgenda /> : <DayAgenda day={selectedDay} today={today} expandedEvent={expandedEvent} onExpand={onExpand} />}
       </section>
     </div>
   );
 }
 
-function WeekStrip({ days, selected, onSelect }: { days: ReturnType<typeof buildCalendarDays>; selected: string; onSelect: (date: string) => void }) {
+function WeekStrip({ days, selected, today, onSelect, onShift }: { days: ReturnType<typeof buildCalendarDays>; selected: string; today: string; onSelect: (date: string) => void; onShift: (direction: -1 | 1) => void }) {
   return (
     <div>
-      <p className="mb-3 text-sm font-semibold">This week</p>
+      <div className="mb-3 grid grid-cols-[40px_1fr_40px] items-center gap-2">
+        <button type="button" aria-label="Previous week" onClick={() => onShift(-1)} className="inline-flex size-10 items-center justify-center rounded-lg bg-[var(--surface-control)] text-[var(--text-muted)] transition-colors duration-150 hover:bg-[var(--surface-control-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"><ArrowLeft className="size-4" /></button>
+        <p className="text-center text-sm font-semibold">This week</p>
+        <button type="button" aria-label="Next week" onClick={() => onShift(1)} className="inline-flex size-10 items-center justify-center rounded-lg bg-[var(--surface-control)] text-[var(--text-muted)] transition-colors duration-150 hover:bg-[var(--surface-control-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"><ArrowRight className="size-4" /></button>
+      </div>
       <div className="grid grid-cols-7 gap-1.5">
         {days.map((day) => {
           const date = parseDateKey(day.date);
           const active = day.date === selected;
-          return <button key={day.date} type="button" aria-pressed={active} onClick={() => onSelect(day.date)} className={cn("flex min-h-20 flex-col items-center justify-center rounded-xl bg-[var(--surface-card)] text-xs transition-colors duration-150 hover:bg-[var(--surface-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50", active && "ring-1 ring-[var(--theme-border-strong)]")}><span className="text-[10px] text-[var(--text-muted)]">{date.toLocaleDateString("en-US", { weekday: "narrow" })}</span><strong className={cn("mt-2 inline-flex size-7 items-center justify-center rounded-full text-sm tabular-nums", active && "bg-[var(--text-primary)] text-[var(--background)]")}>{date.getDate()}</strong>{day.events.length > 0 && <span className="mt-1 size-1 rounded-full bg-indigo-primary" />}</button>;
+          const isToday = day.date === today;
+          return <button key={day.date} type="button" aria-pressed={active} onClick={() => onSelect(day.date)} className={cn("flex min-h-20 flex-col items-center justify-center rounded-xl bg-[var(--surface-card)] text-xs transition-colors duration-150 hover:bg-[var(--surface-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50", active && "ring-1 ring-[var(--theme-border-strong)]")}><span className="text-[10px] text-[var(--text-muted)]">{date.toLocaleDateString("en-US", { weekday: "narrow" })}</span><strong className={cn("mt-2 inline-flex size-7 items-center justify-center rounded-full border border-transparent text-sm tabular-nums", isToday && !active && "border-[var(--text-primary)]", active && "bg-[var(--text-primary)] text-[var(--background)]")}>{date.getDate()}</strong>{day.events.length > 0 && <span className="mt-1 flex h-1 items-center gap-1" aria-label={`${day.events.length} earnings`}><span className="size-1 rounded-full bg-indigo-primary" />{day.events.length > 1 && <span className="size-1 rounded-full bg-indigo-primary" />}</span>}</button>;
         })}
       </div>
     </div>
   );
 }
 
-function DayAgenda({ day, expandedEvent, onExpand }: { day: ReturnType<typeof buildCalendarDays>[number]; expandedEvent: string | null; onExpand: (id: string | null) => void }) {
-  const date = parseDateKey(day.date);
+function DayAgenda({ day, today, expandedEvent, onExpand }: { day: ReturnType<typeof buildCalendarDays>[number]; today: string; expandedEvent: string | null; onExpand: (id: string | null) => void }) {
+  const heading = earningsDateLabel(day.date, today);
   const groups = [
     { session: "pre", label: "Pre-market" },
     { session: "post", label: "Post-market" },
@@ -313,7 +320,7 @@ function DayAgenda({ day, expandedEvent, onExpand }: { day: ReturnType<typeof bu
   ].map((group) => ({ ...group, events: day.events.filter((event) => event.session === group.session) })).filter((group) => group.events.length > 0);
   return (
     <section className="mb-9" aria-labelledby={`date-${day.date}`}>
-      <h3 id={`date-${day.date}`} className="mb-4 font-heading text-lg font-semibold">{date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</h3>
+      <h3 id={`date-${day.date}`} title={parseDateKey(day.date).toLocaleDateString("en-US", { dateStyle: "full" })} className="mb-4 font-heading text-lg font-semibold">{heading}</h3>
       {day.events.length ? <div className="space-y-6">{groups.map((group) => <div key={group.session}><p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">{group.label}</p><div className="space-y-2">{group.events.map((event) => <EarningsRow key={event.id} event={event} expanded={expandedEvent === event.id} onToggle={() => onExpand(expandedEvent === event.id ? null : event.id)} />)}</div></div>)}</div> : <div className={cn(APP_RADIUS.surface, "border border-dashed border-[var(--theme-border)] py-12 text-center text-sm text-[var(--text-muted)]")}>No scheduled reports for this day.</div>}
     </section>
   );
@@ -324,12 +331,14 @@ function EarningsRow({ event, expanded, onToggle }: { event: EarningsEvent; expa
   const estimated = event.point.eps_estimate;
   const reported = actual != null;
   const primaryValue = reported ? actual : estimated;
+  const surprise = reported && estimated != null && estimated !== 0 ? ((actual - estimated) / Math.abs(estimated)) * 100 : null;
+  const status = !reported ? "Estimated" : surprise == null ? "Reported" : surprise >= 0 ? "Beat expectations" : "Missed expectations";
   return (
     <article className={cn(APP_RADIUS.surface, "overflow-hidden border border-[var(--theme-border)] bg-[var(--surface-card)]")}>
       <button type="button" aria-expanded={expanded} onClick={onToggle} className="flex min-h-20 w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-[var(--surface-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-primary/50 sm:px-5">
         <EarningsSymbolMark symbol={event.symbol} logoUrl={event.logoUrl} className="size-9" />
-        <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{event.name}</strong><span className="mt-1 block text-xs text-[var(--text-muted)]">{event.symbol} · {event.isHolding ? "Holding" : event.isWatchlist ? "Watchlist" : "Market"}</span></span>
-        <span className="text-right"><strong className="block text-sm tabular-nums">{primaryValue == null ? "EPS —" : `${primaryValue.toFixed(2)} EPS`}</strong><span className="mt-1 inline-flex rounded-full bg-[var(--surface-control)] px-2 py-0.5 text-[10px] font-semibold text-[var(--text-muted)]">{reported ? "Reported" : "Estimated"}</span></span>
+        <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{event.name}</strong><span className="mt-1 block text-xs text-[var(--text-muted)]">{event.symbol} · {reportingPeriod(event.date)}</span></span>
+        <span className="text-right"><strong className="block text-sm tabular-nums">{primaryValue == null ? "EPS —" : `${primaryValue.toFixed(2)} EPS`}</strong><span className={cn("mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold", surprise != null && surprise >= 0 ? "bg-green-positive/15 text-green-positive" : surprise != null ? "bg-red-negative/15 text-red-negative" : "bg-[var(--surface-control)] text-[var(--text-muted)]")}>{status}</span></span>
         {expanded ? <ChevronUp className="size-4 shrink-0 text-[var(--text-muted)]" /> : <ChevronDown className="size-4 shrink-0 text-[var(--text-muted)]" />}
       </button>
       {expanded && <EarningsDetail event={event} />}
@@ -338,28 +347,35 @@ function EarningsRow({ event, expanded, onToggle }: { event: EarningsEvent; expa
 }
 
 function EarningsDetail({ event }: { event: EarningsEvent }) {
+  const [metric, setMetric] = useState<"earnings" | "revenue">("earnings");
   const points = event.history.slice(-5);
-  const values = points.flatMap((point) => [point.eps_estimate, point.eps_actual]).filter((value): value is number => value != null && Number.isFinite(value));
+  const values = points.flatMap((point) => metric === "earnings" ? [point.eps_estimate, point.eps_actual] : [point.revenue_estimate, point.revenue_actual]).filter((value): value is number => value != null && Number.isFinite(value));
   const max = Math.max(...values.map(Math.abs), 1);
   const chartDescriptionId = `earnings-values-${event.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  const metricLabel = metric === "earnings" ? "EPS" : "revenue";
   return (
     <div className="border-t border-[var(--theme-border)] px-4 pb-5 pt-5 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><p className="text-sm font-semibold">Earnings history</p><p className="mt-1 text-xs text-[var(--text-muted)]">Estimate versus reported EPS. Future values remain unfilled.</p></div>
-        <Link href={marketDetailsHref(event.symbol)} className="theme-solid-action inline-flex h-10 items-center rounded-full px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50">Research {event.symbol}</Link>
+        <div role="tablist" aria-label={`${event.symbol} reporting metric`} className="inline-flex items-center gap-1 rounded-lg bg-[var(--surface-panel)] p-1">
+          {(["earnings", "revenue"] as const).map((item) => <button key={item} type="button" role="tab" aria-selected={metric === item} onClick={() => setMetric(item)} className={cn("h-9 rounded-md px-3 text-sm font-semibold text-[var(--text-muted)] transition-colors duration-150 hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50", metric === item && "bg-[var(--surface-control-hover)] text-[var(--text-primary)]")}>{item === "earnings" ? "Earnings" : "Revenue"}</button>)}
+        </div>
+        <Link href={`/trade?symbol=${encodeURIComponent(event.symbol)}`} className="theme-solid-action inline-flex h-10 items-center rounded-full px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50">Trade {event.symbol}</Link>
       </div>
-      <div className="mt-5 flex items-center gap-4 text-xs text-[var(--text-muted)]" aria-hidden="true"><span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-indigo-primary" />Estimate</span><span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-green-positive" />Actual</span></div>
-      <div className="relative mt-4 h-52 border-b border-[var(--theme-border)] px-2" role="img" aria-describedby={chartDescriptionId} aria-label={`Earnings estimate and actual history for ${event.symbol}. Bars above the center line are positive and bars below it are negative.`}>
+      <div className="mt-5 flex items-center gap-4 text-xs text-[var(--text-muted)]" aria-hidden="true"><span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-indigo-primary" />Estimated</span><span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-amber-warning" />Actual</span></div>
+      <div className="relative mt-4 h-52 border-b border-[var(--theme-border)] px-2" role="img" aria-describedby={chartDescriptionId} aria-label={`${event.symbol} estimated and actual ${metricLabel} history. Bars above the center line are positive and bars below it are negative.`}>
         <div className="pointer-events-none absolute inset-x-2 top-[80px] border-t border-dashed border-[var(--theme-border-strong)]" />
         <div className="absolute inset-0 flex gap-4 px-2 sm:gap-8">
           {points.map((point) => {
-            const estimateHeight = point.eps_estimate == null ? 0 : Math.max(4, Math.abs(point.eps_estimate) / max * 68);
-            const actualHeight = point.eps_actual == null ? 0 : Math.max(4, Math.abs(point.eps_actual) / max * 68);
-            return <div key={point.date} className="flex min-w-0 flex-1 flex-col items-center"><div className="relative h-40 w-full max-w-16"><ChartBar value={point.eps_estimate} height={estimateHeight} side="left" tone="estimate" />{point.eps_actual == null ? <span title="Actual not reported" className="absolute left-1/2 top-[77px] h-1 w-5 rounded border-t border-dashed border-[var(--theme-border-strong)] sm:w-7" /> : <ChartBar value={point.eps_actual} height={actualHeight} side="right" tone="actual" />}</div><span className="mt-2 truncate text-[10px] text-[var(--text-muted)]">{parseDateKey(point.date).toLocaleDateString("en-US", { month: "short", year: "2-digit" })}</span><span className="mt-0.5 text-[9px] tabular-nums text-[var(--text-subtle)]">E {point.eps_estimate == null ? "—" : point.eps_estimate.toFixed(2)} · A {point.eps_actual == null ? "—" : point.eps_actual.toFixed(2)}</span></div>;
+            const estimate = metric === "earnings" ? point.eps_estimate : point.revenue_estimate;
+            const actual = metric === "earnings" ? point.eps_actual : point.revenue_actual;
+            const surprise = estimate != null && actual != null && estimate !== 0 ? ((actual - estimate) / Math.abs(estimate)) * 100 : null;
+            const estimateHeight = estimate == null ? 0 : Math.max(4, Math.abs(estimate) / max * 68);
+            const actualHeight = actual == null ? 0 : Math.max(4, Math.abs(actual) / max * 68);
+            return <div key={point.date} className="flex min-w-0 flex-1 flex-col items-center"><div className="relative h-40 w-full max-w-16"><ChartBar value={estimate} height={estimateHeight} side="left" tone="estimate" />{actual == null ? <span title="Actual not reported" className="absolute left-1/2 top-[77px] h-1 w-5 rounded border-t border-dashed border-[var(--theme-border-strong)] sm:w-7" /> : <ChartBar value={actual} height={actualHeight} side="right" tone="actual" />}</div><span className="mt-2 truncate text-[10px] text-[var(--text-muted)]">{reportingPeriod(point.date, true)}</span><span className={cn("mt-0.5 text-[10px] font-medium tabular-nums", surprise != null && surprise >= 0 ? "text-green-positive" : surprise != null ? "text-red-negative" : "text-[var(--text-subtle)]")}>{surprise == null ? "—" : `${surprise >= 0 ? "+" : ""}${surprise.toFixed(2)}%`}</span></div>;
           })}
         </div>
       </div>
-      <ul id={chartDescriptionId} className="sr-only" aria-label={`${event.symbol} earnings values`}>{points.map((point) => <li key={point.date}>{point.date}: estimate {point.eps_estimate ?? "unavailable"}, actual {point.eps_actual ?? "not reported"}</li>)}</ul>
+      <ul id={chartDescriptionId} className="sr-only" aria-label={`${event.symbol} ${metricLabel} values`}>{points.map((point) => <li key={point.date}>{point.date}: estimate {metric === "earnings" ? point.eps_estimate ?? "unavailable" : point.revenue_estimate ?? "unavailable"}, actual {metric === "earnings" ? point.eps_actual ?? "not reported" : point.revenue_actual ?? "not reported"}</li>)}</ul>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <SummaryBox title="Earnings" estimate={event.point.eps_estimate} actual={event.point.eps_actual} format={(value) => value.toFixed(2)} />
         <SummaryBox title="Revenue" estimate={event.point.revenue_estimate} actual={event.point.revenue_actual} format={formatCompactCurrency} />
@@ -370,7 +386,7 @@ function EarningsDetail({ event }: { event: EarningsEvent }) {
 
 function ChartBar({ value, height, side, tone }: { value: number | null; height: number; side: "left" | "right"; tone: "estimate" | "actual" }) {
   if (value == null) return null;
-  return <span title={`${tone === "estimate" ? "Estimate" : "Actual"} ${value}`} className={cn("absolute w-[calc(50%-2px)]", side === "left" ? "left-0" : "right-0", tone === "estimate" ? "bg-indigo-primary/75" : "bg-green-positive/75", value >= 0 ? "rounded-t" : "rounded-b")} style={value >= 0 ? { height, bottom: 80 } : { height, top: 80 }} />;
+  return <span title={`${tone === "estimate" ? "Estimate" : "Actual"} ${value}`} className={cn("absolute w-[calc(50%-2px)]", side === "left" ? "left-0" : "right-0", tone === "estimate" ? "bg-indigo-primary/80" : "bg-amber-warning/85", value >= 0 ? "rounded-t" : "rounded-b")} style={value >= 0 ? { height, bottom: 80 } : { height, top: 80 }} />;
 }
 
 function SummaryBox({ title, estimate, actual, format }: { title: string; estimate: number | null; actual: number | null; format: (value: number) => string }) {
@@ -459,4 +475,12 @@ function capLabel(value: EarningsMarketCap | "all") {
 
 function formatCompactCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 }).format(value);
+}
+
+function reportingPeriod(dateKey: string, short = false) {
+  const date = parseDateKey(dateKey);
+  const calendarQuarter = Math.floor(date.getMonth() / 3);
+  const quarter = calendarQuarter === 0 ? 4 : calendarQuarter;
+  const year = calendarQuarter === 0 ? date.getFullYear() - 1 : date.getFullYear();
+  return short ? `Q${quarter} FY${String(year).slice(-2)}` : `Q${quarter} FY${year}`;
 }

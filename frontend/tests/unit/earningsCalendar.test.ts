@@ -5,8 +5,10 @@ import {
   buildEarningsEvents,
   buildEarningsEventsFromCalendar,
   buildMonthGrid,
+  earningsDateLabel,
   filterEarningsEvents,
   marketCapTier,
+  mergeEarningsEvents,
   parseDateKey,
 } from "../../src/lib/earnings-calendar.ts";
 import type { MarketQuote } from "../../src/lib/api.ts";
@@ -74,4 +76,34 @@ test("filters by scope, country, and minimum market cap", () => {
   assert.equal(filterEarningsEvents(events, { watchlistOnly: true }).length, 0);
   assert.equal(filterEarningsEvents(events, { country: "CA" }).length, 0);
   assert.equal(marketCapTier(1_500_000_000), "mid");
+});
+
+test("labels the selected earnings date relative to today", () => {
+  assert.equal(earningsDateLabel("2026-08-12", "2026-08-12"), "Today");
+  assert.equal(earningsDateLabel("2026-08-13", "2026-08-12"), "Tomorrow");
+  assert.equal(earningsDateLabel("2026-08-11", "2026-08-12"), "Yesterday");
+  assert.equal(earningsDateLabel("2026-08-14", "2026-08-12"), "August 14, 2026");
+});
+
+test("merges partial provider events with quote-backed earnings", () => {
+  const quoteEvents = buildEarningsEvents([quote]);
+  const providerEvents = buildEarningsEventsFromCalendar([{
+    symbol: "AAPL",
+    name: "Apple Inc.",
+    date: "2026-08-27",
+    session: "post",
+    country: "US",
+    market_cap: 3_000_000_000_000,
+    logo_url: "https://static.example/aapl.png",
+    eps_actual: null,
+    eps_estimate: 1.8,
+    beat_pct: null,
+    revenue_actual: null,
+    revenue_estimate: 90_000_000_000,
+    revenue_beat_pct: null,
+  }]);
+
+  const merged = mergeEarningsEvents(quoteEvents, providerEvents);
+  assert.deepEqual(merged.map((event) => event.symbol), ["NVDA", "AAPL"]);
+  assert.equal(merged[1].logoUrl, "https://static.example/aapl.png");
 });
