@@ -68,6 +68,7 @@ export const WORKSPACE_NAVIGATION: Record<WorkspaceKey, WorkspaceNavigation> = {
     label: "Discover",
     items: [
       { id: "markets", label: "Markets", href: "/discover/markets" },
+      { id: "earnings", label: "Earnings", href: "/discover/earnings" },
       { id: "watchlists", label: "Watchlists", href: "/discover/watchlists" },
       { id: "news", label: "News", href: "/discover/news" },
       { id: "picks", label: "Picks", href: "/discover/picks" },

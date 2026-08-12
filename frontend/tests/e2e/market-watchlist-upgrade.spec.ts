@@ -81,8 +81,8 @@ test("watchlist table keeps quote context and active alerts together", async ({ 
   await expect(page.getByText("Cached market brief", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Major indexes finish higher following blockbuster SpaceX debut" }).click();
   await expect(page.getByRole("link", { name: "Dive deeper on this topic with AI" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Upcoming earnings" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "AAPL Apple Inc. Nov 5, 2026" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Earnings", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Today, .*scheduled earnings/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Market trends" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Latest market news" })).toBeVisible();
   await page.getByRole("link", { name: "Open Bitcoin / CAD market details" }).click();

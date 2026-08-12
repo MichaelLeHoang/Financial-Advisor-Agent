@@ -5,18 +5,17 @@ import Link from "next/link";
 import {
   Activity,
   ArrowDownRight,
-  ArrowRight,
   ArrowUpRight,
-  CalendarDays,
   RefreshCw,
   Search,
 } from "lucide-react";
+import EarningsRail from "@/components/earnings/EarningsRail";
 import MarketMovers from "@/components/market/MarketMovers";
 import MarketNewsFeed from "@/components/market/MarketNewsFeed";
 import MarketSummary from "@/components/market/MarketSummary";
 import WatchlistMarketsSection from "@/components/watchlist/WatchlistMarketsSection";
 import { fetchQuotes, invalidate } from "@/lib/quote-cache";
-import type { EarningsPoint, MarketQuote } from "@/lib/api";
+import type { MarketQuote } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { marketDetailsHref } from "@/lib/market-routes";
 
@@ -26,11 +25,6 @@ const INDEXES = [
   { symbol: "^DJI", label: "Dow Jones" },
   { symbol: "^VIX", label: "Volatility" },
 ];
-
-type UpcomingEarning = EarningsPoint & {
-  name: string;
-  symbol: string;
-};
 
 function stockDetailsHref(symbol: string) {
   return marketDetailsHref(symbol);
@@ -53,26 +47,6 @@ function buildMarketBrief(quotes: Map<string, MarketQuote>) {
     : "";
 
   return `US indexes are ${direction}, with the major equity benchmarks averaging ${average >= 0 ? "+" : ""}${average.toFixed(2)}%.${vixCopy} This brief refreshes from cached market data every few minutes.`;
-}
-
-function getUpcomingEarnings(watchlistQuotes: MarketQuote[]): UpcomingEarning[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  return watchlistQuotes
-    .flatMap((quote) =>
-      (quote.earnings ?? []).map((earning) => ({
-        ...earning,
-        name: quote.name || quote.ticker,
-        symbol: quote.ticker,
-      }))
-    )
-    .filter((earning) => {
-      const date = new Date(`${earning.date}T00:00:00`);
-      return !Number.isNaN(date.getTime()) && date >= today && earning.eps_actual == null;
-    })
-    .sort((left, right) => left.date.localeCompare(right.date))
-    .slice(0, 6);
 }
 
 export default function WatchlistMarketContext({ watchlistQuotes = [] }: { watchlistQuotes?: MarketQuote[] }) {
@@ -103,7 +77,6 @@ export default function WatchlistMarketContext({ watchlistQuotes = [] }: { watch
   };
 
   const marketBrief = useMemo(() => buildMarketBrief(quotes), [quotes]);
-  const earnings = useMemo(() => getUpcomingEarnings(watchlistQuotes), [watchlistQuotes]);
 
   return (
     <section className="mt-10 border-t border-[var(--theme-border)] pt-7" aria-labelledby="market-context-title">
@@ -170,37 +143,7 @@ export default function WatchlistMarketContext({ watchlistQuotes = [] }: { watch
         <MarketSummary />
       </section>
 
-      <section className="mt-8" aria-labelledby="upcoming-earnings-title">
-        <div className="mb-3 flex items-center gap-2">
-          <CalendarDays className="size-4 text-indigo-300" />
-          <h3 id="upcoming-earnings-title" className="font-semibold">Upcoming earnings</h3>
-        </div>
-        {earnings.length ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {earnings.map((earning) => (
-              <Link
-                key={`${earning.symbol}-${earning.date}`}
-                href={stockDetailsHref(earning.symbol)}
-                className="group rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-4 transition-[transform,border-color,background-color] duration-150 hover:-translate-y-0.5 hover:border-[var(--theme-border-strong)] hover:bg-[var(--surface-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 motion-reduce:transform-none"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0"><p className="truncate font-semibold">{earning.symbol}</p><p className="truncate text-xs text-[var(--text-muted)]">{earning.name}</p></div>
-                  <ArrowRight className="size-4 shrink-0 text-[var(--text-subtle)] transition-transform group-hover:translate-x-0.5 motion-reduce:transform-none" />
-                </div>
-                <div className="mt-4 flex items-end justify-between gap-3 text-sm"><time dateTime={earning.date}>{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(`${earning.date}T00:00:00`))}</time><span className="text-[var(--text-muted)]">EPS est. {earning.eps_estimate == null ? "—" : earning.eps_estimate.toFixed(2)}</span></div>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <Link
-            href="/discover/markets"
-            className="group flex min-h-24 items-center justify-between gap-5 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] px-5 py-4 transition-colors hover:border-[var(--theme-border-strong)] hover:bg-[var(--surface-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
-          >
-            <div><p className="font-medium">No scheduled earnings in this watchlist</p><p className="mt-1 text-sm text-[var(--text-muted)]">Add companies with upcoming reports or explore more market names.</p></div>
-            <ArrowRight className="size-5 shrink-0 text-[var(--text-subtle)] transition-transform group-hover:translate-x-1 motion-reduce:transform-none" />
-          </Link>
-        )}
-      </section>
+      <div className="mt-8"><EarningsRail quotes={watchlistQuotes} /></div>
 
       <section className="mt-8" aria-labelledby="market-trends-title"><h3 id="market-trends-title" className="mb-3 font-semibold">Market trends</h3><MarketMovers /></section>
       <section className="mt-8" aria-labelledby="market-news-title"><h3 id="market-news-title" className="mb-3 font-semibold">Latest market news</h3><MarketNewsFeed limit={10} title={null} /></section>

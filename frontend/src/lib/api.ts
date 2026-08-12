@@ -822,12 +822,28 @@ export interface MarketQuotePoint {
 
 export interface EarningsPoint {
   date: string;
+  session?: "pre" | "post" | "unknown";
   eps_actual: number | null;
   eps_estimate: number | null;
   beat_pct: number | null;
   revenue_actual: number | null;
   revenue_estimate: number | null;
   revenue_beat_pct: number | null;
+}
+
+export interface EarningsCalendarEvent extends EarningsPoint {
+  symbol: string;
+  name: string;
+  country: "US" | "CA" | "Other";
+  market_cap: number | null;
+  logo_url?: string | null;
+}
+
+export interface EarningsCalendarResponse {
+  from_date: string;
+  to_date: string;
+  events: EarningsCalendarEvent[];
+  data_sources: string[];
 }
 
 export interface QuarterlyFinancial {
@@ -845,6 +861,7 @@ export interface QuarterlyFinancial {
 export interface MarketQuote {
   ticker: string;
   name: string;
+  logo_url?: string | null;
   exchange?: string | null;
   sector?: string | null;
   price: number;
@@ -2044,6 +2061,12 @@ export const api = {
 
   marketQuote: (ticker: string, period = "1mo", interval = "1d") =>
     get<MarketQuote>(`/api/v1/market/quote/${encodeURIComponent(ticker)}?period=${period}&interval=${interval}`),
+
+  earningsCalendar: (from: string, to: string, symbols: string[] = [], limit = 100) => {
+    const query = new URLSearchParams({ from, to, limit: String(limit) });
+    if (symbols.length) query.set("symbols", symbols.join(","));
+    return get<EarningsCalendarResponse>(`/api/v1/market/earnings?${query.toString()}`);
+  },
 
   cryptoOverview: (base: string, quote = "CAD") =>
     get<CryptoOverview>(`/api/v1/crypto/assets/${encodeURIComponent(base)}/overview?quote=${encodeURIComponent(quote)}`),
