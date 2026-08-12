@@ -8,9 +8,77 @@ from src.data.market_data_service import (
     MarketDataService,
     _dedupe_symbol_results,
     _dedupe_news,
+    _normalize_earnings_dates,
+    _normalize_finnhub_calendar,
+    _normalize_yfinance_calendar,
     _risk_metrics,
     _technical_indicators,
 )
+
+
+def test_normalize_earnings_dates_preserves_estimates_and_missing_actuals():
+    frame = pd.DataFrame(
+        {
+            "EPS Estimate": [1.85, 1.72],
+            "Reported EPS": [float("nan"), 1.80],
+            "Surprise(%)": [float("nan"), 4.65],
+        },
+        index=pd.to_datetime(["2026-11-05T16:00:00-05:00", "2026-08-06T16:00:00-05:00"]),
+    )
+
+    earnings = _normalize_earnings_dates(frame)
+
+    assert [point["date"] for point in earnings] == ["2026-08-06", "2026-11-05"]
+    assert earnings[0]["eps_actual"] == 1.8
+    assert earnings[0]["session"] == "post"
+    assert earnings[1]["eps_actual"] is None
+    assert earnings[1]["eps_estimate"] == 1.85
+
+
+def test_normalize_earnings_dates_does_not_invent_timing_for_date_only_values():
+    frame = pd.DataFrame(
+        {"EPS Estimate": [2.10], "Reported EPS": [float("nan")]},
+        index=pd.to_datetime(["2026-12-01"]),
+    )
+
+    earnings = _normalize_earnings_dates(frame)
+
+    assert earnings[0]["session"] == "unknown"
+
+
+def test_normalize_yfinance_calendar_preserves_real_symbol_date_and_timing():
+    frame = pd.DataFrame(
+        {
+            "Company": ["NVIDIA Corporation"],
+            "Marketcap": [5_200_000_000_000],
+            "Event Start Date": pd.to_datetime(["2026-08-26T20:00:00Z"]),
+            "Timing": ["AMC"],
+            "EPS Estimate": [2.08],
+            "Reported EPS": [float("nan")],
+            "Surprise(%)": [float("nan")],
+        },
+        index=["NVDA"],
+    )
+
+    events = _normalize_yfinance_calendar(frame)
+
+    assert events[0]["symbol"] == "NVDA"
+    assert events[0]["date"] == "2026-08-26"
+    assert events[0]["session"] == "post"
+    assert events[0]["eps_estimate"] == 2.08
+
+
+def test_normalize_finnhub_calendar_includes_revenue_and_session():
+    events = _normalize_finnhub_calendar({"earningsCalendar": [{
+        "symbol": "WMT",
+        "date": "2026-08-20",
+        "hour": "bmo",
+        "epsEstimate": 0.74,
+        "revenueEstimate": 180_000_000_000,
+    }]})
+
+    assert events[0]["session"] == "pre"
+    assert events[0]["revenue_estimate"] == 180_000_000_000
 
 
 def test_dedupe_news_prefers_url_or_title():

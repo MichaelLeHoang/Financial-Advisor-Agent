@@ -58,6 +58,7 @@ class NormalizedNewsItem:
 class NormalizedMarketSnapshot:
     ticker: str
     company_name: str | None = None
+    logo_url: str | None = None
     exchange: str | None = None
     sector: str | None = None
     industry: str | None = None
@@ -84,6 +85,7 @@ class NormalizedMarketSnapshot:
     sentiment_summary: dict[str, Any] = field(default_factory=dict)
     news_items: list[NormalizedNewsItem] = field(default_factory=list)
     history: list[NormalizedMarketPoint] = field(default_factory=list)
+    earnings: list[dict[str, Any]] = field(default_factory=list)
     history_frame: pd.DataFrame = field(default_factory=pd.DataFrame, repr=False)
     data_sources: list[str] = field(default_factory=list)
     provider_status: list[ProviderStatus] = field(default_factory=list)
@@ -107,6 +109,153 @@ def _safe_pct(latest: float | None, previous: float | None) -> float | None:
     if latest is None or previous in (None, 0):
         return None
     return round((latest - previous) / previous * 100, 4)
+
+
+def _normalize_earnings_dates(frame: Any) -> list[dict[str, Any]]:
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        return []
+    normalized: dict[str, dict[str, Any]] = {}
+    for index, row in frame.iterrows():
+        parsed = pd.to_datetime(index, errors="coerce")
+        if pd.isna(parsed):
+            continue
+        date_key = parsed.date().isoformat()
+        hour = int(parsed.hour)
+        # yfinance often represents a date-only announcement at midnight. Treat that
+        # sentinel as unknown instead of presenting it as a confirmed pre-market slot.
+        session = "unknown" if hour == 0 else "pre" if hour < 12 else "post" if hour >= 16 else "unknown"
+        beat_pct = _clean_number(row.get("Surprise(%)"))
+        if beat_pct is None:
+            fraction = _clean_number(row.get("surprisePercent"))
+            beat_pct = fraction * 100 if fraction is not None else None
+        normalized[date_key] = {
+            "date": date_key,
+            "session": session,
+            "eps_actual": _clean_number(row.get("Reported EPS", row.get("epsActual"))),
+            "eps_estimate": _clean_number(row.get("EPS Estimate", row.get("epsEstimate"))),
+            "beat_pct": beat_pct,
+            "revenue_actual": None,
+            "revenue_estimate": None,
+            "revenue_beat_pct": None,
+        }
+    return [normalized[key] for key in sorted(normalized)]
+
+
+def _earnings_session(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"amc", "post", "after market close"}:
+        return "post"
+    if normalized in {"bmo", "pre", "before market open"}:
+        return "pre"
+    return "unknown"
+
+
+def _normalize_yfinance_calendar(frame: Any) -> list[dict[str, Any]]:
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        return []
+    events: list[dict[str, Any]] = []
+    for index, row in frame.iterrows():
+        symbol = str(index or "").strip().upper()
+        parsed = pd.to_datetime(row.get("Event Start Date"), errors="coerce")
+        if not symbol or pd.isna(parsed):
+            continue
+        events.append({
+            "symbol": symbol,
+            "name": str(row.get("Company") or symbol),
+            "date": parsed.date().isoformat(),
+            "session": _earnings_session(row.get("Timing")),
+            "country": "CA" if symbol.endswith(".TO") else "US",
+            "market_cap": _clean_number(row.get("Marketcap")),
+            "logo_url": None,
+            "eps_actual": _clean_number(row.get("Reported EPS")),
+            "eps_estimate": _clean_number(row.get("EPS Estimate")),
+            "beat_pct": _clean_number(row.get("Surprise(%)")),
+            "revenue_actual": None,
+            "revenue_estimate": None,
+            "revenue_beat_pct": None,
+        })
+    return events
+
+
+def _normalize_finnhub_calendar(payload: Any) -> list[dict[str, Any]]:
+    rows = payload.get("earningsCalendar", []) if isinstance(payload, dict) else []
+    events: list[dict[str, Any]] = []
+    for row in rows:
+        symbol = str(row.get("symbol") or "").strip().upper()
+        date_key = str(row.get("date") or "")
+        if not symbol or not date_key:
+            continue
+        revenue_actual = _clean_number(row.get("revenueActual"))
+        revenue_estimate = _clean_number(row.get("revenueEstimate"))
+        revenue_beat_pct = None
+        if revenue_actual is not None and revenue_estimate not in (None, 0):
+            revenue_beat_pct = (revenue_actual - revenue_estimate) / abs(revenue_estimate) * 100
+        events.append({
+            "symbol": symbol,
+            "name": symbol,
+            "date": date_key,
+            "session": _earnings_session(row.get("hour")),
+            "country": "CA" if symbol.endswith(".TO") else "US",
+            "market_cap": None,
+            "logo_url": None,
+            "eps_actual": _clean_number(row.get("epsActual")),
+            "eps_estimate": _clean_number(row.get("epsEstimate")),
+            "beat_pct": None,
+            "revenue_actual": revenue_actual,
+            "revenue_estimate": revenue_estimate,
+            "revenue_beat_pct": revenue_beat_pct,
+        })
+    return events
+
+
+def _merge_earnings_calendar_events(*groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    for events in groups:
+        for event in events:
+            key = (event["symbol"], event["date"])
+            current = dict(merged.get(key, {}))
+            for field_name, value in event.items():
+                if value in (None, "", "unknown"):
+                    continue
+                if field_name == "name" and value == event["symbol"] and current.get("name"):
+                    continue
+                current[field_name] = value
+            current.setdefault("symbol", event["symbol"])
+            current.setdefault("date", event["date"])
+            current.setdefault("session", "unknown")
+            for nullable_field in ("market_cap", "logo_url", "eps_actual", "eps_estimate", "beat_pct", "revenue_actual", "revenue_estimate", "revenue_beat_pct"):
+                current.setdefault(nullable_field, None)
+            merged[key] = current
+    return sorted(merged.values(), key=lambda event: (event["date"], -(event.get("market_cap") or 0), event["symbol"]))
+
+
+def _normalize_ticker_calendar(symbol: str, calendar: Any) -> list[dict[str, Any]]:
+    if not isinstance(calendar, dict):
+        return []
+    dates = calendar.get("Earnings Date") or []
+    if not isinstance(dates, (list, tuple)):
+        dates = [dates]
+    events: list[dict[str, Any]] = []
+    for value in dates:
+        parsed = pd.to_datetime(value, errors="coerce")
+        if pd.isna(parsed):
+            continue
+        events.append({
+            "symbol": symbol,
+            "name": symbol,
+            "date": parsed.date().isoformat(),
+            "session": "unknown",
+            "country": "CA" if symbol.endswith(".TO") else "US",
+            "market_cap": None,
+            "logo_url": None,
+            "eps_actual": None,
+            "eps_estimate": _clean_number(calendar.get("Earnings Average")),
+            "beat_pct": None,
+            "revenue_actual": None,
+            "revenue_estimate": _clean_number(calendar.get("Revenue Average")),
+            "revenue_beat_pct": None,
+        })
+    return events
 
 
 def _get_json(url: str, params: dict[str, Any] | None = None, headers: dict[str, str] | None = None) -> dict[str, Any] | list[Any]:
@@ -336,6 +485,65 @@ class MarketDataService:
             pass
         return _dedupe_symbol_results(results, limit)
 
+    def fetch_earnings_calendar(
+        self,
+        start: date,
+        end: date,
+        *,
+        symbols: list[str] | None = None,
+        limit: int = 100,
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        """Fetch a real release calendar, merging Yahoo coverage with Finnhub estimates."""
+        symbol_filter = {symbol.strip().upper() for symbol in (symbols or []) if symbol.strip()}
+        yahoo_events: list[dict[str, Any]] = []
+        finnhub_events: list[dict[str, Any]] = []
+        symbol_events: list[dict[str, Any]] = []
+        sources: list[str] = []
+
+        try:
+            calendar = yf.Calendars(start=start, end=end)
+            frame = calendar.get_earnings_calendar(
+                limit=min(max(limit, 1), 100),
+                filter_most_active=False,
+            )
+            yahoo_events = _normalize_yfinance_calendar(frame)
+            if yahoo_events:
+                sources.append("yfinance_earnings_calendar")
+        except Exception:
+            yahoo_events = []
+
+        key = settings.secret_value("finnhub_api_key")
+        if key:
+            try:
+                payload = _get_json(
+                    "https://finnhub.io/api/v1/calendar/earnings",
+                    {"from": start.isoformat(), "to": end.isoformat(), "token": key},
+                )
+                finnhub_events = _normalize_finnhub_calendar(payload)
+                if finnhub_events:
+                    sources.append("finnhub_earnings_calendar")
+            except Exception:
+                finnhub_events = []
+
+        # A batch calendar can cap the result set. Explicit portfolio/watchlist
+        # symbols are supplemented individually so smaller companies are not dropped.
+        for symbol in sorted(symbol_filter)[:25]:
+            try:
+                symbol_events.extend(_normalize_ticker_calendar(symbol, yf.Ticker(symbol).calendar))
+            except Exception:
+                continue
+        if symbol_events:
+            sources.append("yfinance_symbol_calendar")
+
+        if not symbol_filter:
+            yahoo_keys = {(event["symbol"], event["date"]) for event in yahoo_events}
+            finnhub_events = [event for event in finnhub_events if (event["symbol"], event["date"]) in yahoo_keys]
+        events = _merge_earnings_calendar_events(yahoo_events, finnhub_events, symbol_events)
+        if symbol_filter:
+            events = [event for event in events if event["symbol"] in symbol_filter]
+        events = [event for event in events if start.isoformat() <= event["date"] <= end.isoformat()]
+        return events[: max(1, limit)], list(dict.fromkeys(sources))
+
     def _apply_finnhub(self, snapshot: NormalizedMarketSnapshot, *, include_news: bool, include_fundamentals: bool) -> None:
         key = settings.secret_value("finnhub_api_key")
         if not key:
@@ -354,17 +562,19 @@ class MarketDataService:
                     snapshot.quote_timestamp = datetime.fromtimestamp(float(quote["t"]), UTC).isoformat()
                 snapshot.data_sources.append("finnhub_quote")
                 snapshot.evidence_items.append(EvidenceItem("Latest quote", "Finnhub", f"{snapshot.latest_price}", timestamp=snapshot.quote_timestamp, importance="high"))
-            if include_fundamentals:
-                profile = _get_json("https://finnhub.io/api/v1/stock/profile2", {"symbol": snapshot.ticker, "token": key})
-                if isinstance(profile, dict) and profile:
-                    snapshot.company_name = snapshot.company_name or profile.get("name")
-                    snapshot.exchange = snapshot.exchange or profile.get("exchange")
-                    snapshot.currency = snapshot.currency or profile.get("currency")
+            profile = _get_json("https://finnhub.io/api/v1/stock/profile2", {"symbol": snapshot.ticker, "token": key})
+            if isinstance(profile, dict) and profile:
+                snapshot.company_name = snapshot.company_name or profile.get("name")
+                snapshot.logo_url = snapshot.logo_url or profile.get("logo")
+                snapshot.exchange = snapshot.exchange or profile.get("exchange")
+                snapshot.currency = snapshot.currency or profile.get("currency")
+                snapshot.data_sources.append("finnhub_profile")
+                if include_fundamentals:
                     finnhub_market_cap = _clean_number(profile.get("marketCapitalization"))
                     snapshot.market_cap = snapshot.market_cap or (finnhub_market_cap * 1_000_000 if finnhub_market_cap is not None else None)
                     snapshot.fundamentals.setdefault("country", profile.get("country"))
                     snapshot.fundamentals.setdefault("ipo", profile.get("ipo"))
-                    snapshot.data_sources.append("finnhub_profile")
+            if include_fundamentals:
                 metrics = _get_json("https://finnhub.io/api/v1/stock/metric", {"symbol": snapshot.ticker, "metric": "all", "token": key})
                 metric = metrics.get("metric", {}) if isinstance(metrics, dict) else {}
                 if metric:
@@ -540,6 +750,7 @@ class MarketDataService:
             info = ticker.info or {}
             history = ticker.history(period=period, interval=interval, auto_adjust=True)
             snapshot.company_name = info.get("longName") or info.get("shortName") or snapshot.company_name
+            snapshot.logo_url = info.get("logo_url") or snapshot.logo_url
             snapshot.exchange = info.get("exchange") or info.get("fullExchangeName") or snapshot.exchange
             snapshot.sector = info.get("sector") or info.get("quoteType") or snapshot.sector
             snapshot.industry = info.get("industry") or snapshot.industry
@@ -607,6 +818,22 @@ class MarketDataService:
                     ))
                 if snapshot.news_items:
                     snapshot.data_sources.append("yfinance_news")
+            try:
+                earnings_history = ticker.get_earnings_history()
+                historical = _normalize_earnings_dates(earnings_history)
+                upcoming = _normalize_ticker_calendar(snapshot.ticker, ticker.calendar)
+                points = {point["date"]: point for point in historical}
+                for event in upcoming:
+                    point = {key: value for key, value in event.items() if key not in {"symbol", "name", "country", "market_cap", "logo_url"}}
+                    points[point["date"]] = {**points.get(point["date"], {}), **point}
+                snapshot.earnings = [points[key] for key in sorted(points)]
+                if snapshot.earnings:
+                    snapshot.data_sources.append("yfinance_earnings_calendar")
+                    snapshot.provider_status.append(ProviderStatus("yfinance_earnings", "ok"))
+                else:
+                    snapshot.provider_status.append(ProviderStatus("yfinance_earnings", "skipped", "No earnings dates were published for this symbol."))
+            except Exception as exc:
+                snapshot.provider_status.append(ProviderStatus("yfinance_earnings", "error", str(exc)[:160]))
             snapshot.data_sources.append("yfinance_fallback")
             snapshot.provider_status.append(ProviderStatus("yfinance", "ok"))
         except Exception as exc:

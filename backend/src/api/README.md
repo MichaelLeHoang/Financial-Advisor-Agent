@@ -5,7 +5,7 @@ Provides the FastAPI application and thin transport adapters for Quanfora backen
 
 ## Responsibilities
 - Register routers, middleware, authentication dependencies, and health/status endpoints.
-- Expose Sabi-routed agent chat, selected-capability metadata, structured overviews, queued jobs, bounded RAG queries, market quote/search, prediction, portfolio, watchlist, and service endpoints.
+- Expose Sabi-routed agent chat, selected-capability metadata, structured overviews, queued jobs, bounded RAG queries, market quote/search plus a bounded provider-backed earnings calendar, prediction, portfolio, watchlist, and service endpoints.
 - Expose owned chat-history truncation for edit-and-regenerate and retry workflows.
 - Expose authenticated, owner-scoped memory review, confirmation, editing, settings, and deletion routes.
 - Stream owner-scoped, resumable agent activity and equity-research events over SSE, with polling contracts retained as a fallback.
@@ -25,4 +25,4 @@ Route handlers should validate and translate requests only. Business logic belon
 Use FastAPI `TestClient` with mocked dependencies for route contracts, authorization, resumable SSE cursors, provider timeouts, overview/workspace payloads, status rollups, and error responses.
 
 ## Latest Change
-- Added authenticated, owner-scoped SSE activity streams for queued chat and resumable numbered research events, while retaining status/list polling fallbacks.
+- Added a provider-backed earnings-calendar endpoint and company-logo metadata so Watchlist and Discover render real report dates, estimates, timing, and recognizable symbols.

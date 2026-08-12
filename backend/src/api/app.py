@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import date
 from typing import Literal
 from uuid import uuid4
 
@@ -67,6 +68,7 @@ import math
 
 MARKET_QUOTE_TIMEOUT_SECONDS = 12
 MARKET_SEARCH_TIMEOUT_SECONDS = 6
+EARNINGS_CALENDAR_TIMEOUT_SECONDS = 15
 
 app = FastAPI(
     title=settings.app_name,
@@ -259,12 +261,28 @@ def _ensure_chat_session_owned(session_id: str, user: AuthenticatedUser) -> None
 
 class EarningsPoint(BaseModel):
     date: str
+    session: Literal["pre", "post", "unknown"] = "unknown"
     eps_actual: float | None = None
     eps_estimate: float | None = None
     beat_pct: float | None = None
     revenue_actual: float | None = None
     revenue_estimate: float | None = None
     revenue_beat_pct: float | None = None
+
+
+class EarningsCalendarEvent(EarningsPoint):
+    symbol: str
+    name: str
+    country: Literal["US", "CA", "Other"] = "US"
+    market_cap: float | None = None
+    logo_url: str | None = None
+
+
+class EarningsCalendarResponse(BaseModel):
+    from_date: str
+    to_date: str
+    events: list[EarningsCalendarEvent]
+    data_sources: list[str]
 
 
 class QuarterlyFinancial(BaseModel):
@@ -299,6 +317,7 @@ class MarketSymbolSearchResult(BaseModel):
 class MarketQuoteResponse(BaseModel):
     ticker: str
     name: str
+    logo_url: str | None = None
     exchange: str | None = None
     sector: str | None = None
     price: float
@@ -519,6 +538,7 @@ def _fetch_market_quote_response(
     return MarketQuoteResponse(
         ticker=normalized,
         name=snapshot.company_name or normalized,
+        logo_url=snapshot.logo_url,
         exchange=snapshot.exchange,
         sector=snapshot.sector,
         price=round(
@@ -544,6 +564,7 @@ def _fetch_market_quote_response(
             (snapshot.dividend_rate / 4) if snapshot.dividend_rate else None
         ),
         history=history_points,
+        earnings=[EarningsPoint(**point) for point in snapshot.earnings],
         data_sources=snapshot.data_sources,
         source_quality=snapshot.source_quality,
         provider_status=[status.__dict__ for status in snapshot.provider_status],
@@ -580,6 +601,41 @@ def _fallback_quote_history(snapshot, period: str) -> list[MarketQuotePoint]:
             low=low,
         ),
     ]
+
+
+@app.get("/api/v1/market/earnings", response_model=EarningsCalendarResponse)
+async def market_earnings_calendar(
+    from_date: date = Query(alias="from"),
+    to_date: date = Query(alias="to"),
+    symbols: str | None = None,
+    limit: int = 100,
+):
+    """Return a provider-backed earnings release calendar for a bounded date range."""
+    if to_date < from_date:
+        raise HTTPException(status_code=400, detail="The earnings calendar end date must be on or after the start date.")
+    if (to_date - from_date).days > 62:
+        raise HTTPException(status_code=400, detail="Earnings calendar ranges cannot exceed 63 days.")
+    symbol_list = [symbol.strip().upper() for symbol in (symbols or "").split(",") if symbol.strip()]
+    safe_limit = max(1, min(limit, 100))
+    try:
+        events, sources = await asyncio.wait_for(
+            asyncio.to_thread(
+                market_data_service.fetch_earnings_calendar,
+                from_date,
+                to_date,
+                symbols=symbol_list,
+                limit=safe_limit,
+            ),
+            timeout=EARNINGS_CALENDAR_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Earnings calendar providers timed out. Try again shortly.") from exc
+    return EarningsCalendarResponse(
+        from_date=from_date.isoformat(),
+        to_date=to_date.isoformat(),
+        events=[EarningsCalendarEvent(**event) for event in events],
+        data_sources=sources,
+    )
 
 
 @app.get("/api/v1/market/quote/{ticker}", response_model=MarketQuoteResponse)
