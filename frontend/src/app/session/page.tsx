@@ -2009,14 +2009,33 @@ function ConsensusMessageTabs({ content, opinions }: { content: string; opinions
       />
       {currentOpinion ? (
         <div className="space-y-3">
-          <div className="grid gap-2 rounded-xl border border-white/[0.10] bg-white/[0.04] p-3 text-sm sm:grid-cols-2">
-            <div><span className="text-white/45">Verdict</span><div className="font-semibold capitalize text-white/90">{currentOpinion.verdict}</div></div>
-            <div><span className="text-white/45">Confidence</span><div className="font-semibold text-white/90">{Math.round(currentOpinion.confidence * 100)}%</div></div>
+          <div className="grid gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-3 text-sm sm:grid-cols-3">
+            <div><span className="text-[var(--text-muted)]">Verdict</span><div className="font-semibold capitalize text-[var(--text-primary)]">{currentOpinion.verdict.replaceAll("_", " ")}</div></div>
+            <div><span className="text-[var(--text-muted)]">Confidence</span><div className="font-semibold text-[var(--text-primary)]">{Math.round(currentOpinion.confidence * 100)}%</div></div>
+            <div><span className="text-[var(--text-muted)]">Status</span><div className="font-semibold capitalize text-[var(--text-primary)]">{currentOpinion.status ?? "completed"}</div></div>
           </div>
           <Markdown content={currentOpinion.reasoning} />
+          {currentOpinion.asset_opinions && Object.keys(currentOpinion.asset_opinions).length > 0 && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {Object.entries(currentOpinion.asset_opinions).map(([symbol, asset]) => (
+                <div key={symbol} className="rounded-xl border border-[var(--theme-border)] bg-[var(--surface-panel)] p-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-semibold text-[var(--text-primary)]">{symbol}</span>
+                    <span className="capitalize text-[var(--text-secondary)]">{asset.verdict.replaceAll("_", " ")} · {Math.round(asset.confidence * 100)}%</span>
+                  </div>
+                  <p className="mt-2 leading-6 text-[var(--text-muted)]">{asset.reasoning}</p>
+                </div>
+              ))}
+            </div>
+          )}
           {(currentOpinion.risk_flags ?? []).length > 0 && (
-            <div className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-xs text-amber-100">
-              <span className="font-semibold">Risk flags:</span> {(currentOpinion.risk_flags ?? []).join(", ")}
+            <div className="rounded-xl border border-amber-warning/25 bg-amber-warning/10 p-3 text-xs text-[var(--text-secondary)]">
+              <span className="font-semibold text-amber-warning">Risk flags:</span> {(currentOpinion.risk_flags ?? []).join(", ")}
+            </div>
+          )}
+          {(currentOpinion.limitations ?? []).length > 0 && (
+            <div className="rounded-xl border border-indigo-primary/20 bg-indigo-primary/10 p-3 text-xs text-[var(--text-secondary)]">
+              <span className="font-semibold text-indigo-primary">Evidence limitations:</span> {(currentOpinion.limitations ?? []).join(" ")}
             </div>
           )}
         </div>
