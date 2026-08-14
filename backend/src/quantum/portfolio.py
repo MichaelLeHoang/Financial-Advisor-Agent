@@ -65,12 +65,16 @@ def get_portfolio_volatility(tickers: list[str], period: str = "1y"):
         "mean_returns": mean_returns,
         "cov_matrix": cov_matrix, 
         "tickers": list(prices.columns),
+        "observations": len(returns),
+        "start_date": str(returns.index.min().date()) if not returns.empty else None,
+        "end_date": str(returns.index.max().date()) if not returns.empty else None,
     }
 
 def classical_optimize(
     mean_returns: pd.Series,
     cov_matrix: pd.DataFrame,
     risk_tolerance: float = 1.0,
+    max_weight: float = 1.0,
 ) -> dict:
     """
     Classical Mean-Variance Optimization (Markowitz).
@@ -86,6 +90,9 @@ def classical_optimize(
     - risk_tolerance = how much risk vs return to favor
     """
     n = len(mean_returns)
+    if n == 0:
+        raise ValueError("At least one asset is required")
+    max_weight = min(1.0, max(float(max_weight), 1 / n))
 
     def objective(w):
         portfolio_return = np.dot(w, mean_returns)
@@ -96,7 +103,7 @@ def classical_optimize(
     constraints = {"type": "eq", "fun": lambda w: np.sum(w) - 1}
 
     # bounds: each weight between 0 and 1 (no short selling)
-    bounds = tuple( (0,1) for _ in range(n) )
+    bounds = tuple((0, max_weight) for _ in range(n))
 
     # initial guess: equal weights / allocation
     initial_weights = np.array( [1 / n] * n)
@@ -108,6 +115,9 @@ def classical_optimize(
     bounds=bounds,
     constraints=constraints,
     )
+
+    if not result.success:
+        raise ValueError(f"Portfolio optimization failed: {result.message}")
 
     weights = result.x
     portfolio_return = float(np.dot(weights, mean_returns))
@@ -123,14 +133,18 @@ def classical_optimize(
             if w > 0.001 # only show meaningful allocations
         },
         "expected_annual_return": round(portfolio_return, 4),
+        "trailing_annualized_arithmetic_return": round(portfolio_return, 4),
         "annual_volatility": round(portfolio_risk, 4),
         "sharpe_ratio": round(sharpe_ratio, 4),
+        "max_weight": round(max_weight, 4),
+        "estimation_basis": "trailing daily arithmetic returns annualized over the observed sample; not a forecast",
     }
 
 
 def optimize_portfolio(
     tickers: list[str],
     risk_tolerance: float = 1.0,
+    max_weight: float = 1.0,
 ) -> dict:
     """
     High-level entry point: fetch data and optimize.
@@ -145,9 +159,13 @@ def optimize_portfolio(
         data["mean_returns"],
         data["cov_matrix"],
         risk_tolerance=risk_tolerance,
+        max_weight=max_weight,
     )
 
     result["tickers"] = data["tickers"]
+    result["observations"] = data["observations"]
+    result["start_date"] = data["start_date"]
+    result["end_date"] = data["end_date"]
     return result
 
 def quantum_optimize_portfolio(

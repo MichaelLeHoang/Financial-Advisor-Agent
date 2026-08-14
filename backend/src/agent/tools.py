@@ -77,7 +77,7 @@ def market_quote(ticker: str) -> str:
         f"Latest Price: {price:.2f}",
         f"Currency: {snapshot.currency or 'Unavailable'}",
         f"Latest Trade: {latest_trade}",
-        f"Market Status: latest available",
+        "Market Status: latest available",
         f"Data Source/Tool: market_quote; {', '.join(snapshot.data_sources) or 'market_data_service'}",
     ]
     return "\n".join(lines)
@@ -451,12 +451,29 @@ def optimize_portfolio_tool(
             )
 
         else: 
-            result = optimize_portfolio(tickers, risk_tolerance=risk_tolerance)
+            max_weight = 0.60 if len(tickers) >= 2 else 1.0
+            result = optimize_portfolio(
+                tickers,
+                risk_tolerance=risk_tolerance,
+                max_weight=max_weight,
+            )
+            trailing_return = result.get(
+                "trailing_annualized_arithmetic_return",
+                result.get("expected_annual_return", 0.0),
+            )
+            observations = result.get("observations", "Unavailable")
+            sample_start = result.get("start_date", "Unavailable")
+            sample_end = result.get("end_date", "Unavailable")
+            applied_cap = result.get("max_weight", max_weight)
             output = (
                 f"Method: Classical Markowitz\n"
-                f"Expected Return: {result['expected_annual_return']*100:.1f}%\n"
-                f"Volatility: {result['annual_volatility']*100:.1f}%\n"
-                f"Sharpe Ratio: {result['sharpe_ratio']:.2f}\n"
+                f"Trailing Annualized Arithmetic Return (not a forecast): "
+                f"{trailing_return*100:.1f}%\n"
+                f"Annualized Historical Volatility: {result['annual_volatility']*100:.1f}%\n"
+                f"Return/Volatility Ratio (0% benchmark): {result['sharpe_ratio']:.2f}\n"
+                f"Sample: {observations} daily returns "
+                f"({sample_start} to {sample_end})\n"
+                f"Per-asset weight cap: {applied_cap*100:.0f}%\n"
                 f"Allocation:\n"
             )
             for t, w in sorted(result["weights"].items(), key=lambda x: -x[1]):

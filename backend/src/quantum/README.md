@@ -5,7 +5,7 @@ Implements classical portfolio optimization and experimental quantum QAOA asset 
 
 ## Responsibilities
 - Prepare returns and covariance inputs.
-- Run constrained Markowitz optimization.
+- Run long-only, weight-capped Markowitz optimization.
 - Build QUBO matrices and execute QAOA selection.
 - Return research-oriented allocation and probability outputs.
 
@@ -20,4 +20,4 @@ Market history comes from existing data helpers. Entitlement enforcement and API
 Use small deterministic frames. Cover weights summing to one, non-negative allocations, single-asset behavior, QUBO shape, and selection output.
 
 ## Latest Change
-- Integrated portfolio optimization into the agent tool flow and shared progress reporting.
+- Constrained multi-asset allocations to a 60% per-asset cap in the agent flow and labeled annualized arithmetic return as a trailing historical estimate rather than a forecast, including its observation window and assumptions.

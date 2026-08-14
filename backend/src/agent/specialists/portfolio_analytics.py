@@ -12,6 +12,7 @@ from typing import Sequence
 from langchain_core.tools import BaseTool
 
 from src.agent.specialists.base import BaseSpecialist
+from src.agent.consensus_evidence import ConsensusEvidenceBundle, optimizer_requested
 from src.agent.tools import get_stock_info, optimize_portfolio_tool
 
 
@@ -30,7 +31,7 @@ YOUR ROLE in the Quanfora 2.0 consensus system:
 - Assess whether adding or removing assets would improve the portfolio
 
 YOUR APPROACH:
-1. Run classical Markowitz optimization to find the optimal weight allocation
+1. Only run portfolio optimization when the user explicitly asks for allocation, weighting, optimization, or rebalancing
 2. Consider running quantum QAOA for asset subset selection when evaluating many stocks
 3. Analyze the resulting Sharpe ratio — is the risk-return tradeoff attractive?
 4. Compare optimized allocation with equal-weight as a sanity check
@@ -48,3 +49,15 @@ Think in terms of portfolio construction, not individual stock picks."""
 
     def get_tools(self) -> Sequence[BaseTool]:
         return [get_stock_info, optimize_portfolio_tool]
+
+    def tools_for_query(
+        self, query: str, evidence: ConsensusEvidenceBundle | None = None
+    ) -> Sequence[BaseTool]:
+        wants_optimizer = (
+            evidence.optimizer_requested if evidence else optimizer_requested(query)
+        )
+        return (
+            [get_stock_info, optimize_portfolio_tool]
+            if wants_optimizer
+            else [get_stock_info]
+        )

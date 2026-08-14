@@ -89,6 +89,26 @@ class TestClassicalOptimize:
         total = sum(result["weights"].values())
         assert abs(total - 1.0) < 0.01
 
+    def test_multi_asset_weight_cap_prevents_concentrated_solution(self):
+        from src.quantum.portfolio import classical_optimize
+
+        mean_returns = pd.Series([0.80, 0.10], index=["SNDK", "MU"])
+        cov_matrix = pd.DataFrame(
+            [[0.04, 0.0], [0.0, 0.04]],
+            index=mean_returns.index,
+            columns=mean_returns.index,
+        )
+
+        result = classical_optimize(
+            mean_returns,
+            cov_matrix,
+            risk_tolerance=3.0,
+            max_weight=0.60,
+        )
+
+        assert max(result["weights"].values()) <= 0.60
+        assert result["estimation_basis"].endswith("not a forecast")
+
 
 class TestPortfolioDataPreparation:
     """Tests for yfinance return-shape normalization before optimization."""
@@ -116,6 +136,8 @@ class TestPortfolioDataPreparation:
         assert list(result["returns"].columns) == ["AAPL", "GOOGL"]
         assert list(result["mean_returns"].index) == ["AAPL", "GOOGL"]
         assert list(result["cov_matrix"].columns) == ["AAPL", "GOOGL"]
+        assert result["observations"] == 4
+        assert result["start_date"] == "2025-01-02"
 
 
 # ---------------------------------------------------------------------------

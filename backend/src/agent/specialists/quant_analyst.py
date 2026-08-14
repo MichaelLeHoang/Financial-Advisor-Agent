@@ -23,12 +23,12 @@ def rank_market_signals(tickers: list[str]) -> str:
     try:
         from src.quant.calculations import rank_signals
         from src.quant.models import SignalRankingRequest
-        from src.backtesting.market_data import MarketDataAdapter
+        from src.backtesting.market_data import YFinanceMarketDataAdapter
 
         end = date.today()
         start = end - timedelta(days=90)
         req = SignalRankingRequest(symbols=tickers, start_date=start, end_date=end)
-        adapter = MarketDataAdapter()
+        adapter = YFinanceMarketDataAdapter()
         ranks = rank_signals(req, adapter)
 
         if not ranks:
@@ -56,7 +56,7 @@ def run_strategy_backtest(
     """Backtest a trading strategy on historical data and return performance metrics."""
     try:
         from src.backtesting.engine import run_backtest
-        from src.backtesting.market_data import MarketDataAdapter
+        from src.backtesting.market_data import YFinanceMarketDataAdapter
         from src.backtesting.models import BacktestRequest
 
         end = date.today()
@@ -70,7 +70,7 @@ def run_strategy_backtest(
             initial_capital=10_000,
             parameters={"short_window": short_window, "long_window": long_window},
         )
-        adapter = MarketDataAdapter()
+        adapter = YFinanceMarketDataAdapter()
         metrics, _, _, _ = run_backtest(req, adapter)
 
         return (

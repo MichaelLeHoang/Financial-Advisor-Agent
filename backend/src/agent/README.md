@@ -25,6 +25,7 @@ Implements the Quanfora conversational advisor, Sabi capability routing, determi
 - `overview.py`: structured Overview builders for single-agent, market-grounded, consensus, and equity-research answers.
 - `response_cache.py`: cache-key normalization and cacheability policy for stateless chat responses.
 - `orchestrator.py` / `consensus.py`: Quanfora 2.0 specialist aggregation.
+- `consensus_evidence.py`: shared multi-ticker market, trend, risk, freshness, source, and limitation evidence.
 - `llm_queue.py` / `llm_worker.py`: asynchronous job lifecycle and queued response metadata.
 - `activity.py`: activity planning, tool/source sanitization, progress-event translation, and compact trace persistence.
 - `history.py`: owner-scoped SQLite conversation history shared with the memory store.
@@ -36,4 +37,4 @@ Reuse `data.market_data_service`, `llm.gateway`, `risk`, `quant`, and `saas` rat
 Cover routing, grounding, overview metadata, response structure, bounded personal context, response caching, consensus, queue state, activity ordering/redaction, history ownership, background maintenance, and tool failure behavior with mocked providers.
 
 ## Latest Change
-- Refined single-agent activity traces with clearer user-facing phase names and distinct, safe completion summaries so the activity drawer explains scope and synthesis without exposing private reasoning.
+- Made consensus evidence-first and ticker-specific: every requested symbol receives its own verdict, exact-verdict agreement, confidence, risks, limitations, freshness, and attributable sources. Missing essential evidence now fails closed as `insufficient_data`, while specialist/tool failures reduce coverage without becoming investment risk flags.
