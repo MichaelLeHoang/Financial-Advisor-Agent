@@ -1267,6 +1267,7 @@ async def agent_consensus(
     {"message": "Should I invest in NVDA right now?"}
     """
     from src.agent.orchestrator import QuanforaOrchestrator
+    from src.agent.overview import build_consensus_overview
     from src.agent.history import append_message, load_history
     from src.services.user_memory import UserMemoryService, enqueue_memory_maintenance
 
@@ -1293,6 +1294,7 @@ async def agent_consensus(
         )
         result = orchestrator.analyze(analysis_message)
         synthesis = orchestrator._synthesize_response(analysis_message, result)
+        overview = build_consensus_overview(analysis_message, result)
 
         # Persist
         source_message_id = None
@@ -1324,11 +1326,15 @@ async def agent_consensus(
             "source_message_id": str(source_message_id) if source_message_id else None,
             "memory_status": memory_status,
             "memory_used": memory_context.usage,
+            "overview": overview.model_dump(),
             "consensus": {
                 "verdict": result.verdict.value,
                 "confidence": result.confidence,
                 "consensus_score": result.consensus_score,
                 "agreement_ratio": result.agreement_ratio,
+                "evidence_status": result.evidence_status,
+                "evidence_coverage": result.evidence_coverage,
+                "limitations": result.limitations,
                 "risk_vetoed": result.risk_vetoed,
                 "risk_flags": result.risk_flags,
                 "dissenting_agents": result.dissenting_agents,
@@ -1340,8 +1346,42 @@ async def agent_consensus(
                         "reasoning": o.reasoning,
                         "data_points": o.data_points,
                         "risk_flags": o.risk_flags,
+                        "status": o.status,
+                        "limitations": o.limitations,
+                        "asset_opinions": {
+                            symbol: {
+                                "verdict": asset.verdict.value,
+                                "confidence": asset.confidence,
+                                "reasoning": asset.reasoning,
+                                "data_points": asset.data_points,
+                                "risk_flags": asset.risk_flags,
+                                "limitations": asset.limitations,
+                                "risk_level": asset.risk_level,
+                            }
+                            for symbol, asset in o.asset_opinions.items()
+                        },
                     }
                     for o in result.opinions
+                ],
+                "assets": [
+                    {
+                        "symbol": asset.symbol,
+                        "company_name": asset.company_name,
+                        "verdict": asset.verdict.value,
+                        "confidence": asset.confidence,
+                        "consensus_score": asset.consensus_score,
+                        "agreement_ratio": asset.agreement_ratio,
+                        "evidence_status": asset.evidence_status,
+                        "evidence_coverage": asset.evidence_coverage,
+                        "risk_flags": asset.risk_flags,
+                        "limitations": asset.limitations,
+                        "risk_vetoed": asset.risk_vetoed,
+                        "dissenting_agents": asset.dissenting_agents,
+                        "metrics": asset.metrics,
+                        "sources": asset.sources,
+                        "as_of": asset.as_of,
+                    }
+                    for asset in result.asset_results
                 ],
             },
         }

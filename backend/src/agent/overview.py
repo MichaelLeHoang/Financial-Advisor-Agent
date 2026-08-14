@@ -10,7 +10,13 @@ from src.models.equity_research import (
     EquityResearchRun,
     EquityResearchSnapshot,
 )
-from src.models.overview import Overview, OverviewMetric, OverviewPoint, OverviewSource
+from src.models.overview import (
+    Overview,
+    OverviewAssetAssessment,
+    OverviewMetric,
+    OverviewPoint,
+    OverviewSource,
+)
 
 DISCLAIMER = "This is AI-generated analysis, not professional financial advice."
 
@@ -112,11 +118,16 @@ def build_single_response_overview(
     verdict = _verdict_from_text(response_text)
     decision_prompt = _is_decision_prompt(message)
     explicit_decision = _has_explicit_decision_language(response_text)
-    if decision_prompt and not explicit_decision and verdict in {
-        "neutral",
-        "bullish",
-        "bearish",
-    }:
+    if (
+        decision_prompt
+        and not explicit_decision
+        and verdict
+        in {
+            "neutral",
+            "bullish",
+            "bearish",
+        }
+    ):
         verdict = "hold"
     summary = (
         _first_readable_paragraph(response_text)
@@ -165,8 +176,12 @@ def build_single_response_overview(
 
 
 def build_consensus_overview(query: str, result: ConsensusResult) -> Overview:
-    ticker = _extract_ticker(query) or "the asset"
-    title = ticker if ticker == "the asset" else ticker.upper()
+    if result.asset_results:
+        symbols = [asset.symbol for asset in result.asset_results]
+        title = " vs ".join(symbols)
+    else:
+        ticker = _extract_ticker(query) or "the asset"
+        title = ticker if ticker == "the asset" else ticker.upper()
     verdict = _verdict_from_consensus(result.verdict)
     risk_flags = _unique([str(flag) for flag in result.risk_flags or []])
     opinions = list(result.opinions or [])
@@ -190,12 +205,14 @@ def build_consensus_overview(query: str, result: ConsensusResult) -> Overview:
         OverviewPoint(title="Risk flag", detail=flag, tone="negative")
         for flag in risk_flags[:3]
     )
-    summary = (
-        f"Quanfora 2.0 consensus rates {title} as {result.verdict.value.replace('_', ' ').title()} "
-        f"with {result.confidence:.0%} confidence and {result.agreement_ratio:.0%} specialist agreement."
+    summary = result.summary or (
+        f"Quanfora 2.0 rates {title} as {result.verdict.value.replace('_', ' ').title()} "
+        f"with {result.confidence:.0%} confidence and {result.agreement_ratio:.0%} exact-verdict agreement."
     )
     if result.dissenting_agents:
         summary += f" Dissent came from {', '.join(result.dissenting_agents[:3])}."
+    asset_assessments = [_asset_assessment(item) for item in result.asset_results]
+    actual_sources = _overview_sources_from_assets(result.asset_results)
     return Overview(
         title=title,
         verdict=verdict,
@@ -210,12 +227,14 @@ def build_consensus_overview(query: str, result: ConsensusResult) -> Overview:
                 label="Confidence", value=f"{result.confidence:.0%}", tone="info"
             ),
             OverviewMetric(
-                label="Agreement", value=f"{result.agreement_ratio:.0%}", tone="info"
+                label="Exact agreement",
+                value=f"{result.agreement_ratio:.0%}",
+                tone="info",
             ),
             OverviewMetric(
-                label="Risk Flags",
-                value=str(len(risk_flags)),
-                tone="negative" if risk_flags else "positive",
+                label="Evidence",
+                value=result.evidence_status.replace("_", " ").title(),
+                tone="info" if result.evidence_status == "complete" else "neutral",
             ),
         ],
         catalysts=catalysts[:4],
@@ -227,7 +246,9 @@ def build_consensus_overview(query: str, result: ConsensusResult) -> Overview:
                 tone="neutral",
             )
         ],
-        sources=[OverviewSource(label="Quanfora 2.0 specialists", source="consensus")],
+        sources=actual_sources,
+        asset_assessments=asset_assessments,
+        limitations=_unique(result.limitations),
         next_questions=[
             f"What would change the consensus view on {title}?",
             f"Show the bull and bear case for {title}.",
@@ -235,6 +256,82 @@ def build_consensus_overview(query: str, result: ConsensusResult) -> Overview:
         ],
         disclaimer="This is AI-generated analysis from Quanfora 2.0's multi-agent consensus system, not professional financial advice.",
     )
+
+
+def _asset_assessment(asset: Any) -> OverviewAssetAssessment:
+    metrics = asset.metrics or {}
+    trend = str(metrics.get("trend_label") or "unavailable").replace("_", " ").title()
+    sources = [
+        OverviewSource(
+            label=str(item.get("label") or item.get("source") or "Market evidence"),
+            source=str(item.get("source") or "unknown"),
+            url=item.get("url"),
+        )
+        for item in asset.sources
+    ]
+    return OverviewAssetAssessment(
+        symbol=asset.symbol,
+        company_name=asset.company_name,
+        verdict=_verdict_from_consensus(asset.verdict),
+        confidence=asset.confidence,
+        agreement=asset.agreement_ratio,
+        evidence_status=asset.evidence_status,
+        evidence_coverage=asset.evidence_coverage,
+        as_of=asset.as_of,
+        metrics=[
+            OverviewMetric(label="Price", value=_money(metrics.get("latest_price"))),
+            OverviewMetric(
+                label="20-day momentum",
+                value=_pct(metrics.get("momentum_20d")),
+                tone=_tone_for_number(metrics.get("momentum_20d")),
+            ),
+            OverviewMetric(
+                label="60-day momentum",
+                value=_pct(metrics.get("momentum_60d")),
+                tone=_tone_for_number(metrics.get("momentum_60d")),
+            ),
+            OverviewMetric(
+                label="Realized volatility",
+                value=_pct(metrics.get("annualized_volatility")),
+                tone="negative"
+                if metrics.get("annualized_volatility", 0) >= 0.6
+                else "neutral",
+            ),
+            OverviewMetric(
+                label="Max drawdown",
+                value=_pct(metrics.get("max_drawdown")),
+                tone="negative",
+            ),
+            OverviewMetric(label="Trend", value=trend, tone="info"),
+        ],
+        risks=[
+            OverviewPoint(title="Measured risk", detail=flag, tone="negative")
+            for flag in asset.risk_flags
+        ],
+        limitations=_unique(asset.limitations),
+        sources=sources,
+    )
+
+
+def _overview_sources_from_assets(assets: list[Any]) -> list[OverviewSource]:
+    sources: list[OverviewSource] = []
+    seen: set[tuple[str, str | None]] = set()
+    for asset in assets:
+        for item in asset.sources:
+            source = str(item.get("source") or "unknown")
+            url = item.get("url")
+            key = (source.casefold(), url)
+            if key in seen:
+                continue
+            seen.add(key)
+            sources.append(
+                OverviewSource(
+                    label=str(item.get("label") or source),
+                    source=source,
+                    url=url,
+                )
+            )
+    return sources[:12]
 
 
 def build_research_overview(
@@ -618,7 +715,11 @@ def _verdict_from_consensus(verdict: Verdict) -> str:
         return "bearish"
     if verdict == Verdict.HOLD:
         return "hold"
-    return "hold"
+    if verdict == Verdict.INSUFFICIENT_DATA:
+        return "insufficient_data"
+    if verdict == Verdict.MIXED:
+        return "mixed"
+    return "neutral"
 
 
 def _verdict_from_text(text: str) -> str:
