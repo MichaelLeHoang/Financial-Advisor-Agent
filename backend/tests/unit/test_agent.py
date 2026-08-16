@@ -315,8 +315,8 @@ class TestOptimizePortfolioTool:
             )
 
         assert "Classical Markowitz" in result
-        assert "Expected Return" in result
-        assert "Sharpe Ratio" in result
+        assert "Trailing Annualized Arithmetic Return (not a forecast)" in result
+        assert "Return/Volatility Ratio (0% benchmark)" in result
 
     def test_quantum_method_returns_selected_stocks(self):
         from src.agent.tools import optimize_portfolio_tool

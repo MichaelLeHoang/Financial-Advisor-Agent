@@ -84,6 +84,9 @@ def _consensus_result_metadata(result: Any) -> dict:
             "confidence": result.confidence,
             "consensus_score": result.consensus_score,
             "agreement_ratio": result.agreement_ratio,
+            "evidence_status": result.evidence_status,
+            "evidence_coverage": result.evidence_coverage,
+            "limitations": result.limitations or [],
             "risk_vetoed": result.risk_vetoed,
             "risk_flags": result.risk_flags or [],
             "dissenting_agents": result.dissenting_agents or [],
@@ -95,13 +98,45 @@ def _consensus_result_metadata(result: Any) -> dict:
                     "reasoning": opinion.reasoning,
                     "data_points": opinion.data_points or {},
                     "risk_flags": opinion.risk_flags or [],
+                    "status": opinion.status,
+                    "limitations": opinion.limitations or [],
+                    "asset_opinions": {
+                        symbol: {
+                            "verdict": asset.verdict.value,
+                            "confidence": asset.confidence,
+                            "reasoning": asset.reasoning,
+                            "data_points": asset.data_points or {},
+                            "risk_flags": asset.risk_flags or [],
+                            "limitations": asset.limitations or [],
+                            "risk_level": asset.risk_level,
+                        }
+                        for symbol, asset in opinion.asset_opinions.items()
+                    },
                 }
                 for opinion in result.opinions
             ],
+            "assets": [
+                {
+                    "symbol": asset.symbol,
+                    "company_name": asset.company_name,
+                    "verdict": asset.verdict.value,
+                    "confidence": asset.confidence,
+                    "consensus_score": asset.consensus_score,
+                    "agreement_ratio": asset.agreement_ratio,
+                    "evidence_status": asset.evidence_status,
+                    "evidence_coverage": asset.evidence_coverage,
+                    "risk_flags": asset.risk_flags,
+                    "limitations": asset.limitations,
+                    "risk_vetoed": asset.risk_vetoed,
+                    "dissenting_agents": asset.dissenting_agents,
+                    "metrics": asset.metrics,
+                    "sources": asset.sources,
+                    "as_of": asset.as_of,
+                }
+                for asset in result.asset_results
+            ],
         }
     }
-    overview = build_consensus_overview("", result)
-    metadata.update(overview_to_metadata(overview) or {})
     return metadata
 
 

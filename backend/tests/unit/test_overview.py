@@ -1,7 +1,12 @@
 from datetime import date
 from uuid import uuid4
 
-from src.agent.consensus import AgentOpinion, ConsensusResult, Verdict
+from src.agent.consensus import (
+    AgentOpinion,
+    AssetConsensusResult,
+    ConsensusResult,
+    Verdict,
+)
 from src.agent.overview import (
     build_consensus_overview,
     build_research_overview,
@@ -106,6 +111,73 @@ def test_consensus_overview_maps_specialist_result():
     assert overview.metrics[1].value == "72%"
     assert any(point.title == "Risk flag" for point in overview.risks)
     assert overview.next_questions
+
+
+def test_consensus_overview_exposes_separate_asset_cards_and_real_sources():
+    result = ConsensusResult(
+        verdict=Verdict.MIXED,
+        confidence=0.61,
+        consensus_score=0.0,
+        agreement_ratio=0.6,
+        opinions=[],
+        risk_flags=["Very high realized volatility"],
+        risk_vetoed=False,
+        dissenting_agents=[],
+        summary="SNDK and MU require separate decisions.",
+        evidence_status="partial",
+        evidence_coverage=0.8,
+        limitations=["News enrichment was unavailable."],
+        asset_results=[
+            AssetConsensusResult(
+                symbol="SNDK",
+                company_name="Sandisk",
+                verdict=Verdict.HOLD,
+                confidence=0.55,
+                consensus_score=0.2,
+                agreement_ratio=0.4,
+                evidence_status="partial",
+                evidence_coverage=0.8,
+                metrics={
+                    "latest_price": 1528.11,
+                    "momentum_20d": 0.0829,
+                    "momentum_60d": 0.1464,
+                    "annualized_volatility": 1.1646,
+                    "max_drawdown": -0.5649,
+                    "trend_label": "rebound_in_long_term_uptrend",
+                },
+                sources=[
+                    {
+                        "label": "Latest quote",
+                        "source": "Yahoo Finance",
+                        "url": "https://finance.yahoo.com/quote/SNDK",
+                    }
+                ],
+                risk_flags=["Extreme realized volatility"],
+                limitations=["News enrichment was unavailable."],
+            ),
+            AssetConsensusResult(
+                symbol="MU",
+                company_name="Micron Technology",
+                verdict=Verdict.BULLISH,
+                confidence=0.67,
+                consensus_score=0.4,
+                agreement_ratio=0.8,
+                evidence_status="complete",
+                evidence_coverage=0.8,
+                metrics={"latest_price": 949.83, "trend_label": "mixed"},
+                sources=[{"label": "History", "source": "Yahoo Finance"}],
+            ),
+        ],
+    )
+
+    overview = build_consensus_overview("Should I buy SNDK and MU?", result)
+
+    assert overview.title == "SNDK vs MU"
+    assert overview.verdict == "mixed"
+    assert [asset.symbol for asset in overview.asset_assessments] == ["SNDK", "MU"]
+    assert overview.asset_assessments[0].agreement == 0.4
+    assert overview.sources[0].source == "Yahoo Finance"
+    assert overview.limitations == ["News enrichment was unavailable."]
 
 
 def test_research_overview_uses_snapshot_and_reports():

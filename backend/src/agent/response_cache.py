@@ -8,7 +8,7 @@ from src.core.cache import cached_value
 from src.agent.current_market_context import requires_fresh_evidence
 from src.saas.models import Plan
 
-CHAT_RESPONSE_CACHE_VERSION = 5
+CHAT_RESPONSE_CACHE_VERSION = 6
 
 
 def normalized_chat_message(message: str) -> str:

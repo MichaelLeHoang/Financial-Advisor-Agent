@@ -219,6 +219,35 @@ export interface ConsensusOpinion {
   reasoning: string;
   data_points: Record<string, unknown>;
   risk_flags: string[];
+  status?: "completed" | "partial" | "unavailable";
+  limitations?: string[];
+  asset_opinions?: Record<string, {
+    verdict: string;
+    confidence: number;
+    reasoning: string;
+    data_points: Record<string, unknown>;
+    risk_flags: string[];
+    limitations: string[];
+    risk_level: string;
+  }>;
+}
+
+export interface ConsensusAssetResult {
+  symbol: string;
+  company_name: string;
+  verdict: string;
+  confidence: number;
+  consensus_score: number;
+  agreement_ratio: number;
+  evidence_status: string;
+  evidence_coverage: number;
+  risk_flags: string[];
+  limitations: string[];
+  risk_vetoed: boolean;
+  dissenting_agents: string[];
+  metrics: Record<string, unknown>;
+  sources: OverviewSource[];
+  as_of?: string | null;
 }
 
 export interface ConsensusMetadata {
@@ -226,10 +255,14 @@ export interface ConsensusMetadata {
   confidence: number;
   consensus_score: number;
   agreement_ratio: number;
+  evidence_status?: string;
+  evidence_coverage?: number;
+  limitations?: string[];
   risk_vetoed: boolean;
   risk_flags: string[];
   dissenting_agents: string[];
   opinions: ConsensusOpinion[];
+  assets?: ConsensusAssetResult[];
 }
 
 export interface ConsensusResponse extends ChatResponse {
@@ -353,7 +386,7 @@ export interface EquityResearchEvent {
 }
 
 export type OverviewTone = "positive" | "neutral" | "negative" | "info";
-export type OverviewVerdict = "buy" | "hold" | "sell" | "bullish" | "neutral" | "bearish" | "insufficient_data";
+export type OverviewVerdict = "buy" | "hold" | "sell" | "bullish" | "neutral" | "bearish" | "insufficient_data" | "mixed";
 
 export interface OverviewMetric {
   label: string;
@@ -374,6 +407,21 @@ export interface OverviewPoint {
   tone: OverviewTone;
 }
 
+export interface OverviewAssetAssessment {
+  symbol: string;
+  company_name: string;
+  verdict: OverviewVerdict;
+  confidence: number;
+  agreement: number;
+  evidence_status: string;
+  evidence_coverage: number;
+  as_of?: string | null;
+  metrics: OverviewMetric[];
+  risks: OverviewPoint[];
+  limitations: string[];
+  sources: OverviewSource[];
+}
+
 export interface Overview {
   title: string;
   verdict: OverviewVerdict;
@@ -382,6 +430,8 @@ export interface Overview {
   catalysts: OverviewPoint[];
   risks: OverviewPoint[];
   sources: OverviewSource[];
+  asset_assessments?: OverviewAssetAssessment[];
+  limitations?: string[];
   next_questions: string[];
   disclaimer: string;
 }

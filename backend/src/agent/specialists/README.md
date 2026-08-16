@@ -6,8 +6,10 @@ Defines the five Quanfora 2.0 specialist roles that produce structured opinions 
 ## Responsibilities
 - Bind domain-appropriate existing tools.
 - Convert LLM output into `AgentOpinion` records.
+- Return a distinct `AssetOpinion` for every ticker in a multi-asset request.
 - Provide quant research, quant analysis, data science, portfolio, and risk perspectives.
-- Degrade safely when tools or models fail.
+- Degrade safely when tools or models fail by reporting limitations separately from investment risks.
+- Expose portfolio optimization only for explicit allocation, weighting, optimization, or rebalancing intent.
 
 ## Key Files
 - `base.py`: shared specialist execution and structured parsing.
@@ -20,4 +22,4 @@ Specialists should compose tools from `agent/tools.py` and calculations from dom
 Mock LLM and tool outputs; cover structured parsing, fallback opinions, model disagreement, and risk-veto inputs.
 
 ## Latest Change
-- Updated specialist role copy to use Quanfora branding for user-facing consensus prompts and documentation.
+- Added the multi-asset specialist contract, failure-status metadata, limitation handling, explicit optimizer gating, and concrete yfinance adapters for quantitative signal and backtest tools.

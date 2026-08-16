@@ -15,6 +15,10 @@ import time
 from typing import Any, Callable
 
 from src.agent.consensus import AgentOpinion, ConsensusEngine, ConsensusResult, Verdict
+from src.agent.consensus_evidence import (
+    ConsensusEvidenceBundle,
+    build_consensus_evidence,
+)
 from src.agent.specialists import (
     ALL_SPECIALISTS,
     BaseSpecialist,
@@ -37,6 +41,16 @@ _SPECIALIST_ACTIVITY_DETAILS = {
 def _build_consensus_synthesis_prompt(
     query: str, result: ConsensusResult, opinions_text: str
 ) -> str:
+    assets_text = (
+        "\n".join(
+            f"- {asset.symbol}: {asset.verdict.value.upper()}, confidence {asset.confidence:.0%}, "
+            f"exact-verdict agreement {asset.agreement_ratio:.0%}, evidence {asset.evidence_status}, "
+            f"metrics {asset.metrics}, risks {asset.risk_flags}, limitations {asset.limitations}, "
+            f"sources {asset.sources}"
+            for asset in result.asset_results
+        )
+        or "- No ticker-specific aggregate was available."
+    )
     return f"""You are the Quanfora 2.0 Lead Analyst. You have received analysis from 5 specialist agents.
 Your job is to turn their findings into a clear, reader-friendly investment answer.
 
@@ -46,11 +60,14 @@ Your job is to turn their findings into a clear, reader-friendly investment answ
 ## Consensus Summary
 - Overall Verdict: {result.verdict.value.upper()}
 - Confidence: {result.confidence:.0%}
-- Consensus Score: {result.consensus_score:+.4f}
-- Agreement Ratio: {result.agreement_ratio:.0%}
-- Risk Vetoed: {result.risk_vetoed}
-- Dissenting Agents: {', '.join(result.dissenting_agents) or 'None'}
+- Exact-Verdict Agreement: {result.agreement_ratio:.0%}
 - Risk Flags: {result.risk_flags}
+- Evidence Status: {result.evidence_status}
+- Evidence Coverage: {result.evidence_coverage:.0%}
+- Limitations: {result.limitations}
+
+## Per-Asset Consensus (authoritative)
+{assets_text}
 
 ## Individual Specialist Opinions
 {opinions_text}
@@ -58,11 +75,11 @@ Your job is to turn their findings into a clear, reader-friendly investment answ
 ## Main Answer Format
 Write the main chat answer for an investor, not an internal audit report.
 
-Start with one direct sentence that answers the user's question:
+Start with one direct sentence that answers the user's question. For multiple stocks, name every ticker and give each ticker its own verdict:
 - "Yes..." for a buy/add answer
 - "No..." for an avoid/sell answer
-- "Hold/Wait..." when evidence is mixed, risk-heavy, or incomplete
-- "Insufficient data..." when the specialists lack enough evidence
+- "Hold/Wait..." only when usable evidence supports that verdict
+- "Insufficient evidence..." when essential price, trend, or risk evidence is unavailable; never translate missing evidence into Hold
 
 Then preserve the useful consensus/report evidence instead of replacing it with a short summary. Use markdown that stays scannable in chat:
 - Use `**Label:**` paragraphs for compact evidence blocks.
@@ -88,6 +105,11 @@ For broad market or sector questions, use:
 
 Rules:
 - Be specific with numbers from the specialist outputs.
+- Treat Per-Asset Consensus as authoritative. Never collapse different ticker verdicts into a single buy/hold/sell instruction.
+- Do not repeat the structured overview as a second overview; use the prose to explain evidence and practical implications.
+- State that agreement means exact-verdict agreement; neutral and hold do not count as agreement with bullish.
+- Keep evidence limitations separate from investment risks.
+- Do not describe trailing annualized historical return as expected or forecast return.
 - For ticker-specific stock answers, include "Market Overall" to explain what the broader market, sector, and macro tape are doing around the stock when available.
 - Keep the strongest details from the specialists: current price/action, sentiment/news, model or technical signals, validation quality, risk metrics, and portfolio implications when provided.
 - Translate internal mechanics into plain implications. Do not lead with terms like "risk veto", "agreement ratio", "consensus score", or "tool failure" in the main answer unless they materially change the recommendation.
@@ -138,7 +160,10 @@ class QuanforaOrchestrator:
         ]
 
     def analyze(
-        self, query: str, progress_callback: ProgressCallback | None = None
+        self,
+        query: str,
+        progress_callback: ProgressCallback | None = None,
+        evidence: ConsensusEvidenceBundle | None = None,
     ) -> ConsensusResult:
         """
         Run all specialists on the query and return a consensus result.
@@ -146,17 +171,19 @@ class QuanforaOrchestrator:
         Uses ThreadPoolExecutor for parallel execution since each specialist
         makes independent LLM + tool calls.
         """
+        evidence = evidence or build_consensus_evidence(query)
+        specialist_query = evidence.augment(query)
         specialists = self._create_specialists()
         opinions: list[AgentOpinion] = []
         completed_tools: list[str] = []
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("  Quanfora 2.0 — Multi-Agent Consensus Analysis")
         print(f"  Query: {query[:80]}...")
         print(
             f"  Dispatching to {len(specialists)} specialists (sequential, rate-limit safe)..."
         )
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         # Run specialists sequentially with a delay between each to stay
         # within Gemini free-tier rate limits (~15 RPM).
@@ -179,7 +206,7 @@ class QuanforaOrchestrator:
                     }
                 )
             try:
-                opinion = self._run_specialist(specialist, query)
+                opinion = self._run_specialist(specialist, specialist_query, evidence)
                 opinions.append(opinion)
                 completed_tools.append(specialist.name)
                 if progress_callback:
@@ -192,8 +219,10 @@ class QuanforaOrchestrator:
                             "activity_detail": (
                                 f"Returned a {opinion.verdict.value} view at "
                                 f"{opinion.confidence:.0%} confidence"
-                                f" and flagged {len(opinion.risk_flags)} risk"
-                                f"{'s' if len(opinion.risk_flags) != 1 else ''}."
+                                f" with {len(opinion.risk_flags)} risk"
+                                f"{'s' if len(opinion.risk_flags) != 1 else ''} and "
+                                f"{len(opinion.limitations)} limitation"
+                                f"{'s' if len(opinion.limitations) != 1 else ''}."
                             ),
                         }
                     )
@@ -208,7 +237,8 @@ class QuanforaOrchestrator:
                         verdict=Verdict.NEUTRAL,
                         confidence=0.1,
                         reasoning=f"Specialist unavailable: {str(exc)[:100]}",
-                        risk_flags=[f"{specialist.display_name} analysis failed"],
+                        status="unavailable",
+                        limitations=[f"{specialist.display_name} analysis failed."],
                     )
                 )
                 completed_tools.append(specialist.name)
@@ -224,19 +254,23 @@ class QuanforaOrchestrator:
                         }
                     )
 
-        result = self.consensus_engine.aggregate(opinions)
-        print(f"\n{'─'*60}")
+        result = self.consensus_engine.aggregate(opinions, evidence)
+        print(f"\n{'─' * 60}")
         print(
             f"  Consensus: {result.verdict.value.upper()} | Score: {result.consensus_score:+.2f} | Agreement: {result.agreement_ratio:.0%}"
         )
-        print(f"{'─'*60}\n")
+        print(f"{'─' * 60}\n")
 
         return result
 
     @staticmethod
-    def _run_specialist(specialist: BaseSpecialist, query: str) -> AgentOpinion:
+    def _run_specialist(
+        specialist: BaseSpecialist,
+        query: str,
+        evidence: ConsensusEvidenceBundle | None = None,
+    ) -> AgentOpinion:
         """Execute a single specialist analysis (runs in thread)."""
-        return specialist.analyze(query)
+        return specialist.analyze(query, evidence=evidence)
 
     def chat(
         self,
@@ -304,7 +338,10 @@ class QuanforaOrchestrator:
                 f"- Confidence: {o.confidence:.0%}\n"
                 f"- Reasoning: {o.reasoning}\n"
                 f"- Data Points: {o.data_points}\n"
-                f"- Risk Flags: {o.risk_flags}"
+                f"- Risk Flags: {o.risk_flags}\n"
+                f"- Limitations: {o.limitations}\n"
+                f"- Per-Asset Opinions: "
+                f"{ {symbol: {'verdict': asset.verdict.value, 'confidence': asset.confidence, 'reasoning': asset.reasoning, 'data_points': asset.data_points, 'risk_flags': asset.risk_flags, 'limitations': asset.limitations} for symbol, asset in o.asset_opinions.items()} }"
                 for o in result.opinions
             )
 
@@ -349,6 +386,14 @@ class QuanforaOrchestrator:
             "",
         ]
 
+        if result.asset_results:
+            parts.append("### Per-stock verdicts")
+            for asset in result.asset_results:
+                parts.append(
+                    f"- **{asset.symbol}: {asset.verdict.value.replace('_', ' ').title()}** "
+                    f"({asset.confidence:.0%} confidence, {asset.agreement_ratio:.0%} exact-verdict agreement)"
+                )
+
         if result.risk_vetoed:
             parts.append(
                 "⚠️ **Risk Veto Activated** — Multiple critical risk flags detected.\n"
@@ -363,6 +408,12 @@ class QuanforaOrchestrator:
         if result.risk_flags:
             parts.append(
                 "\n### Risk Flags\n" + "\n".join(f"- {f}" for f in result.risk_flags)
+            )
+
+        if result.limitations:
+            parts.append(
+                "\n### Evidence limitations\n"
+                + "\n".join(f"- {item}" for item in result.limitations)
             )
 
         if result.dissenting_agents:

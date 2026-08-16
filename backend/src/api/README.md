@@ -25,4 +25,4 @@ Route handlers should validate and translate requests only. Business logic belon
 Use FastAPI `TestClient` with mocked dependencies for route contracts, authorization, resumable SSE cursors, provider timeouts, overview/workspace payloads, status rollups, and error responses.
 
 ## Latest Change
-- Added a provider-backed earnings-calendar endpoint and company-logo metadata so Watchlist and Discover render real report dates, estimates, timing, and recognizable symbols.
+- Extended consensus responses with per-ticker verdicts, exact agreement, evidence coverage and status, measured risks, limitations, freshness, provider sources, and specialist availability metadata.
