@@ -2,10 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
+  isKeyedRequestPending,
   remainingSkeletonTime,
   SKELETON_APPEARANCE_DELAY_MS,
   SKELETON_MINIMUM_VISIBLE_MS,
 } from "../../src/lib/loading-state.ts";
+
+test("keeps keyed data pending until the current request settles", () => {
+  assert.equal(isKeyedRequestPending("", ""), false);
+  assert.equal(isKeyedRequestPending("MU,SNDK", ""), true);
+  assert.equal(isKeyedRequestPending("MU,SNDK", "MU,SNDK"), false);
+  assert.equal(isKeyedRequestPending("MU,NVDA,SNDK", "MU,SNDK"), true);
+});
 
 test("uses a short delayed appearance and stable minimum skeleton duration", () => {
   assert.equal(SKELETON_APPEARANCE_DELAY_MS, 150);
