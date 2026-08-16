@@ -8,3 +8,7 @@ export function remainingSkeletonTime(
 ) {
   return Math.max(0, minimumVisibleMs - Math.max(0, now - visibleAt));
 }
+
+export function isKeyedRequestPending(requestKey: string, settledRequestKey: string) {
+  return Boolean(requestKey) && requestKey !== settledRequestKey;
+}

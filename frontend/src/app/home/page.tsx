@@ -8,25 +8,31 @@ import { usePortfolioBooks } from "@/components/portfolio/PortfolioBooksProvider
 import { useInvestmentPolicy } from "@/components/investment-policy/InvestmentPolicyProvider";
 import type { Holding, InvestmentPolicyAlert, MarketQuote, PositionBook } from "@/lib/api";
 import { fetchQuotes } from "@/lib/quote-cache";
+import { isKeyedRequestPending } from "@/lib/loading-state";
 import { LoadingRegion, RefreshingIndicator, SkeletonBlock } from "@/components/ui/DataLoading";
 
 export default function HomePage() {
   const { portfolio, holdings, summary, events, loading: booksLoading, refreshing: booksRefreshing, error: booksError, refreshedAt, refresh } = usePortfolioBooks();
   const { policy, validation, loading: policyLoading, refreshing: policyRefreshing, error: policyError, refresh: refreshPolicy } = useInvestmentPolicy();
   const [quotes, setQuotes] = useState<Map<string, MarketQuote>>(new Map());
+  const [settledQuoteTickerKey, setSettledQuoteTickerKey] = useState("");
   const tickerKey = useMemo(() => holdings.map((holding) => holding.symbol.toUpperCase()).sort().join(","), [holdings]);
 
   useEffect(() => {
     let active = true;
     if (booksLoading || !tickerKey) {
       setQuotes(new Map());
+      setSettledQuoteTickerKey("");
       return () => { active = false; };
     }
     void fetchQuotes(tickerKey.split(","), "5d", "1d").then((nextQuotes) => {
-      if (active) setQuotes(nextQuotes);
+      if (active) {
+        setQuotes(nextQuotes);
+        setSettledQuoteTickerKey(tickerKey);
+      }
     });
     return () => { active = false; };
-  }, [booksError, booksLoading, tickerKey]);
+  }, [booksLoading, tickerKey]);
 
   const investment = summary?.books.find((book) => book.book_type === "investment");
   const trading = summary?.books.find((book) => book.book_type === "trading");
@@ -43,16 +49,22 @@ export default function HomePage() {
   const alerts = useMemo(() => buildAttentionAlerts(validation?.alerts ?? [], unresolved), [unresolved, validation?.alerts]);
   const risk = portfolioRiskLabel({ booksError, booksLoading, policyError, policyLoading, policyConfigured: Boolean(policy), alerts, compliant: validation?.compliant });
   const hasPortfolioData = Boolean(summary);
-  const totalValueLabel = booksLoading ? "Loading" : booksError && !hasPortfolioData ? "Unavailable" : formatMoney(totalValue, currency);
-  const totalValueDetail = quoteCoverage === holdings.length && holdings.length
-    ? "Estimated market value across current positions"
+  const quoteValuesLoading = isKeyedRequestPending(tickerKey, settledQuoteTickerKey);
+  const monetaryValuesLoading = booksLoading || quoteValuesLoading;
+  const totalValueLabel = monetaryValuesLoading ? "Loading" : booksError && !hasPortfolioData ? "Unavailable" : formatMoney(totalValue, currency);
+  const totalValueDetail = monetaryValuesLoading
+    ? "Fetching current market quotes"
+    : quoteCoverage === holdings.length && holdings.length
+      ? "Estimated market value across current positions"
+      : quoteCoverage
+        ? `${quoteCoverage} of ${holdings.length} live quotes · remainder at cost basis`
+        : "Recorded cost basis across all books";
+  const todayValue = monetaryValuesLoading ? "Loading" : quoteCoverage ? formatSignedMoney(dayChange, currency) : "Unavailable";
+  const todayDetail = monetaryValuesLoading
+    ? "Waiting for current quote coverage"
     : quoteCoverage
-      ? `${quoteCoverage} of ${holdings.length} live quotes · remainder at cost basis`
-      : "Recorded cost basis across all books";
-  const todayValue = booksLoading ? "Loading" : quoteCoverage ? formatSignedMoney(dayChange, currency) : "Unavailable";
-  const todayDetail = quoteCoverage
-    ? `${dayChangePercent === null ? "Return unavailable" : formatSignedPercent(dayChangePercent)} · ${quoteCoverage} of ${holdings.length} positions quoted`
-    : "No current quotes available";
+      ? `${dayChangePercent === null ? "Return unavailable" : formatSignedPercent(dayChangePercent)} · ${quoteCoverage} of ${holdings.length} positions quoted`
+      : "No current quotes available";
   const recentEvents = [...events].sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)).slice(0, 3);
   const nextStep = buildNextStep(unresolved, alerts, holdings, portfolio?.name);
 
@@ -66,14 +78,14 @@ export default function HomePage() {
     >
       <div className="grid gap-4 md:grid-cols-4">
         <Metric label="Total portfolio" value={totalValueLabel} detail={totalValueDetail} />
-        <Metric label="Today" value={todayValue} detail={todayDetail} tone={quoteCoverage ? dayChange >= 0 ? "positive" : "negative" : "neutral"} />
+        <Metric label="Today" value={todayValue} detail={todayDetail} tone={!monetaryValuesLoading && quoteCoverage ? dayChange >= 0 ? "positive" : "negative" : "neutral"} />
         <Metric label="Tracked positions" value={booksLoading ? "Loading" : booksError && !hasPortfolioData ? "Unavailable" : String(holdings.length)} detail={portfolio ? `${portfolio.name} · ${currency}` : "No connected portfolio"} />
         <Metric label="Portfolio status" value={risk.value} detail={risk.detail} tone={risk.tone} />
       </div>
 
       <div className="mt-8 grid gap-5 lg:grid-cols-2">
-        <WorkspaceSummary href="/invest" icon={BriefcaseBusiness} title="Investment Book" value={booksError && !hasPortfolioData ? "Unavailable" : formatMoney(investmentValue, currency)} result={`${totalValue ? ((investmentValue / totalValue) * 100).toFixed(1) : "0.0"}% allocated`} detail={`${investment?.holding_count ?? 0} classified holding${investment?.holding_count === 1 ? "" : "s"}`} accent="emerald" />
-        <WorkspaceSummary href="/trade" icon={LineChart} title="Trading Book" value={booksError && !hasPortfolioData ? "Unavailable" : formatMoney(tradingValue, currency)} result={`${totalValue ? ((tradingValue / totalValue) * 100).toFixed(1) : "0.0"}% allocated`} detail={`${trading?.holding_count ?? 0} active book position${trading?.holding_count === 1 ? "" : "s"}`} accent="sky" />
+        <WorkspaceSummary href="/invest" icon={BriefcaseBusiness} title="Investment Book" value={monetaryValuesLoading ? "Loading" : booksError && !hasPortfolioData ? "Unavailable" : formatMoney(investmentValue, currency)} result={monetaryValuesLoading ? "Waiting for quotes" : `${totalValue ? ((investmentValue / totalValue) * 100).toFixed(1) : "0.0"}% allocated`} detail={`${investment?.holding_count ?? 0} classified holding${investment?.holding_count === 1 ? "" : "s"}`} accent="emerald" />
+        <WorkspaceSummary href="/trade" icon={LineChart} title="Trading Book" value={monetaryValuesLoading ? "Loading" : booksError && !hasPortfolioData ? "Unavailable" : formatMoney(tradingValue, currency)} result={monetaryValuesLoading ? "Waiting for quotes" : `${totalValue ? ((tradingValue / totalValue) * 100).toFixed(1) : "0.0"}% allocated`} detail={`${trading?.holding_count ?? 0} active book position${trading?.holding_count === 1 ? "" : "s"}`} accent="sky" />
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
