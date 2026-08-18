@@ -487,6 +487,21 @@ test("central Portfolio keeps the selected position book across tabs and reloads
   await expect(page.getByRole("group", { name: "Portfolio book" }).getByRole("button", { name: /Trade Portfolio/ })).toHaveAttribute("aria-pressed", "true");
 });
 
+test("Portfolio holding recorder uses the searchable app currency menu", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Desktop covers the full inline holding recorder.");
+  await page.goto("/portfolio");
+  await waitForWorkspace(page);
+
+  await page.getByRole("button", { name: "Add investments" }).click();
+  const currencyTrigger = page.getByRole("button", { name: "Average cost currency" });
+  await currencyTrigger.click();
+  await page.getByPlaceholder("Search currency").fill("Euro");
+  await page.getByRole("menuitem", { name: /EUR Euro/ }).click();
+
+  await expect(currencyTrigger).toContainText("EUR");
+  await expect(page.getByPlaceholder("Avg cost (EUR)")).toBeVisible();
+});
+
 test("Invest Holdings owns the detailed Investment positions and manual recorder", async ({ page }) => {
   await page.goto("/invest/holdings");
   await waitForWorkspace(page);

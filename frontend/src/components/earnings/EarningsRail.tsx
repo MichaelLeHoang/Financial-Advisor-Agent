@@ -39,13 +39,12 @@ export default function EarningsRail({ quotes }: { quotes: MarketQuote[] }) {
   }, []);
   const symbols = useMemo(() => quotes.map((quote) => quote.ticker.toUpperCase()), [quotes]);
   useEffect(() => {
-    if (!symbols.length) return;
     let canceled = false;
-    api.earningsCalendar(toDateKey(today), toDateKey(addCalendarDays(today, 20)), symbols)
+    api.earningsCalendar(toDateKey(today), toDateKey(addCalendarDays(today, 20)), [], 250)
       .then((response) => { if (!canceled) setCalendarEvents(response.events); })
       .catch(() => { if (!canceled) setCalendarEvents([]); });
     return () => { canceled = true; };
-  }, [symbols, today]);
+  }, [today]);
   const events = useMemo(() => {
     const quoteEvents = buildEarningsEvents(quotes, [], symbols);
     if (!calendarEvents.length) return quoteEvents;

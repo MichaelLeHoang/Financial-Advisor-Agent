@@ -38,6 +38,7 @@ import { Button } from "@/components/ui/button";
 import { ThinSlider } from "@/components/ui/thin-slider";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { DatePicker } from "@/components/ui/date-picker";
+import CurrencySelectMenu from "@/components/ui/currency-select-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -385,7 +386,7 @@ export default function PortfolioPage() {
   const [addSymbol, setAddSymbol] = useState("");
   const [addQty, setAddQty] = useState("");
   const [addCost, setAddCost] = useState("");
-  const [addCostCurrency, setAddCostCurrency] = useState<(typeof SUPPORTED_BASE_CURRENCIES)[number]>("USD");
+  const [addCostCurrency, setAddCostCurrency] = useState("USD");
   const [displayBaseCurrency, setDisplayBaseCurrency] = useState("USD");
   const [displayTotalValue, setDisplayTotalValue] = useState(0);
   const [currencySearch, setCurrencySearch] = useState("");
@@ -448,9 +449,7 @@ export default function PortfolioPage() {
 
   useEffect(() => {
     setDisplayBaseCurrency(portfolioBaseCurrency);
-    if (SUPPORTED_BASE_CURRENCIES.includes(portfolioBaseCurrency as (typeof SUPPORTED_BASE_CURRENCIES)[number])) {
-      setAddCostCurrency(portfolioBaseCurrency as (typeof SUPPORTED_BASE_CURRENCIES)[number]);
-    }
+    setAddCostCurrency(portfolioBaseCurrency);
     setCurrencySearch("");
     setRecurringBuyDraft((draft) => ({
       ...draft,
@@ -766,7 +765,7 @@ export default function PortfolioPage() {
       setAddSymbol("");
       setAddQty("");
       setAddCost("");
-      setAddCostCurrency(activeBaseCurrency as (typeof SUPPORTED_BASE_CURRENCIES)[number]);
+      setAddCostCurrency(activeBaseCurrency);
 
       fetchQuote(holding.symbol)
         .then(async (quote) => {
@@ -1575,18 +1574,13 @@ export default function PortfolioPage() {
                     onChange={(event) => setAddCost(event.target.value)}
                     className="h-10 w-36 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm text-white placeholder:text-white/28 outline-none focus:border-indigo-primary/60"
                   />
-                  <select
+                  <CurrencySelectMenu
+                    ariaLabel="Average cost currency"
                     value={addCostCurrency}
-                    onChange={(event) => setAddCostCurrency(event.target.value as (typeof SUPPORTED_BASE_CURRENCIES)[number])}
-                    className="h-10 rounded-xl border border-white/[0.10] bg-black/20 px-3 text-sm font-semibold text-white outline-none focus:border-indigo-primary/60"
-                    aria-label="Average cost currency"
-                  >
-                    {SUPPORTED_BASE_CURRENCIES.map((currency) => (
-                      <option key={currency} value={currency} className="bg-space-black text-white">
-                        {currency}
-                      </option>
-                    ))}
-                  </select>
+                    options={GLOBAL_CURRENCIES}
+                    onValueChange={setAddCostCurrency}
+                    className="bg-black/20"
+                  />
                   <Button
                     onClick={addHolding}
                     disabled={saving || !addSymbol || !addQty || !addCost}

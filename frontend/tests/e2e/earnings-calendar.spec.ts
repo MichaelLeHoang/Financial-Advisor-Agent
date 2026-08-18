@@ -97,3 +97,13 @@ test("earnings agenda defaults to today and shows only the selected date", async
   await expect(page.getByText("Apple Inc.")).toHaveCount(0);
   await expect(page.getByText("Walmart Inc.")).toHaveCount(0);
 });
+
+test("watchlist earnings rail previews broad-market report symbols", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Desktop covers the complete watchlist market context.");
+  await page.clock.setFixedTime(new Date("2026-08-12T12:00:00"));
+  await page.goto("/discover/watchlists");
+  await expect.poll(() => page.evaluate(() => document.body.dataset.workspaceReady)).toBe("true");
+
+  await expect(page.getByRole("link", { name: "Today, August 12: 1 scheduled earnings" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "August 13: 1 scheduled earnings" })).toBeVisible();
+});
