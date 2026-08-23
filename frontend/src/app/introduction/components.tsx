@@ -4,7 +4,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { BookOpen, BookOpenText, LogOut, Menu, Moon, Newspaper, Search, Sun, User, X } from "lucide-react";
+import { BookOpen, BookOpenText, FlaskConical, LogOut, Menu, Moon, Newspaper, Search, Sun, User, X } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -291,6 +291,19 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
                           </Link>
                         </NavigationMenuLink>
                       </li>
+                      <li>
+                        <NavigationMenuLink asChild>
+                          <Link href="/lab" className="intro-resource-link flex flex-row items-center gap-3 rounded-xl p-3 transition-colors">
+                            <div className="intro-resource-icon flex size-8 items-center justify-center rounded-md bg-white/5 text-white/70 transition-colors">
+                              <FlaskConical className="size-4" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="intro-resource-title text-sm font-medium text-white/90 transition-colors">The Lab</span>
+                              <span className="intro-resource-subtitle text-xs text-white/40 transition-colors">Model evidence &amp; lineage</span>
+                            </div>
+                          </Link>
+                        </NavigationMenuLink>
+                      </li>
                     </ul>
                   </NavigationMenuContent>
                 </NavigationMenuItem>
@@ -489,6 +502,17 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
                 }`}
               >
                 Blog
+              </Link>
+              <Link
+                href="/lab"
+                onClick={() => setMobileOpen(false)}
+                className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  currentTheme === "White"
+                    ? "text-[#667085] hover:bg-black/[0.04] hover:text-[#121a2c]"
+                    : "text-white/70 hover:bg-white/[0.08] hover:text-white"
+                }`}
+              >
+                The Lab
               </Link>
             </div>
             {NAV_LINKS.slice(2).map((item) => (

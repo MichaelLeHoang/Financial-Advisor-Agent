@@ -40,6 +40,7 @@ const STANDALONE_PUBLIC_PATHS = [
   "/platform",
   "/news",
   "/blog",
+  "/lab",
   "/pricing",
   "/docs",
   "/terms",
