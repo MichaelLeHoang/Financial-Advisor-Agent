@@ -45,7 +45,7 @@ export function ModelArchitectureFigure({ kind }: { kind: LabFigureKind }) {
   return (
     <FigureFrame label="Registered architecture · configuration diagram" scrollable>
       <svg viewBox="0 0 620 330" className="h-auto min-w-[620px] w-full sm:min-w-0" role="img" aria-labelledby={`${titleId} ${descriptionId}`}>
-        <title id={titleId}>{kind} registered model architecture</title>
+        <title id={titleId}>{`${kind} registered model architecture`}</title>
         <desc id={descriptionId}>{architectureDescription(kind)}</desc>
         <g strokeLinecap="round" strokeLinejoin="round">
           <Architecture kind={kind} />
@@ -247,6 +247,7 @@ function FigureFrame({ label, children, scrollable = false }: { label: string; c
         <div
           tabIndex={0}
           aria-label={`${label}; horizontally scroll to inspect on small screens`}
+          style={{ contain: "inline-size" }}
           className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400"
         >
           {children}
