@@ -26,6 +26,9 @@ export const metadata: Metadata = {
     template: "%s | Quanfora",
   },
   description: "Research markets, evaluate portfolio risk, and document investment decisions in one AI-assisted workspace.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
