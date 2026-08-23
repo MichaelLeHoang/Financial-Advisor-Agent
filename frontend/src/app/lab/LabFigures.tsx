@@ -13,8 +13,8 @@ export function ForecastContractFigure() {
   });
 
   return (
-    <FigureFrame label="Forecast contract diagram · schematic, not market data">
-      <svg viewBox="0 0 640 360" className="h-auto w-full" role="img" aria-labelledby="forecast-contract-title forecast-contract-desc">
+    <FigureFrame label="Forecast contract diagram · schematic, not market data" scrollable>
+      <svg viewBox="0 0 640 360" className="h-auto min-w-[640px] w-full sm:min-w-0" role="img" aria-labelledby="forecast-contract-title forecast-contract-desc">
         <title id="forecast-contract-title">The lab&apos;s one-hour endpoint forecast contract</title>
         <desc id="forecast-contract-desc">Ninety-six completed fifteen-minute bars feed a model that estimates one endpoint four bars later. The connecting line is an endpoint guide, not a forecast price path.</desc>
         {GRID_LINES.map((y) => <line key={y} x1="28" y1={y} x2="612" y2={y} stroke="rgba(255,255,255,.07)" />)}
@@ -39,9 +39,14 @@ export function ForecastContractFigure() {
 }
 
 export function ModelArchitectureFigure({ kind }: { kind: LabFigureKind }) {
+  const titleId = `${kind}-architecture-title`;
+  const descriptionId = `${kind}-architecture-description`;
+
   return (
-    <FigureFrame label="Registered architecture · configuration diagram">
-      <svg viewBox="0 0 620 330" className="h-auto w-full" role="img" aria-label={`${kind} registered model architecture diagram`}>
+    <FigureFrame label="Registered architecture · configuration diagram" scrollable>
+      <svg viewBox="0 0 620 330" className="h-auto min-w-[620px] w-full sm:min-w-0" role="img" aria-labelledby={`${titleId} ${descriptionId}`}>
+        <title id={titleId}>{kind} registered model architecture</title>
+        <desc id={descriptionId}>{architectureDescription(kind)}</desc>
         <g strokeLinecap="round" strokeLinejoin="round">
           <Architecture kind={kind} />
         </g>
@@ -231,13 +236,37 @@ export function WalkForwardFigure() {
   );
 }
 
-function FigureFrame({ label, children }: { label: string; children: ReactNode }) {
+function FigureFrame({ label, children, scrollable = false }: { label: string; children: ReactNode; scrollable?: boolean }) {
   return (
-    <figure className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#090b12] shadow-[0_24px_70px_-44px_rgba(0,0,0,.9)]">
-      <figcaption className="border-b border-white/[0.07] px-4 py-3 text-[10px] font-semibold text-white/55">{label}</figcaption>
-      {children}
+    <figure className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-[#090b12] shadow-[0_24px_70px_-44px_rgba(0,0,0,.9)]">
+      <figcaption className="border-b border-white/[0.07] px-4 py-3 text-[10px] font-semibold text-white/55">
+        {label}
+        {scrollable && <span className="ml-2 text-white/36 sm:hidden">Scroll to inspect</span>}
+      </figcaption>
+      {scrollable ? (
+        <div
+          tabIndex={0}
+          aria-label={`${label}; horizontally scroll to inspect on small screens`}
+          className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400"
+        >
+          {children}
+        </div>
+      ) : children}
     </figure>
   );
+}
+
+function architectureDescription(kind: LabFigureKind) {
+  const descriptions: Record<LabFigureKind, string> = {
+    "rf-lstm": "A tabular Random Forest branch and a recurrent LSTM sequence branch converge on the same scalar forecast endpoint.",
+    xgboost: "Three representative decision trees contribute sequentially to a summed scalar forecast endpoint.",
+    tcn: "Five causal convolution layers use increasing dilation over the input sequence before producing one forecast endpoint.",
+    patchtst: "Overlapping feature-channel patches pass through a shared Transformer encoder before producing one forecast endpoint.",
+    "chronos-zero-shot": "Historical return tokens enter a pinned Chronos-2 checkpoint, which returns registered forecast quantiles without task-specific fitting.",
+    "chronos-lora": "Small trainable LoRA adapters sit beside a frozen Chronos-2 base and produce one forecast endpoint.",
+    generic: "A versioned model configuration resolves to one scalar forecast endpoint.",
+  };
+  return descriptions[kind];
 }
 
 function FigureLabel({ x, y, children }: { x: number; y: number; children: ReactNode }) {
