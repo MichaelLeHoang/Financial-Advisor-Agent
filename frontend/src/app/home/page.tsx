@@ -9,6 +9,7 @@ import { useInvestmentPolicy } from "@/components/investment-policy/InvestmentPo
 import type { Holding, InvestmentPolicyAlert, MarketQuote, PositionBook } from "@/lib/api";
 import { fetchQuotes } from "@/lib/quote-cache";
 import { isKeyedRequestPending } from "@/lib/loading-state";
+import { greetingForDate, millisecondsUntilNextGreeting } from "@/lib/time-greeting";
 import { LoadingRegion, RefreshingIndicator, SkeletonBlock } from "@/components/ui/DataLoading";
 
 export default function HomePage() {
@@ -16,7 +17,28 @@ export default function HomePage() {
   const { policy, validation, loading: policyLoading, refreshing: policyRefreshing, error: policyError, refresh: refreshPolicy } = useInvestmentPolicy();
   const [quotes, setQuotes] = useState<Map<string, MarketQuote>>(new Map());
   const [settledQuoteTickerKey, setSettledQuoteTickerKey] = useState("");
+  const [greeting, setGreeting] = useState("Welcome back");
   const tickerKey = useMemo(() => holdings.map((holding) => holding.symbol.toUpperCase()).sort().join(","), [holdings]);
+
+  useEffect(() => {
+    let timer: number | undefined;
+    const syncGreeting = () => {
+      window.clearTimeout(timer);
+      const now = new Date();
+      setGreeting(greetingForDate(now));
+      timer = window.setTimeout(syncGreeting, millisecondsUntilNextGreeting(now));
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") syncGreeting();
+    };
+
+    syncGreeting();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -71,7 +93,7 @@ export default function HomePage() {
   return (
     <WorkspacePage
       eyebrow="Command center"
-      title="Good morning"
+      title={greeting}
       description="One view of your long-term capital, active risk, and the decisions that need attention today."
       actions={<><SecondaryLink href="/ai">Ask AI Desk</SecondaryLink><PrimaryLink href="/portfolio">Review portfolio</PrimaryLink></>}
       contextBar={<HomeContextBar portfolioName={portfolio?.name} currency={currency} positionCount={holdings.length} quoteCoverage={quoteCoverage} loading={booksLoading} refreshing={booksRefreshing || policyRefreshing} error={Boolean(booksError)} refreshedAt={refreshedAt} />}
