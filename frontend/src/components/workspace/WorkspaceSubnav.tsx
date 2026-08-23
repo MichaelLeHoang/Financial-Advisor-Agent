@@ -13,6 +13,7 @@ export default function WorkspaceSubnav({ workspace, children }: { workspace: Wo
   const { user } = useAuth();
   const navigation = WORKSPACE_NAVIGATION[workspace];
   const topNavRef = useRef<HTMLElement>(null);
+  const activeItemRef = useRef<HTMLAnchorElement>(null);
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
@@ -33,9 +34,13 @@ export default function WorkspaceSubnav({ workspace, children }: { workspace: Wo
     return () => target.removeEventListener("scroll", syncBorder);
   }, [pathname]);
 
+  useEffect(() => {
+    activeItemRef.current?.scrollIntoView({ behavior: "auto", block: "nearest", inline: "center" });
+  }, [pathname]);
+
   return (
     <div className="min-h-full">
-      <div className="workspace-top-nav-shell pointer-events-none sticky top-0 z-[55] flex justify-center px-2 pt-3">
+      <div className="workspace-top-nav-shell pointer-events-none sticky top-0 z-[55] flex justify-center pb-1 pl-16 pr-2 pt-3 md:px-2">
         <nav
           ref={topNavRef}
           data-workspace-top-nav
@@ -51,6 +56,7 @@ export default function WorkspaceSubnav({ workspace, children }: { workspace: Wo
             const allowed = planAllows(user.plan, item.minPlan);
             return (
               <Link
+                ref={active ? activeItemRef : undefined}
                 key={item.id}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
