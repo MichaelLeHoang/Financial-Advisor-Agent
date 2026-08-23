@@ -63,7 +63,7 @@ export default function WorkspaceSelectMenu({
         align={align}
         sideOffset={8}
         className={cn(
-          "w-[var(--anchor-width)] min-w-48 rounded-3xl !border-white/15 !bg-[#232323] p-2",
+          "w-[var(--anchor-width)] min-w-48 rounded-3xl !border-[var(--theme-border-strong)] !bg-[var(--surface-popover)] p-2",
           contentClassName,
         )}
       >
@@ -73,7 +73,7 @@ export default function WorkspaceSelectMenu({
             onClick={() => onValueChange(option.value)}
             className={cn(
               "h-11 justify-between rounded-2xl px-3 text-base text-[var(--text-primary)] transition-colors duration-150 motion-reduce:transition-none",
-              option.value === value && "bg-white/[0.075]",
+              option.value === value && "bg-[var(--surface-selected)]",
             )}
           >
             <span className="min-w-0 truncate">{option.label}</span>
