@@ -208,11 +208,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   if (!entryChecked) {
-    return <div className="flex h-screen overflow-hidden relative" />;
+    return <div className="relative flex h-dvh min-h-0 w-full overflow-hidden" />;
   }
 
   return (
-    <div className="flex h-screen overflow-hidden relative">
+    <div className="relative flex h-dvh min-h-0 w-full overflow-hidden">
         <MotionConfig reducedMotion="user">
           <AuthProvider>
             <OnboardingProvider>
@@ -316,9 +316,9 @@ function MainWorkspace({
         tabIndex={-1}
         data-sidebar-expanded={isSidebarOpen}
         style={{ "--workspace-sidebar-offset": sidebarOffset } as CSSProperties}
-        className={`workspace-appearance-canvas relative z-10 flex flex-1 flex-col overflow-hidden ${isSidebarOpen ? "md:ml-[19rem]" : "md:ml-20"}`}
+        className={`workspace-appearance-canvas relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden ${isSidebarOpen ? "md:ml-[19rem]" : "md:ml-20"}`}
       >
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {(loading || onboardingLoading || shouldOnboard) && !isPublicAppPath ? (
             <WorkspaceLoadingShell label={shouldOnboard ? "Opening workspace setup" : "Restoring your workspace"} />
           ) : shouldGate ? <PublicAccessGate /> : children}

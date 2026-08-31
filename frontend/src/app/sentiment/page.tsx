@@ -477,6 +477,7 @@ export default function SentimentPage() {
                   <div className="relative min-h-28 flex-1">
                     <Textarea
                       ref={textareaRef}
+                      aria-label="Add a market headline"
                       value={input}
                       onChange={handleInput}
                       onFocus={() => setIsActive(true)}

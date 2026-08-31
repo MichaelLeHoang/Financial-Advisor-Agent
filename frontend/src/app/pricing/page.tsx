@@ -145,8 +145,8 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="pricing-theme-lock dark relative min-h-screen overflow-hidden bg-[#050507] text-white" data-theme="Deep Space">
-      <div className="pointer-events-none fixed inset-0 z-0">
+    <div className="pricing-theme-lock dark relative min-h-dvh min-w-0 bg-[#050507] text-white" data-theme="Deep Space">
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         <div className="absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(circle_at_50%_0%,rgba(99,102,241,0.16),transparent_56%)]" />
         <div className="absolute bottom-0 right-0 h-[520px] w-[520px] translate-x-1/4 translate-y-1/4 rounded-full bg-cyan-500/[0.045] blur-[110px]" />
       </div>
@@ -158,9 +158,9 @@ export default function PricingPage() {
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45 }}
-          className="mx-auto max-w-3xl text-center"
+          className="mx-auto min-w-0 max-w-3xl text-center"
         >
-          <h1 className="font-heading text-4xl font-semibold leading-[0.95] tracking-tight text-white sm:text-6xl lg:text-7xl">
+          <h1 className="break-words font-heading text-[clamp(2.25rem,11vw,4.5rem)] font-semibold leading-[0.95] tracking-tight text-white">
             Choose your research plan.
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-white/44 sm:text-lg">
@@ -192,19 +192,19 @@ export default function PricingPage() {
 
         {(notice || error) && (
           <div
-            className={`mx-auto mt-8 flex max-w-2xl items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
+            className={`mx-auto mt-8 flex min-w-0 max-w-2xl items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
               error
                 ? "border-red-negative/25 bg-red-negative/10 text-red-negative"
                 : "border-indigo-primary/25 bg-indigo-primary/10 text-white/70"
             }`}
           >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{error ?? notice}</span>
+            <span className="min-w-0 break-words">{error ?? notice}</span>
           </div>
         )}
 
         <section className="mt-12">
-          <div className="relative overflow-hidden rounded-[1.45rem] px-4 py-8 shadow-[0_38px_120px_rgba(0,0,0,0.36)] sm:px-8 sm:py-10 lg:px-10">
+          <div className="relative min-w-0 overflow-hidden rounded-[1.45rem] px-3 py-8 shadow-[0_38px_120px_rgba(0,0,0,0.36)] sm:px-8 sm:py-10 lg:px-10">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/pay-background.webp"
@@ -219,7 +219,7 @@ export default function PricingPage() {
               aria-hidden="true"
             />
 
-            <div className="relative grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+            <div className="relative grid min-w-0 gap-5 md:grid-cols-2 xl:grid-cols-4">
               {PLANS.filter((plan) => plan.id !== "execution").map((plan, index) => (
                 <PlanCard
                   key={plan.id}
@@ -251,7 +251,7 @@ export default function PricingPage() {
 function PricingNav({ isGuest }: { isGuest: boolean }) {
   return (
     <header className="fixed inset-x-0 top-0 z-50 px-4 py-4">
-      <nav className="mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center justify-center gap-6 rounded-full bg-black/72 px-4 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl sm:gap-8">
+      <nav className="mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center justify-center gap-3 rounded-full bg-black/72 px-3 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl sm:gap-8 sm:px-4">
         <Link href="/" className="flex shrink-0 items-center gap-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.svg" alt="" aria-hidden="true" className="size-6 object-contain" />
@@ -260,7 +260,7 @@ function PricingNav({ isGuest }: { isGuest: boolean }) {
         <div className="flex items-center gap-1 text-sm font-semibold text-white/58">
           <div className="relative">
             <HighlightPill layoutId="pricing-nav-pill" className="absolute inset-0 rounded-full bg-white/[0.08]" />
-            <Link href="/pricing" className="relative z-10 block rounded-full px-2.5 py-1.5 text-white/92 transition-colors hover:text-white">
+            <Link href="/pricing" className="relative z-10 flex min-h-11 items-center rounded-full px-2.5 py-1.5 text-white/92 transition-colors hover:text-white sm:min-h-0">
               Pricing
             </Link>
           </div>
@@ -268,11 +268,11 @@ function PricingNav({ isGuest }: { isGuest: boolean }) {
             Help
           </Link>
           {isGuest ? (
-            <Link href="/login?next=/session" className="rounded-full bg-white px-4 py-2 font-semibold text-black transition-all hover:bg-white/86">
+            <Link href="/login?next=/session" className="flex min-h-11 items-center rounded-full bg-white px-4 py-2 text-center font-semibold leading-tight text-black transition-all hover:bg-white/86 sm:min-h-0">
               Join free
             </Link>
           ) : (
-            <Link href="/session" className="rounded-full bg-white px-4 py-2 font-semibold text-black transition-all hover:bg-white/86">
+            <Link href="/session" className="flex min-h-11 items-center rounded-full bg-white px-4 py-2 text-center font-semibold leading-tight text-black transition-all hover:bg-white/86 sm:min-h-0">
               Open app
             </Link>
           )}
@@ -307,7 +307,7 @@ function PlanCard({
       initial={{ opacity: 0, y: 22 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, delay: index * 0.06 }}
-      className={`relative flex min-h-[520px] flex-col rounded-[1.15rem] border p-6 transition-all duration-300 ${
+      className={`relative flex min-h-[520px] min-w-0 flex-col rounded-[1.15rem] border p-4 transition-all duration-300 sm:p-6 ${
         isCurrent
           ? "border-green-positive/30 bg-green-positive/[0.075] shadow-[inset_0_0_0_1px_rgba(52,211,153,0.12)]"
           : isRecommended
@@ -315,10 +315,10 @@ function PlanCard({
             : "border-white/[0.10] bg-[#0f1117]/94 shadow-[0_18px_58px_rgba(0,0,0,0.18)] hover:-translate-y-1 hover:border-indigo-primary/45 hover:bg-[#141827]/96 hover:shadow-[0_24px_76px_rgba(0,0,0,0.28)]"
       }`}
     >
-      <div className="mb-5 flex min-h-12 items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold leading-none text-white">{plan.name}</h2>
+      <div className="mb-5 flex min-h-12 min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h2 className="min-w-0 break-words text-xl font-bold leading-none text-white">{plan.name}</h2>
             {isRecommended && !isCurrent && (
               <span className="on-accent rounded-md bg-indigo-500 px-2 py-1 text-[11px] font-bold leading-none text-white">
                 Popular
@@ -334,9 +334,9 @@ function PlanCard({
         )}
       </div>
 
-      <div className="mb-5 flex items-end gap-2">
-        <span className="text-5xl font-bold tracking-tight text-white">{price.label}</span>
-        {price.note && <span className="pb-1.5 text-xs leading-tight text-white/36">{price.note}</span>}
+      <div className="mb-5 flex min-w-0 flex-wrap items-end gap-2">
+        <span className="min-w-0 break-words text-5xl font-bold tracking-tight text-white">{price.label}</span>
+        {price.note && <span className="min-w-0 break-words pb-1.5 text-xs leading-tight text-white/36">{price.note}</span>}
       </div>
 
       <button

@@ -189,7 +189,6 @@ function ScrollMultiAgentStory() {
   return (
     <section ref={sectionRef} className={styles.story} data-testid="platform-multi-agent-story">
       <div className={styles.stickyViewport}>
-        <motion.div className={styles.storyProgress} style={{ scaleX: scrollYProgress }} aria-hidden="true" />
         <div className={styles.storyGrid}>
           <StoryCopy activePhase={storyState.phaseIndex} />
           <motion.div className={styles.panelWrap} style={{ x: panelX, scale: panelScale, opacity: panelOpacity }}>

@@ -23,8 +23,8 @@ export function WorkspacePage({
   dense?: boolean;
 }) {
   return (
-    <div className={cn("min-h-full bg-[var(--background)] px-4 pt-20 text-[var(--text-primary)] md:pt-6", dense ? "pb-5 lg:px-7 lg:pt-5" : "pb-6 lg:px-10 lg:py-9")}>
-      <div className="mx-auto max-w-[1500px]">
+    <div className={cn("min-h-full min-w-0 bg-[var(--background)] px-4 pt-20 text-[var(--text-primary)] md:pt-6", dense ? "pb-5 lg:px-7 lg:pt-5" : "pb-6 lg:px-10 lg:py-9")}>
+      <div className="mx-auto min-w-0 max-w-[1500px]">
         <div className="flex flex-col gap-5 border-b border-[var(--theme-border)] pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase text-[var(--text-subtle)]">{eyebrow}</p>
@@ -34,7 +34,7 @@ export function WorkspacePage({
           {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
         </div>
         {contextBar === undefined ? <ContextBar /> : contextBar}
-        <div className={dense ? "mt-4" : "mt-7"}>{children}</div>
+        <div className={cn("min-w-0", dense ? "mt-4" : "mt-7")}>{children}</div>
       </div>
     </div>
   );
@@ -58,14 +58,14 @@ export function ContextBar({ paperAccount }: { paperAccount?: { name: string; ca
 }
 
 export function Panel({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <section className={cn(APP_RADIUS.surface, "border border-[var(--theme-border)] bg-[var(--surface-card)] p-5", className)}>{children}</section>;
+  return <section className={cn(APP_RADIUS.surface, "min-w-0 border border-[var(--theme-border)] bg-[var(--surface-card)] p-[20px] sm:p-5", className)}>{children}</section>;
 }
 
 export function PanelHeading({ title, detail, action }: { title: string; detail?: string; action?: React.ReactNode }) {
   return (
-    <div className="mb-4 flex items-start justify-between gap-3">
-      <div><h2 className="text-sm font-semibold">{title}</h2>{detail && <p className="mt-1 text-xs text-[var(--text-muted)]">{detail}</p>}</div>
-      {action}
+    <div className="mb-4 flex min-w-0 items-start justify-between gap-3">
+      <div className="min-w-0"><h2 className="break-words text-sm font-semibold">{title}</h2>{detail && <p className="mt-1 break-words text-xs text-[var(--text-muted)]">{detail}</p>}</div>
+      {action && <span className="shrink-0">{action}</span>}
     </div>
   );
 }

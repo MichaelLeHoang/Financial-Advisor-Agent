@@ -33,8 +33,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${rootFontClasses} dark`} suppressHydrationWarning>
-      <body data-theme="Deep Space" data-appearance="Solid" className="overflow-x-hidden bg-space-black font-sans text-white antialiased">
+    <html lang="en" className={`${rootFontClasses} relative dark`} suppressHydrationWarning>
+      <body data-theme="Deep Space" data-appearance="Solid" className="bg-space-black font-sans text-white antialiased">
         <a
           href="#main-content"
           className="fixed left-4 top-4 z-[300] -translate-y-24 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition-transform focus:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 motion-reduce:transition-none"

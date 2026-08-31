@@ -882,12 +882,12 @@ export default function DocsPage() {
         }
       `}</style>
       <header className="fixed left-0 right-0 top-0 z-50 border-b border-[var(--docs-border)] bg-[var(--docs-header)] backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-4 px-4 sm:px-6">
-          <Link href="/" className="flex items-center gap-2.5">
+        <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-[12px] px-[16px] sm:gap-4 sm:px-6">
+          <Link href="/" className="flex min-w-0 flex-1 items-center gap-[10px] sm:flex-none sm:gap-2.5">
             <span className="docs-logo-mark flex size-7 items-center justify-center rounded-lg border border-[var(--docs-border)] bg-[var(--docs-control)] shadow-[var(--docs-shadow)]">
               <img src="/logo.svg" alt="" className="size-5 object-contain" />
             </span>
-            <span className="text-sm font-semibold text-[var(--docs-text)]">Documentation</span>
+            <span className="min-w-0 truncate text-sm font-semibold text-[var(--docs-text)]">Documentation</span>
           </Link>
 
           <div className="hidden rounded-full border border-[var(--docs-border)] bg-[var(--docs-control)] p-1 sm:flex">
@@ -912,7 +912,7 @@ export default function DocsPage() {
             ))}
           </div>
 
-          <div className="flex-1" />
+          <div className="hidden flex-1 sm:block" />
 
           <button
             type="button"
@@ -927,7 +927,7 @@ export default function DocsPage() {
           <button
             type="button"
             onClick={toggleTheme}
-            className="flex size-9 items-center justify-center rounded-full border border-[var(--docs-border)] bg-[var(--docs-control)] text-[var(--docs-text-muted)] shadow-[var(--docs-shadow)] transition-colors hover:bg-[var(--docs-control-hover)] hover:text-[var(--docs-text-secondary)]"
+            className="flex size-[40px] shrink-0 items-center justify-center rounded-full border border-[var(--docs-border)] bg-[var(--docs-control)] text-[var(--docs-text-muted)] shadow-[var(--docs-shadow)] transition-colors hover:bg-[var(--docs-control-hover)] hover:text-[var(--docs-text-secondary)] sm:size-9"
             aria-label="Toggle light and dark theme"
           >
             {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
@@ -940,7 +940,7 @@ export default function DocsPage() {
           <button
             type="button"
             onClick={() => setMobileNavOpen((open) => !open)}
-            className="flex size-9 items-center justify-center rounded-lg border border-[var(--docs-border)] bg-[var(--docs-control)] text-[var(--docs-text-muted)] sm:hidden"
+            className="flex size-[40px] shrink-0 items-center justify-center rounded-lg border border-[var(--docs-border)] bg-[var(--docs-control)] text-[var(--docs-text-muted)] sm:hidden"
             aria-label="Toggle documentation navigation"
           >
             {mobileNavOpen ? <X className="size-4" /> : <Menu className="size-4" />}

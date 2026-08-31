@@ -267,31 +267,31 @@ function FeaturesSection() {
   }, [selectedFeature]);
 
   return (
-    <section id="features" className="relative z-10 px-6 py-20 sm:py-24">
-      <div className="mx-auto grid max-w-7xl gap-14 lg:grid-cols-[1.35fr_0.9fr] lg:items-center">
-        <SectionReveal className="text-center lg:order-2 lg:text-right">
+    <section id="features" className="relative z-10 px-[24px] py-20 sm:px-6 sm:py-24">
+      <div className="mx-auto grid min-w-0 max-w-7xl grid-cols-[minmax(0,1fr)] gap-14 lg:grid-cols-[1.35fr_0.9fr] lg:items-center">
+        <SectionReveal className="min-w-0 text-center lg:order-2 lg:text-right">
           <span className="text-xs font-semibold uppercase tracking-[0.34em] text-indigo-primary">Capabilities</span>
-          <h2 className="mt-6 font-heading text-4xl font-medium leading-tight tracking-tight text-white sm:text-5xl lg:text-6xl">
+          <h2 className="mt-6 min-w-0 break-words font-heading text-4xl font-medium leading-tight tracking-tight text-white sm:text-5xl lg:text-6xl">
             Built for intelligent investing
           </h2>
-          <p className="ml-auto mt-8 max-w-md text-lg leading-8 text-white/42">
+          <p className="ml-auto mt-8 min-w-0 max-w-md break-words text-lg leading-8 text-white/42">
             Six core modules working together from natural-language chat to quantum optimization, giving you a complete AI-powered financial workspace.
           </p>
         </SectionReveal>
 
-        <div className="grid gap-5 sm:grid-cols-2 lg:order-1">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2 lg:order-1">
           {FEATURES.map((feature) => (
             <button
               key={feature.title}
               type="button"
               onClick={() => setSelectedFeature(feature)}
-              className="landing-feature-card group relative min-h-[230px] rounded-lg border border-indigo-primary/16 bg-white/[0.02] p-8 text-left transition-[background-color,border-color,transform] duration-300 hover:-translate-y-1 hover:border-indigo-primary/40 hover:bg-indigo-primary/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/60"
+              className="landing-feature-card group relative min-h-[230px] min-w-0 rounded-lg border border-indigo-primary/16 bg-white/[0.02] p-[24px] text-left transition-[background-color,border-color,transform] duration-300 hover:-translate-y-1 hover:border-indigo-primary/40 hover:bg-indigo-primary/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/60 sm:p-8"
             >
               <div className="landing-feature-icon mb-8 flex h-12 w-12 items-center justify-center rounded-full border border-indigo-primary/18 bg-indigo-primary/[0.12] text-indigo-primary transition-colors group-hover:bg-indigo-primary/[0.18] group-hover:text-indigo-200">
                 <feature.icon className="h-5 w-5" />
               </div>
-              <h3 className="landing-feature-title text-xl font-semibold leading-tight text-white">{feature.title}</h3>
-              <p className="landing-feature-desc mt-5 text-base leading-7 text-white/46">{feature.desc}</p>
+              <h3 className="landing-feature-title min-w-0 break-words text-xl font-semibold leading-tight text-white">{feature.title}</h3>
+              <p className="landing-feature-desc mt-5 min-w-0 break-words text-base leading-7 text-white/46">{feature.desc}</p>
             </button>
           ))}
         </div>

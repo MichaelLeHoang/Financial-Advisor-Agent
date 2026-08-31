@@ -34,7 +34,7 @@ function MiniSparkline({ history, positive }: { history: { price: number }[]; po
   if (history.length < 2) return <div className="h-full w-full" />;
   return (
     <div className={cn("h-full w-full", positive ? "text-green-positive" : "text-red-negative")}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <AreaChart data={history} margin={{ top: 4, right: 0, bottom: 4, left: 0 }}>
           <defs>
             <linearGradient id={`idx-${positive ? "up" : "dn"}`} x1="0" y1="0" x2="0" y2="1">

@@ -43,7 +43,7 @@ export default function InvestmentAccountsPage() {
           {!portfolios.length && <div className="py-20 text-center"><BriefcaseBusiness className="mx-auto size-7 text-[var(--text-muted)]" /><h2 className="mt-4 font-semibold">No investment portfolios</h2><p className="mt-2 text-sm text-[var(--text-muted)]">Connect or create a portfolio, then classify positions as Investment.</p></div>}
         </section>
 
-        <div className="mt-5 flex justify-end"><Link href="/portfolio/accounts" className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-400">Manage all portfolio connections <ArrowRight className="size-4" /></Link></div>
+        <div className="mt-5 flex justify-end"><Link href="/portfolio/accounts" className="inline-flex min-h-10 items-center gap-1 rounded-lg px-2 text-sm font-semibold text-emerald-400 transition-colors hover:bg-[var(--surface-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50">Manage all portfolio connections <ArrowRight className="size-4" /></Link></div>
       </div>
     </div>
   );

@@ -257,6 +257,7 @@ export default function TickerSuggestionInput({
             <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-[var(--text-placeholder)]" />
             <Input
                 ref={ref}
+                aria-label={placeholder}
                 value={value}
                 onChange={(event) => {
                     onValueChange(event.target.value);

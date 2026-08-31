@@ -13,10 +13,11 @@ import {
   PieChart,
   ShieldAlert,
 } from "lucide-react";
-import { AnimatePresence, motion, useInView, useMotionValueEvent, useReducedMotion, useScroll } from "motion/react";
+import { AnimatePresence, motion, useInView, useMotionValueEvent, useScroll } from "motion/react";
 
 import { WorkflowCard, type WorkflowCardData } from "./WorkflowCard";
 import { trackLandingEvent } from "./landing-analytics";
+import { useHydratedReducedMotion } from "@/hooks/useHydratedReducedMotion";
 
 const CARD_WIDTH = 192;
 const CARD_HEIGHT = 88;
@@ -154,7 +155,7 @@ export function ScatteredWorkspaceSection() {
   const sectionRef = useRef<HTMLElement>(null);
   const sceneRef = useRef<HTMLDivElement>(null);
   const hasTrackedView = useRef(false);
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useHydratedReducedMotion();
   const inView = useInView(sectionRef, { once: true, amount: 0.28 });
   const isSectionActive = useInView(sectionRef, { amount: 0.12 });
   const [sceneSize, setSceneSize] = useState<SceneSize>({ width: 0, height: 0 });

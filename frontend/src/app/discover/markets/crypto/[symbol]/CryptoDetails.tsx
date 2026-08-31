@@ -109,7 +109,7 @@ export default function CryptoDetails({ base, initialQuote }: { base: string; in
       <div className="mx-auto max-w-[1700px] space-y-6">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <Link href="/discover/markets" className="inline-flex items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"><ArrowLeft className="size-4" /> Market overview</Link>
+            <Link href="/discover/markets" className="inline-flex min-h-10 items-center gap-1 rounded-lg px-2 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-control)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"><ArrowLeft className="size-4" /> Market overview</Link>
             <h1 className="mt-2 text-3xl font-semibold">{name} market detail</h1>
             <p className="mt-1 text-sm text-[var(--text-muted)]">{displaySymbol} · Trading 24/7{overview?.venue ? ` · ${overview.venue}` : ""}</p>
           </div>

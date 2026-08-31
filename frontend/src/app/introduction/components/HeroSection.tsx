@@ -30,8 +30,8 @@ export function HeroSection() {
   };
 
   return (
-    <section className="relative z-10 flex min-h-[70dvh] items-center justify-center px-6 pb-2 pt-24 text-center sm:min-h-[58dvh] sm:px-8 sm:pb-4 sm:pt-28">
-      <div className="mx-auto w-full max-w-5xl">
+    <section className="relative z-10 flex min-h-[70dvh] items-center justify-center px-[24px] pb-2 pt-24 text-center sm:min-h-[58dvh] sm:px-8 sm:pb-4 sm:pt-28">
+      <div className="mx-auto min-w-0 w-full max-w-5xl">
         <motion.div initial={entranceInitial} animate={entranceAnimate} transition={entranceTransition}>
           <span className="inline-flex items-center rounded-full border border-white/[0.12] px-4 py-1.5 text-xs font-medium text-white/55">
             AI + Quantum Finance
@@ -41,7 +41,7 @@ export function HeroSection() {
           initial={entranceInitial}
           animate={entranceAnimate}
           transition={{ ...entranceTransition, delay: reduceMotion ? 0 : 0.08 }}
-          className="mt-6 font-heading text-[2.5rem] font-normal leading-none text-white sm:text-5xl md:text-6xl lg:text-7xl"
+        className="mt-6 break-normal font-heading text-[clamp(2.35rem,12vw,4.5rem)] font-normal leading-none text-white [hyphens:none]"
         >
           Quantum Financial Advisor Platform
         </motion.h1>
@@ -85,14 +85,14 @@ function HeroMorphingStatement() {
       <span className="sr-only">The art of disciplined market decisions.</span>
       <span
         aria-hidden="true"
-        className="flex min-h-[3.25rem] flex-col items-center justify-center gap-1 text-left sm:min-h-[1.75rem] sm:flex-row sm:gap-1.5"
+        className="flex min-h-[3.25rem] min-w-0 flex-col items-center justify-center gap-1 text-center sm:min-h-[1.75rem] sm:flex-row sm:gap-1.5 sm:text-left"
       >
         <span className="shrink-0">The art of</span>
-        <span className="hero-morphing-highlight relative inline-grid max-w-full justify-items-start text-indigo-200">
-          <span aria-hidden="true" className="invisible col-start-1 row-start-1 whitespace-nowrap">
+        <span className="hero-morphing-highlight relative inline-grid min-w-0 max-w-full justify-items-center text-indigo-200 sm:justify-items-start">
+          <span aria-hidden="true" className="invisible col-start-1 row-start-1 max-w-full whitespace-normal text-center sm:whitespace-nowrap sm:text-left">
             disciplined market decisions
           </span>
-          <span className="col-start-1 row-start-1 whitespace-nowrap text-left">
+          <span className="col-start-1 row-start-1 max-w-full whitespace-normal text-center sm:whitespace-nowrap sm:text-left">
             {reduceMotion ? "disciplined market decisions" : <MorphingText phrases={heroMorphingPhrases} />}
           </span>
         </span>

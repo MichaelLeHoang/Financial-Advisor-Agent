@@ -56,3 +56,39 @@ test("mobile workspace header clears the fixed navigation trigger", async ({ pag
   expect(eyebrowBox).not.toBeNull();
   expect(menuBox!.y + menuBox!.height).toBeLessThanOrEqual(eyebrowBox!.y);
 });
+
+test("short phones keep the AI starter content clear of fixed navigation", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "Short-phone AI Desk regression");
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.addInitScript(() => window.localStorage.setItem("financial-advisor.coverSeen", "true"));
+  await page.goto("/ai");
+
+  const menu = page.getByRole("button", { name: "Open navigation" });
+  const heading = page.getByText("What do you want to know today?", { exact: true });
+  const composerAction = page.getByRole("button", { name: "Add files" });
+  await expect(heading).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Ask AI Desk" })).toBeVisible();
+
+  const [menuBox, headingBox, composerBox] = await Promise.all([
+    menu.boundingBox(),
+    heading.boundingBox(),
+    composerAction.boundingBox(),
+  ]);
+  expect(menuBox).not.toBeNull();
+  expect(headingBox).not.toBeNull();
+  expect(composerBox).not.toBeNull();
+  expect(headingBox!.y).toBeGreaterThanOrEqual(menuBox!.y + menuBox!.height);
+
+  const overlapWidth = Math.max(0, Math.min(menuBox!.x + menuBox!.width, composerBox!.x + composerBox!.width) - Math.max(menuBox!.x, composerBox!.x));
+  const overlapHeight = Math.max(0, Math.min(menuBox!.y + menuBox!.height, composerBox!.y + composerBox!.height) - Math.max(menuBox!.y, composerBox!.y));
+  expect(overlapWidth * overlapHeight).toBe(0);
+});
+
+test("enlarged landing text reflows without page-level horizontal overflow", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "Mobile text-reflow regression");
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.goto("/");
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+});

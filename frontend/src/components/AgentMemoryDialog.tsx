@@ -223,7 +223,7 @@ export default function AgentMemoryDialog({
             <DialogDescription className="flex items-center gap-2">
               <span>Memory controls</span>
               <span className="group relative inline-flex">
-                <button type="button" aria-label="About memory privacy" className="grid size-4 place-items-center rounded-full text-[var(--text-muted)] outline-none transition-colors hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-indigo-primary/50">
+                <button type="button" aria-label="About memory privacy" className="grid size-10 place-items-center rounded-full text-[var(--text-muted)] outline-none transition-colors hover:bg-[var(--surface-control)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-indigo-primary/50">
                   <Info className="size-4" aria-hidden="true" />
                 </button>
                 <span role="tooltip" className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-72 rounded-lg border border-[var(--theme-border-strong)] bg-[var(--surface-popover-strong)] p-3 text-xs leading-5 text-[var(--text-primary)] opacity-0 shadow-[var(--shadow-tooltip)] transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">

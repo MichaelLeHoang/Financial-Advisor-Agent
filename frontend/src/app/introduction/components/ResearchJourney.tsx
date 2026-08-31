@@ -124,9 +124,9 @@ export function ResearchJourney() {
 
   return (
     <section id="equity-research-demo" className="research-intro-demo relative z-10 px-4 py-16 sm:px-6 sm:py-20">
-      <div className="mx-auto max-w-7xl">
-        <div className="grid gap-10 lg:grid-cols-[0.86fr_1.14fr] lg:items-start">
-          <div className="lg:sticky lg:top-28 lg:self-start">
+      <div className="mx-auto min-w-0 max-w-7xl">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-10 lg:grid-cols-[0.86fr_1.14fr] lg:items-start">
+          <div className="min-w-0 lg:sticky lg:top-28 lg:self-start">
             <p className="text-sm font-semibold uppercase text-white/34">Research journey</p>
             <h2 className="mt-5 font-heading text-4xl font-normal leading-[1.02] tracking-tight text-white sm:text-5xl lg:text-6xl">
               Ask. Evidence. Risk.
@@ -136,7 +136,7 @@ export function ResearchJourney() {
             <p className="mt-7 max-w-xl text-base leading-8 text-white/44">
               One disciplined path from market question to evidence-backed conclusion. No second workflow, no ornamental motion, no unsupported live-data claims.
             </p>
-            <div className="mt-9 flex flex-wrap gap-3">
+            <div className="mt-9 flex min-w-0 flex-wrap gap-3">
               <button
                 type="button"
                 data-analytics-id="landing-journey-launch-app"
@@ -145,7 +145,7 @@ export function ResearchJourney() {
                   window.localStorage.setItem("financial-advisor.coverSeen", "true");
                   window.location.href = "/login?next=%2Fhome";
                 }}
-                className="intro-primary-action inline-flex h-11 items-center justify-center rounded-full px-6 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
+                className="intro-primary-action inline-flex min-h-11 max-w-full items-center justify-center rounded-full px-5 py-3 text-center text-sm font-semibold leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
               >
                 Launch App
               </button>
@@ -153,15 +153,15 @@ export function ResearchJourney() {
                 href="#samples"
                 data-analytics-id="landing-journey-view-samples"
                 onClick={() => trackLandingEvent("landing_sample_research_click", { location: "journey_secondary" })}
-                className="intro-secondary-action research-docs-link inline-flex h-11 items-center justify-center rounded-full border border-white/[0.14] px-6 text-sm font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
+                className="intro-secondary-action research-docs-link inline-flex min-h-11 max-w-full items-center justify-center rounded-full border border-white/[0.14] px-5 py-3 text-center text-sm font-medium leading-tight text-white/70 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07080b]"
               >
                 View sample research
               </a>
             </div>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-[0.74fr_1fr] lg:items-start">
-            <div ref={stepsContainerRef} className="relative order-2 grid gap-4 lg:order-1 lg:pb-[18vh] lg:pl-20">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[0.74fr_1fr] lg:items-start">
+            <div ref={stepsContainerRef} className="relative order-2 grid min-w-0 gap-4 lg:order-1 lg:pb-[18vh] lg:pl-20">
               <div
                 className="research-journey-line absolute left-9 hidden w-px bg-white/[0.08] lg:block"
                 style={{ top: timeline.top, height: timeline.height }}
@@ -187,7 +187,7 @@ export function ResearchJourney() {
               ))}
             </div>
 
-            <div className="order-1 lg:sticky lg:top-28 lg:order-2 lg:self-start">
+            <div className="order-1 min-w-0 lg:sticky lg:top-28 lg:order-2 lg:self-start">
               <ResearchJourneyFrame step={activeStep} reduceMotion={Boolean(reduceMotion)} />
             </div>
           </div>
@@ -225,7 +225,7 @@ function JourneyStepCard({
         cardRef(node);
       }}
       data-analytics-id={`landing-journey-step-${step.id}`}
-      className={`research-journey-step relative rounded-2xl border p-5 transition-colors duration-200 ${
+      className={`research-journey-step relative min-w-0 rounded-2xl border p-[20px] transition-colors duration-200 sm:p-5 ${
         active
           ? "border-indigo-primary/34 bg-indigo-primary/[0.08]"
           : "border-white/[0.08] bg-white/[0.025]"
@@ -234,16 +234,16 @@ function JourneyStepCard({
       <div className="research-journey-node absolute -left-[3.85rem] top-1/2 hidden size-10 -translate-y-1/2 place-items-center rounded-full border border-white/[0.10] bg-[#07080b] text-white/50 lg:grid">
         <Icon className={`h-4 w-4 ${active ? "text-indigo-200" : ""}`} />
       </div>
-      <div className="flex items-center gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-full border border-white/[0.10] bg-white/[0.04] text-white/60 lg:hidden">
+      <div className="flex min-w-0 items-center gap-[12px] sm:gap-3">
+        <span className="grid size-[36px] shrink-0 place-items-center rounded-full border border-white/[0.10] bg-white/[0.04] text-white/60 sm:size-9 lg:hidden">
           <Icon className="h-4 w-4" />
         </span>
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-indigo-200">{step.label}</p>
-          <h3 className="mt-1 text-lg font-semibold leading-snug text-white">{step.title}</h3>
+        <div className="min-w-0">
+          <p className="break-words text-xs font-bold uppercase [letter-spacing:3px] text-indigo-200">{step.label}</p>
+          <h3 className="mt-1 min-w-0 break-words text-lg font-semibold leading-snug text-white">{step.title}</h3>
         </div>
       </div>
-      <p className="mt-4 text-sm leading-6 text-white/50">{step.body}</p>
+      <p className="mt-4 min-w-0 break-words text-sm leading-6 text-white/50">{step.body}</p>
     </div>
   );
 }
@@ -252,7 +252,7 @@ function ResearchJourneyFrame({ step, reduceMotion }: { step: JourneyStep; reduc
   const Icon = step.icon;
 
   return (
-    <div className="research-window-demo relative overflow-hidden rounded-[1.35rem] bg-[#050609] text-[#ffffff] shadow-[0_24px_70px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.08)]">
+    <div className="research-window-demo relative w-full min-w-0 max-w-full overflow-hidden rounded-[1.35rem] bg-[#050609] text-[#ffffff] shadow-[0_24px_70px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.08)]">
       <div className="relative flex h-11 items-center justify-between border-b border-[#ffffff14] px-8">
         <div className="flex items-center gap-3" aria-hidden="true">
           <span className="size-3 rounded-full bg-[#ff5f57]" />

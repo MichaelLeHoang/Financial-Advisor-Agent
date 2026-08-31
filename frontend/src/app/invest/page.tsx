@@ -73,8 +73,8 @@ export default function InvestPage() {
   const activity = buildInvestmentActivity(decisions, theses, events, recurringBuys).slice(0, 8);
 
   return (
-    <div className="min-h-full bg-[var(--theme-bg)] px-4 py-4 text-[var(--text-primary)] lg:px-6 xl:px-8">
-      <div className="mx-auto max-w-[1840px]">
+    <div className="min-h-full min-w-0 bg-[var(--theme-bg)] px-4 py-4 text-[var(--text-primary)] lg:px-6 xl:px-8">
+      <div className="mx-auto min-w-0 max-w-[1840px]">
         <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
@@ -88,7 +88,7 @@ export default function InvestPage() {
                 value={preferences.portfolioScope}
                 options={[{ value: "all", label: "All investment portfolios" }, ...portfolios.map((portfolio) => ({ value: portfolio.id, label: portfolio.name }))]}
                 onValueChange={(value) => setPreference("portfolioScope", value)}
-                className="h-9 min-w-52 max-w-[min(28rem,calc(100vw-2rem))]"
+                className="h-10 min-w-0 w-full max-w-[min(28rem,calc(100vw-2rem))] sm:w-auto sm:min-w-52"
                 contentClassName="min-w-64"
               />
               <WorkspaceSelectMenu
@@ -96,7 +96,7 @@ export default function InvestPage() {
                 value={preferences.displayCurrency}
                 options={[preferences.displayCurrency, "USD", "CAD", "EUR", "GBP"].filter((value, index, values) => values.indexOf(value) === index).map((currency) => ({ value: currency, label: currency }))}
                 onValueChange={(value) => setPreference("displayCurrency", value)}
-                className="h-9 min-w-24"
+                className="h-10 min-w-24"
               />
             </div>
           </div>
@@ -109,20 +109,20 @@ export default function InvestPage() {
 
         {error && <div role="alert" className="mt-4 flex items-start gap-2 border border-red-400/25 bg-red-400/8 p-3 text-sm text-red-200"><CircleAlert className="mt-0.5 size-4 shrink-0" />{error}</div>}
 
-        <div className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,2.35fr)_minmax(320px,0.65fr)]">
+        <div className="mt-6 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,2.35fr)_minmax(320px,0.65fr)]">
           <div className="min-w-0">
-            <section id="performance" aria-labelledby="performance-heading" className="min-w-0 scroll-mt-16">
+            <section id="performance" aria-labelledby="performance-heading" className="w-full min-w-0 max-w-full scroll-mt-16">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-                <div>
+                <div className="min-w-0">
                   <p id="performance-heading" className="text-sm font-semibold text-[var(--text-muted)]">Portfolio performance</p>
-                  {preferences.privacyMode ? <div className="mt-3"><div className="flex items-center gap-2">{Array.from({ length: 7 }, (_, index) => <span key={index} className="size-7 rounded-full border border-white/25 bg-white/[0.08]" />)}<button type="button" aria-label="Toggle portfolio privacy" aria-pressed="true" onClick={() => setPreference("privacyMode", false)} className="inline-flex size-10 items-center justify-center rounded-full hover:bg-[var(--surface-card-hover)]"><Eye className="size-5 text-[var(--text-muted)]" /></button></div><Link href="/invest/performance" className="mt-5 inline-flex h-10 items-center gap-2 rounded-full px-3 text-base font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)]">Performance insights <ArrowRight className="size-4" /></Link></div> : <div className="mt-2"><div className="flex flex-wrap items-center gap-3"><LoadingRegion loading={loading} label="Loading portfolio value" skeleton={<SkeletonBlock className="h-12 w-48 rounded-sm" />}><DataReveal ready><p className="font-heading text-4xl font-semibold tabular-nums sm:text-5xl">{formatMoney(totalValue, preferences.displayCurrency)}</p></DataReveal></LoadingRegion><button type="button" aria-label="Toggle portfolio privacy" aria-pressed="false" onClick={() => setPreference("privacyMode", true)} className="inline-flex size-10 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)]"><EyeOff className="size-5" /></button></div><Link href="/invest/performance" aria-label="Performance insights" className={cn("mt-2 inline-flex h-10 items-center gap-2 rounded-full px-2 text-base font-semibold tabular-nums hover:bg-[var(--surface-card-hover)]", periodReturnAmount >= 0 ? "text-emerald-400" : "text-rose-400")}>{formatSignedMoney(periodReturnAmount, preferences.displayCurrency)} past {periodLabel(preferences.period)} <ArrowRight className="size-4" /></Link><p className="mt-1 text-xs text-[var(--text-muted)]">Estimated from current positions · {formatSignedPercent(periodReturn - benchmarkReturn)} vs {preferences.benchmark}</p></div>}
+                  {preferences.privacyMode ? <div className="mt-3"><div className="flex flex-wrap items-center gap-2">{Array.from({ length: 7 }, (_, index) => <span key={index} className="size-7 rounded-full border border-white/25 bg-white/[0.08]" />)}<button type="button" aria-label="Toggle portfolio privacy" aria-pressed="true" onClick={() => setPreference("privacyMode", false)} className="inline-flex size-10 items-center justify-center rounded-full hover:bg-[var(--surface-card-hover)]"><Eye className="size-5 text-[var(--text-muted)]" /></button></div><Link href="/invest/performance" className="mt-5 inline-flex min-h-10 max-w-full flex-wrap items-center gap-2 rounded-full px-3 py-2 text-base font-semibold leading-tight text-[var(--text-secondary)] hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)]">Performance insights <ArrowRight className="size-4 shrink-0" /></Link></div> : <div className="mt-2 min-w-0"><div className="flex min-w-0 flex-wrap items-center gap-3"><LoadingRegion loading={loading} label="Loading portfolio value" skeleton={<SkeletonBlock className="h-12 w-48 rounded-sm" />}><DataReveal ready><p className="break-words font-heading text-4xl font-semibold tabular-nums sm:text-5xl">{formatMoney(totalValue, preferences.displayCurrency)}</p></DataReveal></LoadingRegion><button type="button" aria-label="Toggle portfolio privacy" aria-pressed="false" onClick={() => setPreference("privacyMode", true)} className="inline-flex size-10 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--surface-card-hover)] hover:text-[var(--text-primary)]"><EyeOff className="size-5" /></button></div><Link href="/invest/performance" aria-label="Performance insights" className={cn("mt-2 inline-flex min-h-10 max-w-full flex-wrap items-center gap-2 rounded-full px-2 py-2 text-base font-semibold leading-tight tabular-nums hover:bg-[var(--surface-card-hover)]", periodReturnAmount >= 0 ? "text-emerald-400" : "text-rose-400")}>{formatSignedMoney(periodReturnAmount, preferences.displayCurrency)} past {periodLabel(preferences.period)} <ArrowRight className="size-4 shrink-0" /></Link><p className="mt-1 break-words text-xs text-[var(--text-muted)]">Estimated from current positions · {formatSignedPercent(periodReturn - benchmarkReturn)} vs {preferences.benchmark}</p></div>}
                 </div>
                 <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
                   <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-emerald-400" />Portfolio</span>
                   <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-slate-400" />{preferences.benchmark}</span>
                 </div>
               </div>
-              <div className="mt-4 h-[280px] min-w-0 sm:h-[360px]">
+              <div className="mt-4 h-[280px] w-full min-w-0 max-w-full overflow-hidden sm:h-[360px]">
               <LoadingRegion loading={quotesLoading && series.length <= 1} label="Loading estimated history" className="h-full w-full" skeleton={<SkeletonBlock className="h-full w-full rounded-lg" />}>{series.length > 1 ? (
                 <InteractiveMarketChart data={series} mode="area" color="#34d399" valueKey="price" volume={false} compareMode compareLines={[{ key: "benchmark", color: "#94a3b8", lineWidth: 2 }]} rangeKey={`${preferences.period}-${preferences.performanceMode}-${preferences.benchmark}`} axisFormatter={(value) => preferences.privacyMode ? "•••" : preferences.performanceMode === "value" ? compactMoney(value, preferences.displayCurrency) : `${value.toFixed(1)}%`} timeFormatter={shortChartDate} tooltip={(point) => <div className="space-y-1.5 text-xs"><p className="font-semibold">{point.label}</p>{preferences.privacyMode ? <p className="text-[var(--text-muted)]">Values hidden</p> : <><p className="flex items-center gap-2"><span className="size-2 rounded-full bg-emerald-400" />Portfolio {preferences.performanceMode === "value" ? formatMoney(point.price, preferences.displayCurrency) : formatSignedPercent(point.price)}</p><p className="flex items-center gap-2"><span className="size-2 rounded-full bg-slate-400" />{preferences.benchmark} {preferences.performanceMode === "value" ? formatMoney(point.benchmark, preferences.displayCurrency) : formatSignedPercent(point.benchmark)}</p></>}</div>} tooltipClassName="rounded-lg border border-white/15 bg-black/55 p-3 shadow-2xl backdrop-blur-xl" className="h-full w-full" />
               ) : <div className="flex h-full items-center justify-center border border-dashed border-[var(--theme-border)] text-center text-sm text-[var(--text-muted)]">Add and classify Investment holdings to build an estimated performance view.</div>}</LoadingRegion>
@@ -137,7 +137,7 @@ export default function InvestPage() {
               </div>
             </section>
 
-            <section aria-label="Portfolio insights" className="mt-6 grid gap-3 sm:grid-cols-2">
+            <section aria-label="Portfolio insights" className="mt-6 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
               <MetricCard title="Performance insights" icon={<BarChart3 className="size-4" />}>
                 <Insight label="Best contributor" value={preferences.privacyMode ? "••••••" : contributors[0] ? `${contributors[0].record.holding.symbol} ${formatSignedMoney(contributors[0].contribution, preferences.displayCurrency)}` : "Not available"} />
                 <Insight label="Largest detractor" value={preferences.privacyMode ? "••••••" : contributors.at(-1) && contributors.at(-1)!.contribution < 0 ? `${contributors.at(-1)!.record.holding.symbol} ${formatSignedMoney(contributors.at(-1)!.contribution, preferences.displayCurrency)}` : "No negative move"} />
@@ -199,10 +199,10 @@ function HoldingsRail({ holdings, watchlistAssets, quotes, theses, mode, sort, c
   const sortLabel = sort === "return" ? "1D" : sort === "value" ? "Value" : sort === "weight" ? "Weight" : "Thesis";
 
   return (
-    <section className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-4">
+    <section className="min-w-0 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-[16px] sm:p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <div role="tablist" aria-label="Investment list" className="grid h-10 min-w-[12.5rem] flex-1 grid-cols-2 rounded-full bg-[var(--surface-control)] p-1">
-          {(["holdings", "watchlist"] as const).map((item) => <button key={item} type="button" role="tab" aria-selected={mode === item} onClick={() => onMode(item)} className={cn("min-w-0 rounded-full px-3 text-sm font-semibold capitalize", mode === item ? "bg-white/[0.10] text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-white/[0.05]")}>{item}</button>)}
+        <div role="tablist" aria-label="Investment list" className="grid h-10 w-full min-w-0 flex-none grid-cols-2 rounded-full bg-[var(--surface-control)] p-1 sm:min-w-[12.5rem] sm:flex-1">
+          {(["holdings", "watchlist"] as const).map((item) => <button key={item} type="button" role="tab" aria-selected={mode === item} onClick={() => onMode(item)} className={cn("min-w-0 rounded-full px-[12px] text-sm font-semibold capitalize sm:px-3", mode === item ? "bg-white/[0.10] text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-white/[0.05]")}>{item}</button>)}
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <DropdownMenu>
@@ -234,8 +234,8 @@ function SymbolMark({ symbol }: { symbol: string }) {
   return <span aria-hidden="true" className={cn("inline-flex size-9 shrink-0 items-center justify-center rounded-full text-[10px] font-bold", colors[index])}>{symbol.slice(0, 4)}</span>;
 }
 
-function MetricCard({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) { return <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-5"><div className="flex items-center justify-between gap-3"><h2 className="text-base font-semibold">{title}</h2><span className="text-[var(--text-muted)]">{icon}</span></div><dl className="mt-5 space-y-3">{children}</dl></div>; }
-function Insight({ label, value }: { label: string; value: string }) { return <div className="flex items-center justify-between gap-4 border-b border-[var(--theme-border)] pb-3 last:border-b-0 last:pb-0"><dt className="text-sm text-[var(--text-muted)]">{label}</dt><dd className="text-right text-sm font-semibold tabular-nums">{value}</dd></div>; }
+function MetricCard({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) { return <div className="min-w-0 rounded-2xl border border-[var(--theme-border)] bg-[var(--surface-card)] p-[20px] sm:p-5"><div className="flex min-w-0 items-center justify-between gap-3"><h2 className="min-w-0 break-words text-base font-semibold">{title}</h2><span className="shrink-0 text-[var(--text-muted)]">{icon}</span></div><dl className="mt-5 min-w-0 space-y-3">{children}</dl></div>; }
+function Insight({ label, value }: { label: string; value: string }) { return <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-[var(--theme-border)] pb-3 last:border-b-0 last:pb-0"><dt className="min-w-0 break-words text-sm text-[var(--text-muted)]">{label}</dt><dd className="min-w-0 break-words text-right text-sm font-semibold tabular-nums">{value}</dd></div>; }
 
 function buildPerformanceSeries(holdings: InvestmentHoldingRecord[], quotes: Map<string, MarketQuote>, rates: Map<string, number>, benchmarkSymbol: string, mode: "value" | "returns"): PerformancePoint[] {
   const histories = holdings.map(({ holding }) => ({ holding, quote: quotes.get(holding.symbol.toUpperCase()) })).filter((item): item is { holding: InvestmentHoldingRecord["holding"]; quote: MarketQuote } => Boolean(item.quote?.history.length));

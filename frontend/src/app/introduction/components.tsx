@@ -155,9 +155,9 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
   }, [pathname]);
 
   return (
-    <header className="introduction-nav fixed inset-x-0 top-0 z-50 px-4 py-3 sm:px-8 sm:py-4">
+    <header className="introduction-nav fixed inset-x-0 top-0 z-50 pb-[12px] pl-[max(16px,env(safe-area-inset-left))] pr-[max(16px,env(safe-area-inset-right))] pt-[max(12px,env(safe-area-inset-top))] sm:pb-4 sm:pl-[max(2rem,env(safe-area-inset-left))] sm:pr-[max(2rem,env(safe-area-inset-right))] sm:pt-[max(1rem,env(safe-area-inset-top))]">
       <div
-        className={`mx-auto flex max-w-6xl items-center justify-between rounded-full px-4 py-2.5 transition-[background-color,box-shadow,backdrop-filter] duration-200 sm:px-5 ${
+        className={`mx-auto flex max-w-6xl items-center justify-between rounded-full px-[16px] py-[10px] transition-[background-color,box-shadow,backdrop-filter] duration-200 sm:px-5 ${
           navExpanded
             ? currentTheme === "White"
               ? "bg-[#e9e6e0]/84 shadow-[0_10px_30px_rgba(18,26,44,0.10)] backdrop-blur-xl"
@@ -201,7 +201,7 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
             className="flex shrink-0 items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.svg" alt="" className="size-8 object-contain" />
+            <img src="/logo.svg" alt="" className="size-[32px] object-contain sm:size-8" />
             <span className="hidden text-sm font-semibold text-[var(--intro-nav-primary)] sm:block">
               Quanfora
             </span>
@@ -329,7 +329,7 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
           </Highlight>
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-[8px] sm:gap-2">
           <motion.button
             type="button"
             aria-label="Search (⌘K)"
@@ -337,7 +337,7 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
             initial={false}
             animate={navExpanded ? { opacity: 1, x: 0 } : { opacity: 0, x: 12 }}
             transition={{ type: "spring", stiffness: 260, damping: 24 }}
-            className="flex size-9 items-center justify-center rounded-full text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+            className="flex size-[44px] items-center justify-center rounded-full text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 sm:size-9"
           >
             <Search className="size-4" />
           </motion.button>
@@ -347,7 +347,7 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
               aria-label={currentTheme === "White" ? "Switch to dark theme" : "Switch to light theme"}
               aria-pressed={currentTheme === "White"}
               onClick={toggleTheme}
-              className="flex size-9 items-center justify-center rounded-full text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+              className="flex size-[44px] items-center justify-center rounded-full text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 sm:size-9"
             >
               {currentTheme === "White" ? <Moon className="size-4" /> : <Sun className="size-4" />}
             </button>
@@ -357,9 +357,9 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
               <DropdownMenu>
                 <DropdownMenuTrigger
                   aria-label="Open account menu"
-                  className="flex size-9 items-center justify-center rounded-full outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+                  className="flex size-[44px] items-center justify-center rounded-full outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-primary/50 sm:size-9"
                 >
-                  <Avatar className="size-9 text-white after:border-white/20 after:mix-blend-normal" style={{ backgroundColor: avatarColor }}>
+                  <Avatar className="size-[44px] text-white after:border-white/20 after:mix-blend-normal sm:size-9" style={{ backgroundColor: avatarColor }}>
                     {user?.avatar_url && <AvatarImage src={user.avatar_url} alt="" className="object-cover" />}
                     <AvatarFallback className="text-xs font-semibold text-white" style={{ backgroundColor: avatarColor }}>
                       {initials}
@@ -428,7 +428,7 @@ export function IntroductionNav({ staticFull = false, forceTheme }: Introduction
             aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
             aria-expanded={mobileOpen}
             onClick={() => setMobileOpen((open) => !open)}
-            className="flex size-9 items-center justify-center rounded-full text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 lg:hidden"
+            className="flex size-[44px] items-center justify-center rounded-full text-[var(--intro-nav-muted)] transition-colors hover:bg-[var(--intro-nav-hover)] hover:text-[var(--intro-nav-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 sm:size-9 lg:hidden"
           >
             {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
           </button>
@@ -641,16 +641,16 @@ export function IntroductionFooter() {
           <div>
             <h2 className="text-xs font-semibold uppercase tracking-widest text-white/35">Support</h2>
             <div className="mt-3 grid gap-2 text-white/36">
-              <Link href="/help" className="footer-link transition-colors hover:text-white/70">Help center</Link>
-              <Link href="/pricing" className="footer-link transition-colors hover:text-white/70">Pricing</Link>
+              <Link href="/help" className="footer-link flex min-h-10 items-center rounded-lg transition-colors hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">Help center</Link>
+              <Link href="/pricing" className="footer-link flex min-h-10 items-center rounded-lg transition-colors hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">Pricing</Link>
             </div>
           </div>
           <div>
             <h2 className="text-xs font-semibold uppercase tracking-widest text-white/35">Terms & Policies</h2>
             <div className="mt-3 grid gap-2 text-white/36">
-              <Link href="/terms" className="footer-link transition-colors hover:text-white/70">Terms of Service</Link>
-              <Link href="/privacy" className="footer-link transition-colors hover:text-white/70">Privacy Policy</Link>
-              <Link href="/help#other-policies" className="footer-link transition-colors hover:text-white/70">Other Policies</Link>
+              <Link href="/terms" className="footer-link flex min-h-10 items-center rounded-lg transition-colors hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">Terms of Service</Link>
+              <Link href="/privacy" className="footer-link flex min-h-10 items-center rounded-lg transition-colors hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">Privacy Policy</Link>
+              <Link href="/help#other-policies" className="footer-link flex min-h-10 items-center rounded-lg transition-colors hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">Other Policies</Link>
             </div>
           </div>
         </div>

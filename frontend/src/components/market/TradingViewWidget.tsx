@@ -70,7 +70,7 @@ export default function TradingViewWidget({ title, scriptUrl, config, className,
         href="https://www.tradingview.com/"
         target="_blank"
         rel="noreferrer"
-        className="absolute bottom-2 right-2 z-10 inline-flex items-center gap-1 rounded-lg bg-black/70 px-2 py-1 text-[10px] text-white/70 hover:text-white"
+        className="absolute bottom-2 right-2 z-10 inline-flex min-h-10 items-center gap-1 rounded-lg bg-black/70 px-3 py-2 text-xs text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
       >
         TradingView <ExternalLink className="size-3" />
       </a>

@@ -590,8 +590,8 @@ export default function InteractiveMarketChart<T extends InteractiveChartPoint>(
     : undefined;
 
   return (
-    <div className={cn("relative h-full w-full", className)} data-testid="interactive-market-chart" data-fit-applied={fitAppliedKey}>
-      <div ref={containerRef} className={cn("h-full w-full transition-opacity duration-200", isRangeTransitioning && "opacity-70")} />
+    <div className={cn("relative h-full w-full min-w-0 max-w-full overflow-hidden", className)} data-testid="interactive-market-chart" data-fit-applied={fitAppliedKey}>
+      <div ref={containerRef} className={cn("h-full w-full min-w-0 max-w-full transition-opacity duration-200", isRangeTransitioning && "opacity-70")} />
       {measurement && <MeasurementOverlay measurement={measurement} axisFormatter={axisFormatter} />}
       {hoverPoint && tooltip && (
         <div role="tooltip" className={cn("pointer-events-none absolute z-20", tooltipClassName)} style={tooltipStyle}>

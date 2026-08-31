@@ -32,7 +32,7 @@ export default function ResearchRunPage({ params }: { params: Promise<{ runId: s
             if (window.history.length > 1) router.back();
             else router.push(backTarget.href);
           }}
-          className="inline-flex items-center gap-2 text-sm text-white/45 hover:text-white"
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg px-2 text-sm text-white/45 transition-colors hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
         >
           <ArrowLeft className="size-4" /> Back
         </button>

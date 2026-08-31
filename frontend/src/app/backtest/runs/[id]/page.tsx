@@ -119,7 +119,7 @@ export default function BacktestRunPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="flex-1 overflow-y-auto p-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-6">
-        <Link href="/trade/strategies/sessions" className="inline-flex w-fit items-center gap-2 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">
+        <Link href="/trade/strategies/sessions" className="inline-flex min-h-10 w-fit items-center gap-2 rounded-lg px-2 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-control)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50">
           <ArrowLeft className="h-4 w-4" />
           Back to sessions
         </Link>

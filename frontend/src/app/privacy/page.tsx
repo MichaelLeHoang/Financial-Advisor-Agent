@@ -77,9 +77,9 @@ const sections = [
 
 export default function PrivacyPage() {
   return (
-    <main className="min-h-screen bg-[#06080d] px-6 py-8 text-white">
+    <main className="min-h-dvh bg-[#06080d] px-6 py-8 text-white">
       <div className="mx-auto max-w-4xl">
-        <Link href="/" className="inline-flex items-center gap-2 text-sm text-white/45 transition-colors hover:text-white">
+        <Link href="/" className="inline-flex min-h-10 items-center gap-2 rounded-lg px-2 text-sm text-white/45 transition-colors hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
           <ArrowLeft className="size-4" /> Back to home
         </Link>
         <header className="mt-10 rounded-3xl border border-white/[0.08] bg-white/[0.035] p-8">

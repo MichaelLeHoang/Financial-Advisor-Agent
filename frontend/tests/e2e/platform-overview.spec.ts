@@ -29,11 +29,11 @@ test("desktop landing navigation shares one highlight across hover and keyboard 
 
 test("reduced motion keeps the landing navigation highlight immediate and usable", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Desktop reduced-motion navigation highlight");
-  const highlightHydrationErrors: string[] = [];
+  const hydrationErrors: string[] = [];
   page.on("console", (message) => {
     const text = message.text();
-    if (message.type() === "error" && text.includes("hydrated") && text.includes("data-highlight")) {
-      highlightHydrationErrors.push(text);
+    if (message.type() === "error" && /hydration|hydrated|didn't match/i.test(text)) {
+      hydrationErrors.push(text);
     }
   });
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -51,7 +51,7 @@ test("reduced motion keeps the landing navigation highlight immediate and usable
   expect(itemBox).not.toBeNull();
   expect(highlightBox).not.toBeNull();
   expect(Math.abs(itemBox!.x - highlightBox!.x)).toBeLessThan(2);
-  expect(highlightHydrationErrors).toEqual([]);
+  expect(hydrationErrors).toEqual([]);
 });
 
 test("desktop product navigation opens the platform overview", async ({ page }, testInfo) => {
@@ -73,10 +73,11 @@ test("platform overview is public and exposes the accurate multi-agent story", a
   await expect(page.getByRole("heading", { name: "Five perspectives. One decision you can audit." })).toBeVisible();
   await expect(page.getByText("Sequential runtime").first()).toBeAttached();
   await expect(page.getByText("Illustrative product walkthrough").first()).toBeAttached();
+  await expect(page.getByTestId("platform-multi-agent-story").locator('[class*="storyProgress"]')).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Launch App" })).toHaveAttribute("href", "/home");
 });
 
-test("desktop scroll progress drives specialist, consensus, and synthesis phases", async ({ page }, testInfo) => {
+test("desktop scrolling drives specialist, consensus, and synthesis phases", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Desktop sticky-scroll behavior");
   await page.goto("/platform");
 

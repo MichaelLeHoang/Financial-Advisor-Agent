@@ -1453,6 +1453,7 @@ export default function ChatPage() {
               <div className="relative min-w-0 flex-1">
                 <Textarea
                   ref={textareaRef}
+                  aria-label="Ask AI Desk"
                   value={input}
                   onChange={handleInput}
                   onFocus={() => setIsActive(true)}
@@ -1587,10 +1588,10 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex flex-col h-full relative overflow-hidden">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
       <p className="sr-only" aria-live="polite">{memoryAnnouncement}</p>
       {/* Messages */}
-      <div ref={scrollRef} data-testid="chat-scroll-container" className="relative flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-4 sm:px-8 sm:pb-4 sm:pt-6">
+      <div ref={scrollRef} data-testid="chat-scroll-container" className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-16 sm:px-8 sm:pb-4 sm:pt-6">
         {upgradeMessage && <UpgradePrompt message={upgradeMessage} />}
         <LoadingRegion
           loading={isHistoryLoading}
@@ -1621,10 +1622,10 @@ export default function ChatPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
-              className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-5xl flex-col items-center justify-center gap-7 py-8 sm:gap-8 lg:min-h-[calc(100vh-12rem)]"
+              className="ai-starter-layout mx-auto flex min-h-full w-full max-w-5xl flex-col items-center justify-start gap-7 pb-8 pt-3 sm:justify-center sm:gap-8 sm:py-8"
             >
               <motion.div
-                animate={{ y: isActive && !input && !uploadMenuOpen ? -46 : 0 }}
+                animate={{ y: 0 }}
                 transition={{ type: "spring", stiffness: 140, damping: 22 }}
                 className="w-full max-w-3xl text-center"
               >

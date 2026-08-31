@@ -235,7 +235,7 @@ export default function Sidebar({
                 aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
                 aria-expanded={mobileOpen}
                 onClick={() => setMobileOpen((open) => !open)}
-                className="group fixed left-4 top-4 z-[70] flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--theme-border)] bg-[var(--surface-mobile-trigger)] text-[var(--text-secondary)] shadow-[var(--shadow-control)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 md:hidden"
+                className="group fixed left-[max(1rem,env(safe-area-inset-left))] top-[max(1rem,env(safe-area-inset-top))] z-[70] flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--theme-border)] bg-[var(--surface-mobile-trigger)] text-[var(--text-secondary)] shadow-[var(--shadow-control)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50 md:hidden"
             >
                 {mobileOpen ? (
                     <img

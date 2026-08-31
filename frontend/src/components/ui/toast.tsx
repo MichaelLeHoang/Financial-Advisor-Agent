@@ -143,7 +143,7 @@ export function showToast({
               sonnerToast.dismiss(toastId);
               onDismiss?.();
             }}
-            className="rounded-full p-1 text-[var(--text-muted)] transition-colors hover:bg-white/[0.08] hover:text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+            className="grid size-10 shrink-0 place-items-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-white/[0.08] hover:text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
             aria-label="Dismiss notification"
           >
             <X className="size-3.5" />

@@ -112,11 +112,11 @@ const FAQS: FaqProItem[] = [
 
 export default function HelpPage() {
   return (
-    <main className="help-page min-h-screen bg-[#050507] text-white">
+    <main className="help-page min-h-dvh bg-[#050507] text-white">
       <IntroductionNav />
 
       <section className="mx-auto max-w-6xl px-6 pb-16 pt-28 sm:pb-20 sm:pt-32">
-        <Link href="/" className="mb-8 inline-flex items-center gap-2 text-sm text-white/45 transition-colors hover:text-white">
+        <Link href="/" className="mb-8 inline-flex min-h-10 items-center gap-2 rounded-lg px-2 text-sm text-white/45 transition-colors hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
           <ArrowLeft className="h-4 w-4" />
           Home
         </Link>

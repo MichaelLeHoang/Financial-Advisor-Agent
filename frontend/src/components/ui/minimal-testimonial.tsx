@@ -40,7 +40,7 @@ export function TestimonialsMinimal() {
   }, []);
 
   return (
-    <section className="landing-testimonials relative z-10 px-6 py-16 sm:py-20">
+    <section className="landing-testimonials relative z-10 px-[24px] py-16 sm:px-6 sm:py-20">
       <Separator className="mx-auto mb-14 max-w-5xl" />
       <div className="mx-auto w-full max-w-xl">
         <div className="relative mb-12 min-h-[132px] sm:min-h-[112px]">
@@ -62,8 +62,8 @@ export function TestimonialsMinimal() {
           ))}
         </div>
 
-        <div className="flex items-center gap-6">
-          <div className="flex -space-x-2">
+        <div className="grid min-w-0 grid-cols-[auto_1px_minmax(0,1fr)] items-center gap-[24px] sm:flex sm:gap-6">
+          <div className="flex -space-x-[8px] sm:-space-x-2">
             {testimonials.map((testimonial, index) => (
               <button
                 key={testimonial.name}
@@ -71,7 +71,7 @@ export function TestimonialsMinimal() {
                 onClick={() => setActive(index)}
                 aria-label={`Show testimonial from ${testimonial.name}`}
                 className={`
-                  relative h-10 w-10 overflow-hidden rounded-full ring-2 ring-[var(--background)]
+                  relative size-[40px] overflow-hidden rounded-full ring-2 ring-[var(--background)] sm:h-10 sm:w-10
                   transition-all duration-300 ease-out
                   ${active === index ? "z-10 scale-110" : "grayscale hover:scale-105 hover:grayscale-0"}
                 `}
@@ -82,9 +82,9 @@ export function TestimonialsMinimal() {
             ))}
           </div>
 
-          <div className="h-8 w-px bg-white/[0.08]" />
+          <div className="h-[32px] w-px bg-white/[0.08] sm:h-8" />
 
-          <div className="relative min-h-[44px] flex-1">
+          <div className="relative min-h-[44px] min-w-0 flex-1">
             {testimonials.map((testimonial, index) => (
               <div
                 key={testimonial.name}
@@ -94,8 +94,8 @@ export function TestimonialsMinimal() {
                   ${active === index ? "translate-x-0 opacity-100" : "pointer-events-none -translate-x-2 opacity-0"}
                 `}
               >
-                <span className="text-sm font-medium text-white">{testimonial.name}</span>
-                <span className="text-xs text-white/42">{testimonial.role}</span>
+                <span className="min-w-0 break-words text-sm font-medium text-white">{testimonial.name}</span>
+                <span className="min-w-0 break-words text-xs text-white/42">{testimonial.role}</span>
               </div>
             ))}
           </div>

@@ -1259,13 +1259,13 @@ export default function PortfolioPage() {
 
         {activePortfolio && (
           <section id="portfolio-accounts" className="scroll-mt-16 space-y-4">
-            <div className="flex items-center justify-between border-b border-white/12 pb-3">
-              <button type="button" className="text-sm text-white/86">All</button>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/12 pb-3">
+              <button type="button" className="inline-flex min-h-10 items-center rounded-lg px-2 text-sm text-white/86 transition-colors hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50">All</button>
               <div ref={accountMenuRef} className="relative">
                 <button
                   type="button"
                   onClick={() => setShowAccountMenu((value) => !value)}
-                  className="inline-flex items-center gap-2 text-sm font-medium text-white/86 transition-colors hover:text-white"
+                  className="inline-flex min-h-10 max-w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-medium text-white/86 transition-colors hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                 >
                   Showing:
                   <span className="text-white">{activePortfolio?.name ?? "All Accounts"}</span>
@@ -1974,16 +1974,16 @@ export default function PortfolioPage() {
                 )}
 
                 <div className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--surface-card-strong)] p-4 shadow-[var(--shadow-card)]">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-4">
                     <h2 className="text-xl font-bold">Returns</h2>
-                    <div className="flex gap-2">
+                    <div className="flex max-w-full flex-wrap gap-2">
                       {(["5D", "1M", "YTD", "1Y", "5Y"] as const).map((period) => (
                         <button
                           key={period}
                           type="button"
                           onClick={() => setReturnPeriod(period)}
                           className={cn(
-                            "h-7 min-w-10 rounded-full px-3 text-xs font-semibold transition-colors",
+                            "min-h-10 min-w-10 rounded-full px-3 py-2 text-xs font-semibold transition-colors",
                             returnPeriod === period ? "bg-emerald-950/80 text-emerald-300" : "bg-black/28 text-white/72 hover:bg-black/42 hover:text-white"
                           )}
                         >
@@ -2014,8 +2014,8 @@ export default function PortfolioPage() {
               </section>
 
               <section id="portfolio-holdings" className="scroll-mt-16 min-w-0">
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
+                  <div className="flex min-w-0 flex-wrap items-center gap-3">
                     <h2 className="text-xl font-semibold">Holdings</h2>
                     <button
                       type="button"
@@ -2030,7 +2030,7 @@ export default function PortfolioPage() {
                     <button
                       type="button"
                       onClick={() => setShowSortMenu((value) => !value)}
-                      className="inline-flex items-center gap-2 text-sm text-white/86 transition-colors hover:text-white"
+                      className="inline-flex min-h-10 max-w-full items-center gap-2 rounded-lg px-2 text-left text-sm text-white/86 transition-colors hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
                     >
                       Sort:
                       <span className="text-white">
@@ -2585,15 +2585,15 @@ function ReturnRow({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] px-3.5 py-2.5",
+        "flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.08] px-3.5 py-2.5",
         highlight ? "bg-green-positive/18 text-green-200" : "bg-[var(--surface-card-hover)]"
       )}
     >
-      <div className="flex items-center gap-2 text-sm font-semibold">
+      <div className="flex min-w-0 items-center gap-2 text-sm font-semibold">
         <span className="text-white/82" aria-hidden="true">{icon}</span>
         <span>{label}</span>
       </div>
-      <div className={cn("text-right text-sm font-semibold tabular-nums", positive ? "text-green-positive" : "text-red-negative")}>
+      <div className={cn("min-w-0 break-words text-right text-sm font-semibold tabular-nums", positive ? "text-green-positive" : "text-red-negative")}>
         <p>{value}</p>
         {detail && <p className="text-xs">{detail}</p>}
       </div>

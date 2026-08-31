@@ -21,7 +21,7 @@ function InfoTooltip({ label, children, className, side = "top" }: InfoTooltipPr
           aria-label={label}
           delay={250}
           closeDelay={80}
-          className="grid size-5 shrink-0 place-items-center rounded-full text-[var(--text-subtle)] outline-none transition-colors hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
+          className="grid size-10 shrink-0 place-items-center rounded-full text-[var(--text-subtle)] outline-none transition-colors hover:bg-[var(--surface-control)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-indigo-primary/50"
         >
           <Info className="size-4" aria-hidden="true" />
         </Tooltip.Trigger>
